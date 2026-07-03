@@ -26,7 +26,11 @@ public sealed class LeagueSimulator
     public const int TeamCount = 8;
     public const int LineupSize = 9;
     public const int RotationSize = 5;
-    public const int RosterSizePerTeam = LineupSize + RotationSize;
+
+    /// <summary>Relievers per team (schema v4). Micro-sim only — the macro-sim
+    /// stays complete-game (its §8 calibration is pinned to that shape).</summary>
+    public const int BullpenSize = 3;
+    public const int RosterSizePerTeam = LineupSize + RotationSize + BullpenSize;
 
     /// <summary>7-day round-robin cycles × 22 = a 154-game season for every team.</summary>
     public const int RegularSeasonDays = RoundsPerCycle * CyclesPerSeason;
@@ -174,7 +178,15 @@ public sealed class LeagueSimulator
 
             if (row.IsPitcher)
             {
-                if (rotationCount[team] < RotationSize)
+                if (row.Role == PitcherRole.None)
+                {
+                    throw new InvalidOperationException(
+                        $"Pitcher {row.PlayerId} has no Pitcher_Roles row — the v4 backfill/generation invariant is broken.");
+                }
+                // Rotation = starters only; relievers are a micro-sim concern
+                // (the macro-sim's complete-game shape is untouched by v4, so
+                // its calibration — and the M1 lines — cannot move).
+                if (row.Role == PitcherRole.Starter && rotationCount[team] < RotationSize)
                 {
                     _rotationSlots[team * RotationSize + rotationCount[team]++] = i;
                 }
@@ -192,7 +204,7 @@ public sealed class LeagueSimulator
             {
                 throw new InvalidOperationException(
                     $"Team {teams[t].TeamId} ({teams[t].Abbreviation}) has {lineupCount[t]}/{LineupSize} " +
-                    $"position players and {rotationCount[t]}/{RotationSize} pitchers — cannot field a season.");
+                    $"position players and {rotationCount[t]}/{RotationSize} starters — cannot field a season.");
             }
             // §3: team defense = mean fielding of the lineup, rounded.
             _teamDefense[t] = (byte)((fieldingSum[t] + LineupSize / 2) / LineupSize);

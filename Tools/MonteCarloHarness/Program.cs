@@ -59,6 +59,7 @@ internal static class Program
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_montecarlo_{Guid.NewGuid():N}.db");
         string microScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_microsim_{Guid.NewGuid():N}.db");
         string careerScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_career_{Guid.NewGuid():N}.db");
+        string v4ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_v4_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -68,6 +69,7 @@ internal static class Program
             RunMicroAnalyticSuite();
             RunMicroGameSuite(schemaPath, microScratchPath);
             RunCareerWiringSuite(schemaPath, careerScratchPath);
+            RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
         }
         catch (Exception ex)
         {
@@ -84,6 +86,9 @@ internal static class Program
             TryDelete(careerScratchPath);
             TryDelete(careerScratchPath + "-wal");
             TryDelete(careerScratchPath + "-shm");
+            TryDelete(v4ScratchPath);
+            TryDelete(v4ScratchPath + "-wal");
+            TryDelete(v4ScratchPath + "-shm");
         }
 
         int failed = 0;
@@ -232,7 +237,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v3", db.GetSchemaVersion() == 3, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v4", db.GetSchemaVersion() == 4, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -464,10 +469,14 @@ internal static class Program
             averagePitchesPerPa is >= 3.7 and <= 4.0, $"{averagePitchesPerPa:F2}");
 
         // §11 test 1 — sampled per-PA neutral consistency: the full pitch-by-
-        // pitch PA (count chain + BIP split) under the neutral policy must
-        // reproduce the 7-way macro distribution. Sampling tolerances sized to
-        // the draw counts; the binding exactness proof is the analytic pin above.
+        // pitch PA (count chain + BIP split + v4 type/zone layer) under the
+        // neutral policies must reproduce the 7-way macro distribution — the
+        // location conditioning is an exact mixture, so the layer must be
+        // invisible here. Sampling tolerances sized to the draw counts; the
+        // binding exactness proof is the analytic pin above.
         var neutral = new NeutralBatterPolicy();
+        var neutralPitcher = new NeutralPitcherPolicy();
+        var neutralMatchup = new PitchMatchup(PitcherArsenal.LeagueAverage, pitcherControl: 50, batterDiscipline: 50);
         var chainRng = new RngState(MicroSeed);
         bool sampledConsistent = true;
         double reportedMaxError = 0.0;
@@ -491,7 +500,8 @@ internal static class Program
             for (int i = 0; i < paCount; i++)
             {
                 PaOutcome outcome = PitchChain.SimulatePa(
-                    fixtureAnchor, in rates, ref neutral, ref idleFatigue, ref chainRng, out int paPitches);
+                    fixtureAnchor, in rates, in neutralMatchup, ref neutral, ref neutralPitcher,
+                    ref idleFatigue, ref chainRng, out int paPitches);
                 outcomeCounts[(int)outcome]++;
                 totalPitches += paPitches;
             }
@@ -521,7 +531,8 @@ internal static class Program
             PitchClassRates warmRates = PitchChain.SolveNeutral(
                 fixtureAnchor[(int)PaOutcome.Walk], fixtureAnchor[(int)PaOutcome.Strikeout]);
             sink += (long)PitchChain.SimulatePa(
-                fixtureAnchor, in warmRates, ref neutral, ref profileFatigue, ref chainRng, out int p) + p;
+                fixtureAnchor, in warmRates, in neutralMatchup, ref neutral, ref neutralPitcher,
+                ref profileFatigue, ref chainRng, out int p) + p;
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 10_000; i++)
@@ -529,7 +540,8 @@ internal static class Program
             PitchClassRates warmRates = PitchChain.SolveNeutral(
                 fixtureAnchor[(int)PaOutcome.Walk], fixtureAnchor[(int)PaOutcome.Strikeout]);
             sink += (long)PitchChain.SimulatePa(
-                fixtureAnchor, in warmRates, ref neutral, ref profileFatigue, ref chainRng, out int p) + p;
+                fixtureAnchor, in warmRates, in neutralMatchup, ref neutral, ref neutralPitcher,
+                ref profileFatigue, ref chainRng, out int p) + p;
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Check("§11.6 pitch chain (solve + PA) allocates zero bytes over 10k PAs",
@@ -633,10 +645,12 @@ internal static class Program
         }
         db.CommitBatch();
 
+        // Bullpens off: §11.4 isolates the STARTER's decay curve — relief
+        // pitching is proven separately in the v4 suite.
         const int fatigueGames = 1500;
-        var fatigueOn = new MicroGame(db, baseball) { FatigueEnabled = true, LoggingEnabled = false };
+        var fatigueOn = new MicroGame(db, baseball) { FatigueEnabled = true, BullpenEnabled = false, LoggingEnabled = false };
         fatigueOn.Initialize();
-        var fatigueOff = new MicroGame(db, baseball) { FatigueEnabled = false, LoggingEnabled = false };
+        var fatigueOff = new MicroGame(db, baseball) { FatigueEnabled = false, BullpenEnabled = false, LoggingEnabled = false };
         fatigueOff.Initialize();
         var onRng = new RngState(MicroSeed + 2);
         var offRng = new RngState(MicroSeed + 2);
@@ -896,11 +910,11 @@ internal static class Program
                 {
                     if (pitch++ % 2 == 0)
                     {
-                        bridge.SubmitSwing(0.0); // on-time swing
+                        bridge.SubmitSwing(0.0, guessInZone: true); // on-time swing, sitting zone
                     }
                     else
                     {
-                        bridge.SubmitTake();
+                        bridge.SubmitTake(guessInZone: false);
                     }
                 }
                 Thread.Sleep(0);
@@ -963,6 +977,211 @@ internal static class Program
         clock.AdvanceDay(); // forfeits the cancelled game to the autopilot, then plays today
         bus.DispatchPending();
         Check("forfeited game autopilots on the next tick", !career.HasPendingGame && !db.IsBatchActive);
+    }
+
+    // ------------------------------------------------------------------
+    // 7. Schema v4: roles, arsenals, bullpens, pitcher-side input model
+    // ------------------------------------------------------------------
+
+    /// <summary>Scripted mound policy: same call every pitch, counts consumption.</summary>
+    private struct AimedPitcherPolicy : IPitcherPolicy
+    {
+        public bool TargetInZone;
+        public int Calls;
+
+        public readonly void BeginPa(in HumanPaContext context)
+        {
+        }
+
+        public PitchCall NextPitch(in CountState count, ref RngState rng)
+        {
+            Calls++;
+            return PitchCall.Throw(PitchType.Fastball, TargetInZone);
+        }
+
+        public readonly void OnPaResolved(PaOutcome outcome)
+        {
+        }
+    }
+
+    private static void RunV4BullpenArsenalSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Schema v4: roles, arsenals, bullpens, pitcher input ---");
+
+        // RngState.Split — the generation fork's contract: the parent stream
+        // is untouched (M1 prefix identity), children of equal parents match,
+        // and the child stream is not the parent's.
+        var parentA = new RngState(123456);
+        var parentB = new RngState(123456);
+        var parentControl = new RngState(123456);
+        RngState childA = parentA.Split();
+        RngState childB = parentB.Split();
+        bool parentUntouched = true;
+        bool childrenEqual = true;
+        bool childDiverges = false;
+        for (int i = 0; i < 16; i++)
+        {
+            ulong parentDraw = parentA.NextUInt64();
+            parentUntouched &= parentDraw == parentControl.NextUInt64();
+            ulong childDraw = childA.NextUInt64();
+            childrenEqual &= childDraw == childB.NextUInt64();
+            childDiverges |= childDraw != parentDraw;
+        }
+        Check("RngState.Split: parent untouched, children deterministic and distinct",
+            parentUntouched && childrenEqual && childDiverges);
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed + 40);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        // ---- roster shape: 9 + 5 + 3 per team, roles ⟺ is_pitcher ----
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        int[] positions = new int[LeagueSimulator.TeamCount + 1];
+        int[] starters = new int[LeagueSimulator.TeamCount + 1];
+        int[] relievers = new int[LeagueSimulator.TeamCount + 1];
+        bool rolesConsistent = true;
+        foreach (RosterPlayerRow row in roster)
+        {
+            rolesConsistent &= row.IsPitcher == (row.Role != PitcherRole.None);
+            switch (row.Role)
+            {
+                case PitcherRole.Starter: starters[row.TeamId]++; break;
+                case PitcherRole.Reliever: relievers[row.TeamId]++; break;
+                default: positions[row.TeamId]++; break;
+            }
+        }
+        bool shape = roster.Count == LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
+        for (int t = 1; t <= LeagueSimulator.TeamCount; t++)
+        {
+            shape &= positions[t] == LeagueSimulator.LineupSize
+                && starters[t] == LeagueSimulator.RotationSize
+                && relievers[t] == LeagueSimulator.BullpenSize;
+        }
+        Check("v4 roster shape: 9 position + 5 starters + 3 relievers per team, roles ⟺ is_pitcher",
+            shape && rolesConsistent, $"{roster.Count} rostered");
+
+        var arsenals = new List<PitchArsenalRow>();
+        baseball.LoadAllArsenals(arsenals);
+        var usageByPitcher = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (PitchArsenalRow pitch in arsenals)
+        {
+            usageByPitcher[pitch.PlayerId] = usageByPitcher.GetValueOrDefault(pitch.PlayerId) + pitch.UsageWeight;
+        }
+        int pitcherCount = roster.Count(r => r.IsPitcher);
+        Check("v4 arsenals: 3 rows per pitcher, usage mix sums to 100",
+            arsenals.Count == pitcherCount * 3
+            && usageByPitcher.Count == pitcherCount && usageByPitcher.Values.All(v => v == 100),
+            $"{arsenals.Count} rows / {pitcherCount} pitchers");
+
+        // ---- EnsureV4 top-up: bench two relievers, re-run, bullpen refills ----
+        string benchedA = roster.First(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever).PlayerId;
+        string benchedB = roster.Last(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever).PlayerId;
+        db.RunInBatch(() =>
+        {
+            players.SetTeam(benchedA, null);
+            players.SetTeam(benchedB, null);
+        });
+        var topUpRng = new RngState(LeagueSeed + 41);
+        bool toppedUp = LeagueGenerator.EnsureV4(db, players, baseball, ratingSpread: 0, ref topUpRng);
+        bool secondIsNoOp = !LeagueGenerator.EnsureV4(db, players, baseball, ratingSpread: 0, ref topUpRng);
+        baseball.LoadRoster(roster);
+        int refilled = roster.Count(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever);
+        Check("EnsureV4 tops a short bullpen back up and is then a no-op",
+            toppedUp && secondIsNoOp && refilled == LeagueSimulator.BullpenSize, $"team 5 relievers {refilled}");
+
+        // ---- bullpen substitution over flushed games ----
+        var micro = new MicroGame(db, baseball) { LoggingEnabled = false };
+        micro.Initialize(); // throws if any role/arsenal invariant is broken
+        var neutralBatter = new NeutralBatterPolicy();
+        var bullpenRng = new RngState(MicroSeed + 20);
+        const int bullpenGames = 60;
+        const int bullpenYear = 3000;
+        double starterPitchesSum = 0.0;
+        for (int g = 0; g < bullpenGames; g++)
+        {
+            int home = 1 + g % LeagueSimulator.TeamCount;
+            int away = 1 + (g + 1 + g % 7) % LeagueSimulator.TeamCount;
+            if (away == home)
+            {
+                away = 1 + home % LeagueSimulator.TeamCount;
+            }
+            MicroGameResult result = micro.PlayGame(home, away, MicroGame.NoHuman, ref neutralBatter, ref bullpenRng);
+            micro.FlushGame(bullpenYear, g + 1);
+            starterPitchesSum += result.HomeStarterPitches + result.AwayStarterPitches;
+        }
+        double averageStarterPitches = starterPitchesSum / (2 * bullpenGames);
+
+        var relieverLine = db.GetPooledCommand(
+            "SELECT COALESCE(SUM(ps.g), 0), COALESCE(SUM(ps.gs), 0) FROM Pitching_Stats AS ps " +
+            "JOIN Pitcher_Roles AS pr ON pr.player_id = ps.player_id " +
+            "WHERE pr.role = 2 AND ps.season_year = @seasonYear;");
+        if (relieverLine.Parameters.Count == 0)
+        {
+            relieverLine.Parameters.Add("@seasonYear", Microsoft.Data.Sqlite.SqliteType.Integer);
+        }
+        relieverLine.Parameters["@seasonYear"].Value = bullpenYear;
+        long relieverG;
+        long relieverGs;
+        using (var reader = db.ExecuteReader(relieverLine))
+        {
+            reader.Read();
+            relieverG = reader.GetInt64(0);
+            relieverGs = reader.GetInt64(1);
+        }
+        LeagueBattingTotals bullpenBat = baseball.LoadLeagueBattingTotals(bullpenYear);
+        LeaguePitchingTotals bullpenPit = baseball.LoadLeaguePitchingTotals(bullpenYear);
+        Console.WriteLine($"  Bullpen games ({bullpenGames}): avg starter pitches {averageStarterPitches:F0}, " +
+            $"reliever G {relieverG}, league G {bullpenPit.G} vs GS {bullpenPit.Gs}");
+        Check("§8.5 relievers relieve: G > 0, never credited a start",
+            relieverG > 0 && relieverGs == 0, $"G {relieverG}, GS {relieverGs}");
+        Check("§8.5 starters no longer complete games (avg pitches in 60–120)",
+            averageStarterPitches is >= 60 and <= 120, $"{averageStarterPitches:F0}");
+        Check("§8.5 accounting: GS = 2×games, W = L = games, ledgers agree",
+            bullpenPit.Gs == 2L * bullpenGames && bullpenPit.W == bullpenGames && bullpenPit.L == bullpenGames
+            && bullpenBat.H == bullpenPit.HAllowed && bullpenBat.Bb == bullpenPit.Bb
+            && bullpenBat.So == bullpenPit.So
+            && bullpenPit.OutsRecorded == bullpenBat.Pa - bullpenBat.H - bullpenBat.Bb,
+            $"gs={bullpenPit.Gs} w={bullpenPit.W} l={bullpenPit.L}");
+
+        // ---- pitcher-side input: painting away must walk more than challenging ----
+        string aimStarterId = roster.First(r => r.TeamId == 1 && r.Role == PitcherRole.Starter).PlayerId;
+        int totalCalls = 0;
+        for (int variant = 0; variant < 2; variant++)
+        {
+            bool aimInZone = variant == 0;
+            int aimYear = 3100 + variant;
+            var aimRng = new RngState(MicroSeed + 21); // same seed for both aims
+            for (int g = 0; g < 40; g++)
+            {
+                // Fresh driver per game so the SAME starter takes the mound
+                // every time (rotation counter resets with Initialize).
+                var aimMicro = new MicroGame(db, baseball) { LoggingEnabled = false, BullpenEnabled = false };
+                aimMicro.Initialize();
+                int slot = aimMicro.FindRosterSlot(aimStarterId);
+                var aimPolicy = new AimedPitcherPolicy { TargetInZone = aimInZone };
+                aimMicro.PlayGame(1, 2 + g % 7, slot, ref neutralBatter, ref aimPolicy, ref aimRng);
+                aimMicro.FlushGame(aimYear, g + 1);
+                totalCalls += aimPolicy.Calls;
+            }
+        }
+        double[] aimBbRates = new double[2];
+        for (int variant = 0; variant < 2; variant++)
+        {
+            var seasons = new List<PitchingStatsRow>();
+            players.LoadPitchingSeasons(aimStarterId, seasons);
+            PitchingStatsRow line = seasons.First(s => s.SeasonYear == 3100 + variant);
+            long faced = line.OutsRecorded + line.HAllowed + line.Bb;
+            aimBbRates[variant] = (double)line.Bb / faced;
+        }
+        Console.WriteLine($"  Pitcher aim: BB/PA {aimBbRates[0]:P1} challenging vs {aimBbRates[1]:P1} painting " +
+            $"({totalCalls} scripted calls)");
+        Check("v4 pitcher-side input has teeth: painting away walks ≥3pp more than challenging",
+            totalCalls > 1_000 && aimBbRates[1] - aimBbRates[0] >= 0.03,
+            $"{aimBbRates[0]:P1} vs {aimBbRates[1]:P1}");
     }
 
     private static void AddInning(ref InningLine total, in InningLine inning)

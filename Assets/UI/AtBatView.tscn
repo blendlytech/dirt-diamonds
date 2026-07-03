@@ -31,6 +31,10 @@ text = "0 out"
 layout_mode = 2
 text = "Bases empty"
 
+[node name="PitchCueLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = ""
+
 [node name="PlayLog" type="RichTextLabel" parent="Layout"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -39,6 +43,11 @@ text = "Play-by-play"
 
 [node name="Controls" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
+
+[node name="ZoneReadToggle" type="CheckButton" parent="Layout/Controls"]
+layout_mode = 2
+button_pressed = true
+text = "Read: in zone"
 
 [node name="TimingSlider" type="HSlider" parent="Layout/Controls"]
 layout_mode = 2

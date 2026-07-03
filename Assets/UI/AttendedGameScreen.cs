@@ -114,7 +114,8 @@ public sealed partial class AttendedGameScreen : Control
             _atBatView.Render(new AtBatViewState(
                 snapshot.Context.AwayScore, snapshot.Context.HomeScore,
                 snapshot.Context.Inning, snapshot.Context.IsTopHalf,
-                snapshot.Balls, snapshot.Strikes, snapshot.Context.Outs, snapshot.Context.Bases));
+                snapshot.Balls, snapshot.Strikes, snapshot.Context.Outs, snapshot.Context.Bases,
+                snapshot.Look.Cue, snapshot.Look.ZoneProbability));
         }
         while (_bridge.TryDequeuePaOutcome(out PaOutcome outcome))
         {
@@ -184,9 +185,10 @@ public sealed partial class AttendedGameScreen : Control
         RefreshDayLabel();
     }
 
-    private void OnSwingCommitted(double timingError) => _bridge.SubmitSwing(timingError);
+    private void OnSwingCommitted(double timingError, bool guessInZone) =>
+        _bridge.SubmitSwing(timingError, guessInZone);
 
-    private void OnTakeCommitted() => _bridge.SubmitTake();
+    private void OnTakeCommitted(bool guessInZone) => _bridge.SubmitTake(guessInZone);
 
     /// <summary>Placeholder until the new-game creation flow (life sim phase) ships.</summary>
     private void EnsureDebugAvatar(GameManager gm)

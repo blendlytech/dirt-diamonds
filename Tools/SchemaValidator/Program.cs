@@ -25,7 +25,7 @@ internal static class Program
     private static readonly string[] RequiredTables =
     {
         "Players", "Batting_Stats", "Pitching_Stats", "Relationships", "Entity_Flags", "Game_Logs", "Game_State",
-        "Teams", "Player_Ratings",
+        "Teams", "Player_Ratings", "Pitcher_Roles", "Pitch_Arsenals",
     };
 
     private static int Main(string[] args)
@@ -101,7 +101,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 3", db.GetSchemaVersion() == 3, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 4", db.GetSchemaVersion() == 4, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);
@@ -166,6 +166,10 @@ internal static class Program
             Check("day-advance batch transaction", stopwatch.ElapsedMilliseconds < 5_000,
                 $"{statements:N0} statements in {stopwatch.ElapsedMilliseconds} ms ({statements * 1000 / tickMs:N0} stmts/sec)");
 
+            // --- Schema v4: role/arsenal backfill migration ------------------
+            // Runs after the benchmark: the cascade check deletes players[3].
+            RunV4MigrationChecks(db, queries, schemaPath, players[3].PlayerId, players[4].PlayerId);
+
             // --- FK integrity ------------------------------------------------
             bool orphanRejected = false;
             try
@@ -205,6 +209,97 @@ internal static class Program
         {
             DeleteDatabaseFiles(dbPath);
         }
+    }
+
+    /// <summary>
+    /// Proves the v3→v4 pure-SQL migration: a pitcher who exists in
+    /// Player_Ratings without role/arsenal rows (the v3 state) gains a Starter
+    /// role and the 60/25/15 stuff-derived arsenal when the idempotent script
+    /// re-applies — and a re-apply never overwrites rows that already exist
+    /// (INSERT OR IGNORE), so post-v4 generated arsenals survive every boot.
+    /// </summary>
+    private static void RunV4MigrationChecks(
+        DatabaseManager db, PlayerQueries queries, string schemaPath, string pitcherId, string checkSubjectId)
+    {
+        // Stage the v3 state: ratings row flagged as pitcher, no satellite rows.
+        SqliteCommand insertRatings = db.GetPooledCommand(
+            "INSERT INTO Player_Ratings (player_id, is_pitcher, pit_stuff) VALUES (@id, 1, @stuff);");
+        if (insertRatings.Parameters.Count == 0)
+        {
+            insertRatings.Parameters.Add("@id", SqliteType.Text);
+            insertRatings.Parameters.Add("@stuff", SqliteType.Integer);
+        }
+        insertRatings.Parameters["@id"].Value = pitcherId;
+        insertRatings.Parameters["@stuff"].Value = 80;
+        db.ExecuteNonQuery(insertRatings);
+
+        db.InitializeSchema(schemaPath); // the boot-time migration pass
+
+        Check("v4 backfill: pitcher role defaults to Starter",
+            ScalarLong(db, "SELECT COALESCE((SELECT role FROM Pitcher_Roles WHERE player_id = @id), -1);", pitcherId) == 1);
+
+        Check("v4 backfill: three arsenal rows, usage sums to 100",
+            ScalarLong(db, "SELECT COUNT(*) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 3 &&
+            ScalarLong(db, "SELECT SUM(usage_weight) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 100);
+
+        Check("v4 backfill: stuff-derived ratings (80 → FB 80/40, BRK 60/80, OFF 55/85)",
+            ScalarLong(db, "SELECT velocity FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Fastball';", pitcherId) == 80 &&
+            ScalarLong(db, "SELECT movement FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Breaking';", pitcherId) == 80 &&
+            ScalarLong(db, "SELECT velocity FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Offspeed';", pitcherId) == 55 &&
+            ScalarLong(db, "SELECT movement FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Offspeed';", pitcherId) == 85);
+
+        // Perturb, re-apply, and prove OR IGNORE left the existing rows alone.
+        SqliteCommand perturb = db.GetPooledCommand(
+            "UPDATE Pitcher_Roles SET role = 2 WHERE player_id = @id; " +
+            "UPDATE Pitch_Arsenals SET velocity = 99 WHERE player_id = @id AND pitch_type = 'Fastball';");
+        if (perturb.Parameters.Count == 0)
+        {
+            perturb.Parameters.Add("@id", SqliteType.Text);
+        }
+        perturb.Parameters["@id"].Value = pitcherId;
+        db.ExecuteNonQuery(perturb);
+
+        db.InitializeSchema(schemaPath);
+        Check("v4 backfill is OR IGNORE (re-apply never clobbers existing rows)",
+            ScalarLong(db, "SELECT role FROM Pitcher_Roles WHERE player_id = @id;", pitcherId) == 2 &&
+            ScalarLong(db, "SELECT velocity FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Fastball';", pitcherId) == 99);
+
+        // CHECK constraint coverage on the new tables.
+        bool badRoleRejected = false;
+        try
+        {
+            SqliteCommand badRole = db.GetPooledCommand(
+                "INSERT INTO Pitcher_Roles (player_id, role) VALUES (@id, 7);");
+            if (badRole.Parameters.Count == 0)
+            {
+                badRole.Parameters.Add("@id", SqliteType.Text);
+            }
+            // An existing player with no role row, so only the role CHECK can object.
+            badRole.Parameters["@id"].Value = checkSubjectId;
+            db.ExecuteNonQuery(badRole);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            badRoleRejected = true;
+        }
+        Check("v4 CHECK rejects unknown role / pitch_type", badRoleRejected);
+
+        // Cascade: deleting the player clears role + arsenal satellites.
+        queries.Delete(pitcherId);
+        Check("v4 delete cascades to Pitcher_Roles + Pitch_Arsenals",
+            ScalarLong(db, "SELECT COUNT(*) FROM Pitcher_Roles WHERE player_id = @id;", pitcherId) == 0 &&
+            ScalarLong(db, "SELECT COUNT(*) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 0);
+    }
+
+    private static long ScalarLong(DatabaseManager db, string sql, string playerId)
+    {
+        SqliteCommand cmd = db.GetPooledCommand(sql);
+        if (cmd.Parameters.Count == 0)
+        {
+            cmd.Parameters.Add("@id", SqliteType.Text);
+        }
+        cmd.Parameters["@id"].Value = playerId;
+        return Convert.ToInt64(db.ExecuteScalar(cmd) ?? -1L, CultureInfo.InvariantCulture);
     }
 
     private static void RunLiveAudit(string livePath)
@@ -251,6 +346,9 @@ internal static class Program
         Check("index: Game_Logs(season_year, game_day)", HasIndexPrefix(db, "Game_Logs", "season_year", "game_day"));
         // Schema v3: macro-sim groups rosters by team_id (deferred-FK hot path).
         Check("index: Players(team_id)", HasIndexPrefix(db, "Players", "team_id"));
+        // Schema v4: roster join + arsenal bulk load ride the PKs.
+        Check("index: Pitcher_Roles(player_id)", HasIndexPrefix(db, "Pitcher_Roles", "player_id"));
+        Check("index: Pitch_Arsenals(player_id, pitch_type)", HasIndexPrefix(db, "Pitch_Arsenals", "player_id", "pitch_type"));
 
         // Data-type consistency spot check on the hottest table.
         Check("Players column types", VerifyColumnTypes(db, "Players", new Dictionary<string, string>
@@ -270,6 +368,21 @@ internal static class Program
             ["bat_power"] = "INTEGER",
             ["pit_stuff"] = "INTEGER",
             ["fielding"] = "INTEGER",
+        }));
+
+        // Schema v4: bullpen roles + pitch-type arsenals.
+        Check("Pitcher_Roles column types", VerifyColumnTypes(db, "Pitcher_Roles", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT",
+            ["role"] = "INTEGER",
+        }));
+        Check("Pitch_Arsenals column types", VerifyColumnTypes(db, "Pitch_Arsenals", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT",
+            ["pitch_type"] = "TEXT",
+            ["velocity"] = "INTEGER",
+            ["movement"] = "INTEGER",
+            ["usage_weight"] = "INTEGER",
         }));
     }
 

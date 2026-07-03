@@ -210,7 +210,41 @@ Steps 1, 2 and 4 of the Phase 5 list above, engine + harness + UI slice. No sche
 
 **Next steps (Phase 5 remainder / Phase 6 per BUILD_PLAN):**
 
-1. Schema v4 (No Blind Queries path): `pitcher_role` for bullpens; pitch-type arsenals + pitcher-side input model + a real zone-read minigame.
+1. ~~Schema v4 (No Blind Queries path): `pitcher_role` for bullpens; pitch-type arsenals + pitcher-side input model + a real zone-read minigame.~~ ✅ 2026-07-03 (entry below)
 2. New-game flow: avatar creation UI (name/team/ratings budget) replacing `EnsureDebugAvatar`.
 3. Attended-game feed: render NPC PAs between the avatar's at-bats (Game_Logs rows already exist per PA).
 4. BUILD_PLAN Phase 5 (Life Sim needs/utility) — note the plan's phase numbering diverges from progress.md's here; the baseball career wiring above was tracked as "Phase 5" in this log.
+
+---
+
+## 2026-07-03 — Schema v4: Bullpens, Pitch Arsenals, Real Zone Read, Pitcher-Side Input ✅
+
+The deferred v4 step (micro doc §8.5/§13), done schema-first per the No Blind Queries path. **All suites green: MonteCarloHarness 77/77 (was 69), CoreLoopHarness 22/22, SchemaValidator 58/58 scratch + 41/41 live, game assembly 0 warn/0 err, headless boot AND headless `AttendedGameScreen.tscn` instantiation clean.** The M1 macro season lines are STILL byte-for-byte (.248/.316/.411 R/G 4.21, .250/.319/.413 R/G 4.29) — see the rng-fork decision below. The live user save migrated in place on first boot (40 starters backfilled, 24 relievers invented, 192 arsenal rows).
+
+**Schema (v3→v4, purely additive, the idempotent script IS the migration — same pattern as v2→v3):**
+
+- `Pitcher_Roles` (player_id PK → Players CASCADE, role 1=Starter 2=Reliever) — a separate table, NOT an ALTER on Player_Ratings, so `CREATE TABLE IF NOT EXISTS` + `INSERT OR IGNORE` backfill (all pre-v4 pitchers were complete-game starters → role 1) keep the whole migration in the DDL.
+- `Pitch_Arsenals` (composite PK player_id+pitch_type ∈ {Fastball, Breaking, Offspeed}; velocity/movement 0–100, usage_weight summing 100 at the query layer). Backfill derives a conservative arsenal from `pit_stuff` (FB rides stuff, BRK carries movement, 60/25/15 mix); `OR IGNORE` means post-v4 generated arsenals are never clobbered on re-boot.
+- `PRAGMA user_version = 4`; all three harnesses' hardcoded version checks bumped (the known gotcha).
+- Reliever *people* can't be invented in DDL: `LeagueGenerator.EnsureV4` tops any team's bullpen up to 3 at boot (GameManager calls it right after `GenerateIfEmpty`).
+
+**Design decisions (the load-bearing ones):**
+
+- **M1 bit-identity via `RngState.Split()`** (xoshiro256\*\* long-jump, 2^192 draws ahead, parent state untouched). `GenerateIfEmpty` runs the frozen v3 9+5 loop on the caller's stream, then generates relievers + arsenals from a fork — the macro sim's seed lineage is unchanged, proven by the byte-identical season lines. Harness asserts Split's contract directly.
+- **Macro stays complete-game.** `LeagueSimulator` rotations now filter `role == Starter`; relievers are invisible to the macro sim, so its §8 calibration cannot move. Bullpens are a micro-sim (attended-game) mechanic only.
+- **The pitch location layer is an exact mixture, so neutral calibration cannot drift.** Each chain pitch now draws a type (usage mix) and an in/out-of-zone location. Conditional class rates are built from the REFERENCE zone probability z_ref (count/control/type tendency model): ballIn = ball·(1−s), ballOut carries the balancing surplus, strike/in-play scale by the shared complement factor — z_ref·in + (1−z_ref)·out ≡ the §5 rates for ANY z_ref and separation. A neutral pitcher draws location from z_ref → marginals preserved (§11.1/§11.2 pass untouched, pitches/PA still 3.84); a CALLED pitch draws location from control-driven execution odds instead and genuinely re-weights the mixture. Gotcha fixed mid-build: constructing the conditionals from the *executed* z would collapse the mixture back to the marginal and make aiming cosmetic.
+- **The zone read is now a real minigame.** `IBatterPolicy.NextPitch` gets a `PitchLook` (type cue — blurred by pitch movement vs batter discipline — plus the scouting zone probability for the cued type) and returns a `BatterIntent` (Neutral/Take/Swing + zone guess). Read correctness = guess vs the actually drawn location; the Phase 5 coin flip is gone. Timing tolerance is now judged against per-pitch `PerceivedStuff` (effective stuff ± type velocity/movement).
+- **Pitcher-side input model shipped engine-complete.** `IPitcherPolicy`/`PitchCall` (type + zone target, executed with control-driven accuracy), `NeutralPitcherPolicy` autopilot, `InteractivePitcherPolicy` over the same bridge (`AwaitPitchCall`/`SubmitPitchCall`, snapshot `IsPitching` flag). `SimulatePa` is now two-policy generic; `MicroGame.PlayGame`/`CareerManager.PlayPendingGame` grew two-policy forms with single-policy convenience overloads so Phase 5 call sites didn't churn. Harness proves aim has teeth: same-seed runs, BB/PA 3.1% challenging the zone vs 18.4% painting away.
+- **Bullpen pulls between half-innings** once the current pitcher's fatigue multiplier < `MicroGame.BullpenPullThreshold` (0.85, ≈ 91% of capacity); the reliever enters with a fresh stamina-derived capacity (generation gives relievers −20 stamina). `BullpenEnabled` toggle keeps the §11.4 starter-decay test isolated. 60-game proof: avg starter 98 pitches (complete games gone), 124 relief appearances, GS/W/L accounting identities intact.
+
+**Other surface:** roster row + join gained `Role` (LEFT JOIN Pitcher_Roles, plan re-validated: idx_players_team + PK autoindexes); `LoadAllArsenals`/`UpsertArsenalPitch`/`UpsertPitcherRole`; `PlayerQueries.LoadPitchingSeasons` (mirrors the batting loader); `CareerManager` displacement is role-exact (starter↔starter, reliever↔reliever) and a pitcher avatar writes role + stuff-derived arsenal; `RosterSizePerTeam` = 9+5+3 = 17. UI slice: `ZoneReadToggle` (CheckButton) + `PitchCueLabel` added to `AtBatView.tscn` (scene-mapped first), swing/take signals carry the guess, cue text via `[Export]` templates.
+
+**Harness (suite 8, +8 checks; suites 1–7 adapted):** Split contract (parent untouched, children deterministic/distinct); v4 roster shape 9+5+3 with roles ⟺ is_pitcher; arsenals 3-per-pitcher summing 100; EnsureV4 top-up + idempotence; relievers G>0 with GS=0 over 60 flushed games, starter avg pitches 98, accounting identities; pitcher-aim BB separation. SchemaValidator gained the v4 migration block (backfill values, OR IGNORE non-clobber, CHECK rejection, cascade).
+
+**Known v4 artifacts (deliberate):** (1) W/L still credited to starters (pitcher-of-record logic deferred; harness identities rely on 1 W + 1 L per game); saves stay 0. (2) Each sim still keeps its own rotation counter (cosmetic starter-identity drift, unchanged from Phase 5). (3) The pitching UI doesn't exist yet — `InteractivePitcherPolicy` is harness-proven only, waiting on the pitcher career path in the new-game flow. (4) Mid-inning pulls don't happen — bullpen decisions are between half-innings only. (5) NPC-PA feed gap from Phase 5 still open.
+
+**Next steps:**
+
+1. New-game flow: avatar creation UI (name/team/ratings budget, batter OR pitcher career) replacing `EnsureDebugAvatar`.
+2. Attended-game feed: render NPC PAs between the avatar's at-bats (Game_Logs rows already exist per PA).
+3. BUILD_PLAN Phase 5 (Life Sim needs/utility engine).

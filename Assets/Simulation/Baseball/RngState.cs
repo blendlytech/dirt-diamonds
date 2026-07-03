@@ -53,4 +53,42 @@ public struct RngState
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxExclusive);
         return (int)(NextDouble() * maxExclusive);
     }
+
+    // xoshiro256** long-jump polynomial (Blackman & Vigna reference constants):
+    // advances a state copy by 2^192 draws, partitioning the sequence into
+    // non-overlapping streams.
+    private static readonly ulong[] LongJump =
+    {
+        0x76E15D3EFEFDCBBFUL, 0xC5004E441C522FB3UL, 0x77710069854EE241UL, 0x39109BB02ACBE635UL,
+    };
+
+    /// <summary>
+    /// Forks a non-overlapping child stream 2^192 draws ahead WITHOUT advancing
+    /// this state — callers that must stay bit-identical (the M1 generation
+    /// prefix) hand later-added consumers a split instead of sharing draws.
+    /// </summary>
+    public readonly RngState Split()
+    {
+        RngState child = this;
+        ulong s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+        foreach (ulong mask in LongJump)
+        {
+            for (int bit = 0; bit < 64; bit++)
+            {
+                if ((mask & (1UL << bit)) != 0)
+                {
+                    s0 ^= child._s0;
+                    s1 ^= child._s1;
+                    s2 ^= child._s2;
+                    s3 ^= child._s3;
+                }
+                child.NextUInt64();
+            }
+        }
+        child._s0 = s0;
+        child._s1 = s1;
+        child._s2 = s2;
+        child._s3 = s3;
+        return child;
+    }
 }

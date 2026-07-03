@@ -47,6 +47,12 @@ public sealed class PlayerQueries
         "SELECT stat_id, player_id, season_year, pa, ab, h, doubles, triples, hr, bb, so, rbi, sb, avg, obp, slg, ops " +
         "FROM Batting_Stats WHERE player_id = @playerId ORDER BY season_year;";
 
+    // Same shape as the batting loader; rides the UNIQUE(player_id, season_year)
+    // prefix (validated via EXPLAIN QUERY PLAN alongside the v4 queries).
+    private const string SqlSelectPitchingByPlayer =
+        "SELECT stat_id, player_id, season_year, g, gs, w, l, sv, outs_recorded, h_allowed, er, bb, so, ip, era, whip " +
+        "FROM Pitching_Stats WHERE player_id = @playerId ORDER BY season_year;";
+
     private const string SqlUpsertFlag =
         "INSERT INTO Entity_Flags (player_id, flag_name, is_active, set_on_day) VALUES (@playerId, @flagName, @isActive, @setOnDay) " +
         "ON CONFLICT (player_id, flag_name) DO UPDATE SET is_active = excluded.is_active, set_on_day = excluded.set_on_day;";
@@ -76,6 +82,7 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _deletePlayer;
     private readonly SqliteCommand _insertBattingSeason;
     private readonly SqliteCommand _selectBattingByPlayer;
+    private readonly SqliteCommand _selectPitchingByPlayer;
     private readonly SqliteCommand _upsertFlag;
     private readonly SqliteCommand _selectActiveFlags;
     private readonly SqliteCommand _upsertRelationship;
@@ -107,6 +114,7 @@ public sealed class PlayerQueries
             ("@slg", SqliteType.Real), ("@ops", SqliteType.Real));
 
         _selectBattingByPlayer = Acquire(SqlSelectBattingByPlayer, ("@playerId", SqliteType.Text));
+        _selectPitchingByPlayer = Acquire(SqlSelectPitchingByPlayer, ("@playerId", SqliteType.Text));
 
         _upsertFlag = Acquire(SqlUpsertFlag,
             ("@playerId", SqliteType.Text), ("@flagName", SqliteType.Text),
@@ -303,6 +311,36 @@ public sealed class PlayerQueries
                 Obp = reader.GetDouble(14),
                 Slg = reader.GetDouble(15),
                 Ops = reader.GetDouble(16),
+            });
+        }
+        return destination.Count;
+    }
+
+    public int LoadPitchingSeasons(string playerId, List<PitchingStatsRow> destination)
+    {
+        destination.Clear();
+        _selectPitchingByPlayer.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectPitchingByPlayer);
+        while (reader.Read())
+        {
+            destination.Add(new PitchingStatsRow
+            {
+                StatId = reader.GetInt64(0),
+                PlayerId = reader.GetString(1),
+                SeasonYear = reader.GetInt32(2),
+                G = reader.GetInt32(3),
+                Gs = reader.GetInt32(4),
+                W = reader.GetInt32(5),
+                L = reader.GetInt32(6),
+                Sv = reader.GetInt32(7),
+                OutsRecorded = reader.GetInt32(8),
+                HAllowed = reader.GetInt32(9),
+                Er = reader.GetInt32(10),
+                Bb = reader.GetInt32(11),
+                So = reader.GetInt32(12),
+                Ip = reader.GetDouble(13),
+                Era = reader.GetDouble(14),
+                Whip = reader.GetDouble(15),
             });
         }
         return destination.Count;

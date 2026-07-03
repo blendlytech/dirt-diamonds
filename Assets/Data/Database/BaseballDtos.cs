@@ -1,5 +1,27 @@
 namespace DirtAndDiamonds.Data;
 
+/// <summary>
+/// Pitcher_Roles.role values (schema v4). None is the query-layer value for
+/// position players, who have no role row; only 1 and 2 exist in the table.
+/// </summary>
+public enum PitcherRole
+{
+    None = 0,
+    Starter = 1,
+    Reliever = 2,
+}
+
+/// <summary>
+/// Pitch_Arsenals.pitch_type values (schema v4), stored by name. The order is
+/// load-bearing: arsenal arrays index by (int)PitchType.
+/// </summary>
+public enum PitchType : byte
+{
+    Fastball = 0,
+    Breaking = 1,
+    Offspeed = 2,
+}
+
 /// <summary>Row DTO for the Teams table (schema v3). Mirrors columns one-to-one.</summary>
 public struct TeamRow
 {
@@ -26,14 +48,17 @@ public struct PlayerRatingsRow
 }
 
 /// <summary>
-/// One row of the Players ⋈ Player_Ratings roster join — everything the macro-sim
-/// needs per baseball-active player, bulk-loaded up front (never mid-simulation).
+/// One row of the Players ⋈ Player_Ratings ⟕ Pitcher_Roles roster join —
+/// everything the macro-sim needs per baseball-active player, bulk-loaded up
+/// front (never mid-simulation). Role is None for position players (no
+/// Pitcher_Roles row).
 /// </summary>
 public struct RosterPlayerRow
 {
     public string PlayerId;
     public int TeamId;
     public bool IsPitcher;
+    public PitcherRole Role;
     public int BatPower;
     public int BatContact;
     public int BatDiscipline;
@@ -41,6 +66,18 @@ public struct RosterPlayerRow
     public int PitControl;
     public int PitStamina;
     public int Fielding;
+}
+
+/// <summary>Row DTO for Pitch_Arsenals (schema v4). 0–100 scales, 50 = league average.</summary>
+public struct PitchArsenalRow
+{
+    public string PlayerId;
+    public PitchType Type;
+    public int Velocity;
+    public int Movement;
+
+    /// <summary>Selection share of the pitcher's mix; the three types sum to 100.</summary>
+    public int UsageWeight;
 }
 
 /// <summary>League-wide Batting_Stats sums for one season (run_monte_carlo_batch acceptance math).</summary>

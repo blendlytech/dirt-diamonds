@@ -53,14 +53,22 @@ public struct InningLine
 /// With logging disabled, a simulated game allocates zero bytes once warm.
 /// Never references the Life sim.
 ///
-/// When the human is on the mound, the opposing batters currently supply
-/// neutral input to the pitch chain (a pitcher-side input model arrives with
-/// the pitch-arsenal schema step, §13).
+/// When the human is on the mound, the pitcher policy supplies per-pitch
+/// calls (type + zone target, v4) while the opposing batters answer with the
+/// neutral policy; bullpen pulls (§8.5) happen between half-innings once the
+/// fatigue multiplier crosses the threshold.
 /// </summary>
 public sealed class MicroGame
 {
     /// <summary>Sentinel for "no human in this game" (fully NPC exhibition / harness runs).</summary>
     public const int NoHuman = -1;
+
+    /// <summary>
+    /// §8.5 bullpen trigger: the starter (or current reliever) is lifted
+    /// between half-innings once his fatigue multiplier sinks below this —
+    /// ~0.91 of capacity, mid-to-late game for an average starter.
+    /// </summary>
+    public const double BullpenPullThreshold = 0.85;
 
     private const int MaxTrackedInnings = 30;
 
@@ -72,11 +80,13 @@ public sealed class MicroGame
     private RosterPlayerRow[] _roster = Array.Empty<RosterPlayerRow>();
     private BatterRatings[] _batterRatings = Array.Empty<BatterRatings>();
     private PitcherRatings[] _pitcherRatings = Array.Empty<PitcherRatings>();
+    private PitcherArsenal[] _arsenals = Array.Empty<PitcherArsenal>();
     private bool[] _pedActive = Array.Empty<bool>();
 
     private int[] _teamIds = Array.Empty<int>();
     private int[] _lineupSlots = Array.Empty<int>();
     private int[] _rotationSlots = Array.Empty<int>();
+    private int[] _bullpenSlots = Array.Empty<int>();
     private byte[] _teamDefense = Array.Empty<byte>();
     private int[] _teamGamesPlayed = Array.Empty<int>();
     private int _teamCount;
@@ -96,6 +106,10 @@ public sealed class MicroGame
 
     /// <summary>§8: false freezes every fatigue multiplier at 1 (harness test 2).</summary>
     public bool FatigueEnabled = true;
+
+    /// <summary>§8.5: false pins the starter for a complete game (harness tests
+    /// that isolate starter fatigue from bullpen relief).</summary>
+    public bool BullpenEnabled = true;
 
     /// <summary>§10: play-by-play capture; disable for headless bulk runs (zero-GC profile).</summary>
     public bool LoggingEnabled = true;
@@ -166,20 +180,40 @@ public sealed class MicroGame
         _queries.LoadActiveFlagPlayerIds(LeagueSimulator.PedActiveFlagName, pedIds);
         var pedSet = new HashSet<string>(pedIds, StringComparer.Ordinal);
 
+        // Arsenal rows keyed by player for slot assembly below (load-time only).
+        var arsenalRows = new List<PitchArsenalRow>(_roster.Length * 3);
+        _queries.LoadAllArsenals(arsenalRows);
+        var arsenalParts = new Dictionary<string, (PitchArsenalRow Fb, PitchArsenalRow Brk, PitchArsenalRow Off, int Count)>(StringComparer.Ordinal);
+        foreach (PitchArsenalRow row in arsenalRows)
+        {
+            arsenalParts.TryGetValue(row.PlayerId, out var parts);
+            switch (row.Type)
+            {
+                case PitchType.Fastball: parts.Fb = row; break;
+                case PitchType.Breaking: parts.Brk = row; break;
+                default: parts.Off = row; break;
+            }
+            parts.Count++;
+            arsenalParts[row.PlayerId] = parts;
+        }
+
         int slots = _roster.Length;
         _batterRatings = new BatterRatings[slots];
         _pitcherRatings = new PitcherRatings[slots];
+        _arsenals = new PitcherArsenal[slots];
         _pedActive = new bool[slots];
         _batting = new BattingLine[slots];
         _pitching = new PitchingLine[slots];
         _playedThisGame = new bool[slots];
         _lineupSlots = new int[_teamCount * LeagueSimulator.LineupSize];
         _rotationSlots = new int[_teamCount * LeagueSimulator.RotationSize];
+        _bullpenSlots = new int[_teamCount * LeagueSimulator.BullpenSize];
         _teamDefense = new byte[_teamCount];
         _teamGamesPlayed = new int[_teamCount];
 
         Span<int> lineupCount = stackalloc int[_teamCount];
         Span<int> rotationCount = stackalloc int[_teamCount];
+        Span<int> bullpenCount = stackalloc int[_teamCount];
         Span<int> fieldingSum = stackalloc int[_teamCount];
 
         for (int i = 0; i < slots; i++)
@@ -198,9 +232,28 @@ public sealed class MicroGame
 
             if (row.IsPitcher)
             {
-                if (rotationCount[team] < LeagueSimulator.RotationSize)
+                if (!arsenalParts.TryGetValue(row.PlayerId, out var parts) || parts.Count != 3)
                 {
-                    _rotationSlots[team * LeagueSimulator.RotationSize + rotationCount[team]++] = i;
+                    throw new InvalidOperationException(
+                        $"Pitcher {row.PlayerId} has {parts.Count}/3 Pitch_Arsenals rows — " +
+                        "the v4 backfill/generation invariant is broken.");
+                }
+                _arsenals[i] = new PitcherArsenal(
+                    (byte)parts.Fb.Velocity, (byte)parts.Fb.Movement, (byte)parts.Fb.UsageWeight,
+                    (byte)parts.Brk.Velocity, (byte)parts.Brk.Movement, (byte)parts.Brk.UsageWeight,
+                    (byte)parts.Off.Velocity, (byte)parts.Off.Movement, (byte)parts.Off.UsageWeight);
+
+                switch (row.Role)
+                {
+                    case PitcherRole.Starter when rotationCount[team] < LeagueSimulator.RotationSize:
+                        _rotationSlots[team * LeagueSimulator.RotationSize + rotationCount[team]++] = i;
+                        break;
+                    case PitcherRole.Reliever when bullpenCount[team] < LeagueSimulator.BullpenSize:
+                        _bullpenSlots[team * LeagueSimulator.BullpenSize + bullpenCount[team]++] = i;
+                        break;
+                    case PitcherRole.None:
+                        throw new InvalidOperationException(
+                            $"Pitcher {row.PlayerId} has no Pitcher_Roles row — the v4 backfill/generation invariant is broken.");
                 }
             }
             else if (lineupCount[team] < LeagueSimulator.LineupSize)
@@ -212,11 +265,14 @@ public sealed class MicroGame
 
         for (int t = 0; t < _teamCount; t++)
         {
-            if (lineupCount[t] < LeagueSimulator.LineupSize || rotationCount[t] < LeagueSimulator.RotationSize)
+            if (lineupCount[t] < LeagueSimulator.LineupSize || rotationCount[t] < LeagueSimulator.RotationSize ||
+                bullpenCount[t] < LeagueSimulator.BullpenSize)
             {
                 throw new InvalidOperationException(
-                    $"Team {_teamIds[t]} has {lineupCount[t]}/{LeagueSimulator.LineupSize} position players and " +
-                    $"{rotationCount[t]}/{LeagueSimulator.RotationSize} pitchers — cannot host an attended game.");
+                    $"Team {_teamIds[t]} has {lineupCount[t]}/{LeagueSimulator.LineupSize} position players, " +
+                    $"{rotationCount[t]}/{LeagueSimulator.RotationSize} starters and " +
+                    $"{bullpenCount[t]}/{LeagueSimulator.BullpenSize} relievers — cannot host an attended game " +
+                    "(did LeagueGenerator.EnsureV4 run?).");
             }
             _teamDefense[t] = (byte)((fieldingSum[t] + LeagueSimulator.LineupSize / 2) / LeagueSimulator.LineupSize);
         }
@@ -244,15 +300,32 @@ public sealed class MicroGame
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Plays one full game. <paramref name="humanSlot"/> is the roster slot of
-    /// the player's avatar (<see cref="NoHuman"/> for none); the policy supplies
-    /// that avatar's per-pitch input — <see cref="NeutralBatterPolicy"/> for
-    /// headless runs (§6.1). Game-flow rules (9 innings, home half skipped when
-    /// ahead, extras while tied) mirror the macro-sim exactly.
+    /// Single-policy convenience: the human (if any) only bats; NPC pitchers
+    /// run on the neutral mound autopilot. Existing Phase 5 call sites keep
+    /// this shape.
     /// </summary>
     public MicroGameResult PlayGame<TPolicy>(
         int homeTeamId, int awayTeamId, int humanSlot, ref TPolicy policy, ref RngState rng)
         where TPolicy : IBatterPolicy
+    {
+        var neutralPitcher = new NeutralPitcherPolicy();
+        return PlayGame(homeTeamId, awayTeamId, humanSlot, ref policy, ref neutralPitcher, ref rng);
+    }
+
+    /// <summary>
+    /// Plays one full game. <paramref name="humanSlot"/> is the roster slot of
+    /// the player's avatar (<see cref="NoHuman"/> for none); the batter policy
+    /// supplies that avatar's per-pitch input when batting, the pitcher policy
+    /// its pitch calls when on the mound — the neutral policies for headless
+    /// runs (§6.1). Game-flow rules (9 innings, home half skipped when ahead,
+    /// extras while tied) mirror the macro-sim exactly; §8.5 bullpen pulls
+    /// happen between half-innings off the fatigue multiplier.
+    /// </summary>
+    public MicroGameResult PlayGame<TBatter, TPitcher>(
+        int homeTeamId, int awayTeamId, int humanSlot,
+        ref TBatter batterPolicy, ref TPitcher pitcherPolicy, ref RngState rng)
+        where TBatter : IBatterPolicy
+        where TPitcher : IPitcherPolicy
     {
         if (!_initialized)
         {
@@ -278,10 +351,16 @@ public sealed class MicroGame
         _teamGamesPlayed[homeTeam]++;
         _teamGamesPlayed[awayTeam]++;
 
-        // §8: complete-game starters whose effectiveness decays via the fatigue
-        // multiplier (bullpens are the deferred v4 follow-on, §8.5).
+        // §8/§8.5: starters decay via the fatigue multiplier and hand off to
+        // the bullpen when it sinks below the pull threshold.
+        int homePitcher = homeStarter;
+        int awayPitcher = awayStarter;
         var homeFatigue = new PitcherFatigue(in _pitcherRatings[homeStarter], _pedActive[homeStarter], FatigueEnabled);
         var awayFatigue = new PitcherFatigue(in _pitcherRatings[awayStarter], _pedActive[awayStarter], FatigueEnabled);
+        int homeBullpenUsed = 0;
+        int awayBullpenUsed = 0;
+        double homeStarterPitches = -1.0;
+        double awayStarterPitches = -1.0;
         _pitching[homeStarter].G++;
         _pitching[homeStarter].Gs++;
         _pitching[awayStarter].G++;
@@ -297,24 +376,29 @@ public sealed class MicroGame
 
         for (inning = 1; ; inning++)
         {
+            MaybePullPitcher(homeTeam, ref homePitcher, ref homeFatigue, ref homeBullpenUsed, ref homeStarterPitches);
             awayScore += PlayHalfInning(
-                awayTeam, homeStarter, ref homeFatigue, _teamDefense[homeTeam], ref awayOrder,
+                awayTeam, homePitcher, ref homeFatigue, _teamDefense[homeTeam], ref awayOrder,
                 humanSlot, inning, isTopHalf: true, awayScore, homeScore,
-                ref policy, ref rng, ref humanPa, ref humanPitches);
+                ref batterPolicy, ref pitcherPolicy, ref rng, ref humanPa, ref humanPitches);
             if (inning >= 9 && homeScore > awayScore)
             {
                 break;
             }
+            MaybePullPitcher(awayTeam, ref awayPitcher, ref awayFatigue, ref awayBullpenUsed, ref awayStarterPitches);
             homeScore += PlayHalfInning(
-                homeTeam, awayStarter, ref awayFatigue, _teamDefense[awayTeam], ref homeOrder,
+                homeTeam, awayPitcher, ref awayFatigue, _teamDefense[awayTeam], ref homeOrder,
                 humanSlot, inning, isTopHalf: false, awayScore, homeScore,
-                ref policy, ref rng, ref humanPa, ref humanPitches);
+                ref batterPolicy, ref pitcherPolicy, ref rng, ref humanPa, ref humanPitches);
             if (inning >= 9 && homeScore != awayScore)
             {
                 break;
             }
         }
 
+        // Decisions stay with the starters — pitcher-of-record bookkeeping is
+        // a deliberate v4 simplification (documented artifact; W/L accounting
+        // identities in the harness rely on exactly one W and L per game).
         if (homeScore > awayScore)
         {
             _pitching[homeStarter].W++;
@@ -324,6 +408,15 @@ public sealed class MicroGame
         {
             _pitching[awayStarter].W++;
             _pitching[homeStarter].L++;
+        }
+
+        if (homeStarterPitches < 0.0)
+        {
+            homeStarterPitches = homeFatigue.PitchesThrown;
+        }
+        if (awayStarterPitches < 0.0)
+        {
+            awayStarterPitches = awayFatigue.PitchesThrown;
         }
 
         // §6/§8.4 post-game hook bookkeeping: participants are marked so flush
@@ -348,7 +441,33 @@ public sealed class MicroGame
         _gamePendingFlush = true;
         return new MicroGameResult(
             homeTeamId, awayTeamId, homeScore, awayScore, inning,
-            humanPa, humanPitches, homeFatigue.PitchesThrown, awayFatigue.PitchesThrown);
+            humanPa, humanPitches, homeStarterPitches, awayStarterPitches);
+    }
+
+    /// <summary>
+    /// §8.5: lifts the current pitcher between half-innings once his fatigue
+    /// multiplier drops below <see cref="BullpenPullThreshold"/>, bringing the
+    /// next fresh reliever (their own stamina-derived capacity). The starter's
+    /// final pitch count is captured on his way out for the game line.
+    /// </summary>
+    private void MaybePullPitcher(
+        int team, ref int pitcherSlot, ref PitcherFatigue fatigue, ref int bullpenUsed,
+        ref double starterPitches)
+    {
+        if (!BullpenEnabled || bullpenUsed >= LeagueSimulator.BullpenSize ||
+            fatigue.Multiplier >= BullpenPullThreshold)
+        {
+            return;
+        }
+        if (bullpenUsed == 0)
+        {
+            starterPitches = fatigue.PitchesThrown;
+        }
+        int reliever = _bullpenSlots[team * LeagueSimulator.BullpenSize + bullpenUsed++];
+        pitcherSlot = reliever;
+        fatigue = new PitcherFatigue(in _pitcherRatings[reliever], _pedActive[reliever], FatigueEnabled);
+        _pitching[reliever].G++;
+        _playedThisGame[reliever] = true;
     }
 
     private int TeamIndexOf(int teamId)
@@ -368,16 +487,19 @@ public sealed class MicroGame
     /// from the pitcher's CURRENT effective ratings (§5.2/§8.3); the pitch
     /// chain runs only when the human bats or pitches (§1).
     /// </summary>
-    private int PlayHalfInning<TPolicy>(
+    private int PlayHalfInning<TBatter, TPitcher>(
         int battingTeam, int pitcherSlot, ref PitcherFatigue fatigue, byte defense, ref int orderPos,
         int humanSlot, int inning, bool isTopHalf, int awayScore, int homeScore,
-        ref TPolicy policy, ref RngState rng, ref int humanPa, ref int humanPitches)
-        where TPolicy : IBatterPolicy
+        ref TBatter batterPolicy, ref TPitcher pitcherPolicy, ref RngState rng,
+        ref int humanPa, ref int humanPitches)
+        where TBatter : IBatterPolicy
+        where TPitcher : IPitcherPolicy
     {
         int outs = 0;
         int bases = 0;
         int runs = 0;
-        var neutral = new NeutralBatterPolicy();
+        var neutralBatter = new NeutralBatterPolicy();
+        var neutralPitcher = new NeutralPitcherPolicy();
         // Hoisted: stackalloc inside the loop would only release at method exit.
         Span<double> anchor = stackalloc double[AtBatResolver.OutcomeCount];
 
@@ -399,20 +521,29 @@ public sealed class MicroGame
                 AtBatResolver.ComputeProbabilities(in _batterRatings[batterSlot], in effectivePitcher, defense, anchor);
                 PitchClassRates rates = PitchChain.SolveNeutral(
                     anchor[(int)PaOutcome.Walk], anchor[(int)PaOutcome.Strikeout]);
+                var matchup = new PitchMatchup(
+                    in _arsenals[pitcherSlot], effectivePitcher.Control, _batterRatings[batterSlot].Discipline);
+                // Runs already scored this half count toward the batting side.
+                var context = new HumanPaContext(
+                    awayScore + (isTopHalf ? runs : 0), homeScore + (isTopHalf ? 0 : runs),
+                    inning, isTopHalf, outs, bases, in effectivePitcher);
                 if (humanBatting)
                 {
-                    // Runs already scored this half count toward the batting side.
-                    policy.BeginPa(new HumanPaContext(
-                        awayScore + (isTopHalf ? runs : 0), homeScore + (isTopHalf ? 0 : runs),
-                        inning, isTopHalf, outs, bases, in effectivePitcher));
-                    outcome = PitchChain.SimulatePa(anchor, in rates, ref policy, ref fatigue, ref rng, out pitches);
-                    policy.OnPaResolved(outcome);
+                    batterPolicy.BeginPa(in context);
+                    outcome = PitchChain.SimulatePa(
+                        anchor, in rates, in matchup, ref batterPolicy, ref neutralPitcher,
+                        ref fatigue, ref rng, out pitches);
+                    batterPolicy.OnPaResolved(outcome);
                     humanPa++;
                     humanPitches += pitches;
                 }
                 else
                 {
-                    outcome = PitchChain.SimulatePa(anchor, in rates, ref neutral, ref fatigue, ref rng, out pitches);
+                    pitcherPolicy.BeginPa(in context);
+                    outcome = PitchChain.SimulatePa(
+                        anchor, in rates, in matchup, ref neutralBatter, ref pitcherPolicy,
+                        ref fatigue, ref rng, out pitches);
+                    pitcherPolicy.OnPaResolved(outcome);
                 }
             }
             else

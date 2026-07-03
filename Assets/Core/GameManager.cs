@@ -76,6 +76,9 @@ public sealed partial class GameManager : Node
         var rng = new RngState(unchecked((ulong)System.Environment.TickCount64) | 1UL);
         bool newLeague = LeagueGenerator.GenerateIfEmpty(
             _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        // v3→v4 save top-up: invents the relievers the DDL backfill cannot
+        // (roles/arsenals for migrated pitchers come from the schema script).
+        LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
 
         // Split the wall-clock stream before the league copies it, so the two
         // sims never replay each other's draws.

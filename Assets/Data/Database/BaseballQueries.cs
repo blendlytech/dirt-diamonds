@@ -35,11 +35,33 @@ public sealed class BaseballQueries
 
     // The macro-sim's single up-front bulk load. Ordered (team, player) so the
     // simulator's lineup/rotation assignment is deterministic across sessions.
+    // Schema v4 adds the Pitcher_Roles LEFT JOIN (COALESCE 0 = None for position
+    // players); plan re-validated via EXPLAIN QUERY PLAN — idx_players_team plus
+    // both PK autoindexes, same shape as v3 (No Blind Queries).
     private const string SqlSelectRoster =
-        "SELECT p.player_id, p.team_id, r.is_pitcher, r.bat_power, r.bat_contact, r.bat_discipline, " +
+        "SELECT p.player_id, p.team_id, r.is_pitcher, COALESCE(pr.role, 0), " +
+        "r.bat_power, r.bat_contact, r.bat_discipline, " +
         "r.pit_stuff, r.pit_control, r.pit_stamina, r.fielding " +
         "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
+        "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
         "WHERE p.team_id IS NOT NULL ORDER BY p.team_id, p.player_id;";
+
+    // Schema v4: bullpen role + arsenal writes (world-gen / avatar creation) and
+    // the arsenal bulk load (rides the composite PK; ordered so slot-indexed
+    // arsenal assembly is deterministic across sessions).
+    private const string SqlUpsertPitcherRole =
+        "INSERT INTO Pitcher_Roles (player_id, role) VALUES (@playerId, @role) " +
+        "ON CONFLICT (player_id) DO UPDATE SET role = excluded.role;";
+
+    private const string SqlUpsertArsenalPitch =
+        "INSERT INTO Pitch_Arsenals (player_id, pitch_type, velocity, movement, usage_weight) VALUES " +
+        "(@playerId, @pitchType, @velocity, @movement, @usageWeight) " +
+        "ON CONFLICT (player_id, pitch_type) DO UPDATE SET velocity = excluded.velocity, " +
+        "movement = excluded.movement, usage_weight = excluded.usage_weight;";
+
+    private const string SqlSelectAllArsenals =
+        "SELECT player_id, pitch_type, velocity, movement, usage_weight " +
+        "FROM Pitch_Arsenals ORDER BY player_id, pitch_type;";
 
     // Rides the idx_entity_flags_active_name partial index (is_active = 1).
     private const string SqlSelectActiveFlagPlayerIds =
@@ -116,6 +138,9 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _countTeams;
     private readonly SqliteCommand _upsertRatings;
     private readonly SqliteCommand _selectRoster;
+    private readonly SqliteCommand _upsertPitcherRole;
+    private readonly SqliteCommand _upsertArsenalPitch;
+    private readonly SqliteCommand _selectAllArsenals;
     private readonly SqliteCommand _selectActiveFlagPlayerIds;
     private readonly SqliteCommand _addBattingGameCounts;
     private readonly SqliteCommand _addPitchingGameCounts;
@@ -144,6 +169,16 @@ public sealed class BaseballQueries
             ("@fielding", SqliteType.Integer));
 
         _selectRoster = Acquire(SqlSelectRoster);
+
+        _upsertPitcherRole = Acquire(SqlUpsertPitcherRole,
+            ("@playerId", SqliteType.Text), ("@role", SqliteType.Integer));
+
+        _upsertArsenalPitch = Acquire(SqlUpsertArsenalPitch,
+            ("@playerId", SqliteType.Text), ("@pitchType", SqliteType.Text),
+            ("@velocity", SqliteType.Integer), ("@movement", SqliteType.Integer),
+            ("@usageWeight", SqliteType.Integer));
+
+        _selectAllArsenals = Acquire(SqlSelectAllArsenals);
         _selectActiveFlagPlayerIds = Acquire(SqlSelectActiveFlagPlayerIds, ("@flagName", SqliteType.Text));
 
         _addBattingGameCounts = Acquire(SqlAddBattingGameCounts,
@@ -261,17 +296,82 @@ public sealed class BaseballQueries
                 PlayerId = reader.GetString(0),
                 TeamId = reader.GetInt32(1),
                 IsPitcher = reader.GetInt64(2) != 0,
-                BatPower = reader.GetInt32(3),
-                BatContact = reader.GetInt32(4),
-                BatDiscipline = reader.GetInt32(5),
-                PitStuff = reader.GetInt32(6),
-                PitControl = reader.GetInt32(7),
-                PitStamina = reader.GetInt32(8),
-                Fielding = reader.GetInt32(9),
+                Role = (PitcherRole)reader.GetInt32(3),
+                BatPower = reader.GetInt32(4),
+                BatContact = reader.GetInt32(5),
+                BatDiscipline = reader.GetInt32(6),
+                PitStuff = reader.GetInt32(7),
+                PitControl = reader.GetInt32(8),
+                PitStamina = reader.GetInt32(9),
+                Fielding = reader.GetInt32(10),
             });
         }
         return destination.Count;
     }
+
+    /// <summary>Sets a pitcher's bullpen role (schema v4). Position players never get a row.</summary>
+    public void UpsertPitcherRole(string playerId, PitcherRole role)
+    {
+        if (role == PitcherRole.None)
+        {
+            throw new ArgumentException("PitcherRole.None is the absence of a row, not a storable role.", nameof(role));
+        }
+        SqliteParameterCollection p = _upsertPitcherRole.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@role"].Value = (int)role;
+        _db.ExecuteNonQuery(_upsertPitcherRole);
+    }
+
+    /// <summary>Writes one pitch of a pitcher's arsenal (schema v4).</summary>
+    public void UpsertArsenalPitch(in PitchArsenalRow pitch)
+    {
+        SqliteParameterCollection p = _upsertArsenalPitch.Parameters;
+        p["@playerId"].Value = pitch.PlayerId;
+        p["@pitchType"].Value = PitchTypeName(pitch.Type);
+        p["@velocity"].Value = pitch.Velocity;
+        p["@movement"].Value = pitch.Movement;
+        p["@usageWeight"].Value = pitch.UsageWeight;
+        _db.ExecuteNonQuery(_upsertArsenalPitch);
+    }
+
+    /// <summary>
+    /// Bulk-loads every arsenal row ordered (player_id, pitch_type) — the sims'
+    /// one up-front load, mirroring <see cref="LoadRoster"/>.
+    /// </summary>
+    public int LoadAllArsenals(List<PitchArsenalRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllArsenals);
+        while (reader.Read())
+        {
+            destination.Add(new PitchArsenalRow
+            {
+                PlayerId = reader.GetString(0),
+                Type = ParsePitchType(reader.GetString(1)),
+                Velocity = reader.GetInt32(2),
+                Movement = reader.GetInt32(3),
+                UsageWeight = reader.GetInt32(4),
+            });
+        }
+        return destination.Count;
+    }
+
+    /// <summary>Enum ↔ stored-name mapping for Pitch_Arsenals.pitch_type (CHECK-constrained).</summary>
+    public static string PitchTypeName(PitchType type) => type switch
+    {
+        PitchType.Fastball => "Fastball",
+        PitchType.Breaking => "Breaking",
+        PitchType.Offspeed => "Offspeed",
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+    };
+
+    private static PitchType ParsePitchType(string name) => name switch
+    {
+        "Fastball" => PitchType.Fastball,
+        "Breaking" => PitchType.Breaking,
+        "Offspeed" => PitchType.Offspeed,
+        _ => throw new InvalidOperationException($"Unknown pitch_type '{name}' in Pitch_Arsenals."),
+    };
 
     /// <summary>Player ids whose named flag is currently active (e.g. "ped_active"), via the partial index.</summary>
     public int LoadActiveFlagPlayerIds(string flagName, List<string> destination)

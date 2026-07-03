@@ -132,20 +132,29 @@ public sealed class CareerManager
 
     /// <summary>
     /// Creates the player avatar on <paramref name="teamId"/>: inserts the
-    /// Players + Player_Ratings rows, benches the team's weakest same-role
-    /// player to free-agency (rosters stay exactly 9+5), records the avatar in
-    /// Game_State — one batch — then reloads both sims' rosters and claims the
-    /// team from the macro sim. The league's in-memory stats are flushed first
-    /// so the reload loses nothing.
+    /// Players + Player_Ratings rows (plus Pitcher_Roles and a stuff-derived
+    /// Pitch_Arsenals set when the avatar pitches), benches the team's weakest
+    /// same-role player to free-agency (rosters stay exactly 9+5+3), records
+    /// the avatar in Game_State — one batch — then reloads both sims' rosters
+    /// and claims the team from the macro sim. The league's in-memory stats
+    /// are flushed first so the reload loses nothing.
     /// </summary>
-    public void CreateAvatar(string firstName, string lastName, int teamId, in PlayerRatingsRow ratings)
+    /// <param name="pitcherRole">Bullpen role when <paramref name="ratings"/>.IsPitcher; ignored for batters.</param>
+    public void CreateAvatar(
+        string firstName, string lastName, int teamId, in PlayerRatingsRow ratings,
+        PitcherRole pitcherRole = PitcherRole.Starter)
     {
         if (HasAvatar)
         {
             throw new InvalidOperationException($"Avatar {_avatarPlayerId} already exists (one career per save).");
         }
+        if (ratings.IsPitcher && pitcherRole == PitcherRole.None)
+        {
+            throw new ArgumentException("A pitcher avatar needs a bullpen role.", nameof(pitcherRole));
+        }
 
-        string displacedId = FindDisplacedPlayer(teamId, ratings.IsPitcher);
+        PitcherRole displacedRole = ratings.IsPitcher ? pitcherRole : PitcherRole.None;
+        string displacedId = FindDisplacedPlayer(teamId, displacedRole);
         string avatarId = Guid.NewGuid().ToString();
 
         _league.FlushPending();
@@ -169,6 +178,13 @@ public sealed class CareerManager
             PlayerRatingsRow avatarRatings = ratings;
             avatarRatings.PlayerId = avatarId;
             _baseball.UpsertRatings(in avatarRatings);
+            if (ratings.IsPitcher)
+            {
+                _baseball.UpsertPitcherRole(avatarId, pitcherRole);
+                // Deterministic stuff-derived arsenal (spread 0 = no jitter);
+                // a bespoke arsenal editor belongs to the creation UI later.
+                LeagueGenerator.GenerateArsenal(_baseball, avatarId, ratings.PitStuff, ratingSpread: 0, ref _rng);
+            }
             _players.SetTeam(displacedId, null);
             _gameState.SetText(GameStateKeys.AvatarPlayerId, avatarId);
             _db.CommitBatch();
@@ -213,18 +229,21 @@ public sealed class CareerManager
 
     /// <summary>
     /// Weakest same-role player on the team by summed role ratings (ties break
-    /// on player_id, matching the roster join's deterministic order).
+    /// on player_id, matching the roster join's deterministic order). Role is
+    /// exact since v4: a starter avatar displaces a starter, a reliever a
+    /// reliever, a batter a batter — rosters stay 9 + 5 + 3.
     /// </summary>
-    private string FindDisplacedPlayer(int teamId, bool isPitcher)
+    private string FindDisplacedPlayer(int teamId, PitcherRole role)
     {
         var roster = new List<RosterPlayerRow>(LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
         _baseball.LoadRoster(roster);
 
+        bool isPitcher = role != PitcherRole.None;
         string? weakestId = null;
         int weakestSum = int.MaxValue;
         foreach (RosterPlayerRow row in roster)
         {
-            if (row.TeamId != teamId || row.IsPitcher != isPitcher)
+            if (row.TeamId != teamId || row.Role != role)
             {
                 continue;
             }
@@ -238,7 +257,7 @@ public sealed class CareerManager
             }
         }
         return weakestId ?? throw new InvalidOperationException(
-            $"Team {teamId} has no {(isPitcher ? "pitcher" : "position player")} to displace — league not generated?");
+            $"Team {teamId} has no {(isPitcher ? $"{role} pitcher" : "position player")} to displace — league not generated?");
     }
 
     // ------------------------------------------------------------------
@@ -302,6 +321,19 @@ public sealed class CareerManager
     public MicroGameResult PlayPendingGame<TPolicy>(ref TPolicy policy)
         where TPolicy : IBatterPolicy
     {
+        var neutralPitcher = new NeutralPitcherPolicy();
+        return PlayPendingGame(ref policy, ref neutralPitcher);
+    }
+
+    /// <summary>
+    /// Two-policy form (v4): the pitcher policy supplies the avatar's pitch
+    /// calls when the avatar is on the mound (pitcher careers); batter-only
+    /// call sites use the single-policy overload.
+    /// </summary>
+    public MicroGameResult PlayPendingGame<TBatter, TPitcher>(ref TBatter batterPolicy, ref TPitcher pitcherPolicy)
+        where TBatter : IBatterPolicy
+        where TPitcher : IPitcherPolicy
+    {
         if (!_hasPending)
         {
             throw new InvalidOperationException("No attended game is pending.");
@@ -315,7 +347,8 @@ public sealed class CareerManager
         try
         {
             MicroGameResult result = _micro.PlayGame(
-                _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot, ref policy, ref _rng);
+                _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot,
+                ref batterPolicy, ref pitcherPolicy, ref _rng);
             _micro.FlushGame(_pending.SeasonYear, checked((int)_pending.AbsoluteDay));
             _hasPending = false;
             return result;
