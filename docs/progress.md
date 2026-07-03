@@ -83,3 +83,49 @@ At the end of every coding session, before you clear the chat, instruct Fable 5 
 3. `LeagueSimulator.cs` + `AtBatResolver.cs` (Fable 5): structs/`Span<T>`, rosters bulk-loaded up front via `PlayerQueries.LoadAll`, league days react to `DayAdvancedEvent` off the bus, results committed in the sim's own batch (never the tick's).
 4. Sonnet 5: `StatsNormalizer.cs` (denormalized AVG/OBP/SLG/OPS after batch writes) + the headless harness behind `run_monte_carlo_batch`.
 5. Exit: full season simulates headless; league slash line within MLB norms; flat GC profile.
+
+---
+
+## 2026-07-03 — Phase 3 (partial): PA-outcome design + schema v3 ✅ (steps 1–2 of the Phase 3 plan)
+
+Scope was deliberately capped here — **stopped before writing any baseball C#** (`AtBatResolver.cs` / `LeagueSimulator.cs` remain empty stubs). What shipped is the statistical design and its backing schema, both validated, so the resolver/simulator can be written next session against a proven schema (No Blind Queries).
+
+**Design doc — `docs/design/baseball_pa_outcome_model.md` (Opus 4.8).** Full macro-sim PA model: 7 mutually exclusive outcomes {Out, Strikeout, Walk, Single, Double, Triple, HomeRun} (HBP folded into Walk; ROE/sac omitted). MLB-calibrated baselines (Out .460 / K .225 / BB .090 / 1B .143 / 2B .046 / 3B .004 / HR .032) derive to **.247/.315/.412, .727 OPS** average-vs-average. Matchup layer is log-linear: `w_O = base_O·exp(k_O·m_O)`, renormalized — always a valid distribution for any roster. Per-outcome index weights (`m_O`) and sensitivities (`k_O`) tabulated; K/BB/HR are defense-independent by construction, BIP outcomes carry a team-defense term. PED hook = clamped `min(100, power×1.5)` pre-normalization + post-game `health_ceiling`/`detection_risk` deltas (flag from `Entity_Flags 'ped_active'`, Phase 7). Includes a base-out run-scoring layer (§7), calibration/acceptance ranges + tuning order (§8), and the binding zero-GC resolver contract for §9 (struct inputs, `stackalloc` weights, seeded struct RNG, constants-not-literals). Two worked numeric examples (elite slugger → ~1.02 OPS; ace → .187 opp AVG) double as unit-test fixtures.
+
+**Schema v3 (`SchemaDefinitions.sql`, `PRAGMA user_version = 3`).** Two additive tables + one index, all `CREATE … IF NOT EXISTS` so the v2→v3 upgrade is the same in-place idempotent migration used for Game_State in v2 — **no ALTER on existing tables** (deliberate: split ratings into their own table rather than widen Players, keeping the migration risk-free):
+
+- `Teams` (STRICT): `team_id` PK, `city`, `name`, `abbreviation` NOT NULL, nullable `league`/`division`.
+- `Player_Ratings` (STRICT): `player_id` PK → Players ON DELETE CASCADE; `is_pitcher` + seven 0–100 ratings (`bat_power/contact/discipline`, `pit_stuff/control/stamina`, `fielding`), all DEFAULT 50 = league-avg, CHECK-bounded. One row per baseball-active player; the sim will `Players ⋈ Player_Ratings` at roster-load.
+- `idx_players_team` on `Players(team_id)` — mandated hot-path index for roster grouping. A real FK on `Players.team_id` needs a Players rebuild and is **deferred**; enforced at the query layer for now (documented in the schema + design doc §10).
+
+**Validation (No Blind Queries, done before any dependent code):** DDL proven CLI-first on a scratch db (apply + idempotent re-apply, STRICT, integrity_check ok, CHECK/FK-cascade/NOT-NULL rejection tests on both new tables). SchemaValidator expectations bumped to v3 (RequiredTables += Teams/Player_Ratings, user_version 2→3, +Players(team_id) index check, +Player_Ratings column-types): **scratch 44/44, live 33/33** (were 38/27 at v2). Live `dirt_and_diamonds.db` migrated in place (v2→v3) and re-confirmed via the sqlite MCP.
+
+**Next steps (resume Phase 3):**
+
+1. **Fable 5** — `AtBatResolver.cs` + `LeagueSimulator.cs` per design-doc §9: struct/`Span<T>`/`stackalloc`, seeded struct RNG, rosters bulk-loaded up front (needs new query surface: a `Players⋈Player_Ratings` roster load + `Teams` load + a pitching-season insert — extend `PlayerQueries` / add `BaseballQueries`), react to `DayAdvancedEvent`/`SeasonRolledOverEvent` off the bus, flush season counting stats in the sim's **own** batch (never the tick's), rate columns left 0 for the normalizer.
+2. **Sonnet 5** — `StatsNormalizer.cs` (denormalize AVG/OBP/SLG/OPS/ERA/WHIP after the batch) + the `run_monte_carlo_batch` harness (10k PA → slash line vs §8 acceptance ranges).
+3. Exit: full season simulates headless; league slash line within MLB norms; flat GC profile.
+
+---
+
+## 2026-07-03 — Phase 3: Baseball Macro-Sim ✅ COMPLETE — **Milestone M1 "The League Lives"**
+
+Steps 3–5 of the Phase 3 plan (steps 1–2 shipped earlier today). Live schema re-validated via the sqlite MCP + `EXPLAIN QUERY PLAN` (roster join rides `idx_players_team` + the ratings PK autoindex) before any join code was written.
+
+**Query surface — `BaseballQueries.cs` + `BaseballDtos.cs` (Assets/Data/Database).** Same contract as PlayerQueries (const SQL, ctor-acquired pooled prepared commands): Teams insert/load/count; Player_Ratings upsert; the `Players ⋈ Player_Ratings` roster bulk-load ordered `(team_id, player_id)` for deterministic lineup assignment; active-flag player-id load (partial index); **upserts** for season counting stats on both stats tables (`ON CONFLICT (player_id, season_year)` — a re-simulated or partial season is a safe overwrite); PED cost UPDATE (clamped in SQL); set-based rate-denormalization UPDATEs; league aggregate SUMs (harness + future standings). DTOs: TeamRow, PlayerRatingsRow, RosterPlayerRow, LeagueBatting/PitchingTotals.
+
+**`AtBatResolver.cs`** — pure static, zero-alloc (§9 contract): §2 baselines / §4.1 weight matrix / §4.2 sensitivities as named `static readonly` tables (tuning = data edit); log-linear `w_O = p_base·exp(k_O·m_O)` + renormalize; `stackalloc` for deviations and weights; single uniform draw vs the cumulative; §6 PED clamp `min(100, (power·3+1)/2)` applied inside the resolver (callers can't forget it). `ComputeProbabilities` exposed separately so the harness asserts the §5 fixtures without consuming draws. **`RngState.cs`** — xoshiro256\*\* struct RNG, splitmix64-seeded, passed by `ref`.
+
+**`LeagueSimulator.cs`** — 8 teams × (9 lineup + 5 rotation); circle-method round-robin, 22×7-day cycles = 154 games/team; complete-game starters (bullpens arrive with Phase 4 stamina); §7 base-out half-inning machine (bases = 3 bits, force-chain walk logic, `SingleScoresFrom2nd=0.60` / `DoubleScoresFrom1st=0.45` knobs, walk-off break after 9, extras while tied); RBI to the batter, all runs earned to the pitcher. Season counting stats accumulate in preallocated struct arrays; **flush once per season in the sim's own batch** (day-154 `DayAdvancedEvent`), then `StatsNormalizer` runs in its own transaction; `SeasonRolledOverEvent` handler is a year-guarded defensive flush (won't mis-file the new season's day 1, which dispatches first). PED bookkeeping per flagged participant per game → `health_ceiling`/`detection_risk` costs at flush (flag always inactive until Phase 7). **`LeagueGenerator.cs`** — seeds Teams/Players/Player_Ratings on an empty save (spread-0 mode = the §8 calibration roster). **`StatsNormalizer.cs`** — two set-based UPDATEs (AVG/OBP/SLG/OPS, IP/ERA/WHIP; `ip` = real innings, outs/3 — baseball notation is a UI concern).
+
+**`Tools/MonteCarloHarness`** (in sln; compiles Data+Core+Baseball sources directly, GameManager excluded) behind the **`run_monte_carlo_batch`** skill (SKILL.md updated with the command + §8 tuning order): **30/30** — §5.1/5.2/5.3 fixtures (max err ≤6e-5), PED-clamp equivalence, bit-for-bit seed determinism, 0 B/PA; 100k-PA batch **.247/.316/.412, OPS .728, K% 22.4, BB% 9.2, HR/PA 3.2** — every §8 range hit; full 730-day/2-season pipeline on scratch db: seasons **.248/.316/.411 (R/G 4.21)** and **.250/.319/.413 (R/G 4.29)**, W/L/GS ledgers exact, batting↔pitching ledgers agree to the out, stored rates match recomputation, integrity/FK clean, **0 B allocated per warm game day** (80 games).
+
+**Wiring:** GameManager boots the league (generate-if-empty with `DefaultRatingSpread=25`, wall-clock seed — determinism is the harness's contract, not the game's), `League.Initialize()` + `AttachTo(Events)`. In-engine `--headless --quit`: `schema v3 … league generated (8 teams)`, clean dispose. CoreLoopHarness's stale v2 expectation fixed → **22/22**; SchemaValidator **44/44**; game assembly builds 0/0.
+
+**Known M1 artifacts (deliberate, revisit later):** (1) a fresh save seeds at day 1 and events fire on *advancement*, so the first-ever season plays season-days 2–154 (612 games, not 616) — harness encodes this; fix candidates: publish a day-1 event at seed, or shift the season window. (2) Stats flush is end-of-season only — quitting mid-season loses in-memory accumulators (the upsert flush makes periodic mid-season flushes trivial to add when save-integrity matters). (3) No Game_Logs rows / standings persistence yet; W/L lives in Pitching_Stats. (4) No SB, sacrifices, DPs, or bullpens — all Phase 4+ per the design doc.
+
+**Next steps (Phase 4 — Markov Micro-Sim, when the player's avatar is in-game):**
+
+1. Opus 4.8 design doc first: 25 base-out states per half-inning, 25×25 transition matrix per event, blending player timing/location inputs with database attributes, pitcher stamina/fatigue curve (where `pit_stamina` and the PED 1.5× stamina hook finally bind).
+2. Micro↔macro consistency: a micro-simmed game's aggregate line must converge to the macro model's probabilities for the same ratings (shared calibration tables, not duplicated constants).
+3. UI: first at-bat scene is a thin vertical slice per ui_conventions.md — verify node paths via godot_scene_mapper before any `GetNode<T>()`.

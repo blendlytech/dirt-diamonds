@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Simulation.Baseball;
 using Godot;
 using FileAccess = Godot.FileAccess;
 
@@ -35,6 +36,8 @@ public sealed partial class GameManager : Node
     public GlobalState State { get; private set; } = null!;
     public GameStateQueries GameState { get; private set; } = null!;
     public PlayerQueries Players { get; private set; } = null!;
+    public BaseballQueries Baseball { get; private set; } = null!;
+    public LeagueSimulator League { get; private set; } = null!;
 
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
@@ -61,13 +64,26 @@ public sealed partial class GameManager : Node
         State = new GlobalState();
         GameState = new GameStateQueries(_database);
         Players = new PlayerQueries(_database);
+        Baseball = new BaseballQueries(_database);
         Clock = new TimeManager(_database, GameState, State, Events);
         Clock.Initialize(NewGameStartYear);
+
+        // World-gen on first boot only; an existing save keeps its league.
+        // In-game runs are not required to be replay-deterministic (that is
+        // the harness's contract), so a wall-clock seed is fine here.
+        var rng = new RngState(unchecked((ulong)System.Environment.TickCount64) | 1UL);
+        bool newLeague = LeagueGenerator.GenerateIfEmpty(
+            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+
+        League = new LeagueSimulator(_database, Baseball, new StatsNormalizer(_database, Baseball), rng);
+        League.Initialize();
+        League.AttachTo(Events);
 
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
             $"[GameManager] Save open at '{databasePath}' — schema v{schemaVersion}, journal={journalMode}, " +
-            $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}).");
+            $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}), " +
+            $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams).");
     }
 
     public override void _Process(double delta)

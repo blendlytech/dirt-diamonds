@@ -153,8 +153,49 @@ CREATE TABLE IF NOT EXISTS Game_State (
     value ANY  NOT NULL
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Teams — league structure (Phase 3 / schema v3). team_id is the value the
+-- previously unconstrained Players.team_id points at; rosters and schedules
+-- group by it. A real FK on Players.team_id needs a Players table rebuild and
+-- is deferred — the relationship is enforced at the query layer for now, with
+-- the mandated hot-path index (idx_players_team) added below.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Teams (
+    team_id      INTEGER PRIMARY KEY,
+    city         TEXT    NOT NULL,
+    name         TEXT    NOT NULL,
+    abbreviation TEXT    NOT NULL,
+    league       TEXT,
+    division     TEXT
+) STRICT;
+
+-- Mandated hot-path index: the macro-sim bulk-loads rosters grouped by team_id.
+CREATE INDEX IF NOT EXISTS idx_players_team ON Players(team_id);
+
+-- ----------------------------------------------------------------------------
+-- Player_Ratings — baseball attributes driving the PA outcome model
+-- (docs/design/baseball_pa_outcome_model.md). Split from Players so the life-
+-- sim core table stays untouched and the v2→v3 migration is purely additive
+-- (new table via IF NOT EXISTS, no ALTER on Players). One row per baseball-
+-- active player; the macro-sim JOINs it to Players at roster-load time.
+-- 50 = league-average on every 0–100 rating scale. is_pitcher tags who bats
+-- vs. who pitches when lineups/rotations are built.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Ratings (
+    player_id      TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    is_pitcher     INTEGER NOT NULL DEFAULT 0  CHECK (is_pitcher     IN (0, 1)),
+    bat_power      INTEGER NOT NULL DEFAULT 50 CHECK (bat_power      BETWEEN 0 AND 100),
+    bat_contact    INTEGER NOT NULL DEFAULT 50 CHECK (bat_contact    BETWEEN 0 AND 100),
+    bat_discipline INTEGER NOT NULL DEFAULT 50 CHECK (bat_discipline BETWEEN 0 AND 100),
+    pit_stuff      INTEGER NOT NULL DEFAULT 50 CHECK (pit_stuff      BETWEEN 0 AND 100),
+    pit_control    INTEGER NOT NULL DEFAULT 50 CHECK (pit_control    BETWEEN 0 AND 100),
+    pit_stamina    INTEGER NOT NULL DEFAULT 50 CHECK (pit_stamina    BETWEEN 0 AND 100),
+    fielding       INTEGER NOT NULL DEFAULT 50 CHECK (fielding       BETWEEN 0 AND 100)
+) STRICT;
+
 COMMIT;
 
--- Schema version 2 — Phase 2 adds Game_State (additive; IF NOT EXISTS migrates
--- v1 saves in place on boot). Bump with every migration.
-PRAGMA user_version = 2;
+-- Schema version 3 — Phase 3 adds Teams + Player_Ratings and idx_players_team
+-- (all additive; IF NOT EXISTS migrates v2 saves in place on boot, same pattern
+-- as Game_State in v2). Bump with every migration.
+PRAGMA user_version = 3;

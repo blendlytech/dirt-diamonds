@@ -25,6 +25,7 @@ internal static class Program
     private static readonly string[] RequiredTables =
     {
         "Players", "Batting_Stats", "Pitching_Stats", "Relationships", "Entity_Flags", "Game_Logs", "Game_State",
+        "Teams", "Player_Ratings",
     };
 
     private static int Main(string[] args)
@@ -100,7 +101,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 2", db.GetSchemaVersion() == 2, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 3", db.GetSchemaVersion() == 3, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);
@@ -248,6 +249,8 @@ internal static class Program
         Check("index: Entity_Flags(player_id, flag_name)", HasIndexPrefix(db, "Entity_Flags", "player_id", "flag_name"));
         Check("index: Game_Logs(player_id…)", HasIndexPrefix(db, "Game_Logs", "player_id"));
         Check("index: Game_Logs(season_year, game_day)", HasIndexPrefix(db, "Game_Logs", "season_year", "game_day"));
+        // Schema v3: macro-sim groups rosters by team_id (deferred-FK hot path).
+        Check("index: Players(team_id)", HasIndexPrefix(db, "Players", "team_id"));
 
         // Data-type consistency spot check on the hottest table.
         Check("Players column types", VerifyColumnTypes(db, "Players", new Dictionary<string, string>
@@ -257,6 +260,16 @@ internal static class Program
             ["funds"] = "REAL",
             ["health_ceiling"] = "INTEGER",
             ["detection_risk"] = "INTEGER",
+        }));
+
+        // Schema v3: baseball rating inputs for the PA outcome model.
+        Check("Player_Ratings column types", VerifyColumnTypes(db, "Player_Ratings", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT",
+            ["is_pitcher"] = "INTEGER",
+            ["bat_power"] = "INTEGER",
+            ["pit_stuff"] = "INTEGER",
+            ["fielding"] = "INTEGER",
         }));
     }
 
