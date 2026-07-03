@@ -314,3 +314,25 @@ No design doc existed yet for the Life Sim decay curves (Opus 4.8's half of the 
 
 1. `UtilityCalculator.cs` — action-selection engine (`Utility = Σ Consideration × Weight`; Need Deficit / Temporal Cost / Financial Cost / Risk considerations per life_sim_ai.md) and the stress/emotion overlay that overrides queued actions below `CriticalThreshold`. No harness exists for this yet — needs its own tuning pass once there are actions to select between.
 2. Wire `NeedsEngine.DecayHour` into an actual per-NPC tick (currently only exercised by the harness) — needs a driver analogous to `TimeManager`/`DayAdvancedEvent`, engine-free, Life-sim-side only per the architectural boundary in CLAUDE.md.
+
+---
+
+## 2026-07-03 — Life Sim: Need-Decay Design Doc ✅ (Opus 4.8's Phase 5 curve-design assignment)
+
+Wrote the design doc the previous entry explicitly deferred ("no design doc existed yet … curves were designed directly against `life_sim_ai.md`"). Per the BUILD_PLAN Model Delegation Doctrine, non-linear need-decay curves are Opus 4.8's to own; the empirical first pass shipped the curves, this closes the missing spec. **No code touched — pure design doc**, so no harness surface moved; re-ran `simulate_utility_decay` only to capture ground-truth output (14/14 green) and quote it verbatim.
+
+**`docs/design/life_sim_needs_decay.md` (Opus 4.8).** Companion to the two baseball design docs, same house style (numbered sections, calibration tables, worked fixtures, acceptance anchors, implementation contract). Formalizes the shipped `d(v) = D·E·S·(1 + a·f^p)` decay law as a continuous ODE whose forward-Euler (h=1h) discretization *is* `NeedsEngine.DecayHour` — constants tuned against the discrete trajectory (the harness), so there's no model-vs-code gap. Per-need §3 table carries exact critical/floor hours recomputed from the shipped integrator (Hunger crit@16/floor@18, Sleep 20/23, Hygiene 47/54, Social 66/77, Fitness crit@122/floor@141), not the earlier "first checkpoint showing 0.0" estimates.
+
+**What it adds beyond documenting the first pass (the real contribution — gaps the empirical pass left open):**
+
+- **§4 modifier semantics** — `life_sim_ai.md` names `Environmental_Multiplier`/`Stress_Modifier` but defines neither. Pinned both: `E ∈ [0.25, 3.0]` (per-need context: labor hustle drains Fitness ×2.5 per gritty_events.md, home ×0.8, 3h-game anchor at ×1.0) with per-need-vector as the target and the shipped uniform scalar as the degenerate case; `S ∈ [1.0, 2.5]` via `S = 1 + 1.5·stress/100`; combined `E·S ≤ 3.0` ceiling.
+- **§5 floor/desperation zone** — pinned-at-0 cliff formalized as intended (not a bug), structured around `CriticalThreshold = 20` as the stress-override line; `[20,100]` managed vs `[0,20]` override zone.
+- **§6 recovery** — additive per-action `Restore` companion, with the **decay-only asymmetry** (desperation accelerates decay but recovery is flat) called out as load-bearing design, not to be "fixed" into symmetry.
+- **§7 Utility coupling** — the handoff seam to the still-stubbed `UtilityCalculator.cs`: convex Need-Deficit consideration `((100−v)/100)^q` + the stress override; decay's only job is to expose `v` and `CriticalThreshold`.
+- **§10 implementation contract** (engine-free, struct/zero-alloc, constants-not-literals, caller-supplied modifiers) + **§11 schema note** (needs are in-memory now; persistence is a deferred additive `[0,100]`-CHECK column set via the No Blind Queries path).
+
+**Next steps (Phase 5 remainder — toward the M3 exit criteria "NPCs self-manage needs over a simulated month; stress override provably fires"):**
+
+1. **`UtilityCalculator.cs`** — now has a spec to build against (design doc §7): `Utility = Σ(Consideration·Weight)` with the convex Need-Deficit consideration and the `≤ CriticalThreshold` stress override that forces stress-relief actions regardless of temporal cost. Needs an **action catalog** (the §6 restore vectors) to select among. Owner per doctrine: Sonnet 5 implements from the §7 spec; escalate to Opus only if the consideration-weight balance needs a design pass once actions exist.
+2. **Per-NPC tick driver** — wire `NeedsEngine.DecayHour` into real game flow (engine-free, Life-side, analogous to `TimeManager`/`DayAdvancedEvent`); currently only the harness exercises it.
+3. **Needs persistence** (design doc §11) — additive schema column set via the validation path, deferred until the tick driver produces values worth saving.
