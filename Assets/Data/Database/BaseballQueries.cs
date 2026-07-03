@@ -45,28 +45,12 @@ public sealed class BaseballQueries
     private const string SqlSelectActiveFlagPlayerIds =
         "SELECT player_id FROM Entity_Flags WHERE flag_name = @flagName AND is_active = 1;";
 
-    // Counting stats only; avg/obp/slg/ops stay 0 until StatsNormalizer runs.
-    // Upsert (not insert) so a mid-season flush or a re-simulated season is a
-    // safe overwrite of the same (player, season) row.
-    private const string SqlUpsertBattingSeason =
-        "INSERT INTO Batting_Stats (player_id, season_year, pa, ab, h, doubles, triples, hr, bb, so, rbi, sb) VALUES " +
-        "(@playerId, @seasonYear, @pa, @ab, @h, @doubles, @triples, @hr, @bb, @so, @rbi, @sb) " +
-        "ON CONFLICT (player_id, season_year) DO UPDATE SET pa = excluded.pa, ab = excluded.ab, h = excluded.h, " +
-        "doubles = excluded.doubles, triples = excluded.triples, hr = excluded.hr, bb = excluded.bb, " +
-        "so = excluded.so, rbi = excluded.rbi, sb = excluded.sb;";
-
-    private const string SqlUpsertPitchingSeason =
-        "INSERT INTO Pitching_Stats (player_id, season_year, g, gs, w, l, sv, outs_recorded, h_allowed, er, bb, so) VALUES " +
-        "(@playerId, @seasonYear, @g, @gs, @w, @l, @sv, @outsRecorded, @hAllowed, @er, @bb, @so) " +
-        "ON CONFLICT (player_id, season_year) DO UPDATE SET g = excluded.g, gs = excluded.gs, w = excluded.w, " +
-        "l = excluded.l, sv = excluded.sv, outs_recorded = excluded.outs_recorded, h_allowed = excluded.h_allowed, " +
-        "er = excluded.er, bb = excluded.bb, so = excluded.so;";
-
-    // Additive per-game upserts for the micro-sim (micro doc §9): the attended
-    // game flushes a box score per game, ADDING to the season row rather than
-    // overwriting it, so it composes with the macro-sim's whole-season upsert
-    // flush instead of clobbering it. Unqualified column names in DO UPDATE
-    // refer to the existing row; excluded.* is the incoming game line.
+    // Additive upserts — since Phase 5 they are THE season-stat write path for
+    // both sims: the micro-sim adds a box score per attended game, the macro
+    // sim adds one chunk per 7-day cycle flush, and the chunks compose on the
+    // same (player, season) row instead of clobbering each other. Unqualified
+    // column names in DO UPDATE refer to the existing row; excluded.* is the
+    // incoming line.
     private const string SqlAddBattingGameCounts =
         "INSERT INTO Batting_Stats (player_id, season_year, pa, ab, h, doubles, triples, hr, bb, so, rbi, sb) VALUES " +
         "(@playerId, @seasonYear, @pa, @ab, @h, @doubles, @triples, @hr, @bb, @so, @rbi, @sb) " +
@@ -133,8 +117,6 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _upsertRatings;
     private readonly SqliteCommand _selectRoster;
     private readonly SqliteCommand _selectActiveFlagPlayerIds;
-    private readonly SqliteCommand _upsertBattingSeason;
-    private readonly SqliteCommand _upsertPitchingSeason;
     private readonly SqliteCommand _addBattingGameCounts;
     private readonly SqliteCommand _addPitchingGameCounts;
     private readonly SqliteCommand _insertGameLog;
@@ -163,20 +145,6 @@ public sealed class BaseballQueries
 
         _selectRoster = Acquire(SqlSelectRoster);
         _selectActiveFlagPlayerIds = Acquire(SqlSelectActiveFlagPlayerIds, ("@flagName", SqliteType.Text));
-
-        _upsertBattingSeason = Acquire(SqlUpsertBattingSeason,
-            ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer),
-            ("@pa", SqliteType.Integer), ("@ab", SqliteType.Integer), ("@h", SqliteType.Integer),
-            ("@doubles", SqliteType.Integer), ("@triples", SqliteType.Integer), ("@hr", SqliteType.Integer),
-            ("@bb", SqliteType.Integer), ("@so", SqliteType.Integer), ("@rbi", SqliteType.Integer),
-            ("@sb", SqliteType.Integer));
-
-        _upsertPitchingSeason = Acquire(SqlUpsertPitchingSeason,
-            ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer),
-            ("@g", SqliteType.Integer), ("@gs", SqliteType.Integer), ("@w", SqliteType.Integer),
-            ("@l", SqliteType.Integer), ("@sv", SqliteType.Integer), ("@outsRecorded", SqliteType.Integer),
-            ("@hAllowed", SqliteType.Integer), ("@er", SqliteType.Integer), ("@bb", SqliteType.Integer),
-            ("@so", SqliteType.Integer));
 
         _addBattingGameCounts = Acquire(SqlAddBattingGameCounts,
             ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer),
@@ -319,50 +287,10 @@ public sealed class BaseballQueries
     }
 
     // ------------------------------------------------------------------
-    // Season stat flush (LeagueSimulator's own batch)
+    // Season stat flush (each sim's own batch; additive — see SQL comment)
     // ------------------------------------------------------------------
 
-    public void UpsertBattingSeasonCounts(
-        string playerId, int seasonYear,
-        int pa, int ab, int h, int doubles, int triples, int hr, int bb, int so, int rbi, int sb)
-    {
-        SqliteParameterCollection p = _upsertBattingSeason.Parameters;
-        p["@playerId"].Value = playerId;
-        p["@seasonYear"].Value = seasonYear;
-        p["@pa"].Value = pa;
-        p["@ab"].Value = ab;
-        p["@h"].Value = h;
-        p["@doubles"].Value = doubles;
-        p["@triples"].Value = triples;
-        p["@hr"].Value = hr;
-        p["@bb"].Value = bb;
-        p["@so"].Value = so;
-        p["@rbi"].Value = rbi;
-        p["@sb"].Value = sb;
-        _db.ExecuteNonQuery(_upsertBattingSeason);
-    }
-
-    public void UpsertPitchingSeasonCounts(
-        string playerId, int seasonYear,
-        int g, int gs, int w, int l, int sv, int outsRecorded, int hAllowed, int er, int bb, int so)
-    {
-        SqliteParameterCollection p = _upsertPitchingSeason.Parameters;
-        p["@playerId"].Value = playerId;
-        p["@seasonYear"].Value = seasonYear;
-        p["@g"].Value = g;
-        p["@gs"].Value = gs;
-        p["@w"].Value = w;
-        p["@l"].Value = l;
-        p["@sv"].Value = sv;
-        p["@outsRecorded"].Value = outsRecorded;
-        p["@hAllowed"].Value = hAllowed;
-        p["@er"].Value = er;
-        p["@bb"].Value = bb;
-        p["@so"].Value = so;
-        _db.ExecuteNonQuery(_upsertPitchingSeason);
-    }
-
-    /// <summary>Adds one attended game's batting line to the (player, season) row (micro doc §9).</summary>
+    /// <summary>Adds one batting chunk (attended game or macro cycle) to the (player, season) row.</summary>
     public void AddBattingGameCounts(
         string playerId, int seasonYear,
         int pa, int ab, int h, int doubles, int triples, int hr, int bb, int so, int rbi, int sb)
@@ -383,7 +311,7 @@ public sealed class BaseballQueries
         _db.ExecuteNonQuery(_addBattingGameCounts);
     }
 
-    /// <summary>Adds one attended game's pitching line to the (player, season) row (micro doc §9).</summary>
+    /// <summary>Adds one pitching chunk (attended game or macro cycle) to the (player, season) row.</summary>
     public void AddPitchingGameCounts(
         string playerId, int seasonYear,
         int g, int gs, int w, int l, int sv, int outsRecorded, int hAllowed, int er, int bb, int so)

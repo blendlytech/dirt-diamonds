@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/AttendedGameScreen.cs" id="1_attendedscreen"]
+[ext_resource type="PackedScene" path="res://Assets/UI/AtBatView.tscn" id="2_atbatview"]
+
+[node name="AttendedGameScreen" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_attendedscreen")
+
+[node name="Screen" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="TopBar" type="HBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="DayLabel" type="Label" parent="Screen/TopBar"]
+layout_mode = 2
+text = "Day 1"
+
+[node name="PlayGameButton" type="Button" parent="Screen/TopBar"]
+layout_mode = 2
+text = "Play Today's Game"
+
+[node name="SkipDayButton" type="Button" parent="Screen/TopBar"]
+layout_mode = 2
+text = "Skip Day"
+
+[node name="StatusLabel" type="Label" parent="Screen/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
+
+[node name="AtBatView" parent="Screen" instance=ExtResource("2_atbatview")]
+layout_mode = 2
+size_flags_vertical = 3

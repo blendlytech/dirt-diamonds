@@ -58,6 +58,7 @@ internal static class Program
         string schemaPath = Path.Combine(repoRoot, "Assets", "Data", "Database", "SchemaDefinitions.sql");
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_montecarlo_{Guid.NewGuid():N}.db");
         string microScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_microsim_{Guid.NewGuid():N}.db");
+        string careerScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_career_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -66,6 +67,7 @@ internal static class Program
             RunSeasonPipeline(schemaPath, scratchPath);
             RunMicroAnalyticSuite();
             RunMicroGameSuite(schemaPath, microScratchPath);
+            RunCareerWiringSuite(schemaPath, careerScratchPath);
         }
         catch (Exception ex)
         {
@@ -79,6 +81,9 @@ internal static class Program
             TryDelete(microScratchPath);
             TryDelete(microScratchPath + "-wal");
             TryDelete(microScratchPath + "-shm");
+            TryDelete(careerScratchPath);
+            TryDelete(careerScratchPath + "-wal");
+            TryDelete(careerScratchPath + "-shm");
         }
 
         int failed = 0;
@@ -736,6 +741,228 @@ internal static class Program
         long gameAllocated = GC.GetAllocatedBytesForCurrentThread() - beforeGame;
         Check("§11.6 warm attended game allocates zero bytes (10 games, human PAs incl.)",
             gameAllocated == 0, $"{gameAllocated} B");
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Phase 5 career wiring: avatar, macro suppression, stat composition,
+    //    interactive bridge — a whole season through the real event loop
+    // ------------------------------------------------------------------
+
+    private static void RunCareerWiringSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Career wiring (Phase 5: avatar, suppression, composition) ---");
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var gameState = new GameStateQueries(db);
+        var clock = new TimeManager(db, gameState, state, bus);
+        clock.Initialize(StartYear);
+
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Initialize();
+        league.AttachTo(bus);
+
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(
+            db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 9));
+        career.AttachTo(bus);
+
+        // ---- avatar creation ----
+        const int avatarTeam = 3;
+        Check("career starts dormant (no avatar in Game_State)", !career.LoadExistingAvatar() && !career.HasAvatar);
+
+        var preRoster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(preRoster);
+        career.CreateAvatar("You", "Rookie", avatarTeam, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 60,
+            BatContact = 60,
+            BatDiscipline = 60,
+            PitStuff = 50,
+            PitControl = 50,
+            PitStamina = 50,
+            Fielding = 50,
+        });
+        var postRoster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(postRoster);
+        bool avatarRostered = postRoster.Any(r => r.PlayerId == career.AvatarPlayerId && r.TeamId == avatarTeam);
+        string displacedId = preRoster.First(pre => postRoster.All(post => post.PlayerId != pre.PlayerId)).PlayerId;
+        players.TryGetById(displacedId, out PlayerRow displaced);
+        gameState.TryGetText(GameStateKeys.AvatarPlayerId, out string storedAvatarId);
+        Check("avatar created: rostered on its team, roster size unchanged, Game_State records it",
+            career.HasAvatar && avatarRostered && postRoster.Count == preRoster.Count
+            && storedAvatarId == career.AvatarPlayerId && career.AvatarSlot >= 0,
+            $"roster {preRoster.Count}→{postRoster.Count}, slot {career.AvatarSlot}");
+        Check("displaced player benched to free agency (team_id NULL), not deleted",
+            !displaced.TeamId.HasValue, $"displaced {displacedId[..8]}…");
+
+        // A second manager restores the same avatar from Game_State (boot path).
+        var rebooted = new CareerManager(
+            db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 10));
+        Check("existing save reboots into the same avatar", rebooted.LoadExistingAvatar()
+            && rebooted.AvatarPlayerId == career.AvatarPlayerId && rebooted.AvatarTeamId == avatarTeam);
+
+        // ---- one autopilot season through the real event loop ----
+        var stopwatch = Stopwatch.StartNew();
+        for (int i = 0; i < 40; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+        var midSeasons = new List<BattingStatsRow>();
+        players.LoadBattingSeasons(career.AvatarPlayerId, midSeasons);
+        LeagueBattingTotals midTotals = baseball.LoadLeagueBattingTotals(StartYear);
+        Check("mid-season cadence: avatar stats per game, league stats per 7-day cycle",
+            midSeasons.Count == 1 && midSeasons[0].Pa > 100 && midTotals.Pa > midSeasons[0].Pa,
+            $"avatar PA {(midSeasons.Count > 0 ? midSeasons[0].Pa : 0)}, league PA {midTotals.Pa} by day 40");
+
+        // Stop at day 365 (last of season 1) so the interactive phase below
+        // owns the roll into season 2.
+        for (int i = 40; i < GlobalState.DaysPerSeason - 1; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+        stopwatch.Stop();
+        Console.WriteLine($"  Career season (autopilot, {LeagueSimulator.RegularSeasonDays - 1} attended games): " +
+            $"{stopwatch.ElapsedMilliseconds} ms");
+
+        Check("no batch left open after the career season", !db.IsBatchActive);
+        Check("career-season database integrity ok / no FK violations",
+            db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+
+        // Season 1 plays days 2..154 (the known M1 seed artifact): 153 days ×
+        // 4 games — 3 macro + 1 attended — so league totals must look exactly
+        // like an unsuppressed season. Any macro/micro double-play or clobbered
+        // additive flush breaks the GS or ledger identities.
+        int seasonGames = (LeagueSimulator.RegularSeasonDays - 1) * LeagueSimulator.TeamCount / 2;
+        LeagueBattingTotals bat = baseball.LoadLeagueBattingTotals(StartYear);
+        LeaguePitchingTotals pit = baseball.LoadLeaguePitchingTotals(StartYear);
+        Check($"suppression accounting: {seasonGames} games once each (GS = 2×games, W = L = games)",
+            pit.Gs == 2L * seasonGames && pit.W == seasonGames && pit.L == seasonGames,
+            $"gs={pit.Gs} w={pit.W} l={pit.L}");
+        Check("composed batting and pitching ledgers agree (H, BB, SO, outs)",
+            bat.H == pit.HAllowed && bat.Bb == pit.Bb && bat.So == pit.So
+            && pit.OutsRecorded == bat.Pa - bat.H - bat.Bb,
+            $"H {bat.H}/{pit.HAllowed} BB {bat.Bb}/{pit.Bb} SO {bat.So}/{pit.So}");
+        double avg = (double)bat.H / bat.Ab;
+        double obp = (double)(bat.H + bat.Bb) / bat.Pa;
+        Check("composed league AVG/OBP still inside §8 acceptance",
+            avg is >= 0.240 and <= 0.260 && obp is >= 0.308 and <= 0.325, $"{avg:.000}/{obp:.000}");
+
+        var avatarSeasons = new List<BattingStatsRow>();
+        players.LoadBattingSeasons(career.AvatarPlayerId, avatarSeasons);
+        Check("avatar played the full attended season (PA in 450–800, rates normalized)",
+            avatarSeasons.Count == 1 && avatarSeasons[0].Pa is >= 450 and <= 800 && avatarSeasons[0].Avg > 0,
+            avatarSeasons.Count == 1 ? $"{avatarSeasons[0].Pa} PA, AVG {avatarSeasons[0].Avg:.000}" : "no row");
+        var displacedSeasons = new List<BattingStatsRow>();
+        players.LoadBattingSeasons(displacedId, displacedSeasons);
+        Check("displaced free agent never played", displacedSeasons.Count == 0);
+
+        // ---- interactive bridge: scripted UI thread plays one game ----
+        career.AutopilotAttendedGames = false;
+        clock.AdvanceDay(); // offseason days schedule nothing, so roll to next season's day 1 region
+        bus.DispatchPending();
+        // Advance until a regular-season day hands us a pending game.
+        for (int guard = 0; !career.HasPendingGame && guard < 5; guard++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+        Check("interactive mode parks the attended game as pending", career.HasPendingGame);
+
+        var bridge = new PlayerIntentBridge();
+        var uiDone = false;
+        int snapshots = 0;
+        var scriptedUi = new Thread(() =>
+        {
+            int pitch = 0;
+            while (!Volatile.Read(ref uiDone))
+            {
+                if (bridge.TryGetSnapshot(out AtBatSnapshot snapshot) && snapshot.Context.Inning >= 1)
+                {
+                    snapshots++;
+                }
+                if (bridge.IsAwaitingIntent)
+                {
+                    if (pitch++ % 2 == 0)
+                    {
+                        bridge.SubmitSwing(0.0); // on-time swing
+                    }
+                    else
+                    {
+                        bridge.SubmitTake();
+                    }
+                }
+                Thread.Sleep(0);
+            }
+        });
+        scriptedUi.Start();
+        MicroGameResult interactive;
+        try
+        {
+            var interactivePolicy = new InteractiveBatterPolicy(bridge);
+            interactive = career.PlayPendingGame(ref interactivePolicy);
+        }
+        finally
+        {
+            Volatile.Write(ref uiDone, true);
+            scriptedUi.Join();
+        }
+        int outcomes = 0;
+        while (bridge.TryDequeuePaOutcome(out _))
+        {
+            outcomes++;
+        }
+        Check("scripted UI drives a full interactive game over the bridge",
+            !career.HasPendingGame && interactive.HumanPa > 0 && snapshots >= interactive.HumanPitchesSeen
+            && outcomes == interactive.HumanPa,
+            $"{interactive.HumanPa} PA, {interactive.HumanPitchesSeen} pitches, {snapshots} snapshots, {outcomes} outcomes");
+
+        // ---- cancel path: the game aborts unflushed and stays pending ----
+        clock.AdvanceDay();
+        bus.DispatchPending();
+        Check("next day parks a fresh pending game", career.HasPendingGame);
+        LeagueBattingTotals beforeCancel = baseball.LoadLeagueBattingTotals(StartYear + 1);
+        var cancelBridge = new PlayerIntentBridge();
+        bool cancelled = false;
+        var cancelledGame = new Thread(() =>
+        {
+            var cancelPolicy = new InteractiveBatterPolicy(cancelBridge);
+            try
+            {
+                career.PlayPendingGame(ref cancelPolicy);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
+            }
+        });
+        cancelledGame.Start();
+        while (!cancelBridge.IsAwaitingIntent)
+        {
+            Thread.Sleep(0);
+        }
+        cancelBridge.Cancel();
+        cancelledGame.Join();
+        LeagueBattingTotals afterCancel = baseball.LoadLeagueBattingTotals(StartYear + 1);
+        Check("cancelled game unwinds unflushed and stays pending for the autopilot",
+            cancelled && career.HasPendingGame && !career.IsGameInFlight
+            && afterCancel.Pa == beforeCancel.Pa,
+            $"pa {beforeCancel.Pa}→{afterCancel.Pa}");
+        career.AutopilotAttendedGames = true;
+        clock.AdvanceDay(); // forfeits the cancelled game to the autopilot, then plays today
+        bus.DispatchPending();
+        Check("forfeited game autopilots on the next tick", !career.HasPendingGame && !db.IsBatchActive);
     }
 
     private static void AddInning(ref InningLine total, in InningLine inning)

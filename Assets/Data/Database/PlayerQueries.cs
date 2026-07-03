@@ -33,6 +33,9 @@ public sealed class PlayerQueries
     private const string SqlUpdateFunds =
         "UPDATE Players SET funds = @funds WHERE player_id = @playerId;";
 
+    private const string SqlUpdateTeam =
+        "UPDATE Players SET team_id = @teamId WHERE player_id = @playerId;";
+
     private const string SqlDeletePlayer =
         "DELETE FROM Players WHERE player_id = @playerId;";
 
@@ -69,6 +72,7 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _selectAllPlayers;
     private readonly SqliteCommand _countPlayers;
     private readonly SqliteCommand _updateFunds;
+    private readonly SqliteCommand _updateTeam;
     private readonly SqliteCommand _deletePlayer;
     private readonly SqliteCommand _insertBattingSeason;
     private readonly SqliteCommand _selectBattingByPlayer;
@@ -91,6 +95,7 @@ public sealed class PlayerQueries
         _selectAllPlayers = Acquire(SqlSelectAllPlayers);
         _countPlayers = Acquire(SqlCountPlayers);
         _updateFunds = Acquire(SqlUpdateFunds, ("@funds", SqliteType.Real), ("@playerId", SqliteType.Text));
+        _updateTeam = Acquire(SqlUpdateTeam, ("@teamId", SqliteType.Integer), ("@playerId", SqliteType.Text));
         _deletePlayer = Acquire(SqlDeletePlayer, ("@playerId", SqliteType.Text));
 
         _insertBattingSeason = Acquire(SqlInsertBattingSeason,
@@ -215,6 +220,14 @@ public sealed class PlayerQueries
         _updateFunds.Parameters["@funds"].Value = newFunds;
         _updateFunds.Parameters["@playerId"].Value = playerId;
         _db.ExecuteNonQuery(_updateFunds);
+    }
+
+    /// <summary>Moves a player to a team, or off all rosters (null = free agent; the roster join excludes them).</summary>
+    public void SetTeam(string playerId, int? teamId)
+    {
+        _updateTeam.Parameters["@teamId"].Value = teamId.HasValue ? teamId.Value : DBNull.Value;
+        _updateTeam.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_updateTeam);
     }
 
     /// <summary>Removes a player; stats, flags and relationships cascade via FK rules.</summary>

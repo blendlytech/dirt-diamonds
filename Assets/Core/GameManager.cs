@@ -38,6 +38,8 @@ public sealed partial class GameManager : Node
     public PlayerQueries Players { get; private set; } = null!;
     public BaseballQueries Baseball { get; private set; } = null!;
     public LeagueSimulator League { get; private set; } = null!;
+    public MicroGame Micro { get; private set; } = null!;
+    public CareerManager Career { get; private set; } = null!;
 
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
@@ -75,15 +77,31 @@ public sealed partial class GameManager : Node
         bool newLeague = LeagueGenerator.GenerateIfEmpty(
             _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
 
+        // Split the wall-clock stream before the league copies it, so the two
+        // sims never replay each other's draws.
+        var careerRng = new RngState(rng.NextUInt64() | 1UL);
         League = new LeagueSimulator(_database, Baseball, new StatsNormalizer(_database, Baseball), rng);
         League.Initialize();
         League.AttachTo(Events);
+
+        // Career driver (Phase 5): micro-sim + avatar wiring. On a save with
+        // an avatar, the attended team is reclaimed from the macro sim here;
+        // otherwise the career lies dormant until the UI creates one. The
+        // career handler is attached AFTER the league's so an attended day is
+        // resolved once the rest of the league has played.
+        Micro = new MicroGame(_database, Baseball);
+        Micro.Initialize();
+        Career = new CareerManager(
+            _database, Players, Baseball, GameState, State, League, Micro, careerRng);
+        bool avatarLoaded = Career.LoadExistingAvatar();
+        Career.AttachTo(Events);
 
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
             $"[GameManager] Save open at '{databasePath}' — schema v{schemaVersion}, journal={journalMode}, " +
             $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}), " +
-            $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams).");
+            $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams), " +
+            $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}.");
     }
 
     public override void _Process(double delta)

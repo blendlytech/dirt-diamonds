@@ -7,10 +7,12 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// The background-league macro-sim (design doc §7/§9, Milestone M1). Bulk-loads
 /// rosters up front (Players ⋈ Player_Ratings), plays a round-robin schedule of
 /// <see cref="AtBatResolver"/>-driven games in response to
-/// <see cref="DayAdvancedEvent"/> off the bus, accumulates season counting
-/// stats in preallocated struct arrays, and flushes them once per season in its
-/// OWN batch transaction — never the calendar tick's. Rate columns are left 0
-/// for <see cref="StatsNormalizer"/>.
+/// <see cref="DayAdvancedEvent"/> off the bus, accumulates counting stats in
+/// preallocated struct arrays, and flushes them additively at the end of each
+/// 7-day cycle in its OWN batch transaction — never the calendar tick's. Rate
+/// columns are denormalized by <see cref="StatsNormalizer"/> after each flush.
+/// When a career avatar exists, the attended team's games are skipped here and
+/// owned by the micro-sim (see <see cref="SetAttendedTeam"/>).
 ///
 /// Zero-GC contract: a simulated game day touches only preallocated arrays and
 /// stack memory. Heap work happens at Initialize (load) and FlushSeason
@@ -28,9 +30,8 @@ public sealed class LeagueSimulator
 
     /// <summary>7-day round-robin cycles × 22 = a 154-game season for every team.</summary>
     public const int RegularSeasonDays = RoundsPerCycle * CyclesPerSeason;
-    private const int RoundsPerCycle = TeamCount - 1;
+    internal const int RoundsPerCycle = TeamCount - 1;
     private const int CyclesPerSeason = 22;
-    private const int GamesPerDay = TeamCount / 2;
 
     // §7 discretionary-advance calibration knobs (tuning order step 4). The
     // canonical values live in BaseOutAdvancement, shared with the micro-sim;
@@ -73,6 +74,16 @@ public sealed class LeagueSimulator
 
     /// <summary>Season year with simulated-but-unflushed games; 0 = clean.</summary>
     private int _unflushedSeasonYear;
+
+    /// <summary>
+    /// Team index whose games the career driver owns (-1 = none). Every pairing
+    /// containing this team is skipped by the macro sim — the attended-game
+    /// micro-sim plays and flushes it instead — but the team's rotation counter
+    /// still advances so the unsuppressed path stays bit-identical.
+    /// </summary>
+    private int _attendedTeamIndex = -1;
+
+    private int[] _teamIds = Array.Empty<int>();
 
     public LeagueSimulator(DatabaseManager db, BaseballQueries queries, StatsNormalizer normalizer, RngState rng)
     {
@@ -124,8 +135,10 @@ public sealed class LeagueSimulator
         var pedSet = new HashSet<string>(pedIds, StringComparer.Ordinal);
 
         var teamIndexById = new Dictionary<int, int>(TeamCount);
+        _teamIds = new int[TeamCount];
         for (int t = 0; t < teams.Count; t++)
         {
+            _teamIds[t] = teams[t].TeamId;
             teamIndexById.Add(teams[t].TeamId, t);
         }
 
@@ -188,6 +201,23 @@ public sealed class LeagueSimulator
         _initialized = true;
     }
 
+    /// <summary>
+    /// Hands every game of <paramref name="teamId"/> to the career driver: the
+    /// macro sim stops playing (and stat-flushing) that team's pairings. The
+    /// micro-sim's per-game additive flush owns them from here on.
+    /// </summary>
+    public void SetAttendedTeam(int teamId)
+    {
+        int index = Array.IndexOf(_teamIds, teamId);
+        if (index < 0)
+        {
+            throw new ArgumentException($"Unknown team_id {teamId} (or Initialize() has not run).");
+        }
+        _attendedTeamIndex = index;
+    }
+
+    public void ClearAttendedTeam() => _attendedTeamIndex = -1;
+
     public void AttachTo(EventBus bus)
     {
         bus.Subscribe(_onDayAdvanced);
@@ -218,9 +248,13 @@ public sealed class LeagueSimulator
         SimulateGameDay(e.DayOfSeason);
         _unflushedSeasonYear = e.SeasonYear;
 
-        if (e.DayOfSeason == RegularSeasonDays)
+        // Flush at the end of every 7-day round-robin cycle (RegularSeasonDays
+        // is a multiple of RoundsPerCycle, so day 154 is covered). Keeping the
+        // database at most a cycle stale matters once the player's own stats
+        // are on the line; additive upserts make the cadence safe.
+        if (e.DayOfSeason % RoundsPerCycle == 0)
         {
-            FlushSeason(e.SeasonYear);
+            FlushAccumulated(e.SeasonYear);
         }
     }
 
@@ -231,7 +265,20 @@ public sealed class LeagueSimulator
         // NEW season's day 1, which dispatches before this event on rollover day.
         if (_unflushedSeasonYear == e.PreviousSeasonYear)
         {
-            FlushSeason(e.PreviousSeasonYear);
+            FlushAccumulated(e.PreviousSeasonYear);
+        }
+    }
+
+    /// <summary>
+    /// Flushes any simulated-but-unwritten games immediately (the career
+    /// driver calls this before re-initializing rosters around avatar
+    /// creation, so no in-memory stats are lost to the reload).
+    /// </summary>
+    public void FlushPending()
+    {
+        if (_unflushedSeasonYear != 0)
+        {
+            FlushAccumulated(_unflushedSeasonYear);
         }
     }
 
@@ -240,34 +287,27 @@ public sealed class LeagueSimulator
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Plays all four games for one season day. Circle-method round-robin with
-    /// team index (TeamCount-1) fixed; home/away alternates by cycle+slot so
-    /// pairings balance over the 22 cycles. Internal so run_monte_carlo_batch
-    /// can drive and profile it directly.
+    /// Plays one season day's games from the shared <see cref="LeagueSchedule"/>
+    /// (same pairing order the pre-extraction code produced, so rng draw order
+    /// — and every M1 season line — is bit-identical). The attended team's
+    /// pairing is skipped but its rotation clock still ticks: that game is
+    /// played, in the micro-sim. Internal so run_monte_carlo_batch can drive
+    /// and profile it directly.
     /// </summary>
     internal void SimulateGameDay(int dayOfSeason)
     {
-        int cycle = (dayOfSeason - 1) / RoundsPerCycle;
-        int round = (dayOfSeason - 1) % RoundsPerCycle;
+        Span<SchedulePairing> pairings = stackalloc SchedulePairing[LeagueSchedule.PairingsPerDay];
+        LeagueSchedule.GetDayPairings(dayOfSeason, pairings);
 
-        PlayPair(TeamCount - 1, round, cycle, 0);
-        for (int i = 1; i < GamesPerDay; i++)
+        foreach (SchedulePairing pairing in pairings)
         {
-            int a = (round + i) % RoundsPerCycle;
-            int b = (round - i + RoundsPerCycle) % RoundsPerCycle;
-            PlayPair(a, b, cycle, i);
-        }
-    }
-
-    private void PlayPair(int teamA, int teamB, int cycle, int slot)
-    {
-        if (((cycle + slot) & 1) == 0)
-        {
-            PlayGame(teamA, teamB);
-        }
-        else
-        {
-            PlayGame(teamB, teamA);
+            if (pairing.HomeTeam == _attendedTeamIndex || pairing.AwayTeam == _attendedTeamIndex)
+            {
+                _teamGamesPlayed[pairing.HomeTeam]++;
+                _teamGamesPlayed[pairing.AwayTeam]++;
+                continue;
+            }
+            PlayGame(pairing.HomeTeam, pairing.AwayTeam);
         }
     }
 
@@ -415,10 +455,17 @@ public sealed class LeagueSimulator
     }
 
     // ------------------------------------------------------------------
-    // Season flush — the sim's own batch, never the calendar tick's
+    // Cycle flush — the sim's own batch, never the calendar tick's
     // ------------------------------------------------------------------
 
-    private void FlushSeason(int seasonYear)
+    /// <summary>
+    /// Writes everything accumulated since the last flush and clears the
+    /// accumulators. ADDITIVE upserts (the micro-sim's per-game flushes land
+    /// on the same (player, season) rows — an overwrite here would clobber
+    /// the opponents' attended-game lines), so each chunk composes with both
+    /// the previous cycles and the attended games.
+    /// </summary>
+    private void FlushAccumulated(int seasonYear)
     {
         _db.BeginBatch();
         try
@@ -428,7 +475,7 @@ public sealed class LeagueSimulator
                 ref readonly BattingLine bat = ref _batting[i];
                 if (bat.Pa > 0)
                 {
-                    _queries.UpsertBattingSeasonCounts(
+                    _queries.AddBattingGameCounts(
                         _roster[i].PlayerId, seasonYear,
                         bat.Pa, bat.Ab, bat.H, bat.Doubles, bat.Triples, bat.Hr, bat.Bb, bat.So, bat.Rbi, sb: 0);
                 }
@@ -436,7 +483,7 @@ public sealed class LeagueSimulator
                 ref readonly PitchingLine pit = ref _pitching[i];
                 if (pit.G > 0)
                 {
-                    _queries.UpsertPitchingSeasonCounts(
+                    _queries.AddPitchingGameCounts(
                         _roster[i].PlayerId, seasonYear,
                         pit.G, pit.Gs, pit.W, pit.L, sv: 0, pit.Outs, pit.HAllowed, pit.Er, pit.Bb, pit.So);
                 }

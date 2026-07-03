@@ -43,19 +43,70 @@ public readonly struct BatterPitchInput
 }
 
 /// <summary>
+/// Everything about the game situation that is fixed for the duration of one
+/// human PA — handed to the policy at PA start (Phase 5: the interactive
+/// policy forwards it to the UI, and needs the effective pitcher ratings for
+/// the §6 timing-tolerance mapping). Count evolves per pitch via
+/// <see cref="IBatterPolicy.NextPitch"/>; nothing else changes mid-PA.
+/// </summary>
+public readonly struct HumanPaContext
+{
+    public readonly int AwayScore;
+    public readonly int HomeScore;
+    public readonly int Inning;
+    public readonly bool IsTopHalf;
+    public readonly int Outs;
+
+    /// <summary>3-bit base map, matching the sim (1 = 1B, 2 = 2B, 4 = 3B).</summary>
+    public readonly int Bases;
+
+    /// <summary>Fatigue-adjusted ratings the PA is being resolved against (§8).</summary>
+    public readonly PitcherRatings EffectivePitcher;
+
+    public HumanPaContext(
+        int awayScore, int homeScore, int inning, bool isTopHalf, int outs, int bases,
+        in PitcherRatings effectivePitcher)
+    {
+        AwayScore = awayScore;
+        HomeScore = homeScore;
+        Inning = inning;
+        IsTopHalf = isTopHalf;
+        Outs = outs;
+        Bases = bases;
+        EffectivePitcher = effectivePitcher;
+    }
+}
+
+/// <summary>
 /// The human is an input stream; the neutral policy is its headless stand-in
 /// (§6.1/§9). Implemented by structs and consumed through a generic constraint
-/// so the per-pitch call devirtualizes — no boxing, no allocation.
+/// so the per-pitch call devirtualizes — no boxing, no allocation. Every
+/// implementor supplies all three members explicitly (a default interface
+/// method would box the struct receiver on the constrained call).
 /// </summary>
 public interface IBatterPolicy
 {
+    /// <summary>Called by the driver once at the start of each human PA, before any pitch.</summary>
+    void BeginPa(in HumanPaContext context);
+
     BatterPitchInput NextPitch(in CountState count, ref RngState rng);
+
+    /// <summary>Called by the driver after the human PA resolves (play-log / UI feedback hook).</summary>
+    void OnPaResolved(PaOutcome outcome);
 }
 
 /// <summary>§6.1 neutral autopilot: plays exactly to the ratings (all-zero input).</summary>
 public struct NeutralBatterPolicy : IBatterPolicy
 {
+    public readonly void BeginPa(in HumanPaContext context)
+    {
+    }
+
     public readonly BatterPitchInput NextPitch(in CountState count, ref RngState rng) => default;
+
+    public readonly void OnPaResolved(PaOutcome outcome)
+    {
+    }
 }
 
 /// <summary>

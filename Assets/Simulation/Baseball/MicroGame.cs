@@ -299,14 +299,16 @@ public sealed class MicroGame
         {
             awayScore += PlayHalfInning(
                 awayTeam, homeStarter, ref homeFatigue, _teamDefense[homeTeam], ref awayOrder,
-                humanSlot, inning, isTopHalf: true, ref policy, ref rng, ref humanPa, ref humanPitches);
+                humanSlot, inning, isTopHalf: true, awayScore, homeScore,
+                ref policy, ref rng, ref humanPa, ref humanPitches);
             if (inning >= 9 && homeScore > awayScore)
             {
                 break;
             }
             homeScore += PlayHalfInning(
                 homeTeam, awayStarter, ref awayFatigue, _teamDefense[awayTeam], ref homeOrder,
-                humanSlot, inning, isTopHalf: false, ref policy, ref rng, ref humanPa, ref humanPitches);
+                humanSlot, inning, isTopHalf: false, awayScore, homeScore,
+                ref policy, ref rng, ref humanPa, ref humanPitches);
             if (inning >= 9 && homeScore != awayScore)
             {
                 break;
@@ -368,8 +370,8 @@ public sealed class MicroGame
     /// </summary>
     private int PlayHalfInning<TPolicy>(
         int battingTeam, int pitcherSlot, ref PitcherFatigue fatigue, byte defense, ref int orderPos,
-        int humanSlot, int inning, bool isTopHalf, ref TPolicy policy, ref RngState rng,
-        ref int humanPa, ref int humanPitches)
+        int humanSlot, int inning, bool isTopHalf, int awayScore, int homeScore,
+        ref TPolicy policy, ref RngState rng, ref int humanPa, ref int humanPitches)
         where TPolicy : IBatterPolicy
     {
         int outs = 0;
@@ -397,13 +399,20 @@ public sealed class MicroGame
                 AtBatResolver.ComputeProbabilities(in _batterRatings[batterSlot], in effectivePitcher, defense, anchor);
                 PitchClassRates rates = PitchChain.SolveNeutral(
                     anchor[(int)PaOutcome.Walk], anchor[(int)PaOutcome.Strikeout]);
-                outcome = humanBatting
-                    ? PitchChain.SimulatePa(anchor, in rates, ref policy, ref fatigue, ref rng, out pitches)
-                    : PitchChain.SimulatePa(anchor, in rates, ref neutral, ref fatigue, ref rng, out pitches);
                 if (humanBatting)
                 {
+                    // Runs already scored this half count toward the batting side.
+                    policy.BeginPa(new HumanPaContext(
+                        awayScore + (isTopHalf ? runs : 0), homeScore + (isTopHalf ? 0 : runs),
+                        inning, isTopHalf, outs, bases, in effectivePitcher));
+                    outcome = PitchChain.SimulatePa(anchor, in rates, ref policy, ref fatigue, ref rng, out pitches);
+                    policy.OnPaResolved(outcome);
                     humanPa++;
                     humanPitches += pitches;
+                }
+                else
+                {
+                    outcome = PitchChain.SimulatePa(anchor, in rates, ref neutral, ref fatigue, ref rng, out pitches);
                 }
             }
             else

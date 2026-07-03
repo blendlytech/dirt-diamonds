@@ -182,3 +182,35 @@ Steps 1–4 of the Phase 4 plan, implemented exactly against `docs/design/baseba
 2. Wire `AtBatView` to the driver: pitch-by-pitch DTO updates + `PlayerInputModel` mapping of the timing slider, sim off the UI thread via the dispatcher.
 3. Schema v4 (No Blind Queries path): `pitcher_role` for bullpens; pitch-type arsenals + pitcher-side input model.
 4. Mid-season stat-flush cadence (M1 artifact #2) becomes urgent once the player's own stats are on the line.
+
+---
+
+## 2026-07-03 — Phase 5: Career Wiring / Player Avatar ✅ (steps 1, 2, 4; schema v4 deferred)
+
+Steps 1, 2 and 4 of the Phase 5 list above, engine + harness + UI slice. No schema change (v3 as-is; the avatar is ordinary Players/Player_Ratings rows plus one Game_State key). **All suites green: MonteCarloHarness 69/69 (was 52), CoreLoopHarness 22/22, SchemaValidator 44/44 scratch + 33/33 live, game assembly 0 warn/0 err, headless boot AND headless `AttendedGameScreen.tscn` instantiation clean.** Macro-sim still bit-identical after the schedule extraction (both M1 season lines byte-for-byte: .248/.316/.411 R/G 4.21, .250/.319/.413 R/G 4.29).
+
+**Design decisions (the load-bearing ones):**
+
+- **Suppression is a standing per-team filter, not per-day.** Once an avatar exists, `CareerManager` owns ALL of that team's games: the macro sim skips any pairing containing the attended team (`LeagueSimulator.SetAttendedTeam`) but still ticks its rotation counter; skipped days autopilot through `MicroGame` under `NeutralBatterPolicy` — which reproduces the macro distribution by construction (§7), so the league's calibration never drifts. Every game is played exactly once, provable from GS/W/L accounting.
+- **Stat composition fixed at the macro flush.** Micro flushes are additive per game; the macro's whole-season overwrite flush would have clobbered opponents' attended-game lines at day 154. The macro flush now uses the SAME additive `Add*GameCounts` upserts and fires at the end of every 7-day cycle (`dayOfSeason % 7 == 0`; 154 is a multiple), which also resolves the M1 mid-season-staleness artifact (step 4). The overwrite `Upsert*SeasonCounts` queries were deleted. `StatsNormalizer` runs after each cycle flush, so DB rates are never more than a cycle stale.
+- **Schedule extracted to `LeagueSchedule.cs`** (pure circle-method math, macro play order preserved bit-for-bit): `SimulateGameDay` consumes it and the career driver derives "who does my team play today" from the same source.
+
+**New engine surface:**
+
+- `CareerManager.cs` — avatar lifecycle + attended-game day loop, engine-independent. `CreateAvatar` (one batch: Players+Ratings insert, weakest same-role teammate benched to free agency via `PlayerQueries.SetTeam(null)` so rosters stay exactly 9+5, `avatar_player_id` into Game_State; then league flush + both sims re-Initialize); `LoadExistingAvatar` restores on boot. On `DayAdvancedEvent`: derive the pairing, park it as a `PendingAttendedGame`; `AutopilotAttendedGames` (default true) resolves it instantly with the neutral policy, otherwise the UI plays it via `PlayPendingGame<TPolicy>` on a background task (flush = micro's own batch, `game_day` = absolute day per the Game_Logs clock). A pending game the player never played is forfeited to the autopilot on the next tick; day-advance during an in-flight game throws loud.
+- `PlayerIntentBridge` + `InteractiveBatterPolicy` (`InteractiveBatterPolicy.cs`, System.Threading only) — the sim task blocks in `NextPitch`, publishes an `AtBatSnapshot` (dirty-flag), waits on a semaphore; the UI thread submits swing(τ)/take which maps through `PlayerInputModel`. Double-submit race guarded (submit consumes the wait); `Cancel()` surfaces as `OperationCanceledException` so the game unwinds unflushed. Zone read is a 50/50 rng draw until pitch location exists (v4 arsenals) — deliberate artifact.
+- `IBatterPolicy` grew `BeginPa(in HumanPaContext)` / `OnPaResolved(PaOutcome)` (all implementors explicit — a default interface method would box the struct receiver). `MicroGame` calls them around human-batting PAs only, passing scores/inning/outs/bases + the fatigued effective pitcher ratings.
+- `GameManager` boots `MicroGame` + `CareerManager` after the league (handler order: league first), restores the avatar if saved, logs it.
+
+**UI slice (ui_conventions honored):** `AttendedGameScreen.tscn` + `.cs` — root named after the file, node paths mapped via `godot_scene_mapper` BEFORE `GetNode`, instances the Phase 4 `AtBatView`. Play button: `AdvanceDay` with autopilot off → pending game → `Task.Run` the interactive game; `_Process` polls the bridge's dirty flags (Render only on change), PA outcomes append to the play log, Skip button autopilots the day. Player-facing text templates are `[Export]` properties (scene-editable). `_ExitTree` cancels the in-flight game.
+
+**Harness (suite 7, +17 checks):** avatar creation/reboot invariants; 364-day autopilot season through the real event loop — 612 games once each (GS=1224, W=L=612), composed ledgers agree, league line .248/.317 in §8, avatar 718 PA AVG .280, displaced FA played 0; mid-season cadence proof at day 40 (avatar 187 PA in DB, league 11,298); scripted-UI interactive game (5 PA / 25 pitches / 25 snapshots / 5 outcomes over the bridge); cancel path (unflushed, re-pending, forfeited next tick). SKILL.md check list updated.
+
+**Known Phase 5 artifacts (deliberate):** (1) zone read is a coin flip until v4 pitch arsenals model location; (2) each sim keeps its own rotation counter, so an opponent's attended-game starter can differ from their macro rotation slot (stats compose fine; identity is cosmetic until bullpens); (3) `EnsureDebugAvatar` in the UI creates a fixed 60/60/60 rookie on team 1 — placeholder until the new-game creation flow (life-sim phases); (4) a cancelled game leaves `MicroGame`'s team game counters bumped (rotation drift only); (5) between human PAs the at-bat view doesn't update (NPC PAs render nothing until a game feed exists).
+
+**Next steps (Phase 5 remainder / Phase 6 per BUILD_PLAN):**
+
+1. Schema v4 (No Blind Queries path): `pitcher_role` for bullpens; pitch-type arsenals + pitcher-side input model + a real zone-read minigame.
+2. New-game flow: avatar creation UI (name/team/ratings budget) replacing `EnsureDebugAvatar`.
+3. Attended-game feed: render NPC PAs between the avatar's at-bats (Game_Logs rows already exist per PA).
+4. BUILD_PLAN Phase 5 (Life Sim needs/utility) — note the plan's phase numbering diverges from progress.md's here; the baseball career wiring above was tracked as "Phase 5" in this log.

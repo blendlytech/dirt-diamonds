@@ -10,6 +10,9 @@ public static class GameStateKeys
 
     /// <summary>Season year that day 1 belongs to (long).</summary>
     public const string StartSeasonYear = "start_season_year";
+
+    /// <summary>player_id (text) of the career avatar; absent until the player creates one.</summary>
+    public const string AvatarPlayerId = "avatar_player_id";
 }
 
 /// <summary>
