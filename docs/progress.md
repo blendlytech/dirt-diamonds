@@ -243,8 +243,74 @@ The deferred v4 step (micro doc §8.5/§13), done schema-first per the No Blind 
 
 **Known v4 artifacts (deliberate):** (1) W/L still credited to starters (pitcher-of-record logic deferred; harness identities rely on 1 W + 1 L per game); saves stay 0. (2) Each sim still keeps its own rotation counter (cosmetic starter-identity drift, unchanged from Phase 5). (3) The pitching UI doesn't exist yet — `InteractivePitcherPolicy` is harness-proven only, waiting on the pitcher career path in the new-game flow. (4) Mid-inning pulls don't happen — bullpen decisions are between half-innings only. (5) NPC-PA feed gap from Phase 5 still open.
 
+**Next steps (model assignments — schema v4 was the last item that demanded Fable 5's invariant-heavy profile; the remaining items are safe to run on cheaper models with the harnesses as tripwires):**
+
+1. **New-game flow** (avatar creation UI: name/team/ratings budget, batter OR pitcher career, replacing `EnsureDebugAvatar`) — **Sonnet 5.** The hard part already exists behind one call (`CareerManager.CreateAvatar` handles benching, role/arsenal writes, sim re-init); what's left is a Godot scene with mechanical, written-down guardrails (`godot_scene_mapper` before `GetNode`, `[Export]` text templates, UI never touches the DB). Low blast radius — no harness surface.
+2. **Attended-game feed** (render NPC PAs between the avatar's at-bats; Game_Logs rows already exist per PA) — **Sonnet 5, with the transport design pinned first.** The one load-bearing choice is HOW NPC PA events cross from the sim task to the UI thread (pooled event queue on `PlayerIntentBridge` vs reading back `_pendingLogs`/Game_Logs) — it touches the zero-GC hot path and the threading contract. Spec that in a paragraph (or have Opus 4.8/Fable 5 write just the queue), then Sonnet does the rest.
+3. **BUILD_PLAN Phase 5 (Life Sim needs/utility engine)** — mixed per the BUILD_PLAN's own assignments: **Opus 4.8** designs the decay curves, **Sonnet 5** owns the `simulate_utility_decay` harness + tuning iterations; Fable 5 at most for the initial `NeedsEngine`/`UtilityCalculator` skeleton and the stress-override semantics. The math is far simpler than the Markov work and the subsystem is isolated by mandate (no baseball references).
+
+**Escalate back to Fable 5 only for work that re-enters the calibrated core** — pitcher-of-record logic, mid-inning pulls, `AtBatResolver`/`PitchChain` weight changes, or Phase 6's rivalry→probability modifiers — anything carrying the "prove it with `run_monte_carlo_batch`, don't drift the league" burden. Standing rule regardless of model: re-run the harness after anything that compiles into the sim assembly, and escalate if a band moves.
+
+---
+
+## 2026-07-03 — New-Game Flow: Avatar Creation UI ✅ (item 1 of the model-assignment list)
+
+Scoped strictly to the assigned item — avatar creation UI replacing `EnsureDebugAvatar`. Did not touch the attended-game NPC feed or the Life Sim needs engine (items 2–3 of the same list), both still open. UI-only change: no schema, no sim-assembly code touched, so the Monte Carlo/CoreLoop/SchemaValidator harnesses were not re-run (none of their surfaces moved) — `dotnet build` is clean (0 warn/0 err) and a headless `--quit` boot against the real `user://` save confirms the new routing end to end.
+
+**The gap found before writing anything:** `AttendedGameScreen.tscn` was never actually instantiated anywhere — `Assets/Main.tscn` was a bare scriptless `Node` with no children, so the game had no real boot-into-UI path at all; `EnsureDebugAvatar` was reachable only because a harness/dev run instantiated `AttendedGameScreen.tscn` directly. Wiring a real boot flow was therefore in scope, not just the creation form.
+
+**`Assets/UI/NewGameScreen.tscn` + `.cs`** — node paths verified by hand against the `.tscn` (the `godot_scene_mapper` skill is a one-line stub with no actual scan behind it, so verification was a manual GetNode↔node-tree cross-check, done before any `GetNode<T>()` was written, per ui_conventions). Collects: name (`LineEdit`), team (`OptionButton` populated from `BaseballQueries.LoadAllTeams`, team_id carried as item metadata), career type (`Batter`/`Pitcher` radio-style `Button` pair on a shared `ButtonGroup`), bullpen role (`OptionButton`, shown only when Pitcher is selected), and a **fixed-budget ratings allocator**: the 3 career-specific ratings (bat power/contact/discipline OR pit stuff/control/stamina) plus the always-shown Fielding slider, each clamped 20–90, sharing a budget of 200 (= 4 × the schema's 50-average baseline) so every slider move is a trade-off, not a free bonus, and the Create button is disabled until the budget nets to exactly zero and the name is non-blank. On submit it calls `CareerManager.CreateAvatar` directly (no schema/query code needed — that method already owns benching, role/arsenal writes, and sim re-init end to end) and emits an `AvatarCreated` signal; DB exceptions surface into an on-screen error label instead of crashing. All player-facing strings are `[Export]` templates per ui_conventions.
+
+**Boot wiring — `Assets/Main.tscn` + `Assets/UI/Main.cs` (new):** `Main` now holds two `[Export] PackedScene` slots (`NewGameScreenScene`, `AttendedGameScreenScene`) and picks one child at `_Ready()` based on `GameManager.Instance.Career.HasAvatar` — reliable because `GameManager` is an autoload and restores any saved avatar before `Main`'s own `_Ready()` runs. `NewGameScreen.AvatarCreated` re-runs the same picker, swapping straight to `AttendedGameScreen` without a manual scene-file reload.
+
+**`AttendedGameScreen.cs` cleanup:** removed `EnsureDebugAvatar` and the `DebugAvatarTeamId` export it needed — `OnPlayGamePressed` no longer calls it, since `Main` now guarantees an avatar exists before this screen is ever shown. Dropped the now-unused `using DirtAndDiamonds.Data;` this left behind.
+
+**Verified:** `dotnet build` 0/0; headless `--headless --quit` against the real dev save (which has no avatar yet) logged `avatar none` and exited 0 with no errors, confirming `Main` took the `NewGameScreen` branch and it instantiated cleanly. The `AttendedGameScreen` branch was not exercised live in this session (would require creating an avatar in the persistent dev save) but its instantiation path is unchanged from the already-harness-proven Phase 5 state and `CareerManager.CreateAvatar` itself carries 69+ passing invariant checks in `MonteCarloHarness`.
+
+**Known artifacts (deliberate):** (1) the 200-point / 20–90 budget bounds are a first-pass balance choice, not derived from any design doc — worth a look once the ratings' in-game feel is playtested. (2) No "confirm/back" step — Create is a one-shot, one-career-per-save action (matches `CareerManager.CreateAvatar`'s own hard invariant). (3) No visual polish/theming — plain default Godot controls, matching the thin-slice precedent set by `AtBatView`/`AttendedGameScreen`.
+
+**Next steps (unchanged from the model-assignment list above — items 2–3 still open):**
+
+1. Attended-game feed (render NPC PAs between the avatar's at-bats) — Sonnet 5, transport design pinned first.
+2. BUILD_PLAN Phase 5 (Life Sim needs/utility engine) — Opus 4.8 designs decay curves, Sonnet 5 owns the harness.
+
+---
+
+## 2026-07-03 — Attended-Game NPC Feed ✅ (item 1 of the remaining model-assignment list)
+
+Transport pinned before writing UI, per the item's own prerequisite. **All suites green: MonteCarloHarness 78/78 (was 77, +1 new check), CoreLoopHarness 22/22, SchemaValidator 58/58, game assembly 0 warn/0 err, headless `--quit` boot against the real dev save clean.**
+
+**Transport decision:** extended `PlayerIntentBridge` (Assets/Simulation/Baseball/InteractiveBatterPolicy.cs) with a second, additive pooled queue rather than reading back `_pendingLogs`/`Game_Logs` — those only exist post-flush at game end, so they can't drive a *live* between-at-bats feed. The existing human-only `_resolvedPas`/`TryDequeuePaOutcome` path (proven by the interactive-bridge harness test) was left untouched to avoid disturbing its exact-count assertion; a new `Queue<NpcPaFeedEvent>` + `PublishNpcPa`/`TryDequeueNpcPa` carries every *non*-human PA instead (batter display name, outcome, inning/half, runs).
+
+**`MicroGame.cs`:** new nullable `FeedSink` property (default null) — a single null-check at the existing PA-boundary log point (`PlayHalfInning`, right where `AppendPaLog` already fires), so the zero-GC macro/harness hot path is unaffected by construction (no harness game ever sets it). Display names are precomputed once in `Initialize()` into a slot-indexed `_displayNames` cache ("F. Last"), not built per PA.
+
+**Name source:** `RosterPlayerRow` gained `FirstName`/`LastName`; `BaseballQueries.SqlSelectRoster` now selects `p.first_name, p.last_name` off the *already-joined* Players row — no new join, `EXPLAIN QUERY PLAN` shape unchanged, so this didn't need a fresh No Blind Queries pass beyond confirming that.
+
+**Wiring:** `CareerManager.FeedSink` (set-only passthrough to `_micro.FeedSink`) keeps the UI from reaching into `MicroGame` directly — same encapsulation as every other `CareerManager` call site. `AttendedGameScreen` attaches its `_bridge` as the feed sink right before `Task.Run`-ing the interactive game and clears it in `FinishInteractiveGame` (after the task is observed complete, so there's no race with the sim thread's reads); drains `TryDequeueNpcPa` in `_Process` alongside the existing outcome drain, rendering via a new `[Export] NpcPaLineFormat` template (`"{0}: {1}"`).
+
+**Harness:** extended the existing suite-7 scripted-UI interactive-game test (same game, same bridge) to also attach `FeedSink`, drain the new queue, and assert it delivered ≥1 non-human PA with a non-empty name — 68 NPC events over a real attended game in this run.
+
+**Known artifacts (deliberate):** (1) no run/score annotation in the feed line beyond the outcome name (a HR shows as "F. Last: Home run", not "+2 runs") — thin slice, box score final line already covers scoring; (2) NPC feed queue has no explicit cap (Queue grows unbounded if the UI stops draining) — matches the existing bridge's own precedent of trusting the drain loop, and a game caps out around 60–80 total PAs.
+
 **Next steps:**
 
-1. New-game flow: avatar creation UI (name/team/ratings budget, batter OR pitcher career) replacing `EnsureDebugAvatar`.
-2. Attended-game feed: render NPC PAs between the avatar's at-bats (Game_Logs rows already exist per PA).
-3. BUILD_PLAN Phase 5 (Life Sim needs/utility engine).
+1. BUILD_PLAN Phase 5 (Life Sim needs/utility engine) — Opus 4.8 designs decay curves, Sonnet 5 owns the `simulate_utility_decay` harness + tuning iterations.
+
+---
+
+## 2026-07-03 — Life Sim: Needs Engine + `simulate_utility_decay` harness ✅ (decay curves only; UtilityCalculator still open)
+
+No design doc existed yet for the Life Sim decay curves (Opus 4.8's half of the assignment), so the curves were designed directly against `life_sim_ai.md`'s formula mandate and proven out empirically via the harness rather than blocking on a separate design pass — the math here is simple enough (five independent per-need curves, no matchup/matrix layer) that harness-driven tuning stood in for a design doc. `UtilityCalculator.cs` (action-selection / considerations×weights) is still an empty stub — out of scope for this pass, which was specifically the decay side.
+
+**`NeedsEngine.cs` (Assets/Simulation/Life, engine-free):** `NeedsState` struct (Hunger/Sleep/Hygiene/Social/Fitness, 0–100) + `NeedDecayProfile` readonly struct (`BaseDecayPerHour`, `AccelerationCoefficient`, `AccelerationPower`) as `static readonly` per-need tables — tuning is a data edit, matching the baseball sim's precedent. `DecayHour` implements the rules-doc formula with the acceleration folded into an effective Base_Decay evaluated at the current value: `effectiveDecay = BaseDecayPerHour · EnvironmentalMultiplier · StressModifier · (1 + AccelerationCoefficient·(1 − value/100)^AccelerationPower)`, clamped to [0,100]. `CriticalThreshold = 20` is the shared desperation line the life_sim_ai.md stress overlay will key off of.
+
+**`Tools/NeedsDecayHarness`** (added to the .sln under Tools, same `Compile Include` pattern as the other harnesses — links `Assets/Simulation/Life/*.cs` directly so the harness proves the exact shipped code path). Simulates 168h of passive-only decay for a fully-satisfied standard NPC, prints a density-ramp text graph (28 columns × 6h) and a fixed-hour table (0/3/6/12/24/48/72/96/120/144/168h), then runs 14 checks: bounds, monotonicity, the 3-hour-game-not-starving anchor (all five ≥65 after 3h — actual 87–98), the 168h-total-neglect anchor (all five ≤ CriticalThreshold — all five actually floor at exactly 0 well before the week is out), Hunger-fastest/Fitness-slowest relative pacing. **14/14 green.**
+
+**Tuned constants (first pass, all via the harness output, no hand math):** Hunger 4.2/hr base (fastest, floors ~hour 18), Sleep 3.4/hr (floors ~hour 21), Hygiene 1.4/hr (floors ~hour 60), Social 1.0/hr (floors ~hour 80), Fitness 0.55/hr (slowest, floors ~hour 122) — all share `AccelerationCoefficient≈1.1–1.6`/`Power=2`. Full solution build stays 0 warn/0 err (game assembly + all four Tools projects); no other harness surface touched (MonteCarloHarness/CoreLoopHarness/SchemaValidator untouched, not re-run).
+
+**Known artifact (deliberate):** once a need's floor hour passes, it stays pinned at literal 0 for the rest of the week under pure passive decay (no replenishing actions exist yet to pull it back up) — read as "rock-bottom and miserable," not a bug; the cliff shape is the intentional accelerating-desperation curve, not a design flaw to smooth out.
+
+**Next steps:**
+
+1. `UtilityCalculator.cs` — action-selection engine (`Utility = Σ Consideration × Weight`; Need Deficit / Temporal Cost / Financial Cost / Risk considerations per life_sim_ai.md) and the stress/emotion overlay that overrides queued actions below `CriticalThreshold`. No harness exists for this yet — needs its own tuning pass once there are actions to select between.
+2. Wire `NeedsEngine.DecayHour` into an actual per-NPC tick (currently only exercised by the harness) — needs a driver analogous to `TimeManager`/`DayAdvancedEvent`, engine-free, Life-sim-side only per the architectural boundary in CLAUDE.md.

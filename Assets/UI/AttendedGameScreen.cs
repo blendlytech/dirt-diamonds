@@ -1,5 +1,4 @@
 using DirtAndDiamonds.Core;
-using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
 using Godot;
 
@@ -35,14 +34,12 @@ public sealed partial class AttendedGameScreen : Control
     [Export]
     public string PaLineFormat { get; set; } = "Your PA: {0}";
 
+    [Export]
+    public string NpcPaLineFormat { get; set; } = "{0}: {1}";
+
     /// <summary>Comma-separated player-facing names for the 7 PaOutcome values, in enum order.</summary>
     [Export]
     public string OutcomeNamesCsv { get; set; } = "Out,Strikeout,Walk,Single,Double,Triple,Home run";
-
-    // Thin-slice defaults for the debug avatar until the new-game creation
-    // flow ships; ratings are a modest above-average rookie bat.
-    [Export]
-    public int DebugAvatarTeamId { get; set; } = 1;
 
     private Label _dayLabel = null!;
     private Button _playGameButton = null!;
@@ -121,6 +118,10 @@ public sealed partial class AttendedGameScreen : Control
         {
             _atBatView.AppendPlayLine(string.Format(PaLineFormat, OutcomeName(outcome)));
         }
+        while (_bridge.TryDequeueNpcPa(out NpcPaFeedEvent npcPa))
+        {
+            _atBatView.AppendPlayLine(string.Format(NpcPaLineFormat, npcPa.BatterName, OutcomeName(npcPa.Outcome)));
+        }
 
         if (_gameTask.IsCompleted)
         {
@@ -131,7 +132,6 @@ public sealed partial class AttendedGameScreen : Control
     private void OnPlayGamePressed()
     {
         GameManager gm = GameManager.Instance!;
-        EnsureDebugAvatar(gm);
         SetDayControlsEnabled(false);
         _statusLabel.Text = GameRunningText;
         gm.Career.AutopilotAttendedGames = false;
@@ -151,6 +151,7 @@ public sealed partial class AttendedGameScreen : Control
     private void StartInteractiveGame(CareerManager career)
     {
         _bridge.Reset();
+        career.FeedSink = _bridge; // cleared in FinishInteractiveGame, after the task is observed done
         PlayerIntentBridge bridge = _bridge;
         _gameTask = Task.Run(() =>
         {
@@ -165,6 +166,7 @@ public sealed partial class AttendedGameScreen : Control
     {
         Task<MicroGameResult> task = _gameTask!;
         _gameTask = null;
+        GameManager.Instance!.Career.FeedSink = null;
         SetDayControlsEnabled(true);
 
         if (task.IsCompletedSuccessfully)
@@ -189,26 +191,6 @@ public sealed partial class AttendedGameScreen : Control
         _bridge.SubmitSwing(timingError, guessInZone);
 
     private void OnTakeCommitted(bool guessInZone) => _bridge.SubmitTake(guessInZone);
-
-    /// <summary>Placeholder until the new-game creation flow (life sim phase) ships.</summary>
-    private void EnsureDebugAvatar(GameManager gm)
-    {
-        if (gm.Career.HasAvatar)
-        {
-            return;
-        }
-        gm.Career.CreateAvatar("You", "Rookie", DebugAvatarTeamId, new PlayerRatingsRow
-        {
-            IsPitcher = false,
-            BatPower = 60,
-            BatContact = 60,
-            BatDiscipline = 60,
-            PitStuff = 50,
-            PitControl = 50,
-            PitStamina = 50,
-            Fielding = 50,
-        });
-    }
 
     private void SetDayControlsEnabled(bool enabled)
     {

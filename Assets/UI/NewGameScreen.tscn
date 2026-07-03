@@ -1,0 +1,243 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/NewGameScreen.cs" id="1_newgame"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_career"]
+
+[node name="NewGameScreen" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_newgame")
+
+[node name="Screen" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="TitleLabel" type="Label" parent="Screen"]
+layout_mode = 2
+text = "Create Your Player"
+
+[node name="NameRow" type="HBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Screen/NameRow"]
+layout_mode = 2
+text = "Name"
+
+[node name="NameLineEdit" type="LineEdit" parent="Screen/NameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Enter your name"
+
+[node name="TeamRow" type="HBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="TeamLabel" type="Label" parent="Screen/TeamRow"]
+layout_mode = 2
+text = "Team"
+
+[node name="TeamOptionButton" type="OptionButton" parent="Screen/TeamRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CareerRow" type="HBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="CareerLabel" type="Label" parent="Screen/CareerRow"]
+layout_mode = 2
+text = "Career"
+
+[node name="BatterButton" type="Button" parent="Screen/CareerRow"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_career")
+text = "Batter"
+
+[node name="PitcherButton" type="Button" parent="Screen/CareerRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_career")
+text = "Pitcher"
+
+[node name="RoleRow" type="HBoxContainer" parent="Screen"]
+layout_mode = 2
+visible = false
+
+[node name="RoleLabel" type="Label" parent="Screen/RoleRow"]
+layout_mode = 2
+text = "Bullpen Role"
+
+[node name="RoleOptionButton" type="OptionButton" parent="Screen/RoleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BatterRatings" type="VBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="PowerRow" type="HBoxContainer" parent="Screen/BatterRatings"]
+layout_mode = 2
+
+[node name="PowerLabel" type="Label" parent="Screen/BatterRatings/PowerRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Power"
+
+[node name="PowerSlider" type="HSlider" parent="Screen/BatterRatings/PowerRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="PowerValueLabel" type="Label" parent="Screen/BatterRatings/PowerRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="ContactRow" type="HBoxContainer" parent="Screen/BatterRatings"]
+layout_mode = 2
+
+[node name="ContactLabel" type="Label" parent="Screen/BatterRatings/ContactRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Contact"
+
+[node name="ContactSlider" type="HSlider" parent="Screen/BatterRatings/ContactRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="ContactValueLabel" type="Label" parent="Screen/BatterRatings/ContactRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="DisciplineRow" type="HBoxContainer" parent="Screen/BatterRatings"]
+layout_mode = 2
+
+[node name="DisciplineLabel" type="Label" parent="Screen/BatterRatings/DisciplineRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Discipline"
+
+[node name="DisciplineSlider" type="HSlider" parent="Screen/BatterRatings/DisciplineRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="DisciplineValueLabel" type="Label" parent="Screen/BatterRatings/DisciplineRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="PitcherRatings" type="VBoxContainer" parent="Screen"]
+layout_mode = 2
+visible = false
+
+[node name="StuffRow" type="HBoxContainer" parent="Screen/PitcherRatings"]
+layout_mode = 2
+
+[node name="StuffLabel" type="Label" parent="Screen/PitcherRatings/StuffRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Stuff"
+
+[node name="StuffSlider" type="HSlider" parent="Screen/PitcherRatings/StuffRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="StuffValueLabel" type="Label" parent="Screen/PitcherRatings/StuffRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="ControlRow" type="HBoxContainer" parent="Screen/PitcherRatings"]
+layout_mode = 2
+
+[node name="ControlLabel" type="Label" parent="Screen/PitcherRatings/ControlRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Control"
+
+[node name="ControlSlider" type="HSlider" parent="Screen/PitcherRatings/ControlRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="ControlValueLabel" type="Label" parent="Screen/PitcherRatings/ControlRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="StaminaRow" type="HBoxContainer" parent="Screen/PitcherRatings"]
+layout_mode = 2
+
+[node name="StaminaLabel" type="Label" parent="Screen/PitcherRatings/StaminaRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Stamina"
+
+[node name="StaminaSlider" type="HSlider" parent="Screen/PitcherRatings/StaminaRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="StaminaValueLabel" type="Label" parent="Screen/PitcherRatings/StaminaRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="FieldingRow" type="HBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="FieldingLabel" type="Label" parent="Screen/FieldingRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Fielding"
+
+[node name="FieldingSlider" type="HSlider" parent="Screen/FieldingRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 90
+step = 1
+value = 50
+
+[node name="FieldingValueLabel" type="Label" parent="Screen/FieldingRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 0)
+text = "50"
+
+[node name="RemainingPointsLabel" type="Label" parent="Screen"]
+layout_mode = 2
+text = "Points remaining: 0"
+
+[node name="ErrorLabel" type="Label" parent="Screen"]
+layout_mode = 2
+visible = false
+text = ""
+
+[node name="CreateButton" type="Button" parent="Screen"]
+layout_mode = 2
+text = "Start Career"

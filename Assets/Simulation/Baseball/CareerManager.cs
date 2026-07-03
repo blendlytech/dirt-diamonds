@@ -88,6 +88,18 @@ public sealed class CareerManager
 
     public bool HasPendingGame => _hasPending;
 
+    /// <summary>
+    /// Attach (or clear, with null) the sim-to-UI NPC play-by-play feed for the
+    /// next <see cref="PlayPendingGame{TPolicy}"/> call. The UI sets this right
+    /// before starting the interactive game's background task and clears it
+    /// once the task completes — the sim thread only reads it, so there is no
+    /// race as long as the clear happens after the task is observed done.
+    /// </summary>
+    public PlayerIntentBridge? FeedSink
+    {
+        set => _micro.FeedSink = value;
+    }
+
     /// <summary>True while an interactive game is running on a background task.</summary>
     public bool IsGameInFlight => _gameInFlight;
 

@@ -78,6 +78,7 @@ public sealed class MicroGame
     // Roster-slot-indexed parallel arrays, filled once at Initialize — the
     // same load pattern (and query) as the macro LeagueSimulator.
     private RosterPlayerRow[] _roster = Array.Empty<RosterPlayerRow>();
+    private string[] _displayNames = Array.Empty<string>();
     private BatterRatings[] _batterRatings = Array.Empty<BatterRatings>();
     private PitcherRatings[] _pitcherRatings = Array.Empty<PitcherRatings>();
     private PitcherArsenal[] _arsenals = Array.Empty<PitcherArsenal>();
@@ -113,6 +114,16 @@ public sealed class MicroGame
 
     /// <summary>§10: play-by-play capture; disable for headless bulk runs (zero-GC profile).</summary>
     public bool LoggingEnabled = true;
+
+    /// <summary>
+    /// Attended-game NPC play-by-play feed (the "render NPC PAs between the
+    /// avatar's at-bats" gap): when a UI attaches its <see cref="PlayerIntentBridge"/>
+    /// here, every NPC plate appearance is queued for it at the PA boundary.
+    /// Null (the default) for headless/autopilot/harness games — the check is a
+    /// single null comparison, so the zero-GC hot path is untouched when no
+    /// viewer is watching.
+    /// </summary>
+    public PlayerIntentBridge? FeedSink;
 
     private bool _initialized;
 
@@ -198,6 +209,12 @@ public sealed class MicroGame
         }
 
         int slots = _roster.Length;
+        _displayNames = new string[slots];
+        for (int i = 0; i < slots; i++)
+        {
+            RosterPlayerRow r = _roster[i];
+            _displayNames[i] = r.FirstName.Length > 0 ? $"{r.FirstName[0]}. {r.LastName}" : r.LastName;
+        }
         _batterRatings = new BatterRatings[slots];
         _pitcherRatings = new PitcherRatings[slots];
         _arsenals = new PitcherArsenal[slots];
@@ -614,6 +631,12 @@ public sealed class MicroGame
             if (LoggingEnabled)
             {
                 AppendPaLog(inning, isTopHalf, batterSlot, pitcherSlot, outcome, paRuns, pitches);
+            }
+            // NPC feed: the human's own PA already renders via the bridge's
+            // outcome queue ("Your PA: ..."), so only queue the others here.
+            if (FeedSink != null && batterSlot != humanSlot)
+            {
+                FeedSink.PublishNpcPa(new NpcPaFeedEvent(_displayNames[batterSlot], outcome, inning, isTopHalf, paRuns));
             }
         }
         return runs;

@@ -38,8 +38,11 @@ public sealed class BaseballQueries
     // Schema v4 adds the Pitcher_Roles LEFT JOIN (COALESCE 0 = None for position
     // players); plan re-validated via EXPLAIN QUERY PLAN — idx_players_team plus
     // both PK autoindexes, same shape as v3 (No Blind Queries).
+    // first_name/last_name ride the same Players row already in the join (no
+    // new join, no plan change) — the attended-game NPC feed needs a display
+    // name and the macro-sim simply ignores the extra columns.
     private const string SqlSelectRoster =
-        "SELECT p.player_id, p.team_id, r.is_pitcher, COALESCE(pr.role, 0), " +
+        "SELECT p.player_id, p.first_name, p.last_name, p.team_id, r.is_pitcher, COALESCE(pr.role, 0), " +
         "r.bat_power, r.bat_contact, r.bat_discipline, " +
         "r.pit_stuff, r.pit_control, r.pit_stamina, r.fielding " +
         "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
@@ -294,16 +297,18 @@ public sealed class BaseballQueries
             destination.Add(new RosterPlayerRow
             {
                 PlayerId = reader.GetString(0),
-                TeamId = reader.GetInt32(1),
-                IsPitcher = reader.GetInt64(2) != 0,
-                Role = (PitcherRole)reader.GetInt32(3),
-                BatPower = reader.GetInt32(4),
-                BatContact = reader.GetInt32(5),
-                BatDiscipline = reader.GetInt32(6),
-                PitStuff = reader.GetInt32(7),
-                PitControl = reader.GetInt32(8),
-                PitStamina = reader.GetInt32(9),
-                Fielding = reader.GetInt32(10),
+                FirstName = reader.GetString(1),
+                LastName = reader.GetString(2),
+                TeamId = reader.GetInt32(3),
+                IsPitcher = reader.GetInt64(4) != 0,
+                Role = (PitcherRole)reader.GetInt32(5),
+                BatPower = reader.GetInt32(6),
+                BatContact = reader.GetInt32(7),
+                BatDiscipline = reader.GetInt32(8),
+                PitStuff = reader.GetInt32(9),
+                PitControl = reader.GetInt32(10),
+                PitStamina = reader.GetInt32(11),
+                Fielding = reader.GetInt32(12),
             });
         }
         return destination.Count;

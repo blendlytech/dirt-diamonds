@@ -895,8 +895,11 @@ internal static class Program
         Check("interactive mode parks the attended game as pending", career.HasPendingGame);
 
         var bridge = new PlayerIntentBridge();
+        career.FeedSink = bridge; // attended-game NPC feed: queued alongside the human's own outcomes
         var uiDone = false;
         int snapshots = 0;
+        int npcEvents = 0;
+        bool sawNonEmptyName = false;
         var scriptedUi = new Thread(() =>
         {
             int pitch = 0;
@@ -917,6 +920,11 @@ internal static class Program
                         bridge.SubmitTake(guessInZone: false);
                     }
                 }
+                while (bridge.TryDequeueNpcPa(out NpcPaFeedEvent npcPa))
+                {
+                    npcEvents++;
+                    sawNonEmptyName |= npcPa.BatterName.Length > 0;
+                }
                 Thread.Sleep(0);
             }
         });
@@ -931,6 +939,13 @@ internal static class Program
         {
             Volatile.Write(ref uiDone, true);
             scriptedUi.Join();
+            career.FeedSink = null;
+        }
+        // Drain anything queued between the loop's last drain and the sim's return.
+        while (bridge.TryDequeueNpcPa(out NpcPaFeedEvent trailing))
+        {
+            npcEvents++;
+            sawNonEmptyName |= trailing.BatterName.Length > 0;
         }
         int outcomes = 0;
         while (bridge.TryDequeuePaOutcome(out _))
@@ -941,6 +956,9 @@ internal static class Program
             !career.HasPendingGame && interactive.HumanPa > 0 && snapshots >= interactive.HumanPitchesSeen
             && outcomes == interactive.HumanPa,
             $"{interactive.HumanPa} PA, {interactive.HumanPitchesSeen} pitches, {snapshots} snapshots, {outcomes} outcomes");
+        Check("attended-game NPC feed queues non-human PAs with a display name once a UI attaches FeedSink",
+            npcEvents > 0 && sawNonEmptyName,
+            $"{npcEvents} NPC PA events over the bridge");
 
         // ---- cancel path: the game aborts unflushed and stays pending ----
         clock.AdvanceDay();

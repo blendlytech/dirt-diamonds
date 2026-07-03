@@ -56,6 +56,8 @@ public struct PlayerRatingsRow
 public struct RosterPlayerRow
 {
     public string PlayerId;
+    public string FirstName;
+    public string LastName;
     public int TeamId;
     public bool IsPitcher;
     public PitcherRole Role;

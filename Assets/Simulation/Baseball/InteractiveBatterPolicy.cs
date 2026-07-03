@@ -30,13 +30,41 @@ public readonly struct AtBatSnapshot
 }
 
 /// <summary>
+/// One NPC plate appearance for the attended-game play-by-play feed (the
+/// "render NPC PAs between the avatar's at-bats" gap) — a display name, not a
+/// player_id, since the feed is a UI-only convenience and never round-trips
+/// back into the sim. Published only when <see cref="MicroGame.FeedSink"/> is
+/// attached (i.e. an interactive game with a live viewer); the macro/harness
+/// hot paths never set it, so this never touches the zero-GC contract.
+/// </summary>
+public readonly struct NpcPaFeedEvent
+{
+    public readonly string BatterName;
+    public readonly PaOutcome Outcome;
+    public readonly int Inning;
+    public readonly bool IsTopHalf;
+    public readonly int Runs;
+
+    public NpcPaFeedEvent(string batterName, PaOutcome outcome, int inning, bool isTopHalf, int runs)
+    {
+        BatterName = batterName;
+        Outcome = outcome;
+        Inning = inning;
+        IsTopHalf = isTopHalf;
+        Runs = runs;
+    }
+}
+
+/// <summary>
 /// Thread handshake between the attended-game sim (a background task blocked
 /// inside <see cref="PitchChain.SimulatePa"/>) and the Godot main thread.
 /// Sim side publishes a snapshot and waits; UI side renders, then submits the
 /// player's swing/take + zone guess (batting) or pitch call (pitching), which
 /// releases the sim for one pitch. Interactive PAs are ~5 per game, so this
 /// path is not zero-GC constrained — clarity over allocation here; the NPC
-/// hot path never touches it.
+/// hot path never touches it. The NPC play-by-play feed (below) rides the
+/// same non-hot-path allowance: dozens of events per game, only ever queued
+/// when a UI has attached itself as <see cref="MicroGame.FeedSink"/>.
 ///
 /// Engine-independent (System.Threading only) so the harness can prove the
 /// handshake headless with a scripted UI thread.
@@ -53,6 +81,7 @@ public sealed class PlayerIntentBridge
     private readonly object _gate = new();
     private readonly SemaphoreSlim _intentReady = new(0, 1);
     private readonly Queue<PaOutcome> _resolvedPas = new(8);
+    private readonly Queue<NpcPaFeedEvent> _npcFeed = new(32);
 
     private AtBatSnapshot _snapshot;
     private bool _snapshotDirty;
@@ -104,6 +133,15 @@ public sealed class PlayerIntentBridge
         lock (_gate)
         {
             _resolvedPas.Enqueue(outcome);
+        }
+    }
+
+    /// <summary>Called by <see cref="MicroGame"/> at the PA boundary for every NPC plate appearance.</summary>
+    internal void PublishNpcPa(in NpcPaFeedEvent evt)
+    {
+        lock (_gate)
+        {
+            _npcFeed.Enqueue(evt);
         }
     }
 
@@ -163,6 +201,21 @@ public sealed class PlayerIntentBridge
         }
     }
 
+    /// <summary>Dequeues one NPC play-by-play line for the attended-game feed, if any.</summary>
+    public bool TryDequeueNpcPa(out NpcPaFeedEvent evt)
+    {
+        lock (_gate)
+        {
+            if (_npcFeed.Count > 0)
+            {
+                evt = _npcFeed.Dequeue();
+                return true;
+            }
+            evt = default;
+            return false;
+        }
+    }
+
     /// <summary>Swing with a zone read: guessInZone is the player's in/out call for this pitch.</summary>
     public void SubmitSwing(double timingError, bool guessInZone) =>
         SubmitBatter(isSwing: true, timingError, guessInZone);
@@ -215,6 +268,7 @@ public sealed class PlayerIntentBridge
             _snapshotDirty = false;
             _awaiting = AwaitKind.None;
             _resolvedPas.Clear();
+            _npcFeed.Clear();
             while (_intentReady.CurrentCount > 0)
             {
                 _intentReady.Wait(0);
