@@ -1,0 +1,57 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/AtBatView.cs" id="1_atbatview"]
+
+[node name="AtBatView" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_atbatview")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="ScoreLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = "AWAY 0 — HOME 0"
+
+[node name="InningLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = "Top 1"
+
+[node name="CountLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = "0-0"
+
+[node name="OutsLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = "0 out"
+
+[node name="BasesLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = "Bases empty"
+
+[node name="PlayLog" type="RichTextLabel" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+scroll_following = true
+text = "Play-by-play"
+
+[node name="Controls" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="TimingSlider" type="HSlider" parent="Layout/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -1.0
+max_value = 1.0
+step = 0.01
+value = 0.0
+
+[node name="SwingButton" type="Button" parent="Layout/Controls"]
+layout_mode = 2
+text = "Swing"
+
+[node name="TakeButton" type="Button" parent="Layout/Controls"]
+layout_mode = 2
+text = "Take"

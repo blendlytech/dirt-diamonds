@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Set-Location \"$env:LOCALAPPDATA\\\\Temp\\\\claude\\\\c--Users-DELL-dirt-diamonds\\\\06278be3-05f5-4fad-908f-8afb23e44b59\\\\scratchpad\\\\FoulTune\"; if \\(-not \\(Test-Path FoulTune.csproj\\)\\) { dotnet new console --force | Out-Null }; dotnet run -c Release)",
+      "PowerShell(dotnet run -c Release --project \"$env:LOCALAPPDATA\\\\Temp\\\\claude\\\\c--Users-DELL-dirt-diamonds\\\\06278be3-05f5-4fad-908f-8afb23e44b59\\\\scratchpad\\\\FoulTune\")"
+    ]
+  }
+}

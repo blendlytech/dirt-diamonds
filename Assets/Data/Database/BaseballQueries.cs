@@ -62,6 +62,33 @@ public sealed class BaseballQueries
         "l = excluded.l, sv = excluded.sv, outs_recorded = excluded.outs_recorded, h_allowed = excluded.h_allowed, " +
         "er = excluded.er, bb = excluded.bb, so = excluded.so;";
 
+    // Additive per-game upserts for the micro-sim (micro doc §9): the attended
+    // game flushes a box score per game, ADDING to the season row rather than
+    // overwriting it, so it composes with the macro-sim's whole-season upsert
+    // flush instead of clobbering it. Unqualified column names in DO UPDATE
+    // refer to the existing row; excluded.* is the incoming game line.
+    private const string SqlAddBattingGameCounts =
+        "INSERT INTO Batting_Stats (player_id, season_year, pa, ab, h, doubles, triples, hr, bb, so, rbi, sb) VALUES " +
+        "(@playerId, @seasonYear, @pa, @ab, @h, @doubles, @triples, @hr, @bb, @so, @rbi, @sb) " +
+        "ON CONFLICT (player_id, season_year) DO UPDATE SET pa = pa + excluded.pa, ab = ab + excluded.ab, " +
+        "h = h + excluded.h, doubles = doubles + excluded.doubles, triples = triples + excluded.triples, " +
+        "hr = hr + excluded.hr, bb = bb + excluded.bb, so = so + excluded.so, rbi = rbi + excluded.rbi, " +
+        "sb = sb + excluded.sb;";
+
+    private const string SqlAddPitchingGameCounts =
+        "INSERT INTO Pitching_Stats (player_id, season_year, g, gs, w, l, sv, outs_recorded, h_allowed, er, bb, so) VALUES " +
+        "(@playerId, @seasonYear, @g, @gs, @w, @l, @sv, @outsRecorded, @hAllowed, @er, @bb, @so) " +
+        "ON CONFLICT (player_id, season_year) DO UPDATE SET g = g + excluded.g, gs = gs + excluded.gs, " +
+        "w = w + excluded.w, l = l + excluded.l, sv = sv + excluded.sv, " +
+        "outs_recorded = outs_recorded + excluded.outs_recorded, h_allowed = h_allowed + excluded.h_allowed, " +
+        "er = er + excluded.er, bb = bb + excluded.bb, so = so + excluded.so;";
+
+    // Play-by-play / box-score log rows (micro doc §10). Schema validated via
+    // the SQLite MCP before this query was written (No Blind Queries).
+    private const string SqlInsertGameLog =
+        "INSERT INTO Game_Logs (season_year, game_day, home_team_id, away_team_id, player_id, event_type, payload) VALUES " +
+        "(@seasonYear, @gameDay, @homeTeamId, @awayTeamId, @playerId, @eventType, @payload);";
+
     // §6 post-game PED hook: erode health_ceiling, raise detection_risk, both
     // clamped in SQL so the CHECK bounds can never reject the write.
     private const string SqlApplyPedGameCosts =
@@ -108,6 +135,9 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _selectActiveFlagPlayerIds;
     private readonly SqliteCommand _upsertBattingSeason;
     private readonly SqliteCommand _upsertPitchingSeason;
+    private readonly SqliteCommand _addBattingGameCounts;
+    private readonly SqliteCommand _addPitchingGameCounts;
+    private readonly SqliteCommand _insertGameLog;
     private readonly SqliteCommand _applyPedGameCosts;
     private readonly SqliteCommand _normalizeBattingRates;
     private readonly SqliteCommand _normalizePitchingRates;
@@ -147,6 +177,25 @@ public sealed class BaseballQueries
             ("@l", SqliteType.Integer), ("@sv", SqliteType.Integer), ("@outsRecorded", SqliteType.Integer),
             ("@hAllowed", SqliteType.Integer), ("@er", SqliteType.Integer), ("@bb", SqliteType.Integer),
             ("@so", SqliteType.Integer));
+
+        _addBattingGameCounts = Acquire(SqlAddBattingGameCounts,
+            ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer),
+            ("@pa", SqliteType.Integer), ("@ab", SqliteType.Integer), ("@h", SqliteType.Integer),
+            ("@doubles", SqliteType.Integer), ("@triples", SqliteType.Integer), ("@hr", SqliteType.Integer),
+            ("@bb", SqliteType.Integer), ("@so", SqliteType.Integer), ("@rbi", SqliteType.Integer),
+            ("@sb", SqliteType.Integer));
+
+        _addPitchingGameCounts = Acquire(SqlAddPitchingGameCounts,
+            ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer),
+            ("@g", SqliteType.Integer), ("@gs", SqliteType.Integer), ("@w", SqliteType.Integer),
+            ("@l", SqliteType.Integer), ("@sv", SqliteType.Integer), ("@outsRecorded", SqliteType.Integer),
+            ("@hAllowed", SqliteType.Integer), ("@er", SqliteType.Integer), ("@bb", SqliteType.Integer),
+            ("@so", SqliteType.Integer));
+
+        _insertGameLog = Acquire(SqlInsertGameLog,
+            ("@seasonYear", SqliteType.Integer), ("@gameDay", SqliteType.Integer),
+            ("@homeTeamId", SqliteType.Integer), ("@awayTeamId", SqliteType.Integer),
+            ("@playerId", SqliteType.Text), ("@eventType", SqliteType.Text), ("@payload", SqliteType.Text));
 
         _applyPedGameCosts = Acquire(SqlApplyPedGameCosts,
             ("@healthCost", SqliteType.Integer), ("@riskGain", SqliteType.Integer), ("@playerId", SqliteType.Text));
@@ -311,6 +360,64 @@ public sealed class BaseballQueries
         p["@bb"].Value = bb;
         p["@so"].Value = so;
         _db.ExecuteNonQuery(_upsertPitchingSeason);
+    }
+
+    /// <summary>Adds one attended game's batting line to the (player, season) row (micro doc §9).</summary>
+    public void AddBattingGameCounts(
+        string playerId, int seasonYear,
+        int pa, int ab, int h, int doubles, int triples, int hr, int bb, int so, int rbi, int sb)
+    {
+        SqliteParameterCollection p = _addBattingGameCounts.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@seasonYear"].Value = seasonYear;
+        p["@pa"].Value = pa;
+        p["@ab"].Value = ab;
+        p["@h"].Value = h;
+        p["@doubles"].Value = doubles;
+        p["@triples"].Value = triples;
+        p["@hr"].Value = hr;
+        p["@bb"].Value = bb;
+        p["@so"].Value = so;
+        p["@rbi"].Value = rbi;
+        p["@sb"].Value = sb;
+        _db.ExecuteNonQuery(_addBattingGameCounts);
+    }
+
+    /// <summary>Adds one attended game's pitching line to the (player, season) row (micro doc §9).</summary>
+    public void AddPitchingGameCounts(
+        string playerId, int seasonYear,
+        int g, int gs, int w, int l, int sv, int outsRecorded, int hAllowed, int er, int bb, int so)
+    {
+        SqliteParameterCollection p = _addPitchingGameCounts.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@seasonYear"].Value = seasonYear;
+        p["@g"].Value = g;
+        p["@gs"].Value = gs;
+        p["@w"].Value = w;
+        p["@l"].Value = l;
+        p["@sv"].Value = sv;
+        p["@outsRecorded"].Value = outsRecorded;
+        p["@hAllowed"].Value = hAllowed;
+        p["@er"].Value = er;
+        p["@bb"].Value = bb;
+        p["@so"].Value = so;
+        _db.ExecuteNonQuery(_addPitchingGameCounts);
+    }
+
+    /// <summary>Appends one play-by-play / box-score row to Game_Logs (micro doc §10).</summary>
+    public void InsertGameLog(
+        int seasonYear, int gameDay, int? homeTeamId, int? awayTeamId,
+        string? playerId, string eventType, string? payload)
+    {
+        SqliteParameterCollection p = _insertGameLog.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@gameDay"].Value = gameDay;
+        p["@homeTeamId"].Value = homeTeamId.HasValue ? homeTeamId.Value : DBNull.Value;
+        p["@awayTeamId"].Value = awayTeamId.HasValue ? awayTeamId.Value : DBNull.Value;
+        p["@playerId"].Value = playerId is null ? DBNull.Value : playerId;
+        p["@eventType"].Value = eventType;
+        p["@payload"].Value = payload is null ? DBNull.Value : payload;
+        _db.ExecuteNonQuery(_insertGameLog);
     }
 
     public void ApplyPedGameCosts(string playerId, int healthCost, int riskGain)

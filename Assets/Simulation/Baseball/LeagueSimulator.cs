@@ -1,4 +1,3 @@
-using System.Numerics;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 
@@ -33,9 +32,11 @@ public sealed class LeagueSimulator
     private const int CyclesPerSeason = 22;
     private const int GamesPerDay = TeamCount / 2;
 
-    // §7 discretionary-advance calibration knobs (tuning order step 4).
-    public const double SingleScoresFrom2nd = 0.60;
-    public const double DoubleScoresFrom1st = 0.45;
+    // §7 discretionary-advance calibration knobs (tuning order step 4). The
+    // canonical values live in BaseOutAdvancement, shared with the micro-sim;
+    // these aliases keep existing references stable.
+    public const double SingleScoresFrom2nd = BaseOutAdvancement.SingleScoresFrom2nd;
+    public const double DoubleScoresFrom1st = BaseOutAdvancement.DoubleScoresFrom1st;
 
     /// <summary>Flag name the Gritty Event system (Phase 7) writes; always inactive until then.</summary>
     public const string PedActiveFlagName = "ped_active";
@@ -375,36 +376,34 @@ public sealed class LeagueSimulator
                 case PaOutcome.Walk:
                     bat.Bb++;
                     pit.Bb++;
-                    paRuns = AdvanceWalk(ref bases);
+                    paRuns = BaseOutAdvancement.AdvanceWalk(ref bases);
                     break;
                 case PaOutcome.Single:
                     bat.Ab++;
                     bat.H++;
                     pit.HAllowed++;
-                    paRuns = AdvanceSingle(ref bases);
+                    paRuns = BaseOutAdvancement.AdvanceSingle(ref bases, ref _rng);
                     break;
                 case PaOutcome.Double:
                     bat.Ab++;
                     bat.H++;
                     bat.Doubles++;
                     pit.HAllowed++;
-                    paRuns = AdvanceDouble(ref bases);
+                    paRuns = BaseOutAdvancement.AdvanceDouble(ref bases, ref _rng);
                     break;
                 case PaOutcome.Triple:
                     bat.Ab++;
                     bat.H++;
                     bat.Triples++;
                     pit.HAllowed++;
-                    paRuns = BitOperations.PopCount((uint)bases);
-                    bases = 0b100;
+                    paRuns = BaseOutAdvancement.AdvanceTriple(ref bases);
                     break;
                 default: // HomeRun
                     bat.Ab++;
                     bat.H++;
                     bat.Hr++;
                     pit.HAllowed++;
-                    paRuns = BitOperations.PopCount((uint)bases) + 1;
-                    bases = 0;
+                    paRuns = BaseOutAdvancement.AdvanceHomeRun(ref bases);
                     break;
             }
 
@@ -412,83 +411,6 @@ public sealed class LeagueSimulator
             pit.Er += paRuns;
             runs += paRuns;
         }
-        return runs;
-    }
-
-    /// <summary>Walk: batter to 1B, force-only advancement (§7).</summary>
-    private static int AdvanceWalk(ref int bases)
-    {
-        if ((bases & 0b001) == 0)
-        {
-            bases |= 0b001;
-            return 0;
-        }
-        if ((bases & 0b010) == 0)
-        {
-            bases |= 0b010; // runner forced 1B→2B, batter takes 1B
-            return 0;
-        }
-        if ((bases & 0b100) == 0)
-        {
-            bases = 0b111; // forced chain fills the bases
-            return 0;
-        }
-        return 1; // bases loaded stay loaded; the runner from 3B scores
-    }
-
-    /// <summary>Single: batter to 1B; R3 scores; R2 scores w.p. SingleScoresFrom2nd else to 3B; R1 to 2B.</summary>
-    private int AdvanceSingle(ref int bases)
-    {
-        int runs = 0;
-        int next = 0b001;
-        if ((bases & 0b100) != 0)
-        {
-            runs++;
-        }
-        if ((bases & 0b010) != 0)
-        {
-            if (_rng.NextDouble() < SingleScoresFrom2nd)
-            {
-                runs++;
-            }
-            else
-            {
-                next |= 0b100;
-            }
-        }
-        if ((bases & 0b001) != 0)
-        {
-            next |= 0b010;
-        }
-        bases = next;
-        return runs;
-    }
-
-    /// <summary>Double: batter to 2B; R3 and R2 score; R1 scores w.p. DoubleScoresFrom1st else to 3B.</summary>
-    private int AdvanceDouble(ref int bases)
-    {
-        int runs = 0;
-        int next = 0b010;
-        if ((bases & 0b100) != 0)
-        {
-            runs++;
-        }
-        if ((bases & 0b010) != 0)
-        {
-            runs++;
-        }
-        if ((bases & 0b001) != 0)
-        {
-            if (_rng.NextDouble() < DoubleScoresFrom1st)
-            {
-                runs++;
-            }
-            else
-            {
-                next |= 0b100;
-            }
-        }
-        bases = next;
         return runs;
     }
 

@@ -129,3 +129,56 @@ Steps 3–5 of the Phase 3 plan (steps 1–2 shipped earlier today). Live schema
 1. Opus 4.8 design doc first: 25 base-out states per half-inning, 25×25 transition matrix per event, blending player timing/location inputs with database attributes, pitcher stamina/fatigue curve (where `pit_stamina` and the PED 1.5× stamina hook finally bind).
 2. Micro↔macro consistency: a micro-simmed game's aggregate line must converge to the macro model's probabilities for the same ratings (shared calibration tables, not duplicated constants).
 3. UI: first at-bat scene is a thin vertical slice per ui_conventions.md — verify node paths via godot_scene_mapper before any `GetNode<T>()`.
+
+---
+
+## 2026-07-03 — Phase 4 (partial): Markov micro-sim design ✅ (step 1 of the Phase 4 plan)
+
+Scope capped at the **design doc only** — no micro-sim C# written (mirrors how Phase 3 shipped its PA-model design + schema before any resolver code). What shipped is the mathematical spec the interactive at-bat engine will be built against next session.
+
+**Design doc — `docs/design/baseball_markov_micro_sim.md` (Opus 4.8).** Full micro-sim spec, written as the companion to the macro `baseball_pa_outcome_model.md` and engineered so **micro↔macro consistency is a provable identity under neutral input, not a calibration coincidence** (the Phase 4 mandate: *shared calibration tables, not duplicated constants*).
+
+- **Two nested absorbing Markov chains, one analytic engine.** Outer = the mandated **25 base-out states** per half-inning (`bases*3+outs`, state 24 = 3-outs absorbing; §2), generalizing the ad-hoc base-out machine already in `LeagueSimulator.PlayHalfInning`. Inner = the **pitch/count chain** (12 count states + BB/K/BIP exits; §5), spun up **only for the human's own PAs**. Both solved with the same fundamental matrix `N=(I−Q)⁻¹` (§4 → run expectancy + a leverage signal reserved for Phase 7 Gritty Events).
+- **The 25×25 "matrix per event" mandate** (§3): the 7 `PaOutcome` events map to constant sparse advancement matrices `A_e` (Single/Double stochastic via the shared `SingleScoresFrom2nd`/`DoubleScoresFrom1st` knobs); per-PA `T = Σ p_e·A_e`. Runtime applies the sparse advancement *function* (zero-GC, no matrix built per PA); the matrices are the analytic/validation representation only.
+- **Consistency by construction** (§5.2/§5.3/§7): the count chain's absorption `(P_BB,P_K,P_BIP)` is pinned to `p* = AtBatResolver.ComputeProbabilities(...)`, and BIP is drawn from `p*`'s renormalized in-play split — so neutral input reproduces the macro 7-way distribution **exactly**, and the whole attended game converges to the macro line. Human timing/location (§6) and pitcher fatigue (§8) are the *deliberate* divergences, both routed back through the shared resolver. HBP/IBB may be surfaced for the box score but aggregate into macro's `Walk` bucket for every consistency check.
+- **Fatigue binds `pit_stamina` + the PED 1.5× stamina hook** (§8): non-linear (accelerating-past-a-comfort-fraction) fatigue multiplier `m(x)` degrades *effective* `pit_stuff`/`pit_control` fed to the **same** `AtBatResolver` (no bespoke penalties); PED gives `min(100, round(stamina·1.5))` before capacity (`70→105→120`-pitch fixture); post-game costs reuse `LeagueSimulator.Ped*` constants. Governs the whole attended game (NPC PAs macro-resolve with the fatigued ratings).
+- **§11 acceptance suite + tuning order** locks the neutral-policy limit to the already-validated macro §8 ranges, so micro tuning can never silently break the background league. **§13: the vertical slice needs NO schema change** (v3's `pit_stamina` + `Game_Logs` suffice); bullpen roles + pitch arsenals are deferred **v4** via the No Blind Queries path.
+
+**Next steps (resume Phase 4 — implementation):**
+
+1. **Fable 5** — build the micro-sim engine per the doc §9: extract the shared base-out advancement out of `LeagueSimulator` so both sims call it; `MicroGame` driver (outer base-out chain + inner pitch chain for human PAs only), fatigue as an effective-ratings adjustment on every pitcher, box score through the existing `Batting_Stats`/`Pitching_Stats` upsert in its own batch, play-by-play to `Game_Logs` via pooled writers. Struct state, `stackalloc`, one `ref RngState`, zero per-pitch alloc.
+2. **Neutral autopilot policy** (§6.1) as the headless stand-in for the human, so the harness runs deterministically.
+3. **Sonnet 5 / harness** — extend `run_monte_carlo_batch` with the §11 tests (neutral consistency vs the macro line, pitches/PA realism, fatigue late-game OPS rise, PED capacity, determinism + 0 B/PA).
+4. **UI** — first at-bat `.tscn` thin slice per ui_conventions.md; `godot_scene_mapper` before any `GetNode<T>()`; read-only DTO rendering, player-intent (timing/location) signals up, no DB writes from UI.
+5. **(Deferred v4)** bullpen `pitcher_role` + pitch-type arsenals via the schema-first validation path when the interactive slice is proven.
+
+---
+
+## 2026-07-03 — Phase 4: Markov Micro-Sim ✅ COMPLETE (engine + harness + UI slice)
+
+Steps 1–4 of the Phase 4 plan, implemented exactly against `docs/design/baseball_markov_micro_sim.md`. No schema change (§13 held: v3 as-is). **All suites green: MonteCarloHarness 52/52 (was 30), CoreLoopHarness 22/22, SchemaValidator 44/44 scratch + 33/33 live, game assembly 0 warn/0 err, in-engine `--headless --quit` boot clean.** Macro-sim proven bit-identical after the refactor (season lines byte-for-byte the M1 numbers: .248/.316/.411 R/G 4.21, .250/.319/.413 R/G 4.29).
+
+**Shared surface first (§14 — nothing duplicated):**
+
+- `BaseOutAdvancement.cs` — the base-out advancement extracted from `LeagueSimulator` as the single source of truth (walk force-chain, single/double with discretionary branches, triple/HR), plus the §2 canonical 25-state index (`bases*3+outs`, 24 = absorbing). The Single/Double discretionary decision is an explicit parameter on a deterministic core with an rng wrapper on top — draw order preserved (macro bit-identical), and the matrix builder enumerates the branches from the SAME core. Knobs (`SingleScoresFrom2nd`/`DoubleScoresFrom1st`) moved here; `LeagueSimulator` keeps compile-time aliases.
+- `BaseOutMatrices.cs` (§3–§4, offline/analytic only) — builds all seven 25×25 `A_e` by executing the shared advancement cores, composes `T = Σ p_e·A_e` + per-state expected-run rewards, and solves `(I−Q)·RE = r` (Gaussian elimination) for run expectancy. Harness proves: rows stochastic, runtime advancement ≡ matrix rows (Monte Carlo, ±5e-3), RE24 anchor 0.460 for the average matchup (canonical ~0.48), RE ordering sane. Leverage = future read-off of the same solve (Phase 7 hook).
+
+**The micro-sim itself:**
+
+- `PitchChain.cs` (§5–§6) — 12-count-state inner chain; strike-class folds strikes+fouls (foul share only bites at 2 strikes as a length-only self-loop). **Consistency by construction:** `SolveNeutral` inverts the absorption equations (Newton, FD Jacobian, ~µs, zero-alloc) so `(P_BB, P_K)` hit `p* = AtBatResolver.ComputeProbabilities` to ≤1e-9 analytically; the BIP exit re-draws from p*'s renormalized in-play split. `FoulShareOfStrikes = 0.68` tuned analytically (scratch sweep) → 3.84 pitches/PA. Human input = `BatterPitchInput` (discipline edge, contact quality q), applied as clamped log-linear perturbations; `IBatterPolicy` via generic constraint (devirtualized, no boxing); `NeutralBatterPolicy` = all-zero input = exact macro sampler; `PlayerInputModel` maps UI timing/location → the two scalars (τ_tol narrows with stuff, correct read widens it).
+- `PitcherFatigue.cs` (§8) — capacity `70 + 0.5·effStamina`; PED stamina `min(100, (s·3+1)/2)` (same integer round-half-up as the power clamp) → the `70→105→120` fixture; flat through 60% of capacity then quadratic to m(1)=0.75, floor 0.5; effective stuff/control decay toward 50 and feed the SAME resolver. NPC PAs charge 3.9 pitches. `enabled:false` freezes m≡1 for the harness.
+- `MicroGame.cs` (§9–§10) — attended-game driver: same bulk-load pattern/queries as the league, same game-flow rules; pitch chain only when the human bats (or pitches — opposing batters neutral until the pitch-arsenal step); every PA recomputes p* from the CURRENT fatigued effective ratings; per-inning offense aggregates (`InningTotals`) for fatigue validation/UI splits; play-by-play built at PA boundaries into pooled pending rows; **`FlushGame` = additive box-score upserts + `Game_Logs` + PED costs (shared `LeagueSimulator.Ped*` constants) in the sim's own batch.** Zero-alloc per warm game with logging off, human PAs included.
+- `BaseballQueries` additions (live schema re-validated via the sqlite MCP first): `AddBattingGameCounts`/`AddPitchingGameCounts` — **additive** `ON CONFLICT` upserts so per-game micro flushes compose with the macro's whole-season overwrite flush instead of clobbering it (wiring micro-replaces-macro-game is the Phase 5 driver's job); `InsertGameLog`.
+
+**Harness (§11, all six tests):** analytic absorption pin ≤1e-9 (all three macro fixtures) + sampled 7-way distribution ≡ p* (1M/400k PAs); 2000 neutral games fatigue-off → **.250/.317/.415, OPS .733, K% 22.5, BB% 9.0, HR/PA 3.2, R/G 4.30** — inside every macro §8 range; pitches/PA 3.84 analytic / 3.87 in-game; fatigue on (80/75 rotations): innings 7–9 OPS +.053 vs 1–3 and R/G +0.24 vs fatigue-off control; PED capacity fixture + post-game health 99/risk 2 exact; bit-for-bit game determinism; 0 B per warm PA/pitch/game. SKILL.md updated (checks 5–6 + micro tuning knobs).
+
+**UI slice (§12):** `Assets/UI/AtBatView.tscn` + `AtBatView.cs` (`PanelContainer` root named after the file) — node paths mapped via `godot_scene_mapper` BEFORE any `GetNode<T>()`, refs cached in `_Ready`, `[Export]` on the log cap, signals `SwingCommitted(timing)`/`TakeCommitted` up, renders an `AtBatViewState` DTO only on change (no `_Process`), player-facing default text lives in the `.tscn`, intent controls lock while the sim resolves. Scene imports clean headless.
+
+**Known Phase 4 artifacts (deliberate):** (1) `MicroGame` is not yet wired into `GameManager`/game flow — the Phase 5 career driver decides *which* league game is attended and suppresses the macro sim's copy of it; until then micro games are exhibition-additive. (2) Human-as-pitcher PAs run the chain with neutral batter input (pitcher-side input model lands with pitch arsenals, schema v4). (3) HBP/IBB not yet surfaced in the box score (aggregate into Walk per §7 bookkeeping). (4) `AtBatView` has no live driver behind it yet — it renders DTOs and emits intent; hooking it to `MicroGame` pitch-by-pitch is the first Phase 5 task.
+
+**Next steps (Phase 5 — career wiring / player avatar):**
+
+1. Game-flow driver: create the player avatar, decide the attended game per day, run `MicroGame` for it off the bus, and suppress the macro league's copy of that game (schedule-aware `LeagueSimulator` skip or result injection).
+2. Wire `AtBatView` to the driver: pitch-by-pitch DTO updates + `PlayerInputModel` mapping of the timing slider, sim off the UI thread via the dispatcher.
+3. Schema v4 (No Blind Queries path): `pitcher_role` for bullpens; pitch-type arsenals + pitcher-side input model.
+4. Mid-season stat-flush cadence (M1 artifact #2) becomes urgent once the player's own stats are on the line.
