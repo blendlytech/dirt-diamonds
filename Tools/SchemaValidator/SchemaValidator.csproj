@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>DirtAndDiamonds.Tools.SchemaValidator</RootNamespace>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      The harness compiles the game's database layer sources directly instead of
+      referencing the Godot assembly. This both keeps the tool light and proves
+      the data layer stays engine-independent — if someone adds a Godot type to
+      these files, this project stops building.
+    -->
+    <Compile Include="..\..\Assets\Data\Database\DatabaseManager.cs" Link="Data\DatabaseManager.cs" />
+    <Compile Include="..\..\Assets\Data\Database\PlayerDtos.cs" Link="Data\PlayerDtos.cs" />
+    <Compile Include="..\..\Assets\Data\Database\PlayerQueries.cs" Link="Data\PlayerQueries.cs" />
+  </ItemGroup>
+</Project>
