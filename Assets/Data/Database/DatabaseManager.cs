@@ -93,10 +93,17 @@ public sealed class DatabaseManager : IDisposable
     /// SQL path in the codebase — it must only ever receive the checked-in
     /// schema file, never constructed SQL.
     /// </summary>
-    public void InitializeSchema(string schemaScriptPath)
-    {
-        string ddl = File.ReadAllText(schemaScriptPath);
+    public void InitializeSchema(string schemaScriptPath) =>
+        ApplySchema(File.ReadAllText(schemaScriptPath));
 
+    /// <summary>
+    /// Text overload for callers whose schema file isn't on the filesystem —
+    /// in exported builds res:// lives inside the .pck, so GameManager reads
+    /// the DDL through Godot's FileAccess and hands the text here. Same
+    /// contract: checked-in SchemaDefinitions.sql content only.
+    /// </summary>
+    public void ApplySchema(string ddl)
+    {
         lock (_dbLock)
         {
             ThrowIfDisposed();

@@ -142,7 +142,19 @@ CREATE TABLE IF NOT EXISTS Game_Logs (
 CREATE INDEX IF NOT EXISTS idx_game_logs_player ON Game_Logs(player_id);
 CREATE INDEX IF NOT EXISTS idx_game_logs_day    ON Game_Logs(season_year, game_day);
 
+-- ----------------------------------------------------------------------------
+-- Game_State — single-row-per-key save metadata (calendar day, start season
+-- year, ...). Read/written only through GameStateQueries; the calendar tick
+-- updates current_day inside its batch transaction. `ANY` keeps each value's
+-- native SQLite type under STRICT (integers stay integers).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Game_State (
+    key   TEXT PRIMARY KEY,
+    value ANY  NOT NULL
+) STRICT;
+
 COMMIT;
 
--- Schema version 1 — Phase 1 baseline. Bump with every migration.
-PRAGMA user_version = 1;
+-- Schema version 2 — Phase 2 adds Game_State (additive; IF NOT EXISTS migrates
+-- v1 saves in place on boot). Bump with every migration.
+PRAGMA user_version = 2;

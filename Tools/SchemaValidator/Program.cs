@@ -24,7 +24,7 @@ internal static class Program
 
     private static readonly string[] RequiredTables =
     {
-        "Players", "Batting_Stats", "Pitching_Stats", "Relationships", "Entity_Flags", "Game_Logs",
+        "Players", "Batting_Stats", "Pitching_Stats", "Relationships", "Entity_Flags", "Game_Logs", "Game_State",
     };
 
     private static int Main(string[] args)
@@ -100,7 +100,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 1", db.GetSchemaVersion() == 1, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 2", db.GetSchemaVersion() == 2, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);

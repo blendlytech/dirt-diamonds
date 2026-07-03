@@ -6,6 +6,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{7558C531
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SchemaValidator", "Tools\SchemaValidator\SchemaValidator.csproj", "{5E2BC78F-00D8-4F81-9DDC-DFA91DD206EE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreLoopHarness", "Tools\CoreLoopHarness\CoreLoopHarness.csproj", "{0A7340F3-D2D9-465E-B337-765A0E99989A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -25,11 +27,18 @@ Global
 		{5E2BC78F-00D8-4F81-9DDC-DFA91DD206EE}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
 		{5E2BC78F-00D8-4F81-9DDC-DFA91DD206EE}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
 		{5E2BC78F-00D8-4F81-9DDC-DFA91DD206EE}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
+		{0A7340F3-D2D9-465E-B337-765A0E99989A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A7340F3-D2D9-465E-B337-765A0E99989A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0A7340F3-D2D9-465E-B337-765A0E99989A}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A7340F3-D2D9-465E-B337-765A0E99989A}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{0A7340F3-D2D9-465E-B337-765A0E99989A}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A7340F3-D2D9-465E-B337-765A0E99989A}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{5E2BC78F-00D8-4F81-9DDC-DFA91DD206EE} = {7558C531-8002-4685-86A3-0ACD46186210}
+		{0A7340F3-D2D9-465E-B337-765A0E99989A} = {7558C531-8002-4685-86A3-0ACD46186210}
 	EndGlobalSection
 EndGlobal

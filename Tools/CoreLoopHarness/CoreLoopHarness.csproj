@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>DirtAndDiamonds.Tools.CoreLoopHarness</RootNamespace>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      Same trick as SchemaValidator: compile the game's headless core directly
+      instead of referencing the Godot assembly. GameManager.cs is excluded
+      because it is the one deliberately Godot-facing file in Assets/Core —
+      if an engine type leaks into anything else here, this project stops
+      building and the headless exit-criteria run is impossible.
+    -->
+    <Compile Include="..\..\Assets\Data\Database\*.cs" Link="Data\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
