@@ -1,0 +1,35 @@
+# Godot 4 generated files
+.godot/
+*.import
+export.cfg
+export_credentials.cfg
+export_presets.cfg
+
+# .NET build artifacts
+.mono/
+bin/
+obj/
+*.user
+mono_crash.*.json
+data_*/
+
+# SQLite runtime database (schema lives in SchemaDefinitions.sql; the .db is game state)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Steamworks native libraries are copied at build time, not committed
+steam_api64.dll
+libsteam_api.so
+steam_appid.txt
+
+# Editor / OS noise
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Local Claude settings (machine-specific permissions)
+.claude/settings.local.json

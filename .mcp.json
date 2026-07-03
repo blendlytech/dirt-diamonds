@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "c:/Users/DELL/dirt&diamonds"
+      ]
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-sqlite",
+        "c:/Users/DELL/dirt&diamonds/dirt_and_diamonds.db"
+      ]
+    },
+    "godot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@coding-solo/godot-mcp"
+      ],
+      "env": {
+        "GODOT_PATH": "C:/Users/DELL/AppData/Local/Microsoft/WinGet/Packages/GodotEngine.GodotEngine.Mono_Microsoft.Winget.Source_8wekyb3d8bbwe/Godot_v4.7-stable_mono_win64/Godot_v4.7-stable_mono_win64.exe"
+      }
+    }
+  }
+}
