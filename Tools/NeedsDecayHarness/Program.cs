@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Simulation.Life;
+using DirtAndDiamonds.Core;
 
 namespace DirtAndDiamonds.Tools.NeedsDecayHarness;
 
@@ -59,6 +60,8 @@ internal static class Program
         PrintFixedHourTable(trace);
 
         RunChecks(trace);
+        RunUtilityChecks();
+        RunLifeSimChecks();
 
         int failed = 0;
         Console.WriteLine();
@@ -198,6 +201,137 @@ internal static class Program
             }
         }
         return -1;
+    }
+
+    // ------------------------------------------------------------------
+    // Utility action-selection fixtures (UtilityCalculator.SelectAction).
+    // Expected winners below are hand-derived from the ActionCatalog/
+    // ActionWeights constants and re-verified whenever either changes.
+    // ------------------------------------------------------------------
+
+    private static void RunUtilityChecks()
+    {
+        Console.WriteLine("--- utility action-selection fixtures (UtilityCalculator.SelectAction) ---\n");
+
+        // 1. Fully satisfied + ample funds: every action's need-deficit term is
+        //    0, so the free/no-risk/no-time Idle action wins outright (utility
+        //    ~0.80 vs. the next-best Shower ~0.79).
+        NeedsState full = NeedsState.FullySatisfied();
+        NpcActionId satisfiedPick = UtilityCalculator.SelectAction(full, 1000.0, UtilityCalculator.DefaultWeights, out float satisfiedUtility);
+        Check("fully satisfied + ample funds picks Idle", satisfiedPick == NpcActionId.Idle,
+            $"picked {satisfiedPick} (utility {satisfiedUtility:F3})");
+
+        // 2. Hunger critical (10), everything else full, generous funds: Eat
+        //    wins — the override correctly targets the actual crisis, beating
+        //    Idle (~0.50) and both stress-relief actions (~1.23/~1.21), i.e.
+        //    addressing the real problem outranks merely coping with it.
+        NeedsState hungerCritical = NeedsState.FullySatisfied();
+        hungerCritical.Set(NeedType.Hunger, 10f);
+        NpcActionId crisisPick = UtilityCalculator.SelectAction(hungerCritical, 1000.0, UtilityCalculator.DefaultWeights, out float crisisUtility);
+        Check("Hunger critical + generous funds picks Eat (targets the actual need)", crisisPick == NpcActionId.Eat,
+            $"picked {crisisPick} (utility {crisisUtility:F3})");
+
+        // 3. Same crisis, but broke (funds = 0): Eat becomes ruinously
+        //    unaffordable (FinancialCostScore goes deeply negative) and loses
+        //    to the free stress-relief action PickArgument — which only wins
+        //    BECAUSE of the critical-only stress-relief bonus (hand-verified:
+        //    without that +0.8 term PickArgument scores ~0.41, below Idle's
+        //    ~0.50; with it, ~1.21). Proves the affordability-awareness and
+        //    the stress-relief gating together: a broke NPC in crisis copes
+        //    for free rather than idling or attempting something it can't
+        //    pay for.
+        NpcActionId brokeCrisisPick = UtilityCalculator.SelectAction(hungerCritical, 0.0, UtilityCalculator.DefaultWeights, out float brokeCrisisUtility);
+        Check("Hunger critical + zero funds picks PickArgument (free coping, gated by the crisis)", brokeCrisisPick == NpcActionId.PickArgument,
+            $"picked {brokeCrisisPick} (utility {brokeCrisisUtility:F3})");
+
+        Console.WriteLine();
+    }
+
+    // ------------------------------------------------------------------
+    // LifeSimManager integration proof — the literal M3 exit criterion:
+    // "NPCs self-manage needs over a simulated month; stress override
+    // provably fires." Drives a real EventBus + LifeSimManager by hand
+    // (no TimeManager/database needed) through 30 DayAdvancedEvents.
+    // ------------------------------------------------------------------
+
+    private static void RunLifeSimChecks()
+    {
+        Console.WriteLine("--- LifeSimManager: simulated month (30 days), utility-driven action selection ---\n");
+
+        const string FundedNpc = "funded-npc";
+        const string BrokeNpc = "broke-npc";
+        const int SimulatedDays = 30;
+
+        var bus = new EventBus();
+        var lifeSim = new LifeSimManager();
+        lifeSim.Seed(new[]
+        {
+            new NpcSeed(FundedNpc, 50000.0),
+            new NpcSeed(BrokeNpc, 0.0),
+        });
+        lifeSim.AttachTo(bus);
+
+        var fundedMin = new Dictionary<NeedType, float>();
+        var brokeMin = new Dictionary<NeedType, float>();
+        foreach (NeedType need in AllNeeds)
+        {
+            fundedMin[need] = NeedsEngine.MaxNeed;
+            brokeMin[need] = NeedsEngine.MaxNeed;
+        }
+
+        for (int day = 1; day <= SimulatedDays; day++)
+        {
+            bus.Publish(new DayAdvancedEvent(day, 2026, day));
+            bus.DispatchPending();
+
+            lifeSim.TryGetNeeds(FundedNpc, out NeedsState fundedNeeds);
+            lifeSim.TryGetNeeds(BrokeNpc, out NeedsState brokeNeeds);
+            foreach (NeedType need in AllNeeds)
+            {
+                fundedMin[need] = Math.Min(fundedMin[need], fundedNeeds.Get(need));
+                brokeMin[need] = Math.Min(brokeMin[need], brokeNeeds.Get(need));
+            }
+        }
+
+        Console.WriteLine($"  Funded NPC ($50,000 seed) — {SimulatedDays}-day minimum per need:");
+        foreach (NeedType need in AllNeeds)
+        {
+            Console.WriteLine($"    {need,-8} min {fundedMin[need],6:F1}");
+        }
+        Console.WriteLine($"  Broke NPC ($0 seed) — {SimulatedDays}-day minimum per need:");
+        foreach (NeedType need in AllNeeds)
+        {
+            Console.WriteLine($"    {need,-8} min {brokeMin[need],6:F1}");
+        }
+        Console.WriteLine();
+
+        // The M3 exit criterion, literally: an adequately-funded NPC
+        // self-manages needs over a simulated month and never bottoms out —
+        // contrast with the pure-passive-decay trace above, where every need
+        // floors at 0 by design (no actions are modeled there at all).
+        bool fundedNeverFloored = true;
+        foreach (NeedType need in AllNeeds)
+        {
+            if (fundedMin[need] <= NeedsEngine.MinNeed)
+            {
+                fundedNeverFloored = false;
+            }
+        }
+        Check("adequately-funded NPC's needs never bottom out over a simulated month", fundedNeverFloored);
+
+        // A broke NPC (no income mechanic exists yet — that's Phase 8
+        // territory) can still keep its free needs managed indefinitely
+        // (Sleep, Shower cost $0 in the catalog), but its money-gated needs
+        // (Hunger via Eat, Social via SocializeEvening, Fitness via Workout)
+        // collapse exactly like total neglect. Expected, not a bug: nothing
+        // in the current catalog restores those needs for free.
+        bool freeNeedsManaged = brokeMin[NeedType.Sleep] > NeedsEngine.MinNeed && brokeMin[NeedType.Hygiene] > NeedsEngine.MinNeed;
+        Check("broke NPC's free needs (Sleep, Hygiene) still stay managed", freeNeedsManaged);
+
+        bool paidNeedsCollapse = brokeMin[NeedType.Hunger] <= NeedsEngine.MinNeed
+            && brokeMin[NeedType.Social] <= NeedsEngine.MinNeed
+            && brokeMin[NeedType.Fitness] <= NeedsEngine.MinNeed;
+        Check("broke NPC's money-gated needs (Hunger/Social/Fitness) collapse without an income mechanic (expected — no Phase 8 economy yet)", paidNeedsCollapse);
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

@@ -50,6 +50,14 @@ public struct NeedsState
             default: throw new ArgumentOutOfRangeException(nameof(need));
         }
     }
+
+    // Additive companion to Set (life_sim_needs_decay.md §6): actions restore
+    // needs by a delta rather than assigning an absolute value.
+    public void Restore(NeedType need, float amount) =>
+        Set(need, Math.Clamp(Get(need) + amount, NeedsEngine.MinNeed, NeedsEngine.MaxNeed));
+
+    public readonly bool AnyAtOrBelow(float threshold) =>
+        Hunger <= threshold || Sleep <= threshold || Hygiene <= threshold || Social <= threshold || Fitness <= threshold;
 }
 
 // BaseDecayPerHour: points lost per in-game hour at full satisfaction (deficitFraction == 0).

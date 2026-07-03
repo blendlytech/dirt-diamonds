@@ -1,0 +1,148 @@
+using System;
+using System.Collections.Generic;
+using DirtAndDiamonds.Core;
+
+namespace DirtAndDiamonds.Simulation.Life;
+
+// Plain seed data — deliberately decoupled from PlayerQueries/Data so this
+// whole folder's only dependency beyond its own math is Core (EventBus). The
+// caller (GameManager, in the real game) is responsible for projecting
+// PlayerRow -> NpcSeed.
+public readonly record struct NpcSeed(string PlayerId, double Funds);
+
+// The Life sim's day-tick driver — the CareerManager-equivalent glue class.
+// Subscribes to DayAdvancedEvent and, for every tracked NPC, expands one game
+// day into 24 hourly NeedsEngine/UtilityCalculator ticks. Needs are in-memory
+// only this pass (life_sim_needs_decay.md §11 — persistence is deferred until
+// this driver produces values worth saving).
+public sealed class LifeSimManager
+{
+    private sealed class NpcRuntime
+    {
+        public NeedsState Needs;
+        public double Funds;
+        public int BusyHoursRemaining;
+        public NpcActionId CurrentAction;
+    }
+
+    private const int HoursPerDay = 24;
+
+    private readonly Dictionary<string, NpcRuntime> _npcs = new();
+    // Dictionary enumeration order isn't a documented guarantee; tracked
+    // separately so a harness/log trace is reproducible. Doesn't affect any
+    // individual NPC's correctness — NPCs never interact with each other.
+    private readonly List<string> _order = new();
+    private readonly ActionWeights _weights;
+    private readonly Action<DayAdvancedEvent> _onDayAdvanced;
+
+    public LifeSimManager(ActionWeights? weights = null)
+    {
+        _weights = weights ?? UtilityCalculator.DefaultWeights;
+        _onDayAdvanced = OnDayAdvanced;
+    }
+
+    public int NpcCount => _order.Count;
+
+    // Additive/idempotent: seeding an id already tracked is a no-op, so a
+    // mid-game avatar creation can re-project the roster and re-seed safely.
+    public void Seed(IReadOnlyList<NpcSeed> seeds)
+    {
+        for (int i = 0; i < seeds.Count; i++)
+        {
+            NpcSeed seed = seeds[i];
+            if (_npcs.ContainsKey(seed.PlayerId))
+            {
+                continue;
+            }
+            _npcs.Add(seed.PlayerId, new NpcRuntime
+            {
+                Needs = NeedsState.FullySatisfied(),
+                Funds = seed.Funds,
+                BusyHoursRemaining = 0,
+                CurrentAction = NpcActionId.Idle,
+            });
+            _order.Add(seed.PlayerId);
+        }
+    }
+
+    public void AttachTo(EventBus bus) => bus.Subscribe(_onDayAdvanced);
+
+    public void DetachFrom(EventBus bus) => bus.Unsubscribe(_onDayAdvanced);
+
+    public bool TryGetNeeds(string playerId, out NeedsState needs)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            needs = runtime.Needs;
+            return true;
+        }
+        needs = default;
+        return false;
+    }
+
+    public bool TryGetFunds(string playerId, out double funds)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            funds = runtime.Funds;
+            return true;
+        }
+        funds = 0.0;
+        return false;
+    }
+
+    private void OnDayAdvanced(DayAdvancedEvent e)
+    {
+        for (int i = 0; i < _order.Count; i++)
+        {
+            NpcRuntime npc = _npcs[_order[i]];
+            for (int hour = 0; hour < HoursPerDay; hour++)
+            {
+                TickHour(npc);
+            }
+        }
+    }
+
+    private void TickHour(NpcRuntime npc)
+    {
+        bool critical = npc.Needs.AnyAtOrBelow(NeedsEngine.CriticalThreshold);
+
+        if (critical)
+        {
+            // life_sim_ai.md: the stress overlay can force a response "regardless
+            // of temporal cost" — re-evaluate every hour even mid-action. If the
+            // in-progress action is still the right call, let it run uninterrupted
+            // (no double-restore); otherwise abandon it now, not when its
+            // countdown happens to finish.
+            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _);
+            if (npc.BusyHoursRemaining <= 0 || picked != npc.CurrentAction)
+            {
+                ApplyAction(npc, picked);
+            }
+        }
+        else if (npc.BusyHoursRemaining <= 0)
+        {
+            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _);
+            ApplyAction(npc, picked);
+        }
+
+        if (npc.BusyHoursRemaining > 0)
+        {
+            npc.BusyHoursRemaining--;
+        }
+
+        npc.Needs = NeedsEngine.DecayHour(npc.Needs);
+    }
+
+    private static void ApplyAction(NpcRuntime npc, NpcActionId id)
+    {
+        NpcActionDefinition def = ActionCatalog.Get(id);
+        if (def.PrimaryNeed is NeedType need)
+        {
+            npc.Needs.Restore(need, def.RestoreAmount);
+        }
+        npc.Funds = Math.Max(0.0, npc.Funds - def.FinancialCost);
+        npc.CurrentAction = id;
+        npc.BusyHoursRemaining = Math.Max(0, (int)MathF.Ceiling(def.TemporalCostHours) - 1);
+    }
+}

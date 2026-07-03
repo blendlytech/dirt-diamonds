@@ -13,5 +13,14 @@
       sources directly so this proves the exact code path the game ships.
     -->
     <Compile Include="..\..\Assets\Simulation\Life\*.cs" Link="Life\%(Filename)%(Extension)" />
+    <!--
+      LifeSimManager subscribes to the EventBus, so this harness needs those two
+      Core files to construct one locally and drive DayAdvancedEvent by hand.
+      Deliberately NOT a Core\*.cs wildcard: TimeManager.cs/GameStateQueries pull
+      in Assets/Data + the Sqlite package, which this harness has never needed
+      and shouldn't gain just to prove event-bus wiring.
+    -->
+    <Compile Include="..\..\Assets\Core\EventBus.cs" Link="Core\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Core\CoreEvents.cs" Link="Core\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

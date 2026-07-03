@@ -1,5 +1,6 @@
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
+using DirtAndDiamonds.Simulation.Life;
 using Godot;
 using FileAccess = Godot.FileAccess;
 
@@ -40,6 +41,7 @@ public sealed partial class GameManager : Node
     public LeagueSimulator League { get; private set; } = null!;
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
+    public LifeSimManager LifeSim { get; private set; } = null!;
 
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
@@ -99,12 +101,26 @@ public sealed partial class GameManager : Node
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
 
+        // Life sim (Phase 5 remainder): needs/utility tracking is in-memory only
+        // this pass (no schema change — life_sim_needs_decay.md §11), seeded
+        // once from the same Players rows the baseball sims already loaded.
+        var playerRows = new List<PlayerRow>();
+        Players.LoadAll(playerRows);
+        var npcSeeds = new NpcSeed[playerRows.Count];
+        for (int i = 0; i < playerRows.Count; i++)
+        {
+            npcSeeds[i] = new NpcSeed(playerRows[i].PlayerId, playerRows[i].Funds);
+        }
+        LifeSim = new LifeSimManager();
+        LifeSim.Seed(npcSeeds);
+        LifeSim.AttachTo(Events);
+
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
             $"[GameManager] Save open at '{databasePath}' — schema v{schemaVersion}, journal={journalMode}, " +
             $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}), " +
             $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams), " +
-            $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}.");
+            $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}.");
     }
 
     public override void _Process(double delta)
