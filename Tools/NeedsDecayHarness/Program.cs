@@ -64,6 +64,7 @@ internal static class Program
         RunUtilityChecks();
         RunActionThresholdChecks();
         RunLifeSimChecks();
+        RunRelationshipGraphChecks();
 
         int failed = 0;
         Console.WriteLine();
@@ -481,6 +482,98 @@ internal static class Program
             && brokeMin[NeedType.Social] <= NeedsEngine.MinNeed
             && brokeMin[NeedType.Fitness] <= NeedsEngine.MinNeed;
         Check("broke NPC's money-gated needs (Hunger/Social/Fitness) collapse without an income mechanic (expected — no Phase 8 economy yet)", paidNeedsCollapse);
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 6: RelationshipGraph — canonical storage, clamping, rivalry
+    // derivation, event transport, and the persistence dirty-set. All local
+    // (graph + a hand-pumped EventBus), no database — the DB projection is
+    // GameManager's boundary, proven by the live boot smoke test.
+    // ------------------------------------------------------------------
+
+    private static void RunRelationshipGraphChecks()
+    {
+        // Canonical pair storage: written (b, a), readable either way, and
+        // visible from both endpoints' adjacency.
+        var graph = new RelationshipGraph();
+        graph.SetRelationship("npc-b", "npc-a", 40, RelationshipKind.Friend);
+        bool foundForward = graph.TryGetRelationship("npc-a", "npc-b", out int affinity, out RelationshipKind kind);
+        bool foundReverse = graph.TryGetRelationship("npc-b", "npc-a", out int affinityReverse, out _);
+        Check("edge written (b,a) is readable as (a,b) and (b,a) with one stored value",
+            foundForward && foundReverse && affinity == 40 && affinityReverse == 40 && kind == RelationshipKind.Friend);
+
+        var edges = new List<RelationshipEdge>();
+        graph.GetEdgesFor("npc-a", edges);
+        bool aSeesB = edges.Count == 1 && edges[0].OtherId == "npc-b";
+        graph.GetEdgesFor("npc-b", edges);
+        bool bSeesA = edges.Count == 1 && edges[0].OtherId == "npc-a";
+        Check("adjacency is bidirectional (each endpoint sees the other)", aSeesB && bSeesA);
+
+        // Affinity clamps to [-100, 100] on set and on adjust.
+        graph.SetRelationship("npc-a", "npc-c", 250, RelationshipKind.Partner);
+        graph.TryGetRelationship("npc-a", "npc-c", out int clampedHigh, out _);
+        graph.AdjustAffinity("npc-a", "npc-c", -999);
+        graph.TryGetRelationship("npc-a", "npc-c", out int clampedLow, out _);
+        Check($"affinity clamps to [{RelationshipGraph.MinAffinity}, {RelationshipGraph.MaxAffinity}]",
+            clampedHigh == RelationshipGraph.MaxAffinity && clampedLow == RelationshipGraph.MinAffinity,
+            $"set 250 → {clampedHigh}, adjust -999 → {clampedLow}");
+
+        // Rivalry intensity derivation: only a Rival edge in the red projects.
+        Check("rivalry intensity = -affinity on a negative Rival edge, else 0",
+            RelationshipGraph.RivalryIntensity(-63, RelationshipKind.Rival) == 63
+            && RelationshipGraph.RivalryIntensity(-63, RelationshipKind.Friend) == 0
+            && RelationshipGraph.RivalryIntensity(20, RelationshipKind.Rival) == 0);
+
+        // Event transport through a locally pumped bus.
+        var bus = new EventBus();
+        var received = new List<RivalryChangedEvent>();
+        bus.Subscribe<RivalryChangedEvent>(e => received.Add(e));
+
+        graph.AttachTo(bus);
+        bus.DispatchPending();
+        Check("AttachTo announces nothing when no rivalry exists", received.Count == 0);
+
+        graph.SetRelationship("npc-a", "npc-b", -80, RelationshipKind.Rival);
+        bus.DispatchPending();
+        Check("rivalry creation publishes canonical pair + intensity",
+            received.Count == 1 && received[0].PlayerAId == "npc-a" && received[0].PlayerBId == "npc-b"
+            && received[0].Intensity == 80);
+
+        graph.AdjustAffinity("npc-a", "npc-c", 5); // non-rival edge moves — no rivalry traffic
+        graph.SetRelationship("npc-a", "npc-b", -80, RelationshipKind.Rival); // exact no-op write
+        bus.DispatchPending();
+        Check("non-rival changes and no-op writes publish nothing", received.Count == 1);
+
+        graph.SetRelationship("npc-a", "npc-b", 15, RelationshipKind.Rival); // buried the hatchet
+        bus.DispatchPending();
+        Check("affinity sign flip dissolves the rivalry (publishes intensity 0)",
+            received.Count == 2 && received[1].Intensity == 0);
+
+        // AttachTo on a pre-seeded graph announces hydrated rivalries — the
+        // boot handshake GameManager relies on (Seed itself must stay silent).
+        var hydrated = new RelationshipGraph();
+        hydrated.Seed(new[]
+        {
+            new RelationshipSeed("npc-x", "npc-y", -45, RelationshipKind.Rival),
+            new RelationshipSeed("npc-x", "npc-z", -45, RelationshipKind.Friend),
+        });
+        received.Clear();
+        hydrated.AttachTo(bus);
+        bus.DispatchPending();
+        Check("AttachTo after Seed announces exactly the active rivalries",
+            received.Count == 1 && received[0].Intensity == 45);
+
+        // Persistence dirty-set: mutations accumulate once, Seed never dirties,
+        // and CollectDirty drains.
+        var dirty = new List<RelationshipSeed>();
+        bool seedClean = hydrated.CollectDirty(dirty) == 0;
+        graph.CollectDirty(dirty);
+        // Every mutation above touched only the (a,b) and (a,c) pairs, however
+        // many times — the dirty set coalesces to one entry per pair.
+        bool mutationsCollected = dirty.Count == 2;
+        bool drained = graph.CollectDirty(dirty) == 0;
+        Check("CollectDirty: Seed is clean, mutations coalesce per pair, second call empty",
+            seedClean && mutationsCollected && drained);
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

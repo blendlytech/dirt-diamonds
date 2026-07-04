@@ -44,6 +44,7 @@ public sealed partial class GameManager : Node
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
+    public RelationshipGraph Relationships { get; private set; } = null!;
 
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
@@ -51,6 +52,12 @@ public sealed partial class GameManager : Node
     // Reused every day-tick persist so the handler doesn't allocate a fresh
     // array per calendar day (zero-GC mandate for the hot path).
     private readonly List<NeedsRow> _needsScratch = new();
+    private readonly List<RelationshipSeed> _relationshipScratch = new();
+
+    // Phase 6 rivalry transport: subscribes to RivalryChangedEvent and feeds
+    // both baseball sims. Owned here because it exists exactly as long as the
+    // bus does; the sims only hold the optional reference.
+    private RivalryLedger _rivalryLedger = null!;
 
     public override void _Ready()
     {
@@ -103,6 +110,13 @@ public sealed partial class GameManager : Node
         // resolved once the rest of the league has played.
         Micro = new MicroGame(_database, Baseball);
         Micro.Initialize();
+        // Rivalry ledger before any RelationshipGraph publications are pumped
+        // (dispatch is deferred, so subscribing anywhere inside _Ready is
+        // early enough — the first _Process pump delivers boot publications).
+        _rivalryLedger = new RivalryLedger();
+        _rivalryLedger.AttachTo(Events);
+        League.Rivalries = _rivalryLedger;
+        Micro.Rivalries = _rivalryLedger;
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, League, Micro, careerRng);
         bool avatarLoaded = Career.LoadExistingAvatar();
@@ -146,12 +160,31 @@ public sealed partial class GameManager : Node
         // writes never share the calendar tick's (database_rules.md).
         Events.Subscribe<DayAdvancedEvent>(PersistLifeSimNeeds);
 
+        // Phase 6: relationship graph — hydrate every Relationships row, then
+        // attach; AttachTo announces the hydrated rivalries so the baseball
+        // ledger needs no separate handshake. RelationshipKind mirrors Data's
+        // RelationshipType (the Life folder is compiled Data-free by its
+        // harness), mapped explicitly here at the persistence boundary.
+        var relationshipRows = new List<RelationshipRow>();
+        Players.LoadAllRelationships(relationshipRows);
+        var relationshipSeeds = new List<RelationshipSeed>(relationshipRows.Count);
+        foreach (RelationshipRow row in relationshipRows)
+        {
+            relationshipSeeds.Add(new RelationshipSeed(
+                row.Player1Id, row.Player2Id, row.AffinityScore, ToKind(row.Type)));
+        }
+        Relationships = new RelationshipGraph();
+        Relationships.Seed(relationshipSeeds);
+        Relationships.AttachTo(Events);
+        Events.Subscribe<DayAdvancedEvent>(PersistRelationships);
+
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
             $"[GameManager] Save open at '{databasePath}' — schema v{schemaVersion}, journal={journalMode}, " +
             $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}), " +
             $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams), " +
-            $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}.");
+            $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}, " +
+            $"relationships {Relationships.EdgeCount}.");
     }
 
     public override void _Process(double delta)
@@ -170,6 +203,10 @@ public sealed partial class GameManager : Node
             // Final flush so a mid-day quit doesn't lose that day's progress —
             // the day-tick handler above only fires on a completed calendar day.
             PersistLifeSimNeeds(default);
+        }
+        if (_database is not null && Relationships is not null)
+        {
+            PersistRelationships(default);
         }
         _database?.Dispose();
         _database = null;
@@ -196,4 +233,50 @@ public sealed partial class GameManager : Node
         }
         Needs.BulkUpsert(CollectionsMarshal.AsSpan(_needsScratch));
     }
+
+    /// <summary>
+    /// Upserts every relationship edge mutated since the last flush — one
+    /// batch transaction, own cadence, mirroring the needs persist above.
+    /// A no-op almost every day until Phase 7's writers exist.
+    /// </summary>
+    private void PersistRelationships(DayAdvancedEvent _)
+    {
+        if (Relationships.CollectDirty(_relationshipScratch) == 0)
+        {
+            return;
+        }
+        Database.BeginBatch();
+        try
+        {
+            for (int i = 0; i < _relationshipScratch.Count; i++)
+            {
+                RelationshipSeed edge = _relationshipScratch[i];
+                Players.UpsertRelationship(edge.PlayerAId, edge.PlayerBId, edge.Affinity, ToType(edge.Kind));
+            }
+            Database.CommitBatch();
+        }
+        catch
+        {
+            Database.RollbackBatch();
+            throw;
+        }
+    }
+
+    private static RelationshipKind ToKind(RelationshipType type) => type switch
+    {
+        RelationshipType.Rival => RelationshipKind.Rival,
+        RelationshipType.Friend => RelationshipKind.Friend,
+        RelationshipType.Partner => RelationshipKind.Partner,
+        RelationshipType.Child => RelationshipKind.Child,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+    };
+
+    private static RelationshipType ToType(RelationshipKind kind) => kind switch
+    {
+        RelationshipKind.Rival => RelationshipType.Rival,
+        RelationshipKind.Friend => RelationshipType.Friend,
+        RelationshipKind.Partner => RelationshipType.Partner,
+        RelationshipKind.Child => RelationshipType.Child,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
 }

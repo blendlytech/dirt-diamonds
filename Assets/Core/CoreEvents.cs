@@ -49,3 +49,28 @@ public readonly struct SeasonRolledOverEvent : IGameEvent
         NewSeasonYear = newSeasonYear;
     }
 }
+
+/// <summary>
+/// Published by the Life sim's RelationshipGraph whenever a pair's rivalry
+/// intensity changes; the Baseball sim's RivalryLedger consumes it (BUILD_PLAN
+/// Phase 6: rivalry scores feed baseball probability modifiers via the event
+/// bus, never a direct reference). The payload is raw ids plus a 0–100
+/// intensity — the two sims share no relationship types beyond this struct.
+/// </summary>
+public readonly struct RivalryChangedEvent : IGameEvent
+{
+    /// <summary>Canonical pair order: <see cref="PlayerAId"/> sorts before <see cref="PlayerBId"/> ordinally.</summary>
+    public readonly string PlayerAId;
+
+    public readonly string PlayerBId;
+
+    /// <summary>0–100; the clamp of a Rival edge's negative affinity. 0 = rivalry dissolved.</summary>
+    public readonly byte Intensity;
+
+    public RivalryChangedEvent(string playerAId, string playerBId, byte intensity)
+    {
+        PlayerAId = playerAId;
+        PlayerBId = playerBId;
+        Intensity = intensity;
+    }
+}

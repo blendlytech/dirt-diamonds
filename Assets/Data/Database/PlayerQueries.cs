@@ -72,6 +72,11 @@ public sealed class PlayerQueries
         "UNION ALL " +
         "SELECT rel_id, player_1_id, player_2_id, affinity_score, type_enum FROM Relationships WHERE player_2_id = @playerId;";
 
+    // Boot-time hydration of the whole RelationshipGraph — a deliberate full
+    // scan, same bulk-load-up-front pattern as SqlSelectAllPlayers.
+    private const string SqlSelectAllRelationships =
+        "SELECT rel_id, player_1_id, player_2_id, affinity_score, type_enum FROM Relationships;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertPlayer;
     private readonly SqliteCommand _selectPlayerById;
@@ -87,6 +92,7 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _selectActiveFlags;
     private readonly SqliteCommand _upsertRelationship;
     private readonly SqliteCommand _selectRelationshipsFor;
+    private readonly SqliteCommand _selectAllRelationships;
 
     public PlayerQueries(DatabaseManager db)
     {
@@ -127,6 +133,7 @@ public sealed class PlayerQueries
             ("@affinityScore", SqliteType.Integer), ("@typeEnum", SqliteType.Text));
 
         _selectRelationshipsFor = Acquire(SqlSelectRelationshipsFor, ("@playerId", SqliteType.Text));
+        _selectAllRelationships = Acquire(SqlSelectAllRelationships);
     }
 
     private SqliteCommand Acquire(string sql, params (string Name, SqliteType Type)[] parameters)
@@ -409,15 +416,29 @@ public sealed class PlayerQueries
         using SqliteDataReader reader = _db.ExecuteReader(_selectRelationshipsFor);
         while (reader.Read())
         {
-            destination.Add(new RelationshipRow
-            {
-                RelId = reader.GetInt64(0),
-                Player1Id = reader.GetString(1),
-                Player2Id = reader.GetString(2),
-                AffinityScore = reader.GetInt32(3),
-                Type = RelationshipTypeMap.FromDbString(reader.GetString(4)),
-            });
+            destination.Add(ReadRelationship(reader));
         }
         return destination.Count;
     }
+
+    /// <summary>Bulk-loads every relationship row into <paramref name="destination"/> (cleared first) — RelationshipGraph hydration.</summary>
+    public int LoadAllRelationships(List<RelationshipRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllRelationships);
+        while (reader.Read())
+        {
+            destination.Add(ReadRelationship(reader));
+        }
+        return destination.Count;
+    }
+
+    private static RelationshipRow ReadRelationship(SqliteDataReader reader) => new()
+    {
+        RelId = reader.GetInt64(0),
+        Player1Id = reader.GetString(1),
+        Player2Id = reader.GetString(2),
+        AffinityScore = reader.GetInt32(3),
+        Type = RelationshipTypeMap.FromDbString(reader.GetString(4)),
+    };
 }

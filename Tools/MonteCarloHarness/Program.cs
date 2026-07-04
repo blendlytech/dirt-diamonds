@@ -60,6 +60,7 @@ internal static class Program
         string microScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_microsim_{Guid.NewGuid():N}.db");
         string careerScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_career_{Guid.NewGuid():N}.db");
         string v4ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_v4_{Guid.NewGuid():N}.db");
+        string rivalryScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_rivalry_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -70,6 +71,7 @@ internal static class Program
             RunMicroGameSuite(schemaPath, microScratchPath);
             RunCareerWiringSuite(schemaPath, careerScratchPath);
             RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
+            RunRivalrySuite(schemaPath, rivalryScratchPath);
         }
         catch (Exception ex)
         {
@@ -89,6 +91,12 @@ internal static class Program
             TryDelete(v4ScratchPath);
             TryDelete(v4ScratchPath + "-wal");
             TryDelete(v4ScratchPath + "-shm");
+            foreach (string variant in new[] { rivalryScratchPath, rivalryScratchPath + ".empty", rivalryScratchPath + ".rival" })
+            {
+                TryDelete(variant);
+                TryDelete(variant + "-wal");
+                TryDelete(variant + "-shm");
+            }
         }
 
         int failed = 0;
@@ -237,7 +245,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v4", db.GetSchemaVersion() == 4, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v5", db.GetSchemaVersion() == 5, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -1236,6 +1244,232 @@ internal static class Program
         }
         return max;
     }
+
+    // ------------------------------------------------------------------
+    // 8. Phase 6 rivalry modifiers: RivalryChangedEvent → RivalryLedger →
+    //    slot-cache → effective-ratings boost through the UNCHANGED resolver.
+    //    Proves (a) the ledger's bus contract, (b) the analytic direction of
+    //    the effect, (c) an attached-but-empty ledger leaves a same-seed
+    //    season bit-identical (the M1-lines-cannot-move guarantee), (d) a
+    //    heavily rivalrous season still lands inside every §8 band, and
+    //    (e) the micro-sim's attended-game path is live too.
+    // ------------------------------------------------------------------
+
+    private static void RunRivalrySuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 6 rivalry modifiers (ledger, analytic shift, league neutrality) ---");
+
+        // (a) Ledger ingest off a locally pumped bus.
+        var bus = new EventBus();
+        var ledger = new RivalryLedger();
+        ledger.AttachTo(bus);
+        bus.Publish(new RivalryChangedEvent("p-a", "p-b", 70));
+        bus.DispatchPending();
+        bool set = ledger.GetIntensity("p-b", "p-a") == 70; // reverse-order query
+        int versionAfterSet = ledger.Version;
+        bus.Publish(new RivalryChangedEvent("p-a", "p-b", 70)); // duplicate — no version churn
+        bus.DispatchPending();
+        bool duplicateFrozen = ledger.Version == versionAfterSet;
+        bus.Publish(new RivalryChangedEvent("p-b", "p-a", 0)); // reverse-order dissolve
+        bus.DispatchPending();
+        bool cleared = ledger.Count == 0 && ledger.GetIntensity("p-a", "p-b") == 0 && ledger.Version > versionAfterSet;
+        Check("ledger: set / duplicate no-op / reverse-order clear off the bus", set && duplicateFrozen && cleared);
+
+        // (b) Analytic direction on a flat 50/50 matchup at intensity 100.
+        var flatBatter = new BatterRatings(50, 50, 50, false);
+        var flatPitcher = new PitcherRatings(50, 50, 50);
+        Span<double> baseline = stackalloc double[AtBatResolver.OutcomeCount];
+        Span<double> heated = stackalloc double[AtBatResolver.OutcomeCount];
+        AtBatResolver.ComputeProbabilities(in flatBatter, in flatPitcher, 50, baseline);
+        BatterRatings heatedBatter = RivalryEffects.Batter(in flatBatter, 100);
+        PitcherRatings heatedPitcher = RivalryEffects.Pitcher(in flatPitcher, 100);
+        AtBatResolver.ComputeProbabilities(in heatedBatter, in heatedPitcher, 50, heated);
+        Check($"intensity 100 = +{RivalryEffects.MaxPowerBoost} power / +{RivalryEffects.MaxStuffBoost} stuff, capped at 100",
+            heatedBatter.Power == 50 + RivalryEffects.MaxPowerBoost
+            && heatedPitcher.Stuff == 50 + RivalryEffects.MaxStuffBoost
+            && RivalryEffects.Batter(new BatterRatings(97, 50, 50, false), 100).Power == 100
+            && RivalryEffects.Pitcher(new PitcherRatings(96, 50, 50), 100).Stuff == 100
+            && RivalryEffects.Batter(in flatBatter, 50).Power == 54);
+        Check("full-intensity rivalry is a three-true-outcomes shift (K↑ HR↑ 1B↓)",
+            heated[(int)PaOutcome.Strikeout] > baseline[(int)PaOutcome.Strikeout]
+            && heated[(int)PaOutcome.HomeRun] > baseline[(int)PaOutcome.HomeRun]
+            && heated[(int)PaOutcome.Single] < baseline[(int)PaOutcome.Single],
+            $"K {baseline[(int)PaOutcome.Strikeout]:P1}→{heated[(int)PaOutcome.Strikeout]:P1} " +
+            $"HR {baseline[(int)PaOutcome.HomeRun]:P2}→{heated[(int)PaOutcome.HomeRun]:P2} " +
+            $"1B {baseline[(int)PaOutcome.Single]:P1}→{heated[(int)PaOutcome.Single]:P1}");
+
+        // (c)/(d) Three same-seed single-season runs on separate scratch dbs:
+        // control (no ledger), attached-but-empty, and 45 cross-team rivalries
+        // at intensity 100 (team A's whole lineup vs team B's whole rotation).
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) control = RunLeagueSeason(schemaPath, scratchPath, WireControl);
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) empty = RunLeagueSeason(schemaPath, scratchPath + ".empty", WireEmptyLedger);
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) rival = RunLeagueSeason(schemaPath, scratchPath + ".rival", WireCrossTeamRivalries);
+
+        Check("attached-but-empty ledger: season totals bit-identical to no ledger",
+            BattingTotalsEqual(control.Bat, empty.Bat) && PitchingTotalsEqual(control.Pit, empty.Pit));
+        Check("45 max-intensity rivalries reach macro PAs (same-seed season diverges)",
+            !BattingTotalsEqual(control.Bat, rival.Bat));
+
+        long h = rival.Bat.H;
+        long singles = h - rival.Bat.Doubles - rival.Bat.Triples - rival.Bat.Hr;
+        long tb = singles + 2 * rival.Bat.Doubles + 3 * rival.Bat.Triples + 4 * rival.Bat.Hr;
+        double avg = (double)h / rival.Bat.Ab;
+        double obp = (double)(h + rival.Bat.Bb) / rival.Bat.Pa;
+        double slg = (double)tb / rival.Bat.Ab;
+        double kRate = (double)rival.Bat.So / rival.Bat.Pa;
+        double bbRate = (double)rival.Bat.Bb / rival.Bat.Pa;
+        double hrRate = (double)rival.Bat.Hr / rival.Bat.Pa;
+        double runsPerTeamGame = (double)rival.Pit.Er / rival.Pit.Gs;
+        Console.WriteLine($"  Rivalry season: {avg:.000}/{obp:.000}/{slg:.000}  K% {kRate:P1}  BB% {bbRate:P1}  " +
+            $"HR/PA {hrRate:P1}  R/G {runsPerTeamGame:F2}  ({rival.Bat.Pa:N0} PA)");
+        Check("rivalry-heavy season stays inside every §8 acceptance band",
+            avg is >= 0.240 and <= 0.260 && obp is >= 0.308 and <= 0.325 && slg is >= 0.395 and <= 0.430
+            && kRate is >= 0.20 and <= 0.25 && bbRate is >= 0.075 and <= 0.105 && hrRate is >= 0.027 and <= 0.037
+            && runsPerTeamGame is >= 4.2 and <= 4.8,
+            $"{avg:.000}/{obp:.000}/{slg:.000} K {kRate:P1} BB {bbRate:P1} HR {hrRate:P1} R/G {runsPerTeamGame:F2}");
+
+        // (e) Micro path: same-seed attended NPC exhibition on the control db.
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            var baseball = new BaseballQueries(db);
+            var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
+            baseball.LoadAllTeams(teams);
+            int homeTeamId = teams[0].TeamId;
+            int awayTeamId = teams[1].TeamId;
+            var rosterRows = new List<RosterPlayerRow>();
+            baseball.LoadRoster(rosterRows);
+
+            MicroGameResult baselineGame = PlayMicroGame(db, baseball, homeTeamId, awayTeamId, null);
+            MicroGameResult emptyGame = PlayMicroGame(db, baseball, homeTeamId, awayTeamId, new RivalryLedger());
+
+            // Away lineup vs every home pitcher (starter AND bullpen so the
+            // rivalry survives a mid-game pull).
+            var microBus = new EventBus();
+            var heatedLedger = new RivalryLedger();
+            heatedLedger.AttachTo(microBus);
+            foreach (RosterPlayerRow batter in rosterRows)
+            {
+                if (batter.IsPitcher || batter.TeamId != awayTeamId)
+                {
+                    continue;
+                }
+                foreach (RosterPlayerRow pitcher in rosterRows)
+                {
+                    if (pitcher.IsPitcher && pitcher.TeamId == homeTeamId)
+                    {
+                        microBus.Publish(new RivalryChangedEvent(batter.PlayerId, pitcher.PlayerId, 100));
+                    }
+                }
+            }
+            microBus.DispatchPending();
+            MicroGameResult heatedGame = PlayMicroGame(db, baseball, homeTeamId, awayTeamId, heatedLedger);
+
+            bool emptyIdentical = MicroResultsEqual(baselineGame, emptyGame);
+            bool heatedDiverges = !MicroResultsEqual(baselineGame, heatedGame);
+            Check("micro-sim: empty ledger bit-identical, heated game diverges (same seed)",
+                emptyIdentical && heatedDiverges,
+                $"base {baselineGame.AwayScore}-{baselineGame.HomeScore}/{baselineGame.Innings}, " +
+                $"heated {heatedGame.AwayScore}-{heatedGame.HomeScore}/{heatedGame.Innings}");
+        }
+    }
+
+    /// <summary>No rivalry source at all — the pre-Phase-6 shape.</summary>
+    private static RivalryLedger? WireControl(BaseballQueries baseball, EventBus bus) => null;
+
+    /// <summary>Ledger attached but forever empty — must change nothing.</summary>
+    private static RivalryLedger? WireEmptyLedger(BaseballQueries baseball, EventBus bus)
+    {
+        var ledger = new RivalryLedger();
+        ledger.AttachTo(bus);
+        return ledger;
+    }
+
+    /// <summary>Team A's nine batters vs team B's five starters, all at intensity 100.</summary>
+    private static RivalryLedger? WireCrossTeamRivalries(BaseballQueries baseball, EventBus bus)
+    {
+        var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
+        baseball.LoadAllTeams(teams);
+        int teamAId = teams[0].TeamId;
+        int teamBId = teams[1].TeamId;
+        var rosterRows = new List<RosterPlayerRow>();
+        baseball.LoadRoster(rosterRows);
+
+        var ledger = new RivalryLedger();
+        ledger.AttachTo(bus);
+        foreach (RosterPlayerRow batter in rosterRows)
+        {
+            if (batter.IsPitcher || batter.TeamId != teamAId)
+            {
+                continue;
+            }
+            foreach (RosterPlayerRow pitcher in rosterRows)
+            {
+                if (pitcher.IsPitcher && pitcher.Role == PitcherRole.Starter && pitcher.TeamId == teamBId)
+                {
+                    bus.Publish(new RivalryChangedEvent(batter.PlayerId, pitcher.PlayerId, 100));
+                }
+            }
+        }
+        bus.DispatchPending(); // deliver before any day tick shares the queue
+        return ledger;
+    }
+
+    /// <summary>
+    /// One fresh single-season pipeline run (same league seed, same season
+    /// seed) on its own scratch db; the wire callback decides the rivalry
+    /// setup, so variants differ ONLY in that.
+    /// </summary>
+    private static (LeagueBattingTotals, LeaguePitchingTotals) RunLeagueSeason(
+        string schemaPath, string dbPath, Func<BaseballQueries, EventBus, RivalryLedger?> wire)
+    {
+        using var db = new DatabaseManager(dbPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+        clock.Initialize(StartYear);
+
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Initialize();
+        league.AttachTo(bus);
+        league.Rivalries = wire(baseball, bus);
+
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+        return (baseball.LoadLeagueBattingTotals(StartYear), baseball.LoadLeaguePitchingTotals(StartYear));
+    }
+
+    private static MicroGameResult PlayMicroGame(
+        DatabaseManager db, BaseballQueries baseball, int homeTeamId, int awayTeamId, RivalryLedger? ledger)
+    {
+        // Fresh instance per variant so rotation counters start identical.
+        var micro = new MicroGame(db, baseball) { LoggingEnabled = false, Rivalries = ledger };
+        micro.Initialize();
+        var policy = new NeutralBatterPolicy();
+        var rng = new RngState(MicroSeed);
+        return micro.PlayGame(homeTeamId, awayTeamId, MicroGame.NoHuman, ref policy, ref rng);
+    }
+
+    private static bool BattingTotalsEqual(in LeagueBattingTotals a, in LeagueBattingTotals b) =>
+        a.Pa == b.Pa && a.Ab == b.Ab && a.H == b.H && a.Doubles == b.Doubles
+        && a.Triples == b.Triples && a.Hr == b.Hr && a.Bb == b.Bb && a.So == b.So;
+
+    private static bool PitchingTotalsEqual(in LeaguePitchingTotals a, in LeaguePitchingTotals b) =>
+        a.Gs == b.Gs && a.W == b.W && a.L == b.L && a.OutsRecorded == b.OutsRecorded
+        && a.HAllowed == b.HAllowed && a.Er == b.Er && a.Bb == b.Bb && a.So == b.So;
+
+    private static bool MicroResultsEqual(in MicroGameResult a, in MicroGameResult b) =>
+        a.HomeScore == b.HomeScore && a.AwayScore == b.AwayScore && a.Innings == b.Innings
+        && a.HumanPa == b.HumanPa && a.HomeStarterPitches.Equals(b.HomeStarterPitches)
+        && a.AwayStarterPitches.Equals(b.AwayStarterPitches);
 
     private static void Check(string name, bool pass, string detail = "") =>
         Results.Add((name, pass, detail));

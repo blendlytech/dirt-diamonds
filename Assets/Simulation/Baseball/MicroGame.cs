@@ -125,6 +125,19 @@ public sealed class MicroGame
     /// </summary>
     public PlayerIntentBridge? FeedSink;
 
+    /// <summary>
+    /// Rivalry intensity source (Phase 6), optional like <see cref="FeedSink"/>:
+    /// null leaves every PA on the exact pre-rivalry path.
+    /// </summary>
+    public RivalryLedger? Rivalries;
+
+    // Slot×slot intensity cache refreshed at game start when the ledger's
+    // Version has moved — the per-PA cost is one byte read (zero-GC mandate).
+    private byte[] _rivalrySlots = Array.Empty<byte>();
+    private readonly List<RivalryPair> _rivalryScratch = new();
+    private int _rivalryVersionSeen = -1;
+    private bool _hasRivalries;
+
     private bool _initialized;
 
     public MicroGame(DatabaseManager db, BaseballQueries queries)
@@ -219,6 +232,9 @@ public sealed class MicroGame
         _pitcherRatings = new PitcherRatings[slots];
         _arsenals = new PitcherArsenal[slots];
         _pedActive = new bool[slots];
+        _rivalrySlots = new byte[slots * slots];
+        _rivalryVersionSeen = -1; // roster changed — force a cache rebuild
+        _hasRivalries = false;
         _batting = new BattingLine[slots];
         _pitching = new PitchingLine[slots];
         _playedThisGame = new bool[slots];
@@ -312,6 +328,42 @@ public sealed class MicroGame
 
     public void ResetInningTotals() => Array.Clear(InningTotals);
 
+    /// <summary>
+    /// Rebuilds the slot×slot intensity cache when the ledger has moved. Ids
+    /// outside the roster are skipped; the linear <see cref="FindRosterSlot"/>
+    /// probe is fine here — rebuilds are version-gated and rivalries sparse.
+    /// </summary>
+    private void RefreshRivalryCache()
+    {
+        if (Rivalries is null)
+        {
+            _hasRivalries = false;
+            return;
+        }
+        if (Rivalries.Version == _rivalryVersionSeen)
+        {
+            return;
+        }
+        _rivalryVersionSeen = Rivalries.Version;
+        Array.Clear(_rivalrySlots);
+        _hasRivalries = false;
+
+        int slots = _roster.Length;
+        Rivalries.CopyPairs(_rivalryScratch);
+        for (int i = 0; i < _rivalryScratch.Count; i++)
+        {
+            RivalryPair pair = _rivalryScratch[i];
+            int a = FindRosterSlot(pair.PlayerAId);
+            int b = FindRosterSlot(pair.PlayerBId);
+            if (a != NoHuman && b != NoHuman)
+            {
+                _rivalrySlots[a * slots + b] = pair.Intensity;
+                _rivalrySlots[b * slots + a] = pair.Intensity;
+                _hasRivalries |= pair.Intensity > 0;
+            }
+        }
+    }
+
     // ------------------------------------------------------------------
     // The attended game
     // ------------------------------------------------------------------
@@ -348,6 +400,7 @@ public sealed class MicroGame
         {
             throw new InvalidOperationException("MicroGame.PlayGame before Initialize().");
         }
+        RefreshRivalryCache();
         int homeTeam = TeamIndexOf(homeTeamId);
         int awayTeam = TeamIndexOf(awayTeamId);
         if (homeTeam == awayTeam)
@@ -526,6 +579,17 @@ public sealed class MicroGame
             orderPos = (orderPos + 1) % LeagueSimulator.LineupSize;
 
             PitcherRatings effectivePitcher = fatigue.EffectiveRatings();
+            // Phase 6: an active rivalry bends this PA on BOTH paths below —
+            // the boost lands on the effective ratings the same way fatigue
+            // already does, upstream of the shared resolver, so the human's
+            // pitch-chain anchor p* shifts consistently with an NPC macro PA.
+            byte rivalry = _hasRivalries ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
+            BatterRatings batter = _batterRatings[batterSlot];
+            if (rivalry != 0)
+            {
+                batter = RivalryEffects.Batter(in batter, rivalry);
+                effectivePitcher = RivalryEffects.Pitcher(in effectivePitcher, rivalry);
+            }
             PaOutcome outcome;
             int pitches = 0;
 
@@ -535,11 +599,11 @@ public sealed class MicroGame
             {
                 // Inner chain (§5): anchor to the shared resolver, invert the
                 // absorption equations, then play the count pitch by pitch.
-                AtBatResolver.ComputeProbabilities(in _batterRatings[batterSlot], in effectivePitcher, defense, anchor);
+                AtBatResolver.ComputeProbabilities(in batter, in effectivePitcher, defense, anchor);
                 PitchClassRates rates = PitchChain.SolveNeutral(
                     anchor[(int)PaOutcome.Walk], anchor[(int)PaOutcome.Strikeout]);
                 var matchup = new PitchMatchup(
-                    in _arsenals[pitcherSlot], effectivePitcher.Control, _batterRatings[batterSlot].Discipline);
+                    in _arsenals[pitcherSlot], effectivePitcher.Control, batter.Discipline);
                 // Runs already scored this half count toward the batting side.
                 var context = new HumanPaContext(
                     awayScore + (isTopHalf ? runs : 0), homeScore + (isTopHalf ? 0 : runs),
@@ -565,7 +629,7 @@ public sealed class MicroGame
             }
             else
             {
-                outcome = AtBatResolver.Resolve(in _batterRatings[batterSlot], in effectivePitcher, defense, ref rng);
+                outcome = AtBatResolver.Resolve(in batter, in effectivePitcher, defense, ref rng);
                 fatigue.AddNpcPa();
             }
 

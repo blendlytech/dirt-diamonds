@@ -101,7 +101,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 4", db.GetSchemaVersion() == 4, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 5", db.GetSchemaVersion() == 5, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);

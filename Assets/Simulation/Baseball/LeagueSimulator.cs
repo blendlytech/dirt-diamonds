@@ -76,6 +76,23 @@ public sealed class LeagueSimulator
 
     private bool _initialized;
 
+    /// <summary>
+    /// Rivalry intensity source (Phase 6), same optional-attachment pattern as
+    /// <see cref="MicroGame.FeedSink"/>: null — the default for every existing
+    /// harness path — leaves the per-PA hot path bit-identical to the
+    /// pre-rivalry code (a single false branch), so the M1 season lines cannot
+    /// move unless a rivalry actually exists.
+    /// </summary>
+    public RivalryLedger? Rivalries;
+
+    // Flat slot×slot intensity cache rebuilt only when the ledger's Version
+    // moves (rivalries change at day granularity at most; PAs read one byte).
+    private byte[] _rivalrySlots = Array.Empty<byte>();
+    private Dictionary<string, int>? _slotByPlayerId;
+    private readonly List<RivalryPair> _rivalryScratch = new();
+    private int _rivalryVersionSeen = -1;
+    private bool _hasRivalries;
+
     /// <summary>Season year with simulated-but-unflushed games; 0 = clean.</summary>
     private int _unflushedSeasonYear;
 
@@ -147,6 +164,10 @@ public sealed class LeagueSimulator
         }
 
         int slots = _roster.Length;
+        _rivalrySlots = new byte[slots * slots];
+        _slotByPlayerId = new Dictionary<string, int>(slots, StringComparer.Ordinal);
+        _rivalryVersionSeen = -1; // roster changed — force a cache rebuild
+        _hasRivalries = false;
         _batterRatings = new BatterRatings[slots];
         _pitcherRatings = new PitcherRatings[slots];
         _pedActive = new bool[slots];
@@ -171,6 +192,7 @@ public sealed class LeagueSimulator
                     $"Player {row.PlayerId} references team_id {row.TeamId} with no Teams row (query-layer FK).");
             }
 
+            _slotByPlayerId.Add(row.PlayerId, i);
             bool ped = pedSet.Contains(row.PlayerId);
             _pedActive[i] = ped;
             _batterRatings[i] = new BatterRatings((byte)row.BatPower, (byte)row.BatContact, (byte)row.BatDiscipline, ped);
@@ -308,6 +330,7 @@ public sealed class LeagueSimulator
     /// </summary>
     internal void SimulateGameDay(int dayOfSeason)
     {
+        RefreshRivalryCache();
         Span<SchedulePairing> pairings = stackalloc SchedulePairing[LeagueSchedule.PairingsPerDay];
         LeagueSchedule.GetDayPairings(dayOfSeason, pairings);
 
@@ -387,6 +410,42 @@ public sealed class LeagueSimulator
     }
 
     /// <summary>
+    /// Rebuilds the slot×slot intensity cache when the ledger has moved.
+    /// Ids the ledger knows but the roster doesn't (retired/free agents) are
+    /// simply skipped. Runs at day granularity, never per PA; the scratch
+    /// list reuse keeps even the rebuild allocation-free once warm.
+    /// </summary>
+    private void RefreshRivalryCache()
+    {
+        if (Rivalries is null || _slotByPlayerId is null)
+        {
+            _hasRivalries = false;
+            return;
+        }
+        if (Rivalries.Version == _rivalryVersionSeen)
+        {
+            return;
+        }
+        _rivalryVersionSeen = Rivalries.Version;
+        Array.Clear(_rivalrySlots);
+        _hasRivalries = false;
+
+        int slots = _roster.Length;
+        Rivalries.CopyPairs(_rivalryScratch);
+        for (int i = 0; i < _rivalryScratch.Count; i++)
+        {
+            RivalryPair pair = _rivalryScratch[i];
+            if (_slotByPlayerId.TryGetValue(pair.PlayerAId, out int a) &&
+                _slotByPlayerId.TryGetValue(pair.PlayerBId, out int b))
+            {
+                _rivalrySlots[a * slots + b] = pair.Intensity;
+                _rivalrySlots[b * slots + a] = pair.Intensity;
+                _hasRivalries |= pair.Intensity > 0;
+            }
+        }
+    }
+
+    /// <summary>
     /// §7 base-out state machine. Bases are 3 bits (1 = 1B, 2 = 2B, 4 = 3B).
     /// Returns runs scored; charges the pitching line (all runs earned — no
     /// errors in the macro-sim) and credits batter counting stats + RBI.
@@ -403,8 +462,22 @@ public sealed class LeagueSimulator
             int batterSlot = _lineupSlots[battingTeam * LineupSize + orderPos];
             orderPos = (orderPos + 1) % LineupSize;
 
-            PaOutcome outcome = AtBatResolver.Resolve(
-                in _batterRatings[batterSlot], in pitcher, defense, ref _rng);
+            // Phase 6: an active batter-pitcher rivalry bends this PA through
+            // effective ratings (RivalryEffects), same resolver. Intensity 0
+            // takes the exact pre-rivalry call — bit-identical M1 lines.
+            byte rivalry = _hasRivalries ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
+            PaOutcome outcome;
+            if (rivalry == 0)
+            {
+                outcome = AtBatResolver.Resolve(
+                    in _batterRatings[batterSlot], in pitcher, defense, ref _rng);
+            }
+            else
+            {
+                BatterRatings rivalBatter = RivalryEffects.Batter(in _batterRatings[batterSlot], rivalry);
+                PitcherRatings rivalPitcher = RivalryEffects.Pitcher(in pitcher, rivalry);
+                outcome = AtBatResolver.Resolve(in rivalBatter, in rivalPitcher, defense, ref _rng);
+            }
 
             ref BattingLine bat = ref _batting[batterSlot];
             ref PitchingLine pit = ref _pitching[pitcherSlot];
