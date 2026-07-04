@@ -61,6 +61,7 @@ internal static class Program
 
         RunChecks(trace);
         RunUtilityChecks();
+        RunActionThresholdChecks();
         RunLifeSimChecks();
 
         int failed = 0;
@@ -245,6 +246,65 @@ internal static class Program
             $"picked {brokeCrisisPick} (utility {brokeCrisisUtility:F3})");
 
         Console.WriteLine();
+    }
+
+    // ------------------------------------------------------------------
+    // Need-deficit crossover sweep — the precise, deterministic form of the
+    // "NPCs eat very frequently" artifact flagged after the first tuning
+    // pass. For each need-restoring action, finds the highest need value at
+    // which it first overtakes Idle (every other need full, funds ample).
+    // A trivial deficit shouldn't win (that was the bug); a real deficit
+    // should win with room to spare before CriticalThreshold ever has to
+    // force the issue via the stress override.
+    // ------------------------------------------------------------------
+
+    private const double CrossoverFunds = 1000.0;
+    private const int MaxSensibleCrossover = 75; // shouldn't fire on a <25% deficit
+    private const int MinSensibleCrossover = 25; // should fire well above CriticalThreshold (20)
+
+    private static readonly (NpcActionId Id, NeedType Need)[] NeedRestoringActions =
+    {
+        (NpcActionId.Eat, NeedType.Hunger),
+        (NpcActionId.Sleep, NeedType.Sleep),
+        (NpcActionId.Shower, NeedType.Hygiene),
+        (NpcActionId.SocializeEvening, NeedType.Social),
+        (NpcActionId.Workout, NeedType.Fitness),
+    };
+
+    private static void RunActionThresholdChecks()
+    {
+        Console.WriteLine("--- need-deficit crossover sweep (need value where an action first beats Idle) ---\n");
+
+        foreach ((NpcActionId id, NeedType need) in NeedRestoringActions)
+        {
+            int crossover = FindCrossoverValue(id, need);
+            Console.WriteLine($"    {id,-16} beats Idle once {need,-8} drops to {crossover}");
+            Check($"{id} doesn't fire on a trivial deficit ({need} crossover <= {MaxSensibleCrossover})",
+                crossover >= 0 && crossover <= MaxSensibleCrossover, $"crosses at {crossover}");
+            Check($"{id} fires with real margin before CriticalThreshold ({need} crossover >= {MinSensibleCrossover})",
+                crossover >= MinSensibleCrossover, $"crosses at {crossover}");
+        }
+
+        Console.WriteLine();
+    }
+
+    // Scans from fully satisfied down to empty; needScore is monotonically
+    // non-decreasing as the need drops and Idle's own utility never improves
+    // across the scan (it only drops, at the CriticalThreshold override), so
+    // the first value where actionId wins is the one and only crossover.
+    private static int FindCrossoverValue(NpcActionId actionId, NeedType need)
+    {
+        for (int v = 100; v >= 0; v--)
+        {
+            NeedsState state = NeedsState.FullySatisfied();
+            state.Set(need, v);
+            NpcActionId picked = UtilityCalculator.SelectAction(state, CrossoverFunds, UtilityCalculator.DefaultWeights, out _);
+            if (picked == actionId)
+            {
+                return v;
+            }
+        }
+        return -1;
     }
 
     // ------------------------------------------------------------------

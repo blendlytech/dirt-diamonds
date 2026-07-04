@@ -29,12 +29,23 @@ public readonly struct ActionWeights
 // so ActionWeights never needs a negative entry to behave sensibly.
 public static class UtilityCalculator
 {
-    public const float DefaultDeficitPower = 2f;
+    // Tuning-pass note (2026-07-03, simulate_utility_decay): the first-pass
+    // power=2 made every need-restoring action overtake Idle at a trivial
+    // ~11-16% deficit (need value ~84-89) because a cheap action's non-deficit
+    // terms (temporal/financial/risk, all near-max at low cost) already sit
+    // within ~0.01-0.06 of Idle's 0.8 baseline — the "frequent Eat" artifact
+    // was really "every cheap action fires immediately," Eat just showed it
+    // first because Hunger decays fastest. power=5 (steeper convexity) pushes
+    // the crossover down to a real ~40-60%-deficit band (see Program.cs's
+    // crossover-sweep check); weight raised 1.0->1.4 alongside it to hold the
+    // Hunger-critical-vs-DrinkAlone margin the power increase alone would
+    // erode (verified: Eat still wins with a *larger* margin than before).
+    public const float DefaultDeficitPower = 5f;
 
     // First-pass weights, tuned via simulate_utility_decay like every other
     // constant table in this codebase.
     public static readonly ActionWeights DefaultWeights =
-        new(needDeficitWeight: 1.0f, temporalCostWeight: 0.3f, financialCostWeight: 0.3f, riskWeight: 0.2f, stressReliefWeight: 0.8f);
+        new(needDeficitWeight: 1.4f, temporalCostWeight: 0.3f, financialCostWeight: 0.3f, riskWeight: 0.2f, stressReliefWeight: 0.8f);
 
     // life_sim_needs_decay.md §7: convex, low-need-dominant — a starving NPC
     // values food disproportionately. 0 when full, 1 when empty.

@@ -389,3 +389,33 @@ Schema v5, purely additive, following the exact No Blind Queries path: validated
 1. **Tuning pass on `ActionWeights`/`ActionCatalog`** once playtested — the frequent-`Eat` artifact (Phase 5 M3 entry) is still the first thing worth revisiting.
 2. **Per-action Environmental Multiplier** (§4.1) once locations/activities exist to source it from; today every tick runs neutral (`E=1`).
 3. `RelationshipGraph.cs` (Phase 6) remains an untouched empty stub — Phase 5 is now fully closed out (all three M3 remainder items done).
+
+---
+
+## 2026-07-03 — Tuning Pass: `ActionWeights`/`ActionCatalog` (frequent-`Eat` artifact) ✅
+
+Picked up the standing next-step item. Ran this as harness-driven tuning (no playtesting infra exists yet, and every prior constant table in this codebase — `NeedDecayProfile` included — was tuned the same way), per the model-assignment doctrine's "Sonnet 5 owns the harness + tuning iterations." **`NeedsDecayHarness` now 30/30 (was 20/20); full solution `dotnet build` 0 warn/0 err; headless `--headless --quit` against the real dev save clean (schema v5, day 38, life-sim NPCs 137).** No schema/API surface touched — pure constant retune plus a new diagnostic in the harness.
+
+**Root cause (broader than the "Eat" label suggested).** Swept `UtilityCalculator.SelectAction` by hand before touching anything: at full satisfaction, a cheap action's non-deficit terms (temporal+financial+risk, all near-max when cost/time/risk are low) already land within **0.01–0.06 of Idle's fixed 0.8 baseline**. With `DefaultDeficitPower=2`, that gap closes at a trivial 11–16% deficit — i.e. *every* cheap action, not just `Eat`, was firing at 84–89⁄100 need value. `Eat` was simply the most visible symptom because Hunger decays fastest, so it hit its (already too-eager) crossover first and most often.
+
+**Fix — `UtilityCalculator.cs`:** `DefaultDeficitPower` 2→**5** (steeper convexity — a small deficit now contributes far less), `DefaultWeights.NeedDeficitWeight` 1.0→**1.4** (compensates so a *genuine* deficit still dominates the stress-relief actions' flat bonus in the crisis fixture — the two constants pull in opposite directions on the crossover point, so both had to move together; derived analytically, then confirmed bit-for-bit against the harness). All three existing hand-verified `SelectAction` fixtures still pick the same winners (satisfied→`Idle`, Hunger-critical+funded→`Eat`, Hunger-critical+broke→`PickArgument`), and the funded-crisis margin (`Eat` over `DrinkAlone`) actually **widened**, 0.074→0.091.
+
+**New harness diagnostic — `RunActionThresholdChecks`/`FindCrossoverValue` (`Tools/NeedsDecayHarness/Program.cs`).** A deterministic crossover sweep — for each need-restoring action, the highest need value at which it first beats `Idle` (every other need full, funds ample) — replacing "infer eagerness from a stochastic day trace" with a direct, precise number per action, asserted inside a sensible band (`25`–`75`: not trivial, but not so late it just duplicates the crisis override). Real before/after, all five actions (confirming the artifact was universal, not Eat-only):
+
+| Action | Old crossover | New crossover |
+|---|---|---|
+| `Eat` | ~87 | **59** |
+| `Shower` | ~89 | **61** |
+| `Workout` | ~83 | **54** |
+| `SocializeEvening` | ~76 | **46** |
+| `Sleep` | ~68 | **41** |
+
+**Emergent effect worth flagging, not a regression:** the 30-day `LifeSimManager` integration check's funded-NPC Hunger minimum dropped from 63.9 → **8.7** (still passes "never bottoms out at literal 0"). Cause: `Sleep`'s own crossover also dropped, so the NPC now commits to 8-hour sleeps at a lower Sleep value than before; Hunger's accelerating decay curve can run unattended for most of that window and, once it crosses `CriticalThreshold` (20) *mid-sleep*, the hourly re-check doesn't catch it until the following hour's tick (one hour of lag), by which point it's dropped further. The crisis override then correctly interrupts sleep and eats. Read this as the override **provably firing for a well-funded NPC for the first time** — under the old constants Hunger's minimum (63.9) never got remotely close to 20, so the override was effectively dead code for anyone with money; now it's exercised exactly as M3's exit criterion names it. Worth an eye once there's real play feel to judge against, but not treated as a bug here.
+
+**Known artifacts (deliberate):** (1) the crossover sweep only proves an action beats `Idle` in isolation, not that it wins the overall argmax against competing actions — the Hunger-dips-near-critical dynamic above is exactly that interaction, and isn't itself checked by any fixture; (2) `25`/`75` crossover-band bounds are first-pass judgment calls (not derived from the design doc, which explicitly disclaims owning `q`'s exact value — `life_sim_needs_decay.md` §7 calls it "a curve, not a law"); (3) still no per-action Environmental Multiplier or income mechanic, so this pass only retuned the existing action-vs-Idle balance, not the deeper "broke NPC's paid needs collapse" artifact (expected, no Phase 8 economy yet).
+
+**Next steps:**
+
+1. **Per-action Environmental Multiplier** (§4.1) once locations/activities exist to source it from; today every tick runs neutral (`E=1`).
+2. `RelationshipGraph.cs` (Phase 6) remains an untouched empty stub.
+3. Once there's an actual play surface for the life sim (today it's headless-only), revisit the Hunger-dips-near-critical dynamic above against real play feel — the harness proves it's bounded and self-correcting, not whether it *feels* right.
