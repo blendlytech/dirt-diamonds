@@ -36,6 +36,9 @@ public readonly struct AtBatSnapshot
 /// back into the sim. Published only when <see cref="MicroGame.FeedSink"/> is
 /// attached (i.e. an interactive game with a live viewer); the macro/harness
 /// hot paths never set it, so this never touches the zero-GC contract.
+/// <see cref="IsRivalryPa"/> carries the same per-PA rivalry bit
+/// <see cref="MicroGame"/> already computed for the Phase 6 ratings boost —
+/// no extra lookup, just the existing byte forwarded as a bool.
 /// </summary>
 public readonly struct NpcPaFeedEvent
 {
@@ -44,14 +47,16 @@ public readonly struct NpcPaFeedEvent
     public readonly int Inning;
     public readonly bool IsTopHalf;
     public readonly int Runs;
+    public readonly bool IsRivalryPa;
 
-    public NpcPaFeedEvent(string batterName, PaOutcome outcome, int inning, bool isTopHalf, int runs)
+    public NpcPaFeedEvent(string batterName, PaOutcome outcome, int inning, bool isTopHalf, int runs, bool isRivalryPa)
     {
         BatterName = batterName;
         Outcome = outcome;
         Inning = inning;
         IsTopHalf = isTopHalf;
         Runs = runs;
+        IsRivalryPa = isRivalryPa;
     }
 }
 

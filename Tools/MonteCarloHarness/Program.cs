@@ -1387,6 +1387,29 @@ internal static class Program
                 emptyIdentical && heatedDiverges,
                 $"base {baselineGame.AwayScore}-{baselineGame.HomeScore}/{baselineGame.Innings}, " +
                 $"heated {heatedGame.AwayScore}-{heatedGame.HomeScore}/{heatedGame.Innings}");
+
+            // (f) NPC feed's IsRivalryPa bit: replay the same heated matchup
+            // with a feed sink attached. Away batters face the home
+            // rotation/bullpen — the ledger's rivalry side, always flagged;
+            // home batters face the away pitcher, never entered into this
+            // ledger, so never flagged — one game proves both bit states.
+            var feedBridge = new PlayerIntentBridge();
+            PlayMicroGame(db, baseball, homeTeamId, awayTeamId, heatedLedger, feedBridge);
+            bool sawFlagged = false;
+            bool sawUnflagged = false;
+            while (feedBridge.TryDequeueNpcPa(out NpcPaFeedEvent feedEvt))
+            {
+                if (feedEvt.IsRivalryPa)
+                {
+                    sawFlagged = true;
+                }
+                else
+                {
+                    sawUnflagged = true;
+                }
+            }
+            Check("NPC feed flags rivalry PAs (IsRivalryPa true for the heated side, false for the rest)",
+                sawFlagged && sawUnflagged);
         }
     }
 
@@ -1465,10 +1488,11 @@ internal static class Program
     }
 
     private static MicroGameResult PlayMicroGame(
-        DatabaseManager db, BaseballQueries baseball, int homeTeamId, int awayTeamId, RivalryLedger? ledger)
+        DatabaseManager db, BaseballQueries baseball, int homeTeamId, int awayTeamId, RivalryLedger? ledger,
+        PlayerIntentBridge? feedSink = null)
     {
         // Fresh instance per variant so rotation counters start identical.
-        var micro = new MicroGame(db, baseball) { LoggingEnabled = false, Rivalries = ledger };
+        var micro = new MicroGame(db, baseball) { LoggingEnabled = false, Rivalries = ledger, FeedSink = feedSink };
         micro.Initialize();
         var policy = new NeutralBatterPolicy();
         var rng = new RngState(MicroSeed);

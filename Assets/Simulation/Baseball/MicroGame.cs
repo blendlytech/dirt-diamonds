@@ -700,7 +700,7 @@ public sealed class MicroGame
             // outcome queue ("Your PA: ..."), so only queue the others here.
             if (FeedSink != null && batterSlot != humanSlot)
             {
-                FeedSink.PublishNpcPa(new NpcPaFeedEvent(_displayNames[batterSlot], outcome, inning, isTopHalf, paRuns));
+                FeedSink.PublishNpcPa(new NpcPaFeedEvent(_displayNames[batterSlot], outcome, inning, isTopHalf, paRuns, rivalry != 0));
             }
         }
         return runs;

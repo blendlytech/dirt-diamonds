@@ -615,3 +615,25 @@ Scope capped at exactly the assigned item — event content authored against `do
 3. Succession UI (heir reveal/choice + game-over screen, consuming `LastSuccession`/`EvaluateSuccession`/`LineageOverReason`).
 
 Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.
+
+---
+
+## 2026-07-04 — Rivalry-at-Bat Feed Flag ✅ (Sonnet 5 — item 2 of the queued list)
+
+Scope capped at exactly the queued item: extend `NpcPaFeedEvent` so the attended-game feed flags a PA against a rival, same low-blast-radius pattern as the original NPC feed. Did not touch event-choice UI or succession UI (items 1 and 3, still open). **`MonteCarloHarness` 121/121 (was 120, +1); `CoreLoopHarness` 22/22 (boundary scan re-verified since Baseball-side doc comments moved); `dotnet build` 0 warn/0 err across all 6 projects; headless boot against the real dev save clean (schema v5, day 38, relationships 0, gritty events 11).** No schema change, no new query, no new node — pure UI/sim-glue.
+
+**The wire:** `MicroGame.PlayHalfInning` already computes a per-PA `byte rivalry` (the same value driving the Phase 6 `RivalryEffects` ratings boost) once per plate appearance, in scope right through the existing `FeedSink.PublishNpcPa(...)` call at the PA boundary. `NpcPaFeedEvent` (`InteractiveBatterPolicy.cs`) gained a trailing `bool IsRivalryPa` field/ctor param — the one production call site now passes `rivalry != 0`, so the flag is exactly "this PA's ratings were actually boosted," not a separately-defined notion of rivalry. Zero extra lookups, zero extra allocation — the byte was already being read.
+
+**UI (`AttendedGameScreen.cs`):** new `[Export] string NpcRivalryPaLineFormat` (default `"RIVAL {0}: {1}"`) alongside the existing `NpcPaLineFormat`, per `ui_conventions.md`'s "player-facing text lives on exported properties" rule. The NPC-feed dequeue loop in `_Process` picks the format by `npcPa.IsRivalryPa` before calling `AppendPlayLine` — same call shape as before, one ternary added. No `.tscn` edit needed (neither format string was ever overridden there; both ride the C# default like `NpcPaLineFormat` always has).
+
+**Harness (`MonteCarloHarness` suite 8, +1 check):** `PlayMicroGame` gained a trailing optional `PlayerIntentBridge? feedSink = null` (all three existing positional call sites untouched). New check (f) replays the suite's existing heated matchup (away lineup × home rotation/bullpen at intensity 100) with a bridge attached: away batters facing the home pitching staff are the ledger's rivalry side (always flagged), home batters facing the away pitcher were never entered into that ledger (never flagged) — one game proves both bit states land correctly, cheaper than a separate control-game run.
+
+**Known artifacts (deliberate):** (1) the flag is UI-only, same as the rest of `NpcPaFeedEvent` — it never round-trips into `Game_Logs` or any DB write. (2) No `CareerManager.Rivalries` proxy was added (unlike `FeedSink`, which `CareerManager` already forwards to `_micro`) — out of scope for this slice since the harness proof works directly against `MicroGame`; a future pass wiring rivalries into a live `CareerManager`-driven attended game would need that proxy first. (3) `NpcRivalryPaLineFormat`'s default (`"RIVAL {0}: {1}"`) is unplaytested first-pass copy, trivially reskinned later per `ui_conventions.md`.
+
+**Next steps (model assignments, same cost logic):**
+
+1. Event-choice UI (render a fired event's choices for the avatar instead of autopilot) — scene transport needs pinning first, per `gritty_event_framework.md` §9: **Sonnet 5**.
+2. Succession UI (heir reveal/choice + game-over screen, consuming `LastSuccession`/`EvaluateSuccession`/`LineageOverReason`): **Sonnet 5**.
+3. `RivalryEffects` ±8 retune after playtesting (unchanged, calibrated-core data behind the suite-8 band check): **Fable 5**.
+
+Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.

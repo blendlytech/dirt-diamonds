@@ -37,6 +37,9 @@ public sealed partial class AttendedGameScreen : Control
     [Export]
     public string NpcPaLineFormat { get; set; } = "{0}: {1}";
 
+    [Export]
+    public string NpcRivalryPaLineFormat { get; set; } = "RIVAL {0}: {1}";
+
     /// <summary>Comma-separated player-facing names for the 7 PaOutcome values, in enum order.</summary>
     [Export]
     public string OutcomeNamesCsv { get; set; } = "Out,Strikeout,Walk,Single,Double,Triple,Home run";
@@ -120,7 +123,8 @@ public sealed partial class AttendedGameScreen : Control
         }
         while (_bridge.TryDequeueNpcPa(out NpcPaFeedEvent npcPa))
         {
-            _atBatView.AppendPlayLine(string.Format(NpcPaLineFormat, npcPa.BatterName, OutcomeName(npcPa.Outcome)));
+            string format = npcPa.IsRivalryPa ? NpcRivalryPaLineFormat : NpcPaLineFormat;
+            _atBatView.AppendPlayLine(string.Format(format, npcPa.BatterName, OutcomeName(npcPa.Outcome)));
         }
 
         if (_gameTask.IsCompleted)
