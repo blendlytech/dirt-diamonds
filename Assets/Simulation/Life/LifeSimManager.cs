@@ -12,9 +12,9 @@ public readonly record struct NpcSeed(string PlayerId, double Funds);
 
 // The Life sim's day-tick driver — the CareerManager-equivalent glue class.
 // Subscribes to DayAdvancedEvent and, for every tracked NPC, expands one game
-// day into 24 hourly NeedsEngine/UtilityCalculator ticks. Needs are in-memory
-// only this pass (life_sim_needs_decay.md §11 — persistence is deferred until
-// this driver produces values worth saving).
+// day into 24 hourly NeedsEngine/UtilityCalculator ticks. Needs and stress
+// live in-memory here and persist through GameManager's bridge (Life_Needs
+// schema v5, Life_Stress schema v6) — this class itself stays Data-free.
 public sealed class LifeSimManager
 {
     private sealed class NpcRuntime
@@ -25,8 +25,9 @@ public sealed class LifeSimManager
         public NpcActionId CurrentAction;
 
         // The §4.2 stress scalar, 0 (calm) to 100. Fed by StressImpulseEvent
-        // (gritty events); in-memory only, like needs were before schema v5 —
-        // persistence is a deferred additive pass (gritty_event_framework.md §9).
+        // (gritty events); persisted to Life_Stress since schema v6 —
+        // GameManager hydrates via SetStress and flushes via TryGetStress,
+        // the same bridge pattern needs use (gritty_event_framework.md §9).
         public float Stress;
     }
 

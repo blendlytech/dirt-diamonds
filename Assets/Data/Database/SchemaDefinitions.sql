@@ -267,8 +267,24 @@ CREATE TABLE IF NOT EXISTS Life_Needs (
     fitness   REAL NOT NULL DEFAULT 100 CHECK (fitness BETWEEN 0 AND 100)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Life_Stress — schema v6. Persists the §4.2 stress scalar LifeSimManager
+-- tracks in-memory since Phase 7 (gritty_event_framework.md §9), one row per
+-- tracked NPC. A separate table rather than an ALTER on Life_Needs so the
+-- v5→v6 migration stays purely additive and this script remains the whole
+-- migration — ALTER TABLE ADD COLUMN is not idempotent, and the separate-table
+-- pattern is what Player_Ratings/Pitcher_Roles/Life_Needs already established.
+-- No backfill, same reasoning as Life_Needs: LifeSimManager is the only
+-- producer, and GameManager's hydration falls back to stress 0 (the in-memory
+-- default) for any player_id absent here, matching pre-persistence behavior.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Life_Stress (
+    player_id TEXT PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    stress    REAL NOT NULL DEFAULT 0 CHECK (stress BETWEEN 0 AND 100)
+) STRICT;
+
 COMMIT;
 
--- Schema version 5 — adds Life_Needs (purely additive, no backfill needed;
+-- Schema version 6 — adds Life_Stress (purely additive, no backfill needed;
 -- see comment on the table above). Bump with every migration.
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;

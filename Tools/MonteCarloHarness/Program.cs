@@ -264,7 +264,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v5", db.GetSchemaVersion() == 5, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v6", db.GetSchemaVersion() == 6, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -2242,6 +2242,21 @@ internal static class Program
         Check("check 6: order independence — the two-parent heir conceived with NO Partner edge anywhere in the DB (the id rode the request)",
             noDbPartner && child1EdgesOk);
 
+        // ---- birth-notification UI seam: the same partnered request also queues a display-friendly announcement ----
+        bool birth1Ok = false;
+        if (child1Id is not null
+            && career.TryDequeuePendingBirth(out BirthAnnouncement birth1)
+            && players.TryGetById(child1Id, out PlayerRow child1Reload))
+        {
+            RosterPlayerRow partnerRow = roster.First(r => r.PlayerId == partnerId);
+            birth1Ok = birth1.ChildId == child1Id
+                && birth1.ChildFirstName == child1Reload.FirstName && birth1.ChildLastName == child1Reload.LastName
+                && birth1.PartnerFirstName == partnerRow.FirstName && birth1.PartnerLastName == partnerRow.LastName
+                && birth1.Day == 40;
+        }
+        Check("check 5/6 UI seam: TryDequeuePendingBirth announces the partnered birth with the co-parent's real name, then the queue is empty",
+            birth1Ok && !career.TryDequeuePendingBirth(out _));
+
         // ---- check 5's null-partner arm: unmarried request → single-parent heir (AverageParent vector) ----
         bus.Publish(new ChildConceptionRequestedEvent(avatarId, null, day: 41));
         bus.DispatchPending();
@@ -2258,17 +2273,33 @@ internal static class Program
             child2SingleParent && born.Count == 2 && born[1].PartnerId is null,
             $"{born.Count} ChildBornEvents");
 
+        bool birth2Ok = child2Id is not null
+            && career.TryDequeuePendingBirth(out BirthAnnouncement birth2)
+            && birth2.ChildId == child2Id
+            && birth2.PartnerFirstName is null && birth2.PartnerLastName is null
+            && birth2.Day == 41;
+        Check("check 5 (unmarried) UI seam: an unpartnered birth announces with no co-parent name",
+            birth2Ok && !career.TryDequeuePendingBirth(out _));
+
         // ---- check 7: a stale request naming a since-retired avatar is dropped ----
         int playersBeforeStale = players.Count();
         bus.Publish(new ChildConceptionRequestedEvent("not-the-avatar-anymore", partnerId, day: 42));
         bus.DispatchPending();
         Check("check 7: a stale request for a non-current avatar is dropped (no heir, no throw, no announce)",
             players.Count() == playersBeforeStale && born.Count == 2);
+        Check("check 7 UI seam: a dropped stale request never enqueues a birth announcement either",
+            !career.TryDequeuePendingBirth(out _));
 
         // ---- check 8: multiple requests → multiple heirs; succession selects among them ----
         bus.Publish(new ChildConceptionRequestedEvent(avatarId, partnerId, day: 43));
         bus.DispatchPending();
         string? child3Id = born.Count == 3 ? born[2].ChildId : null;
+        bool birth3Ok = child3Id is not null
+            && career.TryDequeuePendingBirth(out BirthAnnouncement birth3)
+            && birth3.ChildId == child3Id && birth3.Day == 43
+            && !career.TryDequeuePendingBirth(out _);
+        Check("check 8 UI seam: the third request's birth also announces correctly and the queue drains empty",
+            birth3Ok);
         bool distinctHeirs = child1Id is not null && child2Id is not null && child3Id is not null
             && child1Id != child2Id && child2Id != child3Id && child1Id != child3Id;
 

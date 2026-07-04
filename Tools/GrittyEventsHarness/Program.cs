@@ -816,6 +816,63 @@ internal static class Program
                 discharged < 90.4f - LifeSimManager.StressReliefPerAction + 1f, $"{discharged:F2}");
         }
 
+        // Schema v6 persistence: an impulse-raised scalar round-trips through
+        // Life_Stress and hydrates back over a fresh manager's 0 default —
+        // the exact NeedsQueries/SetStress bridge GameManager runs at boot
+        // and on every day-tick flush.
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"dnd_gritty_stresspersist_{Guid.NewGuid():N}.db");
+            ScratchFiles.Add(path);
+            using var db = new DatabaseManager(path);
+            db.InitializeSchema(_schemaPath);
+            var players = new PlayerQueries(db);
+            players.Insert(new PlayerRow
+            {
+                PlayerId = "npc", FirstName = "Test", LastName = "npc", Age = 27,
+                TeamId = 1, Funds = 1_000, HealthCeiling = 100,
+            });
+            var needsQueries = new NeedsQueries(db);
+
+            var bus = new EventBus();
+            var lifeSim = new LifeSimManager();
+            lifeSim.Seed(new[] { new NpcSeed("npc", 1_000) });
+            lifeSim.AttachTo(bus);
+            bus.Publish(new StressImpulseEvent("npc", 42.5f));
+            bus.DispatchPending();
+            lifeSim.TryGetStress("npc", out float live);
+            needsQueries.BulkUpsertStress(new[] { new StressRow { PlayerId = "npc", Stress = live } });
+
+            var rebooted = new LifeSimManager();
+            rebooted.Seed(new[] { new NpcSeed("npc", 1_000) });
+            var persisted = new Dictionary<string, float>();
+            needsQueries.LoadAllStress(persisted);
+            foreach (KeyValuePair<string, float> entry in persisted)
+            {
+                rebooted.SetStress(entry.Key, entry.Value);
+            }
+            rebooted.TryGetStress("npc", out float hydrated);
+            Check("schema v6: stress round-trips Life_Stress and hydrates over a reboot's 0 default",
+                Math.Abs(live - 42.5f) < 1e-3f && persisted.Count == 1 && hydrated == live,
+                $"live={live:F2}, hydrated={hydrated:F2}");
+
+            // The next flush overwrites (upsert, not insert-once), and the
+            // 0–100 CHECK holds the same range contract the scalar clamps to.
+            needsQueries.UpsertStress(new StressRow { PlayerId = "npc", Stress = 7.25f });
+            needsQueries.LoadAllStress(persisted);
+            bool outOfRangeRejected = false;
+            try
+            {
+                needsQueries.UpsertStress(new StressRow { PlayerId = "npc", Stress = 150f });
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
+            {
+                outOfRangeRejected = true;
+            }
+            Check("schema v6: stress upsert overwrites; CHECK rejects out-of-range",
+                Math.Abs(persisted["npc"] - 7.25f) < 1e-6f && outOfRangeRejected,
+                $"after overwrite {persisted["npc"]:F2}");
+        }
+
         // Stress 0 is bit-identical to the pre-Phase-7 decay call.
         {
             var state = new NeedsState { Hunger = 73f, Sleep = 41f, Hygiene = 88f, Social = 12f, Fitness = 55f };

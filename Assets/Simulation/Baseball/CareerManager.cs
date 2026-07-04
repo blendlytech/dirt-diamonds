@@ -106,6 +106,38 @@ public readonly struct HeirCandidate
 }
 
 /// <summary>
+/// A birth-notification UI's render source — the display-friendly companion
+/// to the bare-ids <see cref="ChildBornEvent"/>, same relationship as
+/// <see cref="HeirCandidate"/> to <see cref="SuccessionOutcome"/>. Names are
+/// resolved once at announce time, so the toast stays correct even if the
+/// avatar changes (succession) before the UI gets around to showing it.
+/// </summary>
+public readonly struct BirthAnnouncement
+{
+    public readonly string ChildId;
+    public readonly string ChildFirstName;
+    public readonly string ChildLastName;
+
+    /// <summary>The co-parent's name, or null when the heir was conceived unpartnered.</summary>
+    public readonly string? PartnerFirstName;
+    public readonly string? PartnerLastName;
+
+    public readonly long Day;
+
+    public BirthAnnouncement(
+        string childId, string childFirstName, string childLastName,
+        string? partnerFirstName, string? partnerLastName, long day)
+    {
+        ChildId = childId;
+        ChildFirstName = childFirstName;
+        ChildLastName = childLastName;
+        PartnerFirstName = partnerFirstName;
+        PartnerLastName = partnerLastName;
+        Day = day;
+    }
+}
+
+/// <summary>
 /// The Phase 5 career driver: owns the player avatar and every game of the
 /// avatar's team. On each <see cref="DayAdvancedEvent"/> it derives the team's
 /// pairing from the shared <see cref="LeagueSchedule"/> (the macro sim skips
@@ -163,6 +195,12 @@ public sealed class CareerManager
     private readonly List<HeirCandidate> _heirScratch = new();
     private readonly List<HeirCandidate> _pendingHeirSnapshot = new();
     private bool _hasPendingSuccession;
+
+    // Unlocked like _pending/_pendingHeirSnapshot above: OnChildConceptionRequested
+    // (the producer) and a UI's _Process (the consumer) both only ever run on
+    // the main thread inside EventBus.DispatchPending/Godot's frame loop, so
+    // there is no cross-thread race to guard against.
+    private readonly Queue<BirthAnnouncement> _pendingBirths = new();
 
     /// <summary>
     /// True (default): the day handler resolves attended games instantly with
@@ -914,7 +952,32 @@ public sealed class CareerManager
         // (a naming UI is a future ChildBornEvent consumer, §9).
         string firstName = LeagueGenerator.GenerateFirstName(ref _rng);
         string childId = ConceiveChild(firstName, avatar.LastName, birthAge: 0, e.PartnerId);
+
+        string? partnerFirstName = null;
+        string? partnerLastName = null;
+        if (e.PartnerId is not null)
+        {
+            if (!_players.TryGetById(e.PartnerId, out PlayerRow partner))
+            {
+                throw new InvalidOperationException($"Partner '{e.PartnerId}' has no Players row — save is corrupt.");
+            }
+            partnerFirstName = partner.FirstName;
+            partnerLastName = partner.LastName;
+        }
+        _pendingBirths.Enqueue(new BirthAnnouncement(childId, firstName, avatar.LastName, partnerFirstName, partnerLastName, e.Day));
         _bus?.Publish(new ChildBornEvent(childId, _avatarPlayerId, e.PartnerId, e.Day));
+    }
+
+    /// <summary>The birth-notification UI's feed: FIFO, one entry per successfully-serviced <see cref="ChildConceptionRequestedEvent"/> (a dropped stale request never enqueues one).</summary>
+    public bool TryDequeuePendingBirth(out BirthAnnouncement announcement)
+    {
+        if (_pendingBirths.Count == 0)
+        {
+            announcement = default;
+            return false;
+        }
+        announcement = _pendingBirths.Dequeue();
+        return true;
     }
 
     private void OnSeasonRolledOver(SeasonRolledOverEvent e)

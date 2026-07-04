@@ -13,8 +13,16 @@ public struct NeedsRow
     public float Fitness;
 }
 
+/// <summary>Row DTO mirroring Life_Stress one-to-one (schema v6).</summary>
+public struct StressRow
+{
+    public string PlayerId;
+    public float Stress;
+}
+
 /// <summary>
-/// Typed query surface for Life_Needs. Same discipline as <see cref="PlayerQueries"/>:
+/// Typed query surface for Life_Needs and Life_Stress (the life-sim
+/// persistence tables). Same discipline as <see cref="PlayerQueries"/>:
 /// compile-time-constant SQL, commands pooled and prepared once, per-call work
 /// limited to parameter values. Deliberately dealing only in <see cref="NeedsRow"/>
 /// (not <c>NeedsState</c>) so this class stays a plain Data-layer DTO surface —
@@ -33,9 +41,18 @@ public sealed class NeedsQueries
     private const string SqlSelectAll =
         "SELECT player_id, hunger, sleep, hygiene, social, fitness FROM Life_Needs;";
 
+    private const string SqlUpsertStress =
+        "INSERT INTO Life_Stress (player_id, stress) VALUES (@playerId, @stress) " +
+        "ON CONFLICT (player_id) DO UPDATE SET stress = excluded.stress;";
+
+    private const string SqlSelectAllStress =
+        "SELECT player_id, stress FROM Life_Stress;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _upsert;
     private readonly SqliteCommand _selectAll;
+    private readonly SqliteCommand _upsertStress;
+    private readonly SqliteCommand _selectAllStress;
 
     public NeedsQueries(DatabaseManager db)
     {
@@ -54,6 +71,16 @@ public sealed class NeedsQueries
         }
 
         _selectAll = db.GetPooledCommand(SqlSelectAll);
+
+        _upsertStress = db.GetPooledCommand(SqlUpsertStress);
+        if (_upsertStress.Parameters.Count == 0)
+        {
+            _upsertStress.Parameters.Add("@playerId", SqliteType.Text);
+            _upsertStress.Parameters.Add("@stress", SqliteType.Real);
+            _upsertStress.Prepare();
+        }
+
+        _selectAllStress = db.GetPooledCommand(SqlSelectAllStress);
     }
 
     public void Upsert(in NeedsRow row)
@@ -95,6 +122,55 @@ public sealed class NeedsQueries
             }
             throw;
         }
+    }
+
+    public void UpsertStress(in StressRow row)
+    {
+        SqliteParameterCollection p = _upsertStress.Parameters;
+        p["@playerId"].Value = row.PlayerId;
+        p["@stress"].Value = row.Stress;
+        _db.ExecuteNonQuery(_upsertStress);
+    }
+
+    /// <summary>Persists a whole day-tick's worth of stress rows in one batch transaction (joins the caller's batch if one is open).</summary>
+    public void BulkUpsertStress(ReadOnlySpan<StressRow> rows)
+    {
+        bool ownBatch = !_db.IsBatchActive;
+        if (ownBatch)
+        {
+            _db.BeginBatch();
+        }
+        try
+        {
+            foreach (ref readonly StressRow row in rows)
+            {
+                UpsertStress(in row);
+            }
+            if (ownBatch)
+            {
+                _db.CommitBatch();
+            }
+        }
+        catch
+        {
+            if (ownBatch)
+            {
+                _db.RollbackBatch();
+            }
+            throw;
+        }
+    }
+
+    /// <summary>Bulk-loads every persisted stress row into <paramref name="destination"/> (cleared first), keyed by player_id.</summary>
+    public int LoadAllStress(Dictionary<string, float> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllStress);
+        while (reader.Read())
+        {
+            destination[reader.GetString(0)] = (float)reader.GetDouble(1);
+        }
+        return destination.Count;
     }
 
     /// <summary>Bulk-loads every persisted row into <paramref name="destination"/> (cleared first), keyed by player_id.</summary>

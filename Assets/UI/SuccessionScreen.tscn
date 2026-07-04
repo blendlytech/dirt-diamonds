@@ -29,7 +29,7 @@ layout_mode = 2
 [node name="TitleLabel" type="Label" parent="ChoicePanel/Layout"]
 layout_mode = 2
 autowrap_mode = 2
-text = "Your career is ending. Choose your heir:"
+text = "Your playing days are behind you now. Who carries the family name forward?"
 
 [node name="CandidatesContainer" type="VBoxContainer" parent="ChoicePanel/Layout"]
 layout_mode = 2

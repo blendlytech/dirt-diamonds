@@ -56,6 +56,7 @@ public sealed partial class GameManager : Node
     // Reused every day-tick persist so the handler doesn't allocate a fresh
     // array per calendar day (zero-GC mandate for the hot path).
     private readonly List<NeedsRow> _needsScratch = new();
+    private readonly List<StressRow> _stressScratch = new();
     private readonly List<RelationshipSeed> _relationshipScratch = new();
 
     // Phase 6 rivalry transport: subscribes to RivalryChangedEvent and feeds
@@ -169,6 +170,17 @@ public sealed partial class GameManager : Node
                 Social = row.Social,
                 Fitness = row.Fitness,
             });
+        }
+
+        // Stress persistence (gritty_event_framework.md §9, schema v6): same
+        // hydrate-over-default pattern as needs above. A migrated v5 save or a
+        // freshly generated NPC has no row — Seed()'s stress 0 default stands,
+        // matching the pre-persistence in-memory behavior exactly.
+        var persistedStress = new Dictionary<string, float>();
+        Needs.LoadAllStress(persistedStress);
+        foreach (KeyValuePair<string, float> entry in persistedStress)
+        {
+            LifeSim.SetStress(entry.Key, entry.Value);
         }
 
         LifeSim.AttachTo(Events);
@@ -296,6 +308,7 @@ public sealed partial class GameManager : Node
     private void PersistLifeSimNeeds(DayAdvancedEvent _)
     {
         _needsScratch.Clear();
+        _stressScratch.Clear();
         IReadOnlyList<string> ids = LifeSim.TrackedPlayerIds;
         for (int i = 0; i < ids.Count; i++)
         {
@@ -311,8 +324,26 @@ public sealed partial class GameManager : Node
                     Fitness = needs.Fitness,
                 });
             }
+            if (LifeSim.TryGetStress(ids[i], out float stress))
+            {
+                _stressScratch.Add(new StressRow { PlayerId = ids[i], Stress = stress });
+            }
         }
-        Needs.BulkUpsert(CollectionsMarshal.AsSpan(_needsScratch));
+        // One batch for the whole life-sim flush (both BulkUpserts join an
+        // already-open batch) — still its own transaction, never the calendar
+        // tick's (database_rules.md).
+        Database.BeginBatch();
+        try
+        {
+            Needs.BulkUpsert(CollectionsMarshal.AsSpan(_needsScratch));
+            Needs.BulkUpsertStress(CollectionsMarshal.AsSpan(_stressScratch));
+            Database.CommitBatch();
+        }
+        catch
+        {
+            Database.RollbackBatch();
+            throw;
+        }
     }
 
     /// <summary>
