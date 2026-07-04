@@ -1,0 +1,167 @@
+{
+  "//": "Second gritty-event batch (gritty_event_framework.md §2-§4), Sonnet 5. Extends syndicate_shakedown's 'defy_them' branch — syndicate_marked was a disclosed dead-end flag (nothing read it) — into a third cascade hop (syndicate_enforcers). Adds the PED/steroid-scandal arc named in CLAUDE.md's mission statement (caught_juicing -> redemption_tour, gated on detection_risk climbing via LeagueSimulator's per-game PED cost). Ties injury_scare to the exact health_ceiling<40 succession-retirement threshold from heir_mechanics.md. Authors the framework's first Friend/Partner-kind consequences (road_trip_bonding, spring_training_romance) -- spring_training_romance is the first organic Partner writer, unblocking CareerManager.ConceiveChild's real-parent blending path, which until now only ever saw AverageParent(). benched_for_video_games mirrors backyard_catch as baseball_interest's negative counterpart. All relationship consequences here target teammate (never league), since the target pool for 'league' spans every Players row unfiltered by age -- teammate/opponent are the only pools engine-guaranteed rostered-and-therefore-adult.",
+  "events": [
+    {
+      "id": "syndicate_enforcers",
+      "scope": "any",
+      "weight": 0.15,
+      "cooldown_days": 60,
+      "prerequisites": [
+        { "flag_active": "syndicate_marked", "min_days_since": 14 }
+      ],
+      "choices": [
+        {
+          "id": "pay_the_enforcers",
+          "autopilot_weight": 2,
+          "consequences": [
+            { "type": "funds", "amount": -1500 },
+            { "type": "stress", "amount": 15 },
+            { "type": "clear_flag", "flag": "syndicate_marked" }
+          ]
+        },
+        {
+          "id": "fight_back",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "stress", "amount": 30 },
+            { "type": "relationship", "kind": "rival", "affinity": -60, "target": "league" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "caught_juicing",
+      "scope": "any",
+      "weight": 0.08,
+      "cooldown_days": 30,
+      "prerequisites": [
+        { "field": "detection_risk", "op": ">", "value": 70 },
+        { "flag_inactive": "steroid_scandal_public" }
+      ],
+      "choices": [
+        {
+          "id": "deny_everything",
+          "autopilot_weight": 2,
+          "consequences": [
+            { "type": "funds", "amount": -5000 },
+            { "type": "stress", "amount": 30 },
+            { "type": "set_flag", "flag": "steroid_scandal_public" }
+          ]
+        },
+        {
+          "id": "come_clean",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "funds", "amount": -1500 },
+            { "type": "stress", "amount": 10 },
+            { "type": "set_flag", "flag": "steroid_scandal_public" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "redemption_tour",
+      "scope": "any",
+      "weight": 0.05,
+      "prerequisites": [
+        { "flag_active": "steroid_scandal_public", "min_days_since": 180 }
+      ],
+      "choices": [
+        {
+          "id": "rebuild_trust",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "stress", "amount": -20 },
+            { "type": "relationship", "kind": "friend", "affinity": 15, "target": "teammate" },
+            { "type": "clear_flag", "flag": "steroid_scandal_public" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "injury_scare",
+      "scope": "any",
+      "weight": 0.12,
+      "cooldown_days": 45,
+      "prerequisites": [
+        { "field": "health_ceiling", "op": "<", "value": 40 }
+      ],
+      "choices": [
+        {
+          "id": "play_through_it",
+          "autopilot_weight": 2,
+          "consequences": [
+            { "type": "stress", "amount": 20 },
+            { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" }
+          ]
+        },
+        {
+          "id": "see_a_specialist",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "funds", "amount": -800 },
+            { "type": "stress", "amount": -10 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "road_trip_bonding",
+      "scope": "any",
+      "weight": 0.04,
+      "cooldown_days": 60,
+      "prerequisites": [
+        { "field": "age", "op": ">=", "value": 19 }
+      ],
+      "choices": [
+        {
+          "id": "bond_on_the_road",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "relationship", "kind": "friend", "affinity": 15, "target": "teammate" },
+            { "type": "stress", "amount": -10 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spring_training_romance",
+      "scope": "any",
+      "weight": 0.02,
+      "cooldown_days": 200,
+      "prerequisites": [
+        { "field": "age", "op": ">=", "value": 21 }
+      ],
+      "choices": [
+        {
+          "id": "spring_fling",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "relationship", "kind": "partner", "affinity": 25, "target": "teammate" },
+            { "type": "stress", "amount": -15 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "benched_for_video_games",
+      "scope": "any",
+      "weight": 0.05,
+      "cooldown_days": 45,
+      "prerequisites": [
+        { "field": "age", "op": "<", "value": 16 },
+        { "field": "baseball_interest", "op": ">", "value": 10 }
+      ],
+      "choices": [
+        {
+          "id": "skip_practice",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "interest", "amount": -8 },
+            { "type": "stress", "amount": 5 }
+          ]
+        }
+      ]
+    }
+  ]
+}

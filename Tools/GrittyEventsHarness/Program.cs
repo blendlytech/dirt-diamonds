@@ -116,6 +116,34 @@ internal static class Program
                 """{ "events": [ { "id": "dup", "scope": "any", "weight": 0.1, "choices": [ { "id": "a" } ] } ] }""",
                 """{ "events": [ { "id": "dup", "scope": "any", "weight": 0.2, "choices": [ { "id": "b" } ] } ] }""",
             })));
+
+        // check_event_graph_integrity §1: "Load the whole Content folder
+        // together — cross-batch duplicate ids fail here." Until now this
+        // check only ever loaded core_events.json by hardcoded path above, so
+        // a second batch file's ids were never actually merge-checked against
+        // the first. Mirrors GameManager.LoadGrittyEventContent's *.json scan
+        // (System.IO here; Godot DirAccess there) so the harness proves the
+        // exact multi-file path GameManager runs at boot.
+        string contentDir = Path.Combine(_repoRoot, "Assets", "Narrative", "Events", "Content");
+        string[] batchFiles = Directory.GetFiles(contentDir, "*.json");
+        var batchDocuments = new string[batchFiles.Length];
+        for (int i = 0; i < batchFiles.Length; i++)
+        {
+            batchDocuments[i] = File.ReadAllText(batchFiles[i]);
+        }
+        GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
+        Check("whole Content folder merges into one library (no cross-batch id collisions)",
+            batchFiles.Length >= 2
+            && wholeFolder.Count == 11
+            && wholeFolder.TryGetById("back_alley_bribe", out _)
+            && wholeFolder.TryGetById("syndicate_enforcers", out _)
+            && wholeFolder.TryGetById("caught_juicing", out _)
+            && wholeFolder.TryGetById("redemption_tour", out _)
+            && wholeFolder.TryGetById("injury_scare", out _)
+            && wholeFolder.TryGetById("road_trip_bonding", out _)
+            && wholeFolder.TryGetById("spring_training_romance", out _)
+            && wholeFolder.TryGetById("benched_for_video_games", out _),
+            $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
     // ------------------------------------------------------------------
