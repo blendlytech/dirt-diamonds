@@ -26,9 +26,17 @@ public readonly struct NpcActionDefinition
     public readonly float Risk0To100;
     public readonly bool IsStressRelief;
 
+    // life_sim_needs_decay.md §4.1: the per-need Environmental Multiplier that applies
+    // to every decay tick spent performing this action. The activity IS the location
+    // context for now — a dedicated Location/place entity is deferred until NPCs can
+    // actually be somewhere (Phase 7+ gritty-event venues); this field is where such a
+    // context would compose in.
+    public readonly EnvironmentalModifiers Environment;
+
     public NpcActionDefinition(
         NpcActionId id, NeedType? primaryNeed, float restoreAmount, float temporalCostHours,
-        double financialCost, float risk0To100, bool isStressRelief)
+        double financialCost, float risk0To100, bool isStressRelief,
+        EnvironmentalModifiers? environment = null)
     {
         Id = id;
         PrimaryNeed = primaryNeed;
@@ -37,6 +45,7 @@ public readonly struct NpcActionDefinition
         FinancialCost = financialCost;
         Risk0To100 = risk0To100;
         IsStressRelief = isStressRelief;
+        Environment = environment ?? EnvironmentalModifiers.Neutral;
     }
 }
 
@@ -47,12 +56,24 @@ public static class ActionCatalog
     // Social+35, workout Fitness+30). Hours/cost/risk have no design-doc anchor —
     // first-pass constants, data-edit tunable via simulate_utility_decay exactly
     // like NeedDecayProfile's own constants were.
+    // Environment vectors (life_sim_needs_decay.md §4.1 anchors where one exists):
+    // Idle/Eat run at the calibrated neutral baseline; Sleep/Shower happen at home
+    // ("resting at home" ×0.8, all needs); SocializeEvening is the bar/party anchor
+    // (being social slows Social decay ×0.4 — the +35 restore is separate, per §6's
+    // decay-vs-recovery split); Workout is §6's "actions trade needs against each
+    // other" — exertion accelerates Hunger ×1.5 (the labor-hustle Hunger anchor) and
+    // Sleep ×1.3 (no doc anchor — first-pass invented, tunable like every constant
+    // here via simulate_utility_decay).
     public static readonly NpcActionDefinition Idle = new(NpcActionId.Idle, null, 0f, 0f, 0.0, 0f, false);
     public static readonly NpcActionDefinition Eat = new(NpcActionId.Eat, NeedType.Hunger, 45f, 1f, 12.0, 0f, false);
-    public static readonly NpcActionDefinition Sleep = new(NpcActionId.Sleep, NeedType.Sleep, 80f, 8f, 0.0, 0f, false);
-    public static readonly NpcActionDefinition Shower = new(NpcActionId.Shower, NeedType.Hygiene, 60f, 1f, 0.0, 0f, false);
-    public static readonly NpcActionDefinition SocializeEvening = new(NpcActionId.SocializeEvening, NeedType.Social, 35f, 3f, 40.0, 5f, false);
-    public static readonly NpcActionDefinition Workout = new(NpcActionId.Workout, NeedType.Fitness, 30f, 2f, 10.0, 0f, false);
+    public static readonly NpcActionDefinition Sleep = new(NpcActionId.Sleep, NeedType.Sleep, 80f, 8f, 0.0, 0f, false,
+        EnvironmentalModifiers.Uniform(0.8f));
+    public static readonly NpcActionDefinition Shower = new(NpcActionId.Shower, NeedType.Hygiene, 60f, 1f, 0.0, 0f, false,
+        EnvironmentalModifiers.Uniform(0.8f));
+    public static readonly NpcActionDefinition SocializeEvening = new(NpcActionId.SocializeEvening, NeedType.Social, 35f, 3f, 40.0, 5f, false,
+        new EnvironmentalModifiers(hunger: 1f, sleep: 1f, hygiene: 1f, social: 0.4f, fitness: 1f));
+    public static readonly NpcActionDefinition Workout = new(NpcActionId.Workout, NeedType.Fitness, 30f, 2f, 10.0, 0f, false,
+        new EnvironmentalModifiers(hunger: 1.5f, sleep: 1.3f, hygiene: 1f, social: 1f, fitness: 1f));
 
     // Stress-relief actions (life_sim_ai.md: "alcohol, arguments") restore no need
     // directly — their entire utility comes from UtilityCalculator's stress-relief

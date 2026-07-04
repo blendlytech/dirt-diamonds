@@ -60,6 +60,7 @@ internal static class Program
         PrintFixedHourTable(trace);
 
         RunChecks(trace);
+        RunModifierChecks();
         RunUtilityChecks();
         RunActionThresholdChecks();
         RunLifeSimChecks();
@@ -202,6 +203,94 @@ internal static class Program
             }
         }
         return -1;
+    }
+
+    // ------------------------------------------------------------------
+    // Modifier layer (E and S) — life_sim_needs_decay.md §4/§9. The §9
+    // "modifier fixtures" are quoted verbatim from the design doc, which
+    // wrote them to be verified "once E/S are wired to context" — i.e. by
+    // the per-action Environmental Multiplier pass that added these checks.
+    // ------------------------------------------------------------------
+
+    private const float ModifierFixtureTolerance = 0.005f; // doc quotes values to 2 decimals
+
+    private static void RunModifierChecks()
+    {
+        Console.WriteLine("--- modifier layer (E/S) fixtures (life_sim_needs_decay.md §4/§9) ---\n");
+
+        // §9 fixture: Hunger at v=100, labor hustle E=1.5, high stress S=1.5 → 90.55
+        // (neutral would lose only 4.20).
+        float hustleStressed = NeedsEngine.DecayHour(100f, NeedsEngine.Hunger, environmentalMultiplier: 1.5f, stressModifier: 1.5f);
+        Check("§9 fixture: Hunger v=100, E=1.5, S=1.5 → 90.55",
+            MathF.Abs(hustleStressed - 90.55f) <= ModifierFixtureTolerance, $"{hustleStressed:F4}");
+
+        // §9 fixture: Hunger at v=40, E=1, S=2.0 → 26.76; calm from the same point → 33.38.
+        // Stress nearly doubles the bite on an already-hungry NPC — the intended
+        // "stress compounds desperation" behavior.
+        float hungryStressed = NeedsEngine.DecayHour(40f, NeedsEngine.Hunger, environmentalMultiplier: 1f, stressModifier: 2f);
+        Check("§9 fixture: Hunger v=40, E=1, S=2.0 → 26.76",
+            MathF.Abs(hungryStressed - 26.76f) <= ModifierFixtureTolerance, $"{hungryStressed:F4}");
+        float hungryCalm = NeedsEngine.DecayHour(40f, NeedsEngine.Hunger, environmentalMultiplier: 1f, stressModifier: 1f);
+        Check("§9 fixture: Hunger v=40 calm (S=1) → 33.38",
+            MathF.Abs(hungryCalm - 33.38f) <= ModifierFixtureTolerance, $"{hungryCalm:F4}");
+
+        // §4.2 combined ceiling: E=2 · S=2 = 4 clamps to MaxCombinedModifier (3), so it
+        // decays exactly as hard as E=3 alone — and no harder.
+        float clamped = NeedsEngine.DecayHour(100f, NeedsEngine.Hunger, environmentalMultiplier: 2f, stressModifier: 2f);
+        float atCeiling = NeedsEngine.DecayHour(100f, NeedsEngine.Hunger, environmentalMultiplier: NeedsEngine.MaxCombinedModifier, stressModifier: 1f);
+        Check($"§4.2 ceiling: E·S=4 clamps to {NeedsEngine.MaxCombinedModifier:F0} (Hunger v=100 → 87.40)",
+            MathF.Abs(clamped - 87.4f) <= ModifierFixtureTolerance && clamped == atCeiling, $"{clamped:F4} vs E=3 alone {atCeiling:F4}");
+
+        // Degenerate-case identity: the scalar overload must stay exactly the uniform
+        // vector — the §4.1 "E_all" contract. Composite mid-range state, per-need equality.
+        NeedsState composite = NeedsState.FullySatisfied();
+        composite.Set(NeedType.Hunger, 73.2f);
+        composite.Set(NeedType.Sleep, 55f);
+        composite.Set(NeedType.Social, 31.7f);
+        NeedsState viaScalar = NeedsEngine.DecayHour(composite, environmentalMultiplier: 1.3f, stressModifier: 1.1f);
+        NeedsState viaVector = NeedsEngine.DecayHour(composite, EnvironmentalModifiers.Uniform(1.3f), stressModifier: 1.1f);
+        bool scalarEqualsUniform = true;
+        foreach (NeedType need in AllNeeds)
+        {
+            if (viaScalar.Get(need) != viaVector.Get(need))
+            {
+                scalarEqualsUniform = false;
+            }
+        }
+        Check("scalar DecayHour ≡ Uniform-vector DecayHour (E_all degenerate case, bit-exact)", scalarEqualsUniform);
+
+        // Per-need vector has teeth: an hour under Workout's environment (Hunger ×1.5,
+        // Sleep ×1.3) hits exactly those two needs harder while the other three decay
+        // bit-identically to neutral.
+        NeedsState full = NeedsState.FullySatisfied();
+        NeedsState underWorkout = NeedsEngine.DecayHour(full, ActionCatalog.Workout.Environment);
+        NeedsState underNeutral = NeedsEngine.DecayHour(full, EnvironmentalModifiers.Neutral);
+        Check("Workout env: Hunger decays ×1.5 (100 → 93.70)",
+            MathF.Abs(underWorkout.Hunger - 93.7f) <= ModifierFixtureTolerance, $"{underWorkout.Hunger:F4}");
+        Check("Workout env: Sleep decays ×1.3 (100 → 95.58)",
+            MathF.Abs(underWorkout.Sleep - 95.58f) <= ModifierFixtureTolerance, $"{underWorkout.Sleep:F4}");
+        Check("Workout env: Hygiene/Social/Fitness decay bit-identically to neutral",
+            underWorkout.Hygiene == underNeutral.Hygiene
+            && underWorkout.Social == underNeutral.Social
+            && underWorkout.Fitness == underNeutral.Fitness);
+
+        // Data integrity: every catalog action's authored E stays inside the §4.1
+        // design range [0.25, 3.0] for every need.
+        bool allInRange = true;
+        foreach (NpcActionDefinition def in ActionCatalog.All)
+        {
+            foreach (NeedType need in AllNeeds)
+            {
+                float e = def.Environment.Get(need);
+                if (e < 0.25f || e > 3.0f)
+                {
+                    allInRange = false;
+                }
+            }
+        }
+        Check("every catalog action's Environment multipliers stay in the §4.1 range [0.25, 3.0]", allInRange);
+
+        Console.WriteLine();
     }
 
     // ------------------------------------------------------------------

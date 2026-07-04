@@ -148,7 +148,11 @@ public sealed class LifeSimManager
             npc.BusyHoursRemaining--;
         }
 
-        npc.Needs = NeedsEngine.DecayHour(npc.Needs);
+        // life_sim_needs_decay.md §4.1: the hour decays under the current activity's
+        // per-need Environmental Multiplier (CurrentAction is always this hour's
+        // activity — every path above either re-selects or is mid-action). Stress
+        // stays 1.0: the §4.2 stress scalar has no live source until Gritty Events.
+        npc.Needs = NeedsEngine.DecayHour(npc.Needs, ActionCatalog.Get(npc.CurrentAction).Environment);
     }
 
     private static void ApplyAction(NpcRuntime npc, NpcActionId id)

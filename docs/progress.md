@@ -403,7 +403,7 @@ Picked up the standing next-step item. Ran this as harness-driven tuning (no pla
 **New harness diagnostic — `RunActionThresholdChecks`/`FindCrossoverValue` (`Tools/NeedsDecayHarness/Program.cs`).** A deterministic crossover sweep — for each need-restoring action, the highest need value at which it first beats `Idle` (every other need full, funds ample) — replacing "infer eagerness from a stochastic day trace" with a direct, precise number per action, asserted inside a sensible band (`25`–`75`: not trivial, but not so late it just duplicates the crisis override). Real before/after, all five actions (confirming the artifact was universal, not Eat-only):
 
 | Action | Old crossover | New crossover |
-|---|---|---|
+| --- | --- | --- |
 | `Eat` | ~87 | **59** |
 | `Shower` | ~89 | **61** |
 | `Workout` | ~83 | **54** |
@@ -416,6 +416,32 @@ Picked up the standing next-step item. Ran this as harness-driven tuning (no pla
 
 **Next steps:**
 
-1. **Per-action Environmental Multiplier** (§4.1) once locations/activities exist to source it from; today every tick runs neutral (`E=1`).
+1. ~~**Per-action Environmental Multiplier** (§4.1) once locations/activities exist to source it from; today every tick runs neutral (`E=1`).~~ ✅ 2026-07-03 (entry below)
 2. `RelationshipGraph.cs` (Phase 6) remains an untouched empty stub.
 3. Once there's an actual play surface for the life sim (today it's headless-only), revisit the Hunger-dips-near-critical dynamic above against real play feel — the harness proves it's bounded and self-correcting, not whether it *feels* right.
+
+---
+
+## 2026-07-03 — Per-Action Environmental Multiplier ✅ (design doc §4.1 — the standing "every tick runs neutral" gap)
+
+Fable 5 as lead (new architectural surface — the E-sourcing data shape — not a tunable-constant pass). **`NeedsDecayHarness` 39/39 (was 30/30, +9); full solution `dotnet build` 0 warn/0 err; headless `--headless --quit` against the real dev save clean (schema v5, day 38, life-sim NPCs 137).** No schema change, no baseball-sim surface touched (MonteCarloHarness/CoreLoopHarness/SchemaValidator not re-run — none of their compiled sources moved).
+
+**The load-bearing decision — the activity IS the location context.** §4.1 says E is "sourced from the current location/activity context," but no Location/place entity exists (NPCs aren't anywhere until Phase 7+ gritty-event venues). Rather than invent speculative Location surface, the minimal data shape is a per-need `EnvironmentalModifiers` vector **on each `NpcActionDefinition`**: what an NPC is doing already implies where they are (Sleep/Shower ⇒ at home, SocializeEvening ⇒ bar/party). The field is documented in-code as the composition point where a real location context would later fold in.
+
+**`NeedsEngine.cs`:** new `EnvironmentalModifiers` readonly struct — five floats mirroring `NeedsState`'s shape, `Uniform(x)` + `static readonly Neutral`, `Get(NeedType)` — this is §4.1's "five-element E argument" target shape, with the scalar overload kept as the documented `E_all` degenerate case (now delegating through `Uniform`, one code path). New `DecayHour(in NeedsState, in EnvironmentalModifiers, float stressModifier)` overload applies per-need E. The §4.2 **combined `E·S` ceiling** now actually exists in code: `MaxCombinedModifier = 3f`, product clamped to `[0, 3]` inside the scalar-value `DecayHour` (floor 0 also hardens the monotonicity property against a negative modifier; behavior at all existing call sites unchanged — everything passed 1·1).
+
+**`ActionCatalog.cs`:** `NpcActionDefinition` gained `Environment` (optional ctor param, `null` ⇒ `Neutral`, so `Idle`/`Eat`/`DrinkAlone`/`PickArgument` stay at the calibrated baseline). Authored vectors use §4.1/§6 anchors wherever the design doc provides one: `Sleep`/`Shower` = `Uniform(0.8)` ("resting at home"); `SocializeEvening` = Social ×0.4 (bar/party — decay-slowing is separate from the +35 restore, per §6's decay-vs-recovery split); `Workout` = Hunger ×1.5 (the labor-hustle Hunger anchor) + Sleep ×1.3 (**no doc anchor — invented first-pass**, disclosed in-file), implementing §6's "actions trade needs against each other." The §4.1 labor-hustle Fitness ×2.5 anchor is NOT used anywhere yet — no Legal Work/hustle action exists in the catalog (gritty-events territory).
+
+**`LifeSimManager.TickHour`:** the decay line now reads the current action's vector — `DecayHour(npc.Needs, ActionCatalog.Get(npc.CurrentAction).Environment)`. `CurrentAction` is provably this hour's activity on every path (each hour either re-selects or is mid-action). Stress stays `1.0` — the §4.2 stress scalar still has no live source until Gritty Events, same disclosed gap as the M3 entry.
+
+**Harness (+9 checks, `RunModifierChecks`):** the design doc's §9 modifier fixtures verbatim — written into the doc explicitly "to verify the §4 layer once E/S are wired to context," which is this pass (E=1.5·S=1.5 → 90.55; S=2.0 on Hunger 40 → 26.76 vs calm 33.38); §4.2 ceiling clamp (E·S=4 decays exactly like E=3, → 87.40); scalar ≡ uniform-vector bit-exact identity; per-need vector teeth (Workout env hits Hunger/Sleep exactly, other three bit-identical to neutral); catalog-wide [0.25, 3.0] range sweep. The 168h passive trace is **byte-identical** to the §9 trajectory fixture (neutral path provably untouched).
+
+**Emergent month-run shifts (informative, direction predicted before running):** funded NPC's 30-day Hunger minimum **8.7 → 14.3** — sleeping at home (×0.8) slows the mid-sleep Hunger bleed, softening the Hunger-dips-near-critical dynamic the tuning pass flagged (next-step #3 above partially self-resolved, still worth a play-feel look). Broke NPC: Sleep min 10.5 → 9.3, Hygiene 13.6 → 10.8 (still managed, never floor); money-gated needs still collapse as expected. Crossover sweep numbers unchanged by construction — `SelectAction` doesn't see environment (decay-side term, not a utility consideration; a future "prefer restful activities when worn down" coupling would be a deliberate design change, not this pass).
+
+**Known artifacts (deliberate):** (1) environment applies only to the decay side — utility selection is environment-blind (see above); (2) `Workout` Sleep ×1.3 and both `Uniform(0.8)` home vectors are the only invented/anchor-interpolated constants, tunable as data via `simulate_utility_decay` (SKILL.md gained an "environment vectors" tuning section + the new check list); (3) no Location entity — when places land (Phase 7+), their context should *compose* with the action's vector (e.g. multiply, ceiling-clamped) rather than replace this field; (4) stress `S` still has no live source (unchanged).
+
+**Next steps:**
+
+1. `RelationshipGraph.cs` (Phase 6) remains an untouched empty stub.
+2. Once there's an actual play surface for the life sim (today it's headless-only), revisit the Hunger-near-critical dynamic against real play feel (softened by this pass: funded-NPC Hunger min now 14.3).
+3. When the first hustle/labor action enters the catalog (gritty events), its environment vector already has a §4.1 anchor waiting (Fitness ×2.5, Hunger ×1.5) — and that's the natural moment to wire the §4.2 stress scalar's live source too.
