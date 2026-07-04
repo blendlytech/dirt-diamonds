@@ -143,6 +143,60 @@ public readonly struct FundsImpulseEvent : IGameEvent
     }
 }
 
+/// <summary>
+/// A gritty event's conceive_child consequence, requesting an heir off the
+/// avatar (marriage_and_conception.md §4.2). Published by the Narrative
+/// consequence applier — which must not reference the Baseball sim — and
+/// serviced by CareerManager's subscriber, the same Narrative → bus →
+/// consumer routing as <see cref="StressImpulseEvent"/>. The co-parent id is
+/// resolved from the live RelationshipGraph and rides the event, so a
+/// same-session marriage-then-baby never depends on the day-cadence
+/// relationship flush having reached the database.
+/// </summary>
+public readonly struct ChildConceptionRequestedEvent : IGameEvent
+{
+    /// <summary>The avatar the request was fired for; the consumer drops it if the avatar has since changed.</summary>
+    public readonly string ParentAvatarId;
+
+    /// <summary>The avatar's live Partner counterpart, or null when unmarried (average-parent bloodline path).</summary>
+    public readonly string? PartnerId;
+
+    /// <summary>Absolute game-day of the fire (the Game_Logs/Entity_Flags clock).</summary>
+    public readonly long Day;
+
+    public ChildConceptionRequestedEvent(string parentAvatarId, string? partnerId, long day)
+    {
+        ParentAvatarId = parentAvatarId;
+        PartnerId = partnerId;
+        Day = day;
+    }
+}
+
+/// <summary>
+/// Published by CareerManager after a bus-requested conception's batch has
+/// committed (marriage_and_conception.md §4.3) — the seam a future birth
+/// notification / family screen renders from. Ships before its consumer,
+/// same precedent as GrittyEventResolvedEvent and LastSuccession.
+/// </summary>
+public readonly struct ChildBornEvent : IGameEvent
+{
+    public readonly string ChildId;
+    public readonly string AvatarId;
+
+    /// <summary>The co-parent, or null when the heir was conceived unpartnered.</summary>
+    public readonly string? PartnerId;
+
+    public readonly long Day;
+
+    public ChildBornEvent(string childId, string avatarId, string? partnerId, long day)
+    {
+        ChildId = childId;
+        AvatarId = avatarId;
+        PartnerId = partnerId;
+        Day = day;
+    }
+}
+
 public readonly struct RivalryChangedEvent : IGameEvent
 {
     /// <summary>Canonical pair order: <see cref="PlayerAId"/> sorts before <see cref="PlayerBId"/> ordinally.</summary>

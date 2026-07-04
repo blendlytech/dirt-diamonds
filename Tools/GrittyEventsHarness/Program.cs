@@ -49,6 +49,7 @@ internal static class Program
             RunDispatcherChecks();
             RunCascadeAndWriterChecks();
             RunChoiceUiChecks();
+            RunMarriageConceptionChecks();
             RunStressChecks();
             RunThreadingCheck();
             RunAllocationCheck();
@@ -548,6 +549,197 @@ internal static class Program
 
         Check("ResolveChoice with nothing pending throws",
             ThrowsAny(() => world.Applier.ResolveChoice(0)));
+    }
+
+    // ------------------------------------------------------------------
+    // 4c. Marriage & conception writers (marriage_and_conception.md §7
+    // checks 1–4 — the Narrative side; CareerManager's consumer is
+    // MonteCarloHarness territory, deliberately not compiled here).
+    // ------------------------------------------------------------------
+
+    private static void RunMarriageConceptionChecks()
+    {
+        Console.WriteLine("--- Marriage & conception writers ---");
+
+        // (1) Load-time gate: conceive_child only parses on scope-avatar events.
+        Check("loader rejects conceive_child on a non-avatar-scope event", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "conceive_child" } ] } ] } ] }"""));
+        bool avatarScopeAccepted = false;
+        try
+        {
+            GrittyEventLibrary parsed = GrittyEventJson.Parse(
+                """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "conceive_child" } ] } ] } ] }""");
+            avatarScopeAccepted = parsed.Count == 1;
+        }
+        catch (FormatException)
+        {
+        }
+        Check("loader accepts conceive_child on scope: avatar", avatarScopeAccepted);
+
+        // (2) Marriage exclusivity: the first partner consequence writes one
+        // Partner edge; a second fire on the already-partnered subject is a
+        // no-op — edge, counterpart and affinity all unchanged.
+        {
+            using World world = World.Create("marriage", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "meet", "scope": "avatar", "weight": 1.0,
+                  "choices": [ { "id": "marry", "consequences": [
+                    { "type": "relationship", "kind": "partner", "affinity": 60, "target": "league" } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.AddPlayer("spouseA", age: 27, teamId: 1);
+            world.AddPlayer("spouseB", age: 27, teamId: 2);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            int partnerEdges = edges.Count(e => e.Kind == RelationshipKind.Partner);
+            string? firstPartner = edges.FirstOrDefault(e => e.Kind == RelationshipKind.Partner).OtherId;
+            Check("marriage: partner consequence creates exactly one Partner edge at 60",
+                partnerEdges == 1 && edges.Single(e => e.Kind == RelationshipKind.Partner).Affinity == 60,
+                $"{partnerEdges} partner edges");
+
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Graph.GetEdgesFor("hero", edges);
+            bool unchanged = edges.Count(e => e.Kind == RelationshipKind.Partner) == 1
+                && edges.Single(e => e.Kind == RelationshipKind.Partner).OtherId == firstPartner
+                && edges.Single(e => e.Kind == RelationshipKind.Partner).Affinity == 60;
+            Check("marriage: a second partner consequence on a partnered subject is a no-op (exclusivity)",
+                unchanged, $"partner: {firstPartner}");
+        }
+
+        // (3) Conception publish: the fire publishes exactly one request whose
+        // PartnerId is the avatar's LIVE partner (null when unmarried), and
+        // the applier writes no player rows itself — no Baseball code is even
+        // compiled into this harness, so a request is all it CAN do.
+        {
+            using World world = World.Create("conception", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "meet", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_inactive": "married" } ],
+                    "choices": [ { "id": "marry", "consequences": [
+                      { "type": "relationship", "kind": "partner", "affinity": 60, "target": "league" },
+                      { "type": "set_flag", "flag": "married" } ] } ] },
+                  { "id": "baby", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "married" } ],
+                    "choices": [ { "id": "welcome", "consequences": [ { "type": "conceive_child" } ] } ] }
+                ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.AddPlayer("spouse", age: 27, teamId: 2);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            var requests = new List<ChildConceptionRequestedEvent>();
+            world.Bus.Subscribe<ChildConceptionRequestedEvent>(requests.Add);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: meet (marries "spouse" — the only league candidate)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            world.Clock.AdvanceDay(); // day 3: baby
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var rows = new List<PlayerRow>();
+            world.Players.LoadAll(rows);
+            Check("conception: one request published, PartnerId = the live Partner, no rows written by the applier",
+                requests.Count == 1 && requests[0].ParentAvatarId == "hero"
+                && requests[0].PartnerId == "spouse" && requests[0].Day == 3
+                && rows.Count == 2,
+                $"{requests.Count} requests, {rows.Count} player rows");
+        }
+        {
+            using World world = World.Create("conceptionSingle", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "baby", "scope": "avatar", "weight": 1.0,
+                  "choices": [ { "id": "welcome", "consequences": [ { "type": "conceive_child" } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            var requests = new List<ChildConceptionRequestedEvent>();
+            world.Bus.Subscribe<ChildConceptionRequestedEvent>(requests.Add);
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("conception: an unmarried avatar's request carries PartnerId = null",
+                requests.Count == 1 && requests[0].PartnerId is null,
+                $"{requests.Count} requests");
+        }
+
+        // (4) The §5 content arc end-to-end: met_someone → +365 →
+        // starting_a_family → +270 → child_is_born, paced entirely by the
+        // flag cascade (min_days_since), with the arc left re-armable
+        // (expecting cleared, married kept).
+        {
+            using World world = World.Create("familyArc", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "met_someone", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_inactive": "married" } ],
+                    "choices": [ { "id": "propose", "consequences": [
+                      { "type": "relationship", "kind": "partner", "affinity": 60, "target": "league" },
+                      { "type": "set_flag", "flag": "married" } ] } ] },
+                  { "id": "starting_a_family", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "married", "min_days_since": 365 }, { "flag_inactive": "expecting" } ],
+                    "choices": [ { "id": "try", "consequences": [ { "type": "set_flag", "flag": "expecting" } ] } ] },
+                  { "id": "child_is_born", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "expecting", "min_days_since": 270 } ],
+                    "choices": [ { "id": "welcome", "consequences": [
+                      { "type": "conceive_child" }, { "type": "clear_flag", "flag": "expecting" } ] } ] }
+                ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.AddPlayer("spouse", age: 27, teamId: 2);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            var requests = new List<ChildConceptionRequestedEvent>();
+            world.Bus.Subscribe<ChildConceptionRequestedEvent>(requests.Add);
+            world.Dispatcher.PollOnce();
+
+            // Staged like the shipped bribe→shakedown check: each beat's
+            // flags must COMMIT (pump) before the next catch-up sweep, since
+            // a sweep evaluates every missed day against one snapshot.
+            world.Clock.AdvanceDay(); // day 2: met_someone
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDays(365); // days 3..367: starting_a_family lands on exactly 367
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDays(270); // days 368..637: child_is_born lands on exactly 637
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("hero", flagRows);
+            bool marriedStanding = flagRows.Any(f => f.FlagName == "married" && f.SetOnDay == 2);
+            bool expectingCleared = flagRows.All(f => f.FlagName != "expecting");
+            Check("§5 arc: met_someone@2 → starting_a_family@367 → child_is_born@637, flag-cascade-paced",
+                world.Fired.Count == 3
+                && world.Fired[0].EventId == "met_someone" && world.Fired[0].Day == 2
+                && world.Fired[1].EventId == "starting_a_family" && world.Fired[1].Day == 367
+                && world.Fired[2].EventId == "child_is_born" && world.Fired[2].Day == 637
+                && requests.Count == 1 && requests[0].PartnerId == "spouse" && requests[0].Day == 637
+                && marriedStanding && expectingCleared,
+                string.Join(",", world.Fired.Select(f => $"{f.EventId}@{f.Day}")));
+        }
     }
 
     // ------------------------------------------------------------------

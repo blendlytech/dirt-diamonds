@@ -65,6 +65,7 @@ internal static class Program
         string lineageScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineage_{Guid.NewGuid():N}.db");
         string lineageFailScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineagefail_{Guid.NewGuid():N}.db");
         string lineageEdgeScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineageedge_{Guid.NewGuid():N}.db");
+        string conceptionScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_conception_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -80,6 +81,7 @@ internal static class Program
             RunLineageSuccessionSuite(schemaPath, lineageScratchPath);
             RunLineageFailureSuite(schemaPath, lineageFailScratchPath);
             RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
+            RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
         }
         catch (Exception ex)
         {
@@ -108,7 +110,7 @@ internal static class Program
             TryDelete(heirScratchPath);
             TryDelete(heirScratchPath + "-wal");
             TryDelete(heirScratchPath + "-shm");
-            foreach (string lineage in new[] { lineageScratchPath, lineageFailScratchPath, lineageEdgeScratchPath })
+            foreach (string lineage in new[] { lineageScratchPath, lineageFailScratchPath, lineageEdgeScratchPath, conceptionScratchPath })
             {
                 TryDelete(lineage);
                 TryDelete(lineage + "-wal");
@@ -2156,6 +2158,135 @@ internal static class Program
             && rosterAfter.Any(r => r.PlayerId == heir2Id && r.Role == PitcherRole.Reliever && r.TeamId == 1)
             && !retiree2.TeamId.HasValue,
             fillerInvariant);
+    }
+
+    // ------------------------------------------------------------------
+    // 11. Marriage & conception: the bus-driven ConceiveChild consumer
+    // (marriage_and_conception.md §7 checks 5–8; the Narrative publisher
+    // side is GrittyEventsHarness territory — no Baseball compiled there).
+    // Check 9 (no §8 band moves) is the full-suite rerun itself: nothing in
+    // this pass touches the resolver or either sim's game loop.
+    // ------------------------------------------------------------------
+
+    private static void RunConceptionRequestSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Marriage & conception: bus-driven ConceiveChild (design doc §7 checks 5–8) ---");
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var gameState = new GameStateQueries(db);
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Initialize();
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 90));
+
+        var bus = new EventBus();
+        career.AttachTo(bus);
+        var born = new List<ChildBornEvent>();
+        bus.Subscribe<ChildBornEvent>(born.Add);
+
+        career.CreateAvatar("Dyna", "Sty", teamId: 2, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 65,
+            BatContact = 60,
+            BatDiscipline = 55,
+            PitStuff = 50,
+            PitControl = 50,
+            PitStamina = 50,
+            Fielding = 50,
+        });
+        string avatarId = career.AvatarPlayerId;
+
+        // The co-parent: any rostered player (a Player_Ratings row exists by
+        // construction). Deliberately NO Partner edge is ever written to the
+        // DB — the id rides the request, which is exactly the §4.2 hazard
+        // check 6 closes (a same-session marriage awaiting the day-cadence
+        // flush must still produce the two-parent heir).
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        string partnerId = roster.First(r => r.TeamId == 5).PlayerId;
+
+        var relationships = new List<RelationshipRow>();
+        players.LoadRelationshipsFor(avatarId, relationships);
+        bool noDbPartner = relationships.All(r => r.Type != RelationshipType.Partner);
+
+        // ---- checks 5 + 6: partnered request → two-parent heir, flush-order-independent ----
+        bus.Publish(new ChildConceptionRequestedEvent(avatarId, partnerId, day: 40));
+        bus.DispatchPending();
+
+        string? child1Id = born.Count == 1 ? born[0].ChildId : null;
+        bool child1RowOk = false, child1EdgesOk = false, child1RatingsOk = false;
+        if (child1Id is not null && players.TryGetById(child1Id, out PlayerRow child1))
+        {
+            child1RowOk = child1.LastName == "Sty" && child1.Age == 0 && !child1.TeamId.HasValue;
+            child1RatingsOk = baseball.TryGetRatings(child1Id, out _);
+            players.LoadRelationshipsFor(child1Id, relationships);
+            child1EdgesOk = relationships.Count(r => r.Type == RelationshipType.Child) == 2
+                && relationships.Any(r => r.Type == RelationshipType.Child
+                    && (r.Player1Id == avatarId || r.Player2Id == avatarId))
+                && relationships.Any(r => r.Type == RelationshipType.Child
+                    && (r.Player1Id == partnerId || r.Player2Id == partnerId));
+        }
+        Check("check 5: the subscriber services a partnered request — unrostered newborn, bloodline surname, ratings row, Child edge to BOTH parents",
+            child1RowOk && child1RatingsOk && child1EdgesOk
+            && born[0].AvatarId == avatarId && born[0].PartnerId == partnerId && born[0].Day == 40,
+            child1Id is null ? $"{born.Count} ChildBornEvents" : $"child {child1Id[..8]}…");
+        Check("check 6: order independence — the two-parent heir conceived with NO Partner edge anywhere in the DB (the id rode the request)",
+            noDbPartner && child1EdgesOk);
+
+        // ---- check 5's null-partner arm: unmarried request → single-parent heir (AverageParent vector) ----
+        bus.Publish(new ChildConceptionRequestedEvent(avatarId, null, day: 41));
+        bus.DispatchPending();
+        string? child2Id = born.Count == 2 ? born[1].ChildId : null;
+        bool child2SingleParent = false;
+        if (child2Id is not null)
+        {
+            players.LoadRelationshipsFor(child2Id, relationships);
+            child2SingleParent = relationships.Count(r => r.Type == RelationshipType.Child) == 1
+                && relationships.Any(r => r.Type == RelationshipType.Child
+                    && (r.Player1Id == avatarId || r.Player2Id == avatarId));
+        }
+        Check("check 5 (unmarried): a null-PartnerId request conceives with the average-parent path — exactly one Child edge, to the avatar",
+            child2SingleParent && born.Count == 2 && born[1].PartnerId is null,
+            $"{born.Count} ChildBornEvents");
+
+        // ---- check 7: a stale request naming a since-retired avatar is dropped ----
+        int playersBeforeStale = players.Count();
+        bus.Publish(new ChildConceptionRequestedEvent("not-the-avatar-anymore", partnerId, day: 42));
+        bus.DispatchPending();
+        Check("check 7: a stale request for a non-current avatar is dropped (no heir, no throw, no announce)",
+            players.Count() == playersBeforeStale && born.Count == 2);
+
+        // ---- check 8: multiple requests → multiple heirs; succession selects among them ----
+        bus.Publish(new ChildConceptionRequestedEvent(avatarId, partnerId, day: 43));
+        bus.DispatchPending();
+        string? child3Id = born.Count == 3 ? born[2].ChildId : null;
+        bool distinctHeirs = child1Id is not null && child2Id is not null && child3Id is not null
+            && child1Id != child2Id && child2Id != child3Id && child1Id != child3Id;
+
+        var heirIds = new[] { child1Id!, child2Id!, child3Id! };
+        foreach (string heirId in heirIds)
+        {
+            players.SetAge(heirId, 19);
+            players.SetBaseballInterest(heirId, 100);
+        }
+        players.SetAge(avatarId, HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge);
+        var candidates = new List<HeirCandidate>();
+        SuccessionOutcome outcome = career.EvaluateSuccession(candidates);
+        Check("check 8: repeated requests create distinct heirs off the same avatar; succession reveals and selects among all three",
+            distinctHeirs && outcome.Kind == SuccessionOutcomeKind.Succeeded
+            && candidates.Count == 3
+            && heirIds.All(id => candidates.Any(c => c.HeirId == id))
+            && heirIds.Contains(outcome.HeirId!),
+            $"{candidates.Count} candidates, picked {(outcome.HeirId is null ? "none" : outcome.HeirId[..8] + "…")}");
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

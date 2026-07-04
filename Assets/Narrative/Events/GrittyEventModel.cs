@@ -92,6 +92,12 @@ public enum ConsequenceKind : byte
     SetFlag,
     ClearFlag,
     Relationship,
+
+    /// <summary>
+    /// Requests an heir off the avatar via the bus (marriage_and_conception.md
+    /// §4). Payload-free; valid only on scope-avatar events (load-time gate).
+    /// </summary>
+    ConceiveChild,
 }
 
 /// <summary>Who a relationship consequence pairs the subject with (§4), resolved at apply time.</summary>
@@ -147,6 +153,10 @@ public readonly struct EventConsequence
     public static EventConsequence ForRelationship(
         RelationshipKind kind, double affinity, RelationshipTargetSelector target) =>
         new(ConsequenceKind.Relationship, affinity, null, kind, target);
+
+    /// <summary>Payload-free by design (§4) — twins/birth-age/co-parent selection would be additive fields, not a reshape.</summary>
+    public static EventConsequence ForConceiveChild() =>
+        new(ConsequenceKind.ConceiveChild, 0, null, default, default);
 }
 
 public sealed class EventChoice

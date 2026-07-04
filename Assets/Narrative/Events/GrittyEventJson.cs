@@ -109,7 +109,7 @@ public static class GrittyEventJson
         int c = 0;
         foreach (JsonElement choiceElement in choicesElement.EnumerateArray())
         {
-            EventChoice choice = ParseChoice(choiceElement, id);
+            EventChoice choice = ParseChoice(choiceElement, id, scope);
             if (!choiceIds.Add(choice.Id))
             {
                 throw new FormatException($"Event '{id}': duplicate choice id '{choice.Id}'.");
@@ -195,7 +195,7 @@ public static class GrittyEventJson
             $"Event '{eventId}': prerequisite must be a field comparison, 'flag_active', or 'flag_inactive'.");
     }
 
-    private static EventChoice ParseChoice(JsonElement element, string eventId)
+    private static EventChoice ParseChoice(JsonElement element, string eventId, EventScope scope)
     {
         string choiceId = RequireString(element, "id", eventId);
 
@@ -216,7 +216,7 @@ public static class GrittyEventJson
             int i = 0;
             foreach (JsonElement consequenceElement in consequencesElement.EnumerateArray())
             {
-                consequences[i++] = ParseConsequence(consequenceElement, eventId, choiceId);
+                consequences[i++] = ParseConsequence(consequenceElement, eventId, choiceId, scope);
             }
         }
 
@@ -227,11 +227,22 @@ public static class GrittyEventJson
         return new EventChoice(choiceId, autopilotWeight, label, consequences);
     }
 
-    private static EventConsequence ParseConsequence(JsonElement element, string eventId, string choiceId)
+    private static EventConsequence ParseConsequence(
+        JsonElement element, string eventId, string choiceId, EventScope scope)
     {
         string type = RequireString(element, "type", eventId);
         switch (type)
         {
+            case "conceive_child":
+                // Only the avatar has a tracked bloodline; a scope-any
+                // conception is meaningless, so the apply path stays total
+                // (marriage_and_conception.md §4.1 — fail loud at boot).
+                if (scope != EventScope.Avatar)
+                {
+                    throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': 'conceive_child' is only valid on a 'scope: avatar' event.");
+                }
+                return EventConsequence.ForConceiveChild();
             case "funds":
                 return EventConsequence.ForAmount(ConsequenceKind.Funds, RequireNumber(element, "amount", eventId));
             case "stress":

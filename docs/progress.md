@@ -701,3 +701,60 @@ The queued retune item is gated on play feel, which doesn't exist yet — so thi
 3. Event-choice/succession screens' copy/layout pass once there's play feel: **Sonnet 5.**
 
 Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.
+
+---
+
+## 2026-07-04 — Marriage & Conception DESIGN DOC done (Opus 4.8, design only — NO code): `docs/design/marriage_and_conception.md`
+
+The deferred `ConceiveChild`/marriage consequence from `gritty_event_framework.md` §4/§9 + `heir_mechanics.md` §11.1/§11.2 — the writers that drive the already-built heir seam from live play. Design only, per the Opus architecture lane; no code this pass. **No schema change.**
+
+**The load-bearing constraint that forced the shape (§2):** `GrittyEventsHarness.csproj` compiles Narrative against Data+Core+Life+`RngState.cs` ONLY — never the Baseball assembly (verified). `ConceiveChild` is in `CareerManager` (Baseball). So the applier physically **cannot** call it — a direct call drags the whole Baseball graph into that harness's compile surface and breaks it. **Conception must route Narrative → Core `EventBus` event → Baseball `CareerManager` subscriber**, the exact sanctioned pattern of `StressImpulseEvent` (Narrative→bus→Life) and `RivalryChangedEvent` (Life→bus→Baseball). Bonus: same clean test split as the rivalry writer — `GrittyEventsHarness` proves the request is *published* (no Baseball compiled); `MonteCarloHarness` proves `CareerManager` *services* it.
+
+**Two engine capabilities, orthogonal:**
+
+1. **Marriage = reuse the existing `relationship` consequence** with `kind: partner`, `target: league` (first pass — every entity is a ballplayer, so `league` is the only sane spouse pool; a partner with a `Player_Ratings` row IS the two-parent bloodline path `heir_mechanics.md` §2.3 designed but couldn't reach), **+ a `Partner`-kind exclusivity guard** in `ApplyRelationship` (~6 lines: skip if the subject already has any `Partner` edge, so `FindPartnerId` stays unambiguous and repeat/scope-any fires can't accrete spouses). No new enum, no schema.
+2. **Conception = new closed-enum `ConsequenceKind.ConceiveChild`**, JSON `{ "type": "conceive_child" }`, payload-free. **Load-time gate: valid only on `scope: avatar`** (only the avatar has a tracked bloodline) — rejected loudly at parse time otherwise, so the apply path is total.
+
+**The apply-time hop + the ordering hazard it closes (§4.2):** the applier resolves the avatar's co-parent from the **live in-memory `RelationshipGraph`** (the same object that authored the marriage this session) and publishes `ChildConceptionRequestedEvent(avatarId, partnerId?, day)`. Resolving from the graph — NOT the DB — sidesteps a real hazard: `ConceiveChild.FindPartnerId` reads the *database*, but a `Partner` edge authored this session only persists on GameManager's day-cadence flush, so a same-session marry-then-baby could miss it. Passing the id IN the request makes conception flush-order-independent. Deferred publish drains on a later pump, outside the applier's committed batch → no shared/nested transaction with the Baseball write.
+
+**Baseball consumer (§4.3):** `CareerManager` (already bus-subscribed for DayAdvanced/SeasonRolledOver) adds a `ChildConceptionRequestedEvent` handler — no-op unless the request's avatar is still current (drops stale requests for a since-retired avatar), generates names (surname = avatar's bloodline surname, first name from a new `LeagueGenerator.GenerateName(ref rng)` using `_rng`), calls `ConceiveChild` with a NEW explicit `string? partnerId` param (non-null → skip `FindPartnerId`; null → unchanged DB path for harness/direct callers), then publishes `ChildBornEvent(childId, avatarId, partnerId, day)` as the feed/notification seam (shipped-before-consumer, mirrors `GrittyEventResolvedEvent`/`LastSuccession`). Conception has NO exclusivity — multiple kids are the wanted `NoWillingHeir` hedge (`heir_mechanics.md` §6); pacing is content's job.
+
+**The arc is content, not engine (§5):** no hard-coded marriage→baby sequence. Content composes it via the existing flag cascade (`min_days_since`), same as bribe→syndicate: `met_someone` (writes partner + `married` flag) → `starting_a_family` at +365 (`expecting`) → `child_is_born` at +270 (`conceive_child` + clear `expecting` so it repeats for a 2nd child). Flags round-trip through `Entity_Flags` and survive saves; `cooldown_days` alone wouldn't.
+
+**§8 MODEL SPLIT:** **Fable 5** = engine plumbing (2 Core events, the consequence type + parse + avatar-scope rejection, applier partner-resolution/publish + `Partner` exclusivity guard, `CareerManager` subscriber + `GenerateName` + `ConceiveChild` partnerId overload + `ChildBornEvent`, harness checks 1–9 incl. the "no §8 band moved" reconfirm — career-wiring/calibration-adjacent, same reason succession was Fable's). **Sonnet 5** = the §5 event-arc JSON + prompt/label copy + `check_event_graph_integrity`, and later the birth-feed UI once `ChildBornEvent` has a consumer. Deferred (§9): civilian spouse pool / eligible-singles filter, divorce/re-marriage, partner→needs/stress coupling, twins/birth-age payloads, naming UI.
+
+**Next steps (model assignments):**
+
+1. **Implement marriage & conception** from this doc — **Fable 5** engine plumbing (checks 1–9), then **Sonnet 5** content arc. Genuinely unblocked, no playtest gate. ✅ Fable half done same day (entry below); Sonnet content arc still open.
+2. **Stress persistence v6** (additive schema — bump the three harnesses' hardcoded `user_version` checks) — **Fable 5**, when prioritized.
+3. **Playtest verdict → staged `RivalryEffects` ±16 + suite-8 delta-check retune** (data/justification in the prior entry) — **Fable 5**.
+4. Event-choice/succession screens' copy/layout pass once there's play feel — **Sonnet 5.**
+
+Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.
+
+---
+
+## 2026-07-04 — Marriage & Conception ENGINE PLUMBING ✅ (Fable 5 — the §8 engine half of `marriage_and_conception.md`; Sonnet's content arc still open)
+
+Implemented exactly against the design doc, checks 1–9 inclusive. **All suites green: `GrittyEventsHarness` 51/51 (was 44, +7), `MonteCarloHarness` 131/131 (was 126, +5), `CoreLoopHarness` 22/22, `NeedsDecayHarness` 49/49, `SchemaValidator` 58/58 scratch + 41/41 live; `dotnet build` 0 warn/0 err across all 6 projects; in-engine boot via the godot MCP against the real dev save clean (`schema v5, day 38, … gritty events 11 (dispatcher polling)`), no runtime errors, clean stop.** No schema change (as the doc promised); no content JSON authored (that's Sonnet's §8 half). **The M1 macro season lines are byte-for-byte intact (.248/.316/.411 R/G 4.21, .250/.319/.413 R/G 4.29) and the §7 check-9 "no band moved" burden is met by the full-suite rerun** — nothing in this pass touches the resolver or either sim's game loop, and the suite proves it.
+
+**Core (`CoreEvents.cs`):** `ChildConceptionRequestedEvent(parentAvatarId, partnerId?, day)` + `ChildBornEvent(childId, avatarId, partnerId?, day)` — the §2 cross-boundary hop as two readonly-struct bus events (Narrative publishes the request because it physically cannot call `CareerManager`; Baseball announces the birth as the future feed seam, shipped-before-consumer).
+
+**Narrative:** `ConsequenceKind.ConceiveChild` + `EventConsequence.ForConceiveChild()` (payload-free, mirrors `ForFlag`'s shape); `GrittyEventJson` threads the event's scope down into `ParseConsequence` and **rejects `conceive_child` on any non-`avatar` scope at parse time** (event-id-labelled — §4.1's fail-loud-at-boot, making the apply path total). `EventConsequenceApplier`: the **`Partner` exclusivity guard** in `ApplyRelationship` (an already-partnered subject skips a new partner consequence outright, before the target draw — so no rng is consumed and repeat/scope-any fires can't accrete spouses), and the `ConceiveChild` case in the post-batch consequence loop — resolves the co-parent from the **live in-memory `RelationshipGraph`** via a pooled edge-walk scratch (never the DB — the §4.2 flush-ordering hazard) and publishes the request deferred, outside its own committed batch.
+
+**Baseball:** `CareerManager` grew the `ChildConceptionRequestedEvent` subscriber (rides the existing `AttachTo`, which now also keeps the bus ref for the announce; `DetachFrom` symmetric) — drops stale requests whose avatar is no longer current, names the newborn via new `LeagueGenerator.GenerateFirstName(ref _rng)` (same pool as world-gen, drawn from the career rng — no draws added to any existing path, hence the byte-identical M1 lines) + the avatar's surname, conceives, then publishes `ChildBornEvent` after the batch commits. `ConceiveChild` gained the trailing `string? partnerId = null` parameter (`partnerId ??= FindPartnerId(avatarId)` — non-null skips the DB read; every existing call site untouched).
+
+**Harness (design doc §7, all nine):** GrittyEventsHarness (+7, new section 4c): the two loader-gate checks; partner-edge-created-once + second-fire-no-op exclusivity; one request published with `PartnerId` = the live partner / `null` unmarried and **zero player rows written by the applier** (no Baseball code is even compiled there — a request is all it *can* do); and the **§5 arc end-to-end** — `met_someone@2 → starting_a_family@367 → child_is_born@637`, flag-cascade-paced, `expecting` cleared, `married` standing. MonteCarloHarness (+5, new suite 11 on its own scratch db): partnered request → unrostered newborn with bloodline surname, ratings row, Child edge to BOTH parents; **order independence** proven by never writing any Partner edge to the DB at all (the id rode the request); null-partner request → single Child edge (average-parent path); stale request dropped (no heir, no throw, no announce); three requests → three distinct heirs and `EvaluateSuccession` reveals and selects among all three (the `NoWillingHeir` hedge now reachable from live play).
+
+**Also:** `check_event_graph_integrity`'s SKILL.md vocabulary updated (`conceive_child` + a marriage/conception authoring-notes paragraph: gate follow-ups on the flags the choice sets, never on the Partner edge, since exclusivity can silently skip it).
+
+**Known artifacts (deliberate, all §9 of the design doc):** (1) spouse pool is whatever target the content picks (`league` has no age floor — the pre-existing engine gap from the Batch-2 entry stands; the doc's own §5 arc uses `league`, Sonnet should weigh `teammate` per that entry's workaround). (2) No divorce/re-marriage — `Partner` is write-once until a clear-partner consequence exists. (3) `ChildBornEvent` has no live consumer yet (birth feed/naming UI later). (4) A same-pair prior Friend/Rival edge still just gets an affinity nudge (the §4 "no reclassify" rule) — the exclusivity guard doesn't change that.
+
+**Next steps (model assignments, same cost logic):**
+
+1. **The §5 marriage→family→birth content arc** (avatar-scoped JSON with prompt/label copy, `check_event_graph_integrity` per batch — its SKILL.md now carries the conceive_child notes): **Sonnet 5.** The engine writers are proven; this is pure content.
+2. **Stress persistence v6** (additive schema — bump the three DB-touching harnesses' hardcoded `user_version` checks, the known gotcha): **Fable 5**, when prioritized.
+3. **Playtest verdict → staged `RivalryEffects` ±16 + suite-8 delta-check retune** (data/justification two entries up): **Fable 5.**
+4. Event-choice/succession screens' copy/layout pass once there's play feel; a birth-notification consumer for `ChildBornEvent` can join that pass: **Sonnet 5.**
+
+Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.

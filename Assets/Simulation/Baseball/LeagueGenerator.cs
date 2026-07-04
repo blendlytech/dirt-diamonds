@@ -287,6 +287,14 @@ public static class LeagueGenerator
         });
     }
 
+    /// <summary>
+    /// One draw from the same first-name pool world-gen uses — for callers
+    /// that need a name without inserting a row (CareerManager's bus-driven
+    /// conception names the newborn; the surname is the bloodline's).
+    /// </summary>
+    public static string GenerateFirstName(ref RngState rng) =>
+        FirstNames[rng.NextInt(FirstNames.Length)];
+
     private static string NextGuid(ref RngState rng)
     {
         Span<byte> bytes = stackalloc byte[16];

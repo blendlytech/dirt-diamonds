@@ -137,7 +137,11 @@ public sealed class CareerManager
     private readonly MicroGame _micro;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
     private readonly Action<SeasonRolledOverEvent> _onSeasonRolledOver;
+    private readonly Action<ChildConceptionRequestedEvent> _onChildConceptionRequested;
     private RngState _rng;
+
+    /// <summary>The bus <see cref="AttachTo"/> wired, kept for the <see cref="ChildBornEvent"/> announce.</summary>
+    private EventBus? _bus;
 
     private int[] _teamIds = Array.Empty<int>();
     private string? _avatarPlayerId;
@@ -237,6 +241,7 @@ public sealed class CareerManager
         _rng = rng;
         _onDayAdvanced = OnDayAdvanced;
         _onSeasonRolledOver = OnSeasonRolledOver;
+        _onChildConceptionRequested = OnChildConceptionRequested;
     }
 
     // ------------------------------------------------------------------
@@ -361,8 +366,15 @@ public sealed class CareerManager
     /// batch, mirroring CreateAvatar minus the roster mutation. Neither sim is
     /// re-initialized: the heir is invisible to both until succession (§5)
     /// rosters it. Returns the heir's player_id.
+    ///
+    /// A non-null <paramref name="partnerId"/> names the co-parent explicitly
+    /// and skips the DB Partner lookup — the bus-driven conception path
+    /// resolves the partner from the live relationship graph, which a
+    /// same-session marriage has reached even when the day-cadence flush has
+    /// not yet persisted the edge (marriage_and_conception.md §4.2). Null
+    /// keeps the original DB-reading path for direct/harness callers.
     /// </summary>
-    public string ConceiveChild(string firstName, string lastName, int birthAge = 0)
+    public string ConceiveChild(string firstName, string lastName, int birthAge = 0, string? partnerId = null)
     {
         string avatarId = AvatarPlayerId; // throws if no avatar exists
 
@@ -371,7 +383,7 @@ public sealed class CareerManager
             throw new InvalidOperationException($"Avatar '{avatarId}' has no Player_Ratings row — save is corrupt.");
         }
 
-        string? partnerId = FindPartnerId(avatarId);
+        partnerId ??= FindPartnerId(avatarId);
         PlayerRatingsRow parentB = partnerId is not null && _baseball.TryGetRatings(partnerId, out PlayerRatingsRow partnerRatings)
             ? partnerRatings
             : HeirGenetics.AverageParent();
@@ -858,14 +870,51 @@ public sealed class CareerManager
 
     public void AttachTo(EventBus bus)
     {
+        _bus = bus;
         bus.Subscribe(_onDayAdvanced);
         bus.Subscribe(_onSeasonRolledOver);
+        bus.Subscribe(_onChildConceptionRequested);
     }
 
     public void DetachFrom(EventBus bus)
     {
         bus.Unsubscribe(_onDayAdvanced);
         bus.Unsubscribe(_onSeasonRolledOver);
+        bus.Unsubscribe(_onChildConceptionRequested);
+        if (ReferenceEquals(_bus, bus))
+        {
+            _bus = null;
+        }
+    }
+
+    /// <summary>
+    /// Services a gritty event's conceive_child request off the bus
+    /// (marriage_and_conception.md §4.3) — the Narrative applier cannot call
+    /// <see cref="ConceiveChild"/> directly (it never references Baseball), so
+    /// the request rides a Core event. The co-parent id came from the LIVE
+    /// relationship graph and is passed straight through, making conception
+    /// independent of the day-cadence relationship flush.
+    /// </summary>
+    private void OnChildConceptionRequested(ChildConceptionRequestedEvent e)
+    {
+        // Deferred dispatch means the avatar can change (succession) between
+        // publish and drain — a stale request for a now-retired avatar is
+        // dropped, never applied to the wrong bloodline.
+        if (_avatarPlayerId is null
+            || !string.Equals(e.ParentAvatarId, _avatarPlayerId, StringComparison.Ordinal))
+        {
+            return;
+        }
+        if (!_players.TryGetById(_avatarPlayerId, out PlayerRow avatar))
+        {
+            throw new InvalidOperationException($"Avatar '{_avatarPlayerId}' has no Players row — save is corrupt.");
+        }
+
+        // Bloodline continuity: the avatar's surname; a generated first name
+        // (a naming UI is a future ChildBornEvent consumer, §9).
+        string firstName = LeagueGenerator.GenerateFirstName(ref _rng);
+        string childId = ConceiveChild(firstName, avatar.LastName, birthAge: 0, e.PartnerId);
+        _bus?.Publish(new ChildBornEvent(childId, _avatarPlayerId, e.PartnerId, e.Day));
     }
 
     private void OnSeasonRolledOver(SeasonRolledOverEvent e)

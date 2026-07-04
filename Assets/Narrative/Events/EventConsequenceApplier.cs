@@ -61,6 +61,10 @@ public sealed class EventConsequenceApplier
     // game day at most, bounded by EventDispatcher.MaxFiresPerDay).
     private readonly List<PlayerRow> _playerScratch = new(160);
 
+    // Edge-walk scratch for the Partner lookups (exclusivity guard + the
+    // conception request's co-parent resolution).
+    private readonly List<RelationshipEdge> _edgeScratch = new(8);
+
     /// <summary>
     /// True (default, headless-safe): every fire — including the avatar's —
     /// resolves immediately via the weighted autopilot draw. False: an
@@ -214,6 +218,17 @@ public sealed class EventConsequenceApplier
                 case ConsequenceKind.Relationship:
                     ApplyRelationship(fired.SubjectPlayerId, in consequence);
                     break;
+                case ConsequenceKind.ConceiveChild:
+                    // The load-time gate (§4.1) restricts this consequence to
+                    // scope-avatar events, so the subject IS the avatar. The
+                    // co-parent comes from the LIVE graph — the same object
+                    // that authored any same-session marriage — never the DB,
+                    // whose Partner edge may still await the day-cadence
+                    // flush (§4.2). CareerManager services the request on a
+                    // later pump, outside this handler's committed batch.
+                    _bus.Publish(new ChildConceptionRequestedEvent(
+                        fired.SubjectPlayerId, FindLivePartnerId(fired.SubjectPlayerId), fired.Day));
+                    break;
             }
         }
 
@@ -253,6 +268,16 @@ public sealed class EventConsequenceApplier
     /// </summary>
     private void ApplyRelationship(string subjectId, in EventConsequence consequence)
     {
+        // Single-partner exclusivity (marriage_and_conception.md §3): an
+        // already-partnered subject skips a new Partner consequence outright
+        // (same precedent as an empty pool), so FindPartnerId stays
+        // unambiguous and a repeat/scope-any fire can never accrete spouses.
+        if (consequence.RelationshipKind == RelationshipKind.Partner
+            && FindLivePartnerId(subjectId) is not null)
+        {
+            return;
+        }
+
         if (!TryPickTarget(subjectId, consequence.Target, out string targetId))
         {
             return; // empty pool — consequence skipped by design
@@ -267,6 +292,20 @@ public sealed class EventConsequenceApplier
         {
             _relationships.SetRelationship(subjectId, targetId, affinity, consequence.RelationshipKind);
         }
+    }
+
+    /// <summary>The subject's Partner counterpart in the in-memory graph, or null. At most one exists (the exclusivity guard); the first found is returned.</summary>
+    private string? FindLivePartnerId(string subjectId)
+    {
+        _relationships.GetEdgesFor(subjectId, _edgeScratch);
+        for (int i = 0; i < _edgeScratch.Count; i++)
+        {
+            if (_edgeScratch[i].Kind == RelationshipKind.Partner)
+            {
+                return _edgeScratch[i].OtherId;
+            }
+        }
+        return null;
     }
 
     private bool TryPickTarget(string subjectId, RelationshipTargetSelector selector, out string targetId)
