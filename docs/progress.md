@@ -367,3 +367,25 @@ Implements the design doc §7 spec against the two remaining Phase 5 items. Item
 2. **Tuning pass on `ActionWeights`/`ActionCatalog`** once playtested — the frequent-`Eat` artifact above is the first thing worth revisiting.
 3. **Per-action Environmental Multiplier** (§4.1) once locations/activities exist to source it from; today every tick runs neutral (`E=1`).
 4. `RelationshipGraph.cs` (Phase 6) remains an untouched empty stub.
+
+---
+
+## 2026-07-03 — Needs Persistence ✅ (design doc §11, Phase 5 remainder item 3 of 3 — closes out Phase 5)
+
+Schema v5, purely additive, following the exact No Blind Queries path: validated the live save's schema via the `sqlite` MCP (`list_tables` — confirmed v4, no `Life_Needs` yet) before touching `SchemaDefinitions.sql`, matching the discipline already established for v3→v4.
+
+**`SchemaDefinitions.sql`:** new `Life_Needs` table — `player_id TEXT PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE` (doubles as the mandated hot-path index, same pattern as `Player_Ratings`/`Pitcher_Roles`) + five `REAL NOT NULL DEFAULT 100 CHECK BETWEEN 0 AND 100` columns (hunger/sleep/hygiene/social/fitness), `STRICT`. **No backfill** — unlike `Pitcher_Roles`/`Pitch_Arsenals`, nothing reads these values before `LifeSimManager` itself produces and writes them, so a migrated v4 save just has no row per player until the first day-tick persist or a clean quit; absent rows fall back to the pre-persistence `FullySatisfied()` default exactly as before. `PRAGMA user_version = 5`.
+
+**`NeedsQueries.cs` (new, Assets/Data/Database).** `NeedsRow` DTO (mirrors the table, same convention as `PlayerRow`/`BattingStatsRow`) + typed query class matching `PlayerQueries`'s discipline: pooled/prepared commands, `Upsert`/`BulkUpsert` (upsert-on-conflict, joins the caller's batch or opens its own — same idiom as `PlayerQueries.BulkInsert`), `LoadAll` bulk hydration into a `Dictionary<string, NeedsRow>`. Deliberately deals only in `NeedsRow`, never `NeedsState` — keeps this a plain Data-layer DTO surface rather than reaching into `Simulation.Life` types.
+
+**`LifeSimManager.cs` (small additive edit) — still Data-free.** Added `TrackedPlayerIds` (exposes `_order`) and `SetNeeds(playerId, needs)` (no-op if the id isn't tracked) as the persistence bridge surface. Both are plain C#, no `Data`/Godot reference, so `Tools/NeedsDecayHarness`'s wildcard `Compile Include` of the whole `Assets/Simulation/Life/*.cs` folder still needs zero csproj changes — the harness stays DB-free exactly as its explicit `EventBus.cs`/`CoreEvents.cs`-only Core includes intended.
+
+**`GameManager.cs` (wiring).** `Needs` query property constructed alongside `Players`/`Baseball`. After `LifeSim.Seed(...)` (which unconditionally applies `FullySatisfied()`), bulk-loads `Life_Needs` and calls `LifeSim.SetNeeds` for every persisted row, overwriting the fresh-seed default — then `AttachTo(Events)`. A `DayAdvancedEvent` handler (`PersistLifeSimNeeds`) is subscribed **after** `LifeSim.AttachTo`, so per `EventBus`'s documented per-channel subscriber-order guarantee it always observes a day's needs after that day's 24 hourly ticks already ran; it bulk-upserts through a reused `List<NeedsRow>` scratch buffer (`CollectionsMarshal.AsSpan`, no per-day allocation) in its own batch transaction, never the calendar tick's (`database_rules.md`: Life-sim and Baseball-sim writes must not share a transaction). `_ExitTree` calls the same handler once more before disposing the connection, so a mid-day quit doesn't lose that day's progress.
+
+**Verified:** `dotnet build` → 0 warn/0 err, all 5 projects. `dotnet run --project Tools/NeedsDecayHarness` → still 20/20 (untouched surface). Two full boot/exit cycles via the Godot MCP against the real dev save: first boot logged `schema v5` (clean v4→v5 migration, no exceptions); `sqlite3` against the live `user://` save confirmed 136 `Life_Needs` rows with real varied decay values (not the 100-default) after the exit flush; a second boot/exit cycle produced byte-identical values, confirming hydration restores persisted state rather than resetting to `FullySatisfied()` (no day advanced between runs, so exact equality was the correct expectation).
+
+**Next steps:**
+
+1. **Tuning pass on `ActionWeights`/`ActionCatalog`** once playtested — the frequent-`Eat` artifact (Phase 5 M3 entry) is still the first thing worth revisiting.
+2. **Per-action Environmental Multiplier** (§4.1) once locations/activities exist to source it from; today every tick runs neutral (`E=1`).
+3. `RelationshipGraph.cs` (Phase 6) remains an untouched empty stub — Phase 5 is now fully closed out (all three M3 remainder items done).

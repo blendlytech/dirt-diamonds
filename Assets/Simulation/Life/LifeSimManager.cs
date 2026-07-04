@@ -43,6 +43,23 @@ public sealed class LifeSimManager
 
     public int NpcCount => _order.Count;
 
+    // Persistence bridge surface (design doc §11): GameManager reads this list plus
+    // TryGetNeeds to bulk-persist, and calls SetNeeds to hydrate from a save on
+    // boot. Deliberately just IDs/state, not a DatabaseManager dependency, so this
+    // class stays Data-free (Tools/NeedsDecayHarness compiles it standalone).
+    public IReadOnlyList<string> TrackedPlayerIds => _order;
+
+    // Overwrites a tracked NPC's needs (boot-time hydration from a save). A no-op
+    // for an id not yet seeded — callers hydrate after Seed(), same ordering
+    // GameManager already uses for funds via NpcSeed.
+    public void SetNeeds(string playerId, in NeedsState needs)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            runtime.Needs = needs;
+        }
+    }
+
     // Additive/idempotent: seeding an id already tracked is a no-op, so a
     // mid-game avatar creation can re-project the roster and re-seed safely.
     public void Seed(IReadOnlyList<NpcSeed> seeds)

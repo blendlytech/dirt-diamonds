@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
@@ -37,6 +38,7 @@ public sealed partial class GameManager : Node
     public GlobalState State { get; private set; } = null!;
     public GameStateQueries GameState { get; private set; } = null!;
     public PlayerQueries Players { get; private set; } = null!;
+    public NeedsQueries Needs { get; private set; } = null!;
     public BaseballQueries Baseball { get; private set; } = null!;
     public LeagueSimulator League { get; private set; } = null!;
     public MicroGame Micro { get; private set; } = null!;
@@ -45,6 +47,10 @@ public sealed partial class GameManager : Node
 
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
+
+    // Reused every day-tick persist so the handler doesn't allocate a fresh
+    // array per calendar day (zero-GC mandate for the hot path).
+    private readonly List<NeedsRow> _needsScratch = new();
 
     public override void _Ready()
     {
@@ -68,6 +74,7 @@ public sealed partial class GameManager : Node
         State = new GlobalState();
         GameState = new GameStateQueries(_database);
         Players = new PlayerQueries(_database);
+        Needs = new NeedsQueries(_database);
         Baseball = new BaseballQueries(_database);
         Clock = new TimeManager(_database, GameState, State, Events);
         Clock.Initialize(NewGameStartYear);
@@ -101,9 +108,8 @@ public sealed partial class GameManager : Node
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
 
-        // Life sim (Phase 5 remainder): needs/utility tracking is in-memory only
-        // this pass (no schema change — life_sim_needs_decay.md §11), seeded
-        // once from the same Players rows the baseball sims already loaded.
+        // Life sim (Phase 5 remainder): needs/utility tracking, seeded once from
+        // the same Players rows the baseball sims already loaded.
         var playerRows = new List<PlayerRow>();
         Players.LoadAll(playerRows);
         var npcSeeds = new NpcSeed[playerRows.Count];
@@ -113,7 +119,32 @@ public sealed partial class GameManager : Node
         }
         LifeSim = new LifeSimManager();
         LifeSim.Seed(npcSeeds);
+
+        // Needs persistence (life_sim_needs_decay.md §11, schema v5): hydrate any
+        // NPC with a saved row over the FullySatisfied default Seed() just applied.
+        // A migrated v4 save or a freshly generated NPC simply has no row yet —
+        // Life_Needs is purely additive, no backfill (see SchemaDefinitions.sql).
+        var persistedNeeds = new Dictionary<string, NeedsRow>();
+        Needs.LoadAll(persistedNeeds);
+        foreach (KeyValuePair<string, NeedsRow> entry in persistedNeeds)
+        {
+            NeedsRow row = entry.Value;
+            LifeSim.SetNeeds(entry.Key, new NeedsState
+            {
+                Hunger = row.Hunger,
+                Sleep = row.Sleep,
+                Hygiene = row.Hygiene,
+                Social = row.Social,
+                Fitness = row.Fitness,
+            });
+        }
+
         LifeSim.AttachTo(Events);
+        // Subscribed after LifeSim's own handler, so this always observes a day's
+        // needs after that day's 24 hourly ticks have already run (EventBus
+        // preserves per-channel subscriber order). Own batch transaction — Life-sim
+        // writes never share the calendar tick's (database_rules.md).
+        Events.Subscribe<DayAdvancedEvent>(PersistLifeSimNeeds);
 
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
@@ -134,7 +165,35 @@ public sealed partial class GameManager : Node
         {
             Instance = null;
         }
+        if (_database is not null && LifeSim is not null)
+        {
+            // Final flush so a mid-day quit doesn't lose that day's progress —
+            // the day-tick handler above only fires on a completed calendar day.
+            PersistLifeSimNeeds(default);
+        }
         _database?.Dispose();
         _database = null;
+    }
+
+    private void PersistLifeSimNeeds(DayAdvancedEvent _)
+    {
+        _needsScratch.Clear();
+        IReadOnlyList<string> ids = LifeSim.TrackedPlayerIds;
+        for (int i = 0; i < ids.Count; i++)
+        {
+            if (LifeSim.TryGetNeeds(ids[i], out NeedsState needs))
+            {
+                _needsScratch.Add(new NeedsRow
+                {
+                    PlayerId = ids[i],
+                    Hunger = needs.Hunger,
+                    Sleep = needs.Sleep,
+                    Hygiene = needs.Hygiene,
+                    Social = needs.Social,
+                    Fitness = needs.Fitness,
+                });
+            }
+        }
+        Needs.BulkUpsert(CollectionsMarshal.AsSpan(_needsScratch));
     }
 }
