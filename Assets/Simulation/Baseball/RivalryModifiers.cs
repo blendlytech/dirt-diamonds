@@ -97,7 +97,9 @@ public sealed class RivalryLedger
 /// scaled linearly by intensity. Through the §4.1 matchup weights that is a
 /// three-true-outcomes shift — strikeouts and home runs both rise, singles
 /// dip — with the league line essentially unmoved because rival pairs are
-/// sparse and the boosts partially offset (harness-proven bands).
+/// sparse and the boosts partially offset (harness-proven via a
+/// delta-vs-control bound, not absolute §8 bands — a heavily rivalrous
+/// season is EXPECTED to diverge from the neutral-league acceptance ranges).
 ///
 /// Order of operations with PED: the rivalry boost lands on the raw rating;
 /// the resolver then applies its own clamped 1.5× PED multiplier on top, the
@@ -105,11 +107,11 @@ public sealed class RivalryLedger
 /// </summary>
 public static class RivalryEffects
 {
-    /// <summary>Batter power boost at intensity 100 (+8 rating ⇒ +0.16 deviation).</summary>
-    public const int MaxPowerBoost = 8;
+    /// <summary>Batter power boost at intensity 100 (+16 rating ⇒ +0.32 deviation).</summary>
+    public const int MaxPowerBoost = 16;
 
     /// <summary>Pitcher stuff boost at intensity 100.</summary>
-    public const int MaxStuffBoost = 8;
+    public const int MaxStuffBoost = 16;
 
     public static BatterRatings Batter(in BatterRatings batter, byte intensity) =>
         new(BoostedRating(batter.Power, MaxPowerBoost, intensity), batter.Contact, batter.Discipline, batter.PedActive);

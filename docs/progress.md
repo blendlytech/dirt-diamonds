@@ -830,3 +830,19 @@ Scope: the queued UI/content copy pass, centered on giving `ChildBornEvent` its 
 **Next steps:** no further item is queued for either model pending fresh direction — playtest verdict → staged `RivalryEffects` ±16 + suite-8 delta-check retune remains the one open item, **Fable 5**, still gated on play feel.
 
 Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.
+
+---
+
+## 2026-07-04 — `RivalryEffects` ±16 Retune + Suite-8 Delta-Check Rewrite ✅ (Sonnet 5 — closes the last open item)
+
+Playtest verdict came in: proceed with the staged symmetric retune exactly as the calibration-groundwork entry recommended. Done by Sonnet 5, not Fable — the prior entry's model tag was this project's convention for calibration-adjacent work, not a hard requirement; the change was already fully specified (exact constant, exact harness rewrite, exact justification data) with no remaining architectural judgment call. **`MonteCarloHarness` 135/135 (unchanged count — the retune and rewrite land inside two existing checks, no new fixtures); `dotnet build` 0 warn/0 err across all 6 projects.** Confirmed via the `.csproj` files that only `MonteCarloHarness` compiles `Simulation/Baseball/*.cs` (`GrittyEventsHarness` cherry-picks only `RngState.cs`) — `CoreLoopHarness`/`GrittyEventsHarness`/`NeedsDecayHarness`/`SchemaValidator` not re-run, same disclosed rationale as every prior Baseball-only-touch entry.
+
+**`RivalryModifiers.cs`:** `MaxPowerBoost`/`MaxStuffBoost` 8→16 (doc comment updated to the correct +0.32 deviation math); class-doc note on "league line essentially unmoved" now explicitly says that claim is proven via the delta bound below, not absolute §8 bands.
+
+**`MonteCarloHarness/Program.cs` (suite 8):** the intensity-100-clamp fixture ratings bumped 97/96→90/90 (still the minimal rating that clamps at the new +16 boost) and the intensity-50 fixture 54→58 (round-half-up of 16·0.5). The season check — Finding 3's actual culprit, an absolute-band check on a season that's *supposed* to diverge, sitting at zero slack against the §8 floor — is replaced: new `RivalrySeasonLine` helper derives avg/obp/slg/K%/BB%/HR%/R-per-team-game from `LeagueBattingTotals`/`LeaguePitchingTotals` (factors out the inline math `AssertSeason` already had), computed for both the rival season and the same-seed control season, and the check now asserts `|ΔAVG| ≤ .003 && |ΔR/G| ≤ 0.05` instead of re-testing the neutral-league bands.
+
+**Verified (this run):** full-intensity shift **K 22.5%→25.3%, HR 3.20%→3.45%, 1B 14.3%→13.0%** — matches the staged recommendation's forecast exactly. Same-seed rivalry-vs-control delta: **ΔAVG .000 (.247 vs .248), ΔR/G 0.01 (4.20 vs 4.21)** — comfortably inside the new bound and nowhere near the old floor the absolute check kept grazing. All other suite-8 checks (ledger bus contract, clamp fixtures, empty-ledger bit-identity, micro-sim divergence, NPC feed flag) unaffected.
+
+**Next steps:** none queued. The project has no open items pending fresh direction from here.
+
+Standing rule regardless of model: re-run `run_monte_carlo_batch` after anything that compiles into the sim assembly; escalate to Fable 5 if any band moves.
