@@ -1983,13 +1983,24 @@ internal static class Program
         });
         string avatarId = career.AvatarPlayerId;
 
+        // The succession-UI candidate-list overload must return byte-identical
+        // outcomes to the zero-arg autopilot path across every branch this
+        // suite already exercises (NotTriggered, and all three GameOver
+        // reasons) — read-only, so calling it right before the mutating
+        // RunSuccessionCheck() observes the exact same pre-check state.
+        var candidates = new List<HeirCandidate>();
+
         players.SetAge(avatarId, 41);
+        SuccessionOutcome belowViaList = career.EvaluateSuccession(candidates);
         SuccessionOutcome below = career.RunSuccessionCheck();
         Check("no trigger below both thresholds (age 41, health 100): NotTriggered, no game-over key",
             below.Kind == SuccessionOutcomeKind.NotTriggered
             && !gameState.TryGetText(GameStateKeys.LineageOverReason, out _) && !career.IsLineageOver);
+        Check("EvaluateSuccession(list) ≡ EvaluateSuccession() for NotTriggered; candidate list empty",
+            belowViaList.Kind == below.Kind && candidates.Count == 0);
 
         players.SetAge(avatarId, 42);
+        SuccessionOutcome noHeirsViaList = career.EvaluateSuccession(candidates);
         SuccessionOutcome noHeirs = career.RunSuccessionCheck();
         players.TryGetById(avatarId, out PlayerRow avatarRow);
         gameState.TryGetText(GameStateKeys.LineageOverReason, out string reason1);
@@ -1999,22 +2010,30 @@ internal static class Program
             $"key '{reason1}'");
         Check("game-over mutates nothing but the flag: avatar still rostered, every team still 9+5+3",
             RosterInvariantHolds(baseball, out string invariantDetail) && avatarRow.TeamId == 5, invariantDetail);
+        Check("EvaluateSuccession(list) ≡ EvaluateSuccession() for GameOver(NoHeirs); candidate list empty",
+            noHeirsViaList.Kind == noHeirs.Kind && noHeirsViaList.Reason == noHeirs.Reason && candidates.Count == 0);
 
         string childId = career.ConceiveChild("Only", "Child", birthAge: 19);
         players.SetBaseballInterest(childId, 20);
+        SuccessionOutcome unwillingViaList = career.EvaluateSuccession(candidates);
         SuccessionOutcome unwilling = career.RunSuccessionCheck();
         gameState.TryGetText(GameStateKeys.LineageOverReason, out string reason2);
         Check("single unwilling heir (interest 20 < 40): GameOver(NoWillingHeir)",
             unwilling.Kind == SuccessionOutcomeKind.GameOver && unwilling.Reason == LineageFailure.NoWillingHeir
             && reason2 == "NoWillingHeir");
+        Check("EvaluateSuccession(list) ≡ EvaluateSuccession() for GameOver(NoWillingHeir); unwilling child excluded from the list",
+            unwillingViaList.Kind == unwilling.Kind && unwillingViaList.Reason == unwilling.Reason && candidates.Count == 0);
 
         players.SetBaseballInterest(childId, 100);
         players.SetAge(childId, 10);
+        SuccessionOutcome tooYoungViaList = career.EvaluateSuccession(candidates);
         SuccessionOutcome tooYoung = career.RunSuccessionCheck();
         gameState.TryGetText(GameStateKeys.LineageOverReason, out string reason3);
         Check("willing but underage heir (age 10 < 19): GameOver(NoPlayableHeir)",
             tooYoung.Kind == SuccessionOutcomeKind.GameOver && tooYoung.Reason == LineageFailure.NoPlayableHeir
             && reason3 == "NoPlayableHeir");
+        Check("EvaluateSuccession(list) ≡ EvaluateSuccession() for GameOver(NoPlayableHeir); underage child excluded from the list",
+            tooYoungViaList.Kind == tooYoung.Kind && tooYoungViaList.Reason == tooYoung.Reason && candidates.Count == 0);
 
         // The rollover handler after game-over: the world keeps aging, the
         // succession check does not re-fire (LastSuccession is untouched).
@@ -2072,11 +2091,16 @@ internal static class Program
         string child1Id = career.ConceiveChild("Tough", "Kid", birthAge: 19);
         players.SetBaseballInterest(child1Id, 100);
         baseball.ApplyPedGameCosts(founderId, healthCost: 60, riskGain: 0); // 100 → 40 = the retirement floor
+        var healthCandidates = new List<HeirCandidate>();
+        SuccessionOutcome healthOutcomeViaList = career.EvaluateSuccession(healthCandidates);
         SuccessionOutcome healthOutcome = career.RunSuccessionCheck();
         gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long genAfterHealth);
         Check("health trigger (§5.1 PED coupling): health_ceiling eroded to 40 forces succession at age 30",
             healthOutcome.Kind == SuccessionOutcomeKind.Succeeded && healthOutcome.HeirId == child1Id
             && career.AvatarPlayerId == child1Id && genAfterHealth == 2);
+        Check("EvaluateSuccession(list) ≡ EvaluateSuccession() for Succeeded; candidate list names exactly the one eligible heir",
+            healthOutcomeViaList.Kind == healthOutcome.Kind && healthOutcomeViaList.HeirId == healthOutcome.HeirId
+            && healthCandidates.Count == 1 && healthCandidates[0].HeirId == child1Id);
 
         // ---- filler backfill: mismatch handoff with an empty same-role FA pool ----
         // Age the whole bloodline consistently: the §1.2 direction invariant

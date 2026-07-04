@@ -70,6 +70,7 @@ public sealed partial class AttendedGameScreen : Control
 
         _outcomeNames = OutcomeNamesCsv.Split(',');
         RefreshDayLabel();
+        RefreshDayControlsEnabled();
     }
 
     public override void _ExitTree()
@@ -99,13 +100,13 @@ public sealed partial class AttendedGameScreen : Control
             else
             {
                 _statusLabel.Text = NoGameText; // offseason day
-                SetDayControlsEnabled(true);
             }
             RefreshDayLabel();
         }
 
         if (_gameTask is null)
         {
+            RefreshDayControlsEnabled();
             return;
         }
 
@@ -131,12 +132,12 @@ public sealed partial class AttendedGameScreen : Control
         {
             FinishInteractiveGame();
         }
+        RefreshDayControlsEnabled();
     }
 
     private void OnPlayGamePressed()
     {
         GameManager gm = GameManager.Instance!;
-        SetDayControlsEnabled(false);
         _statusLabel.Text = GameRunningText;
         gm.Career.AutopilotAttendedGames = false;
         _awaitingPendingGame = true;
@@ -171,7 +172,6 @@ public sealed partial class AttendedGameScreen : Control
         Task<MicroGameResult> task = _gameTask!;
         _gameTask = null;
         GameManager.Instance!.Career.FeedSink = null;
-        SetDayControlsEnabled(true);
 
         if (task.IsCompletedSuccessfully)
         {
@@ -196,10 +196,23 @@ public sealed partial class AttendedGameScreen : Control
 
     private void OnTakeCommitted(bool guessInZone) => _bridge.SubmitTake(guessInZone);
 
-    private void SetDayControlsEnabled(bool enabled)
+    /// <summary>
+    /// Unified per-frame recomputation of the Play/Skip buttons' disabled
+    /// state — blocked while a game is in flight (the original invariant)
+    /// OR while either overlay (event choice / succession choice) has
+    /// something for the player to resolve, so a player literally cannot
+    /// advance the day out from under a pending decision. Called every
+    /// frame rather than at scattered transition points so it can never
+    /// drift out of sync with either overlay's own state.
+    /// </summary>
+    private void RefreshDayControlsEnabled()
     {
-        _playGameButton.Disabled = !enabled;
-        _skipDayButton.Disabled = !enabled;
+        GameManager gm = GameManager.Instance!;
+        bool blocked = _gameTask is not null || _awaitingPendingGame
+            || gm.GrittyEventChoices.HasPendingChoice
+            || gm.Career.HasPendingSuccessionChoice;
+        _playGameButton.Disabled = blocked;
+        _skipDayButton.Disabled = blocked;
     }
 
     private void RefreshDayLabel()

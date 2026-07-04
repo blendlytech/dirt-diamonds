@@ -6,6 +6,7 @@
       "scope": "any",
       "weight": 0.15,
       "cooldown_days": 60,
+      "prompt": "Defying the syndicate had consequences. Two men are waiting by your car, and they aren't here to talk baseball.",
       "prerequisites": [
         { "flag_active": "syndicate_marked", "min_days_since": 14 }
       ],
@@ -13,6 +14,7 @@
         {
           "id": "pay_the_enforcers",
           "autopilot_weight": 2,
+          "label": "Pay them off",
           "consequences": [
             { "type": "funds", "amount": -1500 },
             { "type": "stress", "amount": 15 },
@@ -22,6 +24,7 @@
         {
           "id": "fight_back",
           "autopilot_weight": 1,
+          "label": "Fight back",
           "consequences": [
             { "type": "stress", "amount": 30 },
             { "type": "relationship", "kind": "rival", "affinity": -60, "target": "league" }
@@ -34,6 +37,7 @@
       "scope": "any",
       "weight": 0.08,
       "cooldown_days": 30,
+      "prompt": "A tester with a clipboard is waiting outside the clubhouse, and this time the numbers don't lie. Word is already starting to leak.",
       "prerequisites": [
         { "field": "detection_risk", "op": ">", "value": 70 },
         { "flag_inactive": "steroid_scandal_public" }
@@ -42,6 +46,7 @@
         {
           "id": "deny_everything",
           "autopilot_weight": 2,
+          "label": "Deny everything",
           "consequences": [
             { "type": "funds", "amount": -5000 },
             { "type": "stress", "amount": 30 },
@@ -51,6 +56,7 @@
         {
           "id": "come_clean",
           "autopilot_weight": 1,
+          "label": "Come clean",
           "consequences": [
             { "type": "funds", "amount": -1500 },
             { "type": "stress", "amount": 10 },
@@ -63,6 +69,7 @@
       "id": "redemption_tour",
       "scope": "any",
       "weight": 0.05,
+      "prompt": "The scandal is old news now. A local charity asks if you'd host a youth clinic — a chance to start rewriting the story.",
       "prerequisites": [
         { "flag_active": "steroid_scandal_public", "min_days_since": 180 }
       ],
@@ -70,6 +77,7 @@
         {
           "id": "rebuild_trust",
           "autopilot_weight": 1,
+          "label": "Host the clinic",
           "consequences": [
             { "type": "stress", "amount": -20 },
             { "type": "relationship", "kind": "friend", "affinity": 15, "target": "teammate" },
@@ -83,6 +91,7 @@
       "scope": "any",
       "weight": 0.12,
       "cooldown_days": 45,
+      "prompt": "Something in your body isn't right anymore. The trainer's face says it plainly, even if he won't.",
       "prerequisites": [
         { "field": "health_ceiling", "op": "<", "value": 40 }
       ],
@@ -90,6 +99,7 @@
         {
           "id": "play_through_it",
           "autopilot_weight": 2,
+          "label": "Play through it",
           "consequences": [
             { "type": "stress", "amount": 20 },
             { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" }
@@ -98,6 +108,7 @@
         {
           "id": "see_a_specialist",
           "autopilot_weight": 1,
+          "label": "See a specialist",
           "consequences": [
             { "type": "funds", "amount": -800 },
             { "type": "stress", "amount": -10 }
@@ -110,6 +121,7 @@
       "scope": "any",
       "weight": 0.04,
       "cooldown_days": 60,
+      "prompt": "A rain delay strands the whole team at a roadside diner. Someone starts telling stories, and the night turns into one you'll all remember.",
       "prerequisites": [
         { "field": "age", "op": ">=", "value": 19 }
       ],
@@ -117,6 +129,7 @@
         {
           "id": "bond_on_the_road",
           "autopilot_weight": 1,
+          "label": "Join in",
           "consequences": [
             { "type": "relationship", "kind": "friend", "affinity": 15, "target": "teammate" },
             { "type": "stress", "amount": -10 }
@@ -129,6 +142,7 @@
       "scope": "any",
       "weight": 0.02,
       "cooldown_days": 200,
+      "prompt": "Spring training has a way of loosening things up. Somewhere between the batting cages and the team cookout, a teammate catches your eye.",
       "prerequisites": [
         { "field": "age", "op": ">=", "value": 21 }
       ],
@@ -136,6 +150,7 @@
         {
           "id": "spring_fling",
           "autopilot_weight": 1,
+          "label": "Take a chance",
           "consequences": [
             { "type": "relationship", "kind": "partner", "affinity": 25, "target": "teammate" },
             { "type": "stress", "amount": -15 }
@@ -148,6 +163,7 @@
       "scope": "any",
       "weight": 0.05,
       "cooldown_days": 45,
+      "prompt": "Practice starts in twenty minutes, but the controller is right there and the game is just getting good.",
       "prerequisites": [
         { "field": "age", "op": "<", "value": 16 },
         { "field": "baseball_interest", "op": ">", "value": 10 }
@@ -156,6 +172,7 @@
         {
           "id": "skip_practice",
           "autopilot_weight": 1,
+          "label": "Skip practice",
           "consequences": [
             { "type": "interest", "amount": -8 },
             { "type": "stress", "amount": 5 }

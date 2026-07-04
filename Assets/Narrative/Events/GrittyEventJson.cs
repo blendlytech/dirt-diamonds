@@ -117,7 +117,22 @@ public static class GrittyEventJson
             choices[c++] = choice;
         }
 
-        return new GrittyEventDefinition(id, scope, weight, cooldownDays, prerequisites, choices);
+        string prompt = element.TryGetProperty("prompt", out JsonElement promptElement)
+            ? promptElement.GetString() ?? Humanize(id)
+            : Humanize(id);
+
+        return new GrittyEventDefinition(id, scope, weight, cooldownDays, prompt, prerequisites, choices);
+    }
+
+    /// <summary>Player-facing fallback for content that omits "prompt"/"label": snake_case id → Title Case words.</summary>
+    private static string Humanize(string id)
+    {
+        string[] words = id.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < words.Length; i++)
+        {
+            words[i] = char.ToUpperInvariant(words[i][0]) + words[i][1..];
+        }
+        return string.Join(' ', words);
     }
 
     private static EventPrerequisite ParsePrerequisite(JsonElement element, string eventId)
@@ -205,7 +220,11 @@ public static class GrittyEventJson
             }
         }
 
-        return new EventChoice(choiceId, autopilotWeight, consequences);
+        string label = element.TryGetProperty("label", out JsonElement labelElement)
+            ? labelElement.GetString() ?? Humanize(choiceId)
+            : Humanize(choiceId);
+
+        return new EventChoice(choiceId, autopilotWeight, label, consequences);
     }
 
     private static EventConsequence ParseConsequence(JsonElement element, string eventId, string choiceId)

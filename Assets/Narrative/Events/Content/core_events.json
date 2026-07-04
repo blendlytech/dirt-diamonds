@@ -6,6 +6,7 @@
       "scope": "any",
       "weight": 0.1,
       "cooldown_days": 120,
+      "prompt": "A stranger in the parking lot slides you an envelope. 'Just hold onto this for us. No questions.' You're broke enough that the weight of it is tempting.",
       "prerequisites": [
         { "field": "funds", "op": "<", "value": 500 },
         { "field": "recklessness", "op": ">", "value": 75 },
@@ -15,6 +16,7 @@
         {
           "id": "take_the_envelope",
           "autopilot_weight": 3,
+          "label": "Take the envelope",
           "consequences": [
             { "type": "funds", "amount": 2000 },
             { "type": "set_flag", "flag": "compromised_syndicate" },
@@ -24,6 +26,7 @@
         {
           "id": "walk_away",
           "autopilot_weight": 1,
+          "label": "Walk away",
           "consequences": [
             { "type": "stress", "amount": 10 }
           ]
@@ -35,6 +38,7 @@
       "scope": "any",
       "weight": 0.25,
       "cooldown_days": 180,
+      "prompt": "A year of silence, then a knock at the door. The people who fronted you that money want a return on their investment — with interest.",
       "prerequisites": [
         { "flag_active": "compromised_syndicate", "min_days_since": 365 }
       ],
@@ -42,6 +46,7 @@
         {
           "id": "pay_up",
           "autopilot_weight": 2,
+          "label": "Pay up",
           "consequences": [
             { "type": "funds", "amount": -3000 },
             { "type": "stress", "amount": 20 }
@@ -50,6 +55,7 @@
         {
           "id": "defy_them",
           "autopilot_weight": 1,
+          "label": "Defy them",
           "consequences": [
             { "type": "set_flag", "flag": "syndicate_marked" },
             { "type": "stress", "amount": 40 },
@@ -63,6 +69,7 @@
       "scope": "any",
       "weight": 0.03,
       "cooldown_days": 90,
+      "prompt": "A fastball rides up and in, way too close to your head. That was on purpose. The dugout is already on its feet.",
       "prerequisites": [
         { "field": "recklessness", "op": ">", "value": 60 },
         { "field": "age", "op": ">=", "value": 18 }
@@ -71,6 +78,7 @@
         {
           "id": "charge_the_mound",
           "autopilot_weight": 2,
+          "label": "Charge the mound",
           "consequences": [
             { "type": "relationship", "kind": "rival", "affinity": -35, "target": "opponent" },
             { "type": "stress", "amount": 10 }
@@ -79,6 +87,7 @@
         {
           "id": "brush_it_off",
           "autopilot_weight": 1,
+          "label": "Brush it off",
           "consequences": [
             { "type": "stress", "amount": 5 }
           ]
@@ -90,6 +99,7 @@
       "scope": "any",
       "weight": 0.05,
       "cooldown_days": 30,
+      "prompt": "A lazy afternoon, a glove that's a little too big, and a ball smacking leather back and forth. Something about it just clicks.",
       "prerequisites": [
         { "field": "age", "op": "<", "value": 16 }
       ],
@@ -97,6 +107,7 @@
         {
           "id": "caught_the_bug",
           "autopilot_weight": 1,
+          "label": "Keep playing catch",
           "consequences": [
             { "type": "interest", "amount": 8 },
             { "type": "stress", "amount": -5 }

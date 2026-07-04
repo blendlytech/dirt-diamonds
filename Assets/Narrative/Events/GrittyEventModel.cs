@@ -156,12 +156,16 @@ public sealed class EventChoice
     /// <summary>Relative weight for autopilot resolution until the choice UI exists (≥0).</summary>
     public readonly int AutopilotWeight;
 
+    /// <summary>Player-facing button text for the event-choice UI. Content-authored, or a humanized fallback of <see cref="Id"/> (GrittyEventJson.Humanize) when the batch omits "label".</summary>
+    public readonly string Label;
+
     public readonly EventConsequence[] Consequences;
 
-    public EventChoice(string id, int autopilotWeight, EventConsequence[] consequences)
+    public EventChoice(string id, int autopilotWeight, string label, EventConsequence[] consequences)
     {
         Id = id;
         AutopilotWeight = autopilotWeight;
+        Label = label;
         Consequences = consequences;
     }
 }
@@ -177,17 +181,21 @@ public sealed class GrittyEventDefinition
     /// <summary>Min days between fires for the same subject (in-memory pacing; 0 = none).</summary>
     public readonly int CooldownDays;
 
+    /// <summary>Player-facing flavor text for the event-choice UI. Content-authored, or a humanized fallback of <see cref="Id"/> (GrittyEventJson.Humanize) when the batch omits "prompt".</summary>
+    public readonly string Prompt;
+
     public readonly EventPrerequisite[] Prerequisites;
     public readonly EventChoice[] Choices;
 
     public GrittyEventDefinition(
-        string id, EventScope scope, double weight, int cooldownDays,
+        string id, EventScope scope, double weight, int cooldownDays, string prompt,
         EventPrerequisite[] prerequisites, EventChoice[] choices)
     {
         Id = id;
         Scope = scope;
         Weight = weight;
         CooldownDays = cooldownDays;
+        Prompt = prompt;
         Prerequisites = prerequisites;
         Choices = choices;
     }

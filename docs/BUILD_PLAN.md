@@ -89,13 +89,40 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 - Legal work (time-skip abstractions), Narcotics 3-tier state machine (Drop → Cut → Territory using the Relationship Graph), Fencing negotiation, Texas Hold'em (Opus 4.8 pot-odds/bluffing math; Sonnet 5 implementation under Fable 5 review).
 - Each hustle is an isolated interactive node; `godot_scene_mapper` before any UI logic.
+- **Survival economy (GAME_IDEA.md):** recurring living expenses — rent, food, gear — drained on a calendar cadence through the existing funds path; going broke feeds the needs engine (money-gated needs already collapse at $0, harness-proven). Includes persisting life-sim action spending to the DB (the disclosed Phase 7 gap).
+- **Equipment quality (GAME_IDEA.md):** purchasable gear tiers as effective-ratings modifiers — the PED/fatigue/rivalry precedent, never touching `AtBatResolver` calibration tables; behind the `run_monte_carlo_batch` band check. Owner: Fable 5.
+- **Arrest / injury / suspension (GAME_IDEA.md):** the risk triad on the illicit path — arrest (jail time-skip + flags), injury (availability + temporary rating hit keyed to `health_ceiling`), league suspension (`detection_risk` thresholds bench the avatar for N games via `CareerManager` availability). Consequence-vocabulary extension (Fable 5) + gritty-event content (Sonnet 5).
 
 **Exit criteria:** full career loop playable: broke rookie → hustle income → stress consequences → gritty events → season play.
 
-## Phase 9 — Steam & Publishing → Milestone M5 "Ship It"
+## Phase 9 — Career Progression Ladder & Player Development → Milestone M5 "The Long Road"
+
+The GAME_IDEA premise the current build skips: you **start as an under-resourced high-school player** and climb **HS → College → Minors → MLB**. Today the sim seeds a single MLB-tier league and drops the avatar straight into it — there is no ladder, no development, and no player-driven daily grind toward the top.
+
+- **League tiers** (schema-first, No Blind Queries): a `level`/`tier` dimension on Teams (HS, College, Minor A/AA/AAA, MLB) so the macro sim runs each tier in parallel and the avatar occupies exactly one at a time. Owner: **Fable 5** — re-enters `LeagueSimulator`/roster load and carries the `run_monte_carlo_batch` "no band moved" burden, since each tier calibrates to its own offensive baseline, not the MLB one.
+- **Advancement gates**: performance + scouting drive promotion/demotion between tiers — amateur recruitment to college, draft/signing into the minors, call-ups to the MLB, and washing out downward. **Opus 4.8** designs the promotion model; **Fable 5** owns the tier-transfer handoff (the avatar changes team *and* tier mid-save — the succession-handoff's sibling, same roster-invariant discipline where a miscount silently drifts stat composition).
+- **Player development / training**: attributes are static today (set at creation, blended for heirs, no growth curve — the disclosed §11.6 gap). Practice and coaching move ratings along age-appropriate development/decline curves, and this is where the daily "practice" block finally pays off. **Opus 4.8** designs the curves (peak-age growth, veteran decline); **Sonnet 5** owns the tuning harness.
+- **The daily scheduling loop** (the Punch Club / New Star Soccer core the pitch names): the player allocates the rigid 24-hour clock across **sleep, school, practice, games, and work/hustle** blocks — each with needs, stat, and money consequences already modeled by the needs/utility/economy systems. The NPC `UtilityCalculator` auto-selects; the avatar's blocks are player-chosen. **School** is the early-tier (HS/College) obligation competing for those hours.
+
+**Exit criteria:** a generated player climbs from HS to the MLB across simulated seasons via performance + development; each tier's league line sits in its own calibrated band; the avatar's daily schedule measurably moves both stats and needs.
+
+## Phase 10 — Presentation Layer & Narrative Delivery → Milestone M6 "The Look"
+
+Every UI shipped to date is a deliberate thin slice of plain Godot controls. GAME_IDEA's entire hook is 100% UI/text: a dark-mode split between a **"Baseball Dashboard"** and a **"Burner Phone / Bank."** This phase makes the game *look* like the pitch — it is the visual/asset phase the plan otherwise never schedules.
+
+- **Two-panel shell**: the Baseball Dashboard (stats, scouting reports, calendar, progress bars) and the Burner Phone / Bank (contacts, illicit deals, bank balance, basic survival). Both stay read-only over sim state per `ui_conventions.md` — DTOs in, player-intent signals out, no scene reaching into another's tree. Owner: **Sonnet 5**.
+- **Narrative delivery as messages**: fired Gritty Events and relationship beats surface as **iMessage-style texts** from girlfriends, coaches, and shady contacts, threaded per-contact in the Burner Phone — the event-choice UI's dressed-up form, consuming the existing `GrittyEventFiredEvent` / choice seam. **Sonnet 5**, over the already-pinned Fired/Resolved contract.
+- **Scouting reports**: the Baseball Dashboard's read of the player's ratings and tier standing framed as a scout would (letter grades, projection), sourced from `Player_Ratings` + the Phase 9 tier/development state.
+- **Visual identity**: dark-mode theme, satisfying progress bars, calendar interface — a shared Godot theme resource, not per-scene styling, retrofitting the existing thin-slice scenes.
+- **Portrait pipeline**: pre-generated 2D contact portraits (Midjourney, gritty-polaroid / mugshot house style per GAME_IDEA) as an asset set keyed to `player_id`; the Steam-required **disclosure** of these pre-generated portraits carries into Phase 11's store copy.
+
+**Exit criteria:** the full loop is playable through the two-panel shell in the shipping visual identity; narrative events arrive as threaded messages; scenes still communicate only via the event bus / signals.
+
+## Phase 11 — Steam & Publishing → Milestone M7 "Ship It"
 
 - Facepunch.Steamworks **only** (Steamworks.NET forbidden): cloud saves for the SQLite DB, achievements hooked to the EventDispatcher, rich presence.
 - `NativeLibrary.SetDllImportResolver` for steam_api64.dll / libsteam_api.so; `.csproj` native-library copy targets.
+- **Steam content compliance (GAME_IDEA.md):** disclose the pre-generated AI portraits in the store submission; complete the mature-content questionnaire (drug dealing, gambling references) for the appropriate rating.
 - **Validate:** `validate_steamworks_native`; Windows + Linux export builds.
 
 ## Cross-Cutting Discipline (every session)

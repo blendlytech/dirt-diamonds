@@ -22,7 +22,29 @@ namespace DirtAndDiamonds.Narrative.Events;
 /// Until the choice UI ships every fire is autopilot-resolved (the
 /// AutopilotAttendedGames precedent); <see cref="GrittyEventResolvedEvent"/>
 /// is the seam the future UI/feed renders from.
+///
+/// The avatar's own fires are the one exception once <see cref="AutopilotAvatarChoices"/>
+/// is turned off (GameManager does this — headless/harness callers keep the
+/// default true): instead of resolving inline, the fire parks as a
+/// <see cref="PendingGrittyChoice"/> (see <see cref="TryGetPendingChoice"/>)
+/// for the event-choice UI to read and answer via <see cref="ResolveChoice"/>.
+/// A still-unresolved pending choice is forfeited to the autopilot draw
+/// (never thrown away) the moment a new fire needs the slot — safe because
+/// consequence application has no eligibility preconditions that can fail
+/// from staleness (unlike CareerManager.Succeed).
 /// </summary>
+public readonly struct PendingGrittyChoice
+{
+    public readonly GrittyEventFiredEvent Fired;
+    public readonly GrittyEventDefinition Definition;
+
+    public PendingGrittyChoice(GrittyEventFiredEvent fired, GrittyEventDefinition definition)
+    {
+        Fired = fired;
+        Definition = definition;
+    }
+}
+
 public sealed class EventConsequenceApplier
 {
     private readonly DatabaseManager _db;
@@ -30,6 +52,7 @@ public sealed class EventConsequenceApplier
     private readonly GrittyEventLibrary _library;
     private readonly RelationshipGraph _relationships;
     private readonly EventBus _bus;
+    private readonly GameStateQueries _gameState;
     private readonly Action<GrittyEventFiredEvent> _onFired;
 
     private RngState _rng;
@@ -38,15 +61,28 @@ public sealed class EventConsequenceApplier
     // game day at most, bounded by EventDispatcher.MaxFiresPerDay).
     private readonly List<PlayerRow> _playerScratch = new(160);
 
+    /// <summary>
+    /// True (default, headless-safe): every fire — including the avatar's —
+    /// resolves immediately via the weighted autopilot draw. False: an
+    /// avatar-subject fire pauses as <see cref="PendingChoice"/> instead.
+    /// </summary>
+    public bool AutopilotAvatarChoices = true;
+
+    private PendingGrittyChoice _pending;
+    private bool _hasPending;
+
+    public bool HasPendingChoice => _hasPending;
+
     public EventConsequenceApplier(
         DatabaseManager db, PlayerQueries players, GrittyEventLibrary library,
-        RelationshipGraph relationships, EventBus bus, ulong rngSeed)
+        RelationshipGraph relationships, EventBus bus, GameStateQueries gameState, ulong rngSeed)
     {
         _db = db;
         _players = players;
         _library = library;
         _relationships = relationships;
         _bus = bus;
+        _gameState = gameState;
         _rng = new RngState(rngSeed | 1UL);
         _onFired = OnFired;
     }
@@ -54,6 +90,30 @@ public sealed class EventConsequenceApplier
     public void AttachTo(EventBus bus) => bus.Subscribe(_onFired);
 
     public void DetachFrom(EventBus bus) => bus.Unsubscribe(_onFired);
+
+    /// <summary>The avatar-subject fire awaiting a player choice, when <see cref="HasPendingChoice"/>.</summary>
+    public bool TryGetPendingChoice(out PendingGrittyChoice pending)
+    {
+        pending = _pending;
+        return _hasPending;
+    }
+
+    /// <summary>The event-choice UI's answer: applies exactly like an autopilot resolution, just with a player-picked index.</summary>
+    public void ResolveChoice(int choiceIndex)
+    {
+        if (!_hasPending)
+        {
+            throw new InvalidOperationException("No gritty-event choice is pending.");
+        }
+        if (choiceIndex < 0 || choiceIndex >= _pending.Definition.Choices.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(choiceIndex), choiceIndex, "Not a valid choice index for the pending event.");
+        }
+        GrittyEventFiredEvent fired = _pending.Fired;
+        GrittyEventDefinition definition = _pending.Definition;
+        _hasPending = false;
+        ApplyChoice(fired, definition, choiceIndex);
+    }
 
     private void OnFired(GrittyEventFiredEvent fired)
     {
@@ -63,7 +123,36 @@ public sealed class EventConsequenceApplier
                 $"Gritty event '{fired.EventId}' fired but is not in the loaded library.");
         }
 
-        int choiceIndex = PickChoice(definition.Choices);
+        bool isAvatar = _gameState.TryGetText(GameStateKeys.AvatarPlayerId, out string avatarId)
+            && string.Equals(avatarId, fired.SubjectPlayerId, StringComparison.Ordinal);
+
+        if (!AutopilotAvatarChoices && isAvatar)
+        {
+            if (_hasPending)
+            {
+                // A previous avatar choice was never answered — forfeit it to
+                // the autopilot draw rather than lose or overwrite it silently.
+                GrittyEventFiredEvent staleFired = _pending.Fired;
+                GrittyEventDefinition staleDefinition = _pending.Definition;
+                ApplyChoice(staleFired, staleDefinition, PickChoice(staleDefinition.Choices));
+            }
+            _pending = new PendingGrittyChoice(fired, definition);
+            _hasPending = true;
+            return;
+        }
+
+        ApplyChoice(fired, definition, PickChoice(definition.Choices));
+    }
+
+    /// <summary>
+    /// Applies one fired event's chosen branch: DB consequences in their own
+    /// batch, then bus impulses/relationship writes, then the resolved-event
+    /// publish. Shared by the autopilot path (<see cref="OnFired"/>) and the
+    /// UI's <see cref="ResolveChoice"/> — identical either way, only the
+    /// choice-picking differs.
+    /// </summary>
+    private void ApplyChoice(GrittyEventFiredEvent fired, GrittyEventDefinition definition, int choiceIndex)
+    {
         EventConsequence[] consequences = definition.Choices[choiceIndex].Consequences;
 
         // Relationship targets resolve before any write so an empty pool

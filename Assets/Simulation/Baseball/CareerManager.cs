@@ -80,6 +80,32 @@ public readonly struct SuccessionOutcome
 }
 
 /// <summary>
+/// One eligible-heir summary for the succession-UI reveal — every willing,
+/// of-age child gathered by <see cref="CareerManager.EvaluateSuccession(List{HeirCandidate})"/>,
+/// not just the autopilot's best-by-rating pick.
+/// </summary>
+public readonly struct HeirCandidate
+{
+    public readonly string HeirId;
+    public readonly string FirstName;
+    public readonly string LastName;
+    public readonly int Age;
+    public readonly int BaseballInterest;
+    public readonly PlayerRatingsRow Ratings;
+
+    public HeirCandidate(
+        string heirId, string firstName, string lastName, int age, int baseballInterest, in PlayerRatingsRow ratings)
+    {
+        HeirId = heirId;
+        FirstName = firstName;
+        LastName = lastName;
+        Age = age;
+        BaseballInterest = baseballInterest;
+        Ratings = ratings;
+    }
+}
+
+/// <summary>
 /// The Phase 5 career driver: owns the player avatar and every game of the
 /// avatar's team. On each <see cref="DayAdvancedEvent"/> it derives the team's
 /// pairing from the shared <see cref="LeagueSchedule"/> (the macro sim skips
@@ -124,11 +150,30 @@ public sealed class CareerManager
     private volatile bool _gameInFlight;
     private LineageFailure _lineageOverReason;
 
+    // Two SEPARATE lists, deliberately not shared: _heirScratch is a
+    // throwaway buffer for the zero-arg EvaluateSuccession() wrapper (cleared
+    // and repopulated on every call, including RunSuccessionCheck's own
+    // internal ones); _pendingHeirSnapshot must survive across frames until
+    // the UI resolves it, so a stray RunSuccessionCheck() can never Clear()
+    // the very list a succession screen is mid-render against.
+    private readonly List<HeirCandidate> _heirScratch = new();
+    private readonly List<HeirCandidate> _pendingHeirSnapshot = new();
+    private bool _hasPendingSuccession;
+
     /// <summary>
     /// True (default): the day handler resolves attended games instantly with
     /// the neutral autopilot. False: games park as pending for the UI.
     /// </summary>
     public bool AutopilotAttendedGames = true;
+
+    /// <summary>
+    /// True (default, headless/harness-safe): a fired retirement trigger
+    /// hands off to the single best-rated eligible heir immediately via
+    /// <see cref="RunSuccessionCheck"/>. False: a Succeeded outcome instead
+    /// parks every eligible heir as <see cref="HasPendingSuccessionChoice"/>
+    /// for the succession UI to resolve via <see cref="ResolvePendingSuccession"/>.
+    /// </summary>
+    public bool AutopilotSuccession = true;
 
     public bool HasAvatar => _avatarPlayerId is not null;
 
@@ -473,8 +518,18 @@ public sealed class CareerManager
     /// player_id — the same ordering rule <see cref="FindDisplacedPlayer"/>
     /// uses. Mutating the world is <see cref="Succeed"/>'s job.
     /// </summary>
-    public SuccessionOutcome EvaluateSuccession()
+    public SuccessionOutcome EvaluateSuccession() => EvaluateSuccession(_heirScratch);
+
+    /// <summary>
+    /// Same §5.1/§5.2 decision as the zero-arg overload, additionally filling
+    /// <paramref name="eligibleHeirs"/> with every willing, of-age candidate
+    /// (the succession-UI reveal list) — the autopilot's own best-by-rating
+    /// pick is exactly the same computation, unchanged.
+    /// </summary>
+    public SuccessionOutcome EvaluateSuccession(List<HeirCandidate> eligibleHeirs)
     {
+        eligibleHeirs.Clear();
+
         string avatarId = AvatarPlayerId; // throws if no avatar exists
         if (!_players.TryGetById(avatarId, out PlayerRow avatar))
         {
@@ -517,6 +572,7 @@ public sealed class CareerManager
             {
                 continue; // not of age (or unplayable: no ratings row)
             }
+            eligibleHeirs.Add(new HeirCandidate(otherId, other.FirstName, other.LastName, other.Age, other.BaseballInterest, in ratings));
             int sum = ratings.IsPitcher
                 ? ratings.PitStuff + ratings.PitControl + ratings.PitStamina
                 : ratings.BatPower + ratings.BatContact + ratings.BatDiscipline;
@@ -663,12 +719,53 @@ public sealed class CareerManager
                 Succeed(outcome.HeirId!);
                 break;
             case SuccessionOutcomeKind.GameOver:
-                _gameState.SetText(GameStateKeys.LineageOverReason, LineageFailureName(outcome.Reason));
-                _lineageOverReason = outcome.Reason;
+                PersistGameOver(outcome.Reason);
                 break;
         }
         LastSuccession = outcome;
         return outcome;
+    }
+
+    /// <summary>§6: writes the lineage-failure key — its presence in Game_State IS the game-over signal. There's no choice to make on a game-over, so both the autopilot and interactive paths apply it immediately (only a Succeeded outcome ever pauses for the UI).</summary>
+    private void PersistGameOver(LineageFailure reason)
+    {
+        _gameState.SetText(GameStateKeys.LineageOverReason, LineageFailureName(reason));
+        _lineageOverReason = reason;
+    }
+
+    /// <summary>True once a retirement trigger has fired with ≥1 eligible heir and <see cref="AutopilotSuccession"/> is off — the succession UI's cue to show the reveal/choice screen.</summary>
+    public bool HasPendingSuccessionChoice => _hasPendingSuccession;
+
+    /// <summary>Every eligible heir for the pending choice, when <see cref="HasPendingSuccessionChoice"/>.</summary>
+    public bool TryGetPendingSuccessionChoice(out IReadOnlyList<HeirCandidate> candidates)
+    {
+        candidates = _pendingHeirSnapshot;
+        return _hasPendingSuccession;
+    }
+
+    /// <summary>The succession UI's answer: hands off to the player's chosen heir. <paramref name="heirId"/> must be one of the pending candidates; <see cref="Succeed"/> independently re-validates against live state.</summary>
+    public void ResolvePendingSuccession(string heirId)
+    {
+        if (!_hasPendingSuccession)
+        {
+            throw new InvalidOperationException("No succession choice is pending.");
+        }
+        bool isCandidate = false;
+        for (int i = 0; i < _pendingHeirSnapshot.Count; i++)
+        {
+            if (_pendingHeirSnapshot[i].HeirId == heirId)
+            {
+                isCandidate = true;
+                break;
+            }
+        }
+        if (!isCandidate)
+        {
+            throw new ArgumentException($"'{heirId}' is not one of the pending succession candidates.", nameof(heirId));
+        }
+        _hasPendingSuccession = false;
+        Succeed(heirId);
+        LastSuccession = SuccessionOutcome.Succeeded(heirId);
     }
 
     /// <summary>True when a Child edge links the two ids and the age order marks <paramref name="parentId"/> as the parent (§1.2).</summary>
@@ -782,7 +879,40 @@ public sealed class CareerManager
         {
             return;
         }
-        RunSuccessionCheck();
+
+        if (AutopilotSuccession)
+        {
+            RunSuccessionCheck();
+            return;
+        }
+
+        if (_hasPendingSuccession)
+        {
+            // A previous succession choice was never answered before this
+            // rollover came around again — resolve it fresh against LIVE
+            // state rather than replay the stale candidate snapshot (a
+            // candidate's eligibility could have changed meanwhile, and
+            // Succeed() throws loudly on an ineligible heir). This IS this
+            // rollover's succession handling for this tick — age/health only
+            // ever move toward retirement, so the fresh check can't come back
+            // NotTriggered, and a freshly-succeeded heir isn't re-checked
+            // again in the same tick.
+            _hasPendingSuccession = false;
+            RunSuccessionCheck();
+            return;
+        }
+
+        SuccessionOutcome outcome = EvaluateSuccession(_pendingHeirSnapshot);
+        switch (outcome.Kind)
+        {
+            case SuccessionOutcomeKind.Succeeded:
+                _hasPendingSuccession = true;
+                break;
+            case SuccessionOutcomeKind.GameOver:
+                PersistGameOver(outcome.Reason);
+                break;
+        }
+        LastSuccession = outcome;
     }
 
     private void OnDayAdvanced(DayAdvancedEvent e)

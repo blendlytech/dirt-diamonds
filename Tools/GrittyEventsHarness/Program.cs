@@ -48,6 +48,7 @@ internal static class Program
             RunConditionChecks();
             RunDispatcherChecks();
             RunCascadeAndWriterChecks();
+            RunChoiceUiChecks();
             RunStressChecks();
             RunThreadingCheck();
             RunAllocationCheck();
@@ -474,6 +475,82 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
+    // 4b. Event-choice UI: avatar fires pause, NPCs stay autopilot, a stale
+    // pending choice forfeits rather than vanishing or throwing.
+    // ------------------------------------------------------------------
+
+    private static void RunChoiceUiChecks()
+    {
+        Console.WriteLine("--- Event-choice UI (pause/resolve/forfeit) ---");
+
+        const string choiceUiJson =
+            """
+            { "events": [
+              { "id": "choiceA", "scope": "avatar", "weight": 1.0, "cooldown_days": 5,
+                "choices": [ { "id": "a1", "autopilot_weight": 1 }, { "id": "a2", "autopilot_weight": 0 } ] },
+              { "id": "choiceB", "scope": "avatar", "weight": 1.0,
+                "choices": [ { "id": "b1", "autopilot_weight": 1 } ] },
+              { "id": "npcEvent", "scope": "any", "weight": 1.0,
+                "choices": [ { "id": "only" } ] }
+            ] }
+            """;
+
+        using World world = World.Create("choiceUi", GrittyEventJson.Parse(choiceUiJson));
+        world.Applier.AutopilotAvatarChoices = false;
+        world.AddPlayer("hero", age: 27, teamId: 1);
+        world.AddPlayer("npc", age: 27, teamId: 2);
+        world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+
+        var resolved = new List<GrittyEventResolvedEvent>();
+        world.Bus.Subscribe<GrittyEventResolvedEvent>(resolved.Add);
+
+        world.Dispatcher.PollOnce(); // record the boot day
+
+        // Day 2: hero's first satisfied event (choiceA) pauses; npc's
+        // any-scope event still auto-resolves — the UI only changes the
+        // avatar's path.
+        world.Clock.AdvanceDay();
+        world.Bus.DispatchPending();
+        world.Dispatcher.PollOnce();
+        world.Bus.DispatchPending();
+
+        bool pausedForHero = world.Applier.HasPendingChoice
+            && world.Applier.TryGetPendingChoice(out PendingGrittyChoice pendingA)
+            && pendingA.Fired.EventId == "choiceA" && pendingA.Fired.SubjectPlayerId == "hero";
+        Check("avatar-subject fire pauses instead of auto-resolving",
+            pausedForHero, world.Applier.HasPendingChoice ? "pending" : "not pending");
+        Check("NPC-subject fire still auto-resolves with the choice UI live",
+            resolved.Count == 1 && resolved[0].EventId == "npcEvent");
+
+        // Day 3: choiceA is in cooldown for hero, so choiceB fires next —
+        // forfeiting the still-unresolved choiceA to its autopilot draw
+        // (a2's weight is 0, so the forfeit deterministically picks a1/index 0).
+        world.Clock.AdvanceDay();
+        world.Bus.DispatchPending();
+        world.Dispatcher.PollOnce();
+        world.Bus.DispatchPending();
+
+        GrittyEventResolvedEvent? forfeited = resolved.FirstOrDefault(r => r.EventId == "choiceA");
+        bool nowPendingB = world.Applier.HasPendingChoice
+            && world.Applier.TryGetPendingChoice(out PendingGrittyChoice pendingB)
+            && pendingB.Fired.EventId == "choiceB";
+        Check("an unresolved pending choice forfeits to autopilot when a new avatar fire needs the slot",
+            forfeited is { EventId: "choiceA", ChoiceIndex: 0 } && nowPendingB,
+            $"resolved: {string.Join(",", resolved.Select(r => r.EventId))}");
+
+        // The UI's actual answer: resolving the still-open choiceB. Publish is
+        // deferred (EventBus contract), so the resolved-event feed needs a pump.
+        world.Applier.ResolveChoice(0);
+        world.Bus.DispatchPending();
+        Check("ResolveChoice applies the player's pick and clears pending",
+            !world.Applier.HasPendingChoice
+            && resolved.Any(r => r.EventId == "choiceB" && r.ChoiceIndex == 0));
+
+        Check("ResolveChoice with nothing pending throws",
+            ThrowsAny(() => world.Applier.ResolveChoice(0)));
+    }
+
+    // ------------------------------------------------------------------
     // 5. Stress scalar wiring (life_sim_needs_decay.md §4.2 goes live)
     // ------------------------------------------------------------------
 
@@ -692,7 +769,7 @@ internal static class Program
             world.LifeSim = new LifeSimManager();
 
             world.Applier = new EventConsequenceApplier(
-                world.Db, world.Players, library, world.Graph, world.Bus, rngSeed: 4242UL);
+                world.Db, world.Players, library, world.Graph, world.Bus, world.GameState, rngSeed: 4242UL);
             world.Applier.AttachTo(world.Bus);
             world.View = world.Db.CreateReadOnlyView();
             world.Dispatcher = new EventDispatcher(

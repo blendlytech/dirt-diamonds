@@ -69,7 +69,9 @@ public sealed partial class GameManager : Node
     public GrittyEventLibrary GrittyEvents { get; private set; } = null!;
     private DatabaseManager.ReadOnlyView? _pollView;
     private EventDispatcher? _grittyDispatcher;
-    private EventConsequenceApplier _grittyApplier = null!;
+
+    /// <summary>The main-thread consequence applier — public like Career/League/Micro so the event-choice UI can read PendingChoice/ResolveChoice directly.</summary>
+    public EventConsequenceApplier GrittyEventChoices { get; private set; } = null!;
 
     public override void _Ready()
     {
@@ -131,6 +133,10 @@ public sealed partial class GameManager : Node
         Micro.Rivalries = _rivalryLedger;
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, League, Micro, careerRng);
+        // The real game pauses succession for the heir-reveal/choice UI;
+        // headless/harness callers construct their own CareerManager and
+        // never touch this flag, so their autopilot pick is unaffected.
+        Career.AutopilotSuccession = false;
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
 
@@ -196,10 +202,14 @@ public sealed partial class GameManager : Node
         // thread against a read-only WAL view. Wall-clock seeds, same
         // determinism contract as the league (the harness seeds its own).
         GrittyEvents = GrittyEventJson.Parse(LoadGrittyEventContent());
-        _grittyApplier = new EventConsequenceApplier(
-            _database, Players, GrittyEvents, Relationships, Events,
+        GrittyEventChoices = new EventConsequenceApplier(
+            _database, Players, GrittyEvents, Relationships, Events, GameState,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);
-        _grittyApplier.AttachTo(Events);
+        // The real game pauses the avatar's own fires for the choice UI;
+        // headless/harness callers construct their own applier and keep the
+        // default true (autopilot), so this flip is local to the live game.
+        GrittyEventChoices.AutopilotAvatarChoices = false;
+        GrittyEventChoices.AttachTo(Events);
         _pollView = _database.CreateReadOnlyView();
         _grittyDispatcher = new EventDispatcher(
             GrittyEvents, new NarrativePollQueries(_pollView), Events,

@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/SuccessionScreen.cs" id="1_succession"]
+
+[node name="SuccessionScreen" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
+script = ExtResource("1_succession")
+
+[node name="ChoicePanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -260.0
+offset_top = -160.0
+offset_right = 260.0
+offset_bottom = 160.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="ChoicePanel"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="ChoicePanel/Layout"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Your career is ending. Choose your heir:"
+
+[node name="CandidatesContainer" type="VBoxContainer" parent="ChoicePanel/Layout"]
+layout_mode = 2
+
+[node name="GameOverPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -80.0
+offset_right = 220.0
+offset_bottom = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="GameOverLabel" type="Label" parent="GameOverPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = "..."
