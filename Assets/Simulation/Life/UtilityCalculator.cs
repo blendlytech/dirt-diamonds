@@ -47,6 +47,13 @@ public static class UtilityCalculator
     public static readonly ActionWeights DefaultWeights =
         new(needDeficitWeight: 1.4f, temporalCostWeight: 0.3f, financialCostWeight: 0.3f, riskWeight: 0.2f, stressReliefWeight: 0.8f);
 
+    // life_sim_ai.md's second override trigger, live since Phase 7 gave the
+    // stress scalar a source: at/above this, "high stress can override queued
+    // actions, forcing the entity to autonomously seek stress-relief actions
+    // (alcohol, arguments) regardless of temporal cost" — same crisis pass the
+    // needs threshold engages, new trigger.
+    public const float StressOverrideThreshold = 70f;
+
     // life_sim_needs_decay.md §7: convex, low-need-dominant — a starving NPC
     // values food disproportionately. 0 when full, 1 when empty.
     public static float NeedDeficitScore(float value, float power = DefaultDeficitPower) =>
@@ -76,14 +83,16 @@ public static class UtilityCalculator
     // Never filters/skips a candidate for unaffordability or high risk — only
     // penalizes via score — so a desperate or broke NPC can never come back
     // empty-handed (ActionCatalog.Idle is always a zero-cost candidate).
-    public static NpcActionId SelectAction(in NeedsState needs, double fundsAvailable, in ActionWeights weights, out float bestUtility)
+    public static NpcActionId SelectAction(in NeedsState needs, double fundsAvailable, in ActionWeights weights, out float bestUtility, float stress0To100 = 0f)
     {
-        // life_sim_ai.md: at/under CriticalThreshold, the stress overlay can force
-        // an autonomous response regardless of temporal cost. Implemented as a
-        // whole-pass override rather than a per-action filter: temporal cost stops
-        // counting at all, and stress-relief actions (otherwise never worth it)
-        // become fully competitive.
-        bool anyCritical = needs.AnyAtOrBelow(NeedsEngine.CriticalThreshold);
+        // life_sim_ai.md: at/under CriticalThreshold — or at/above the stress
+        // override line, now that gritty events feed the stress scalar — the
+        // stress overlay can force an autonomous response regardless of temporal
+        // cost. Implemented as a whole-pass override rather than a per-action
+        // filter: temporal cost stops counting at all, and stress-relief actions
+        // (otherwise never worth it) become fully competitive.
+        bool anyCritical = needs.AnyAtOrBelow(NeedsEngine.CriticalThreshold)
+            || stress0To100 >= StressOverrideThreshold;
 
         NpcActionDefinition[] all = ActionCatalog.All;
         NpcActionId bestId = all[0].Id;

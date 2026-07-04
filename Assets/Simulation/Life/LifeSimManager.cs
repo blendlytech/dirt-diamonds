@@ -23,9 +23,24 @@ public sealed class LifeSimManager
         public double Funds;
         public int BusyHoursRemaining;
         public NpcActionId CurrentAction;
+
+        // The §4.2 stress scalar, 0 (calm) to 100. Fed by StressImpulseEvent
+        // (gritty events); in-memory only, like needs were before schema v5 —
+        // persistence is a deferred additive pass (gritty_event_framework.md §9).
+        public float Stress;
     }
 
     private const int HoursPerDay = 24;
+
+    public const float MinStress = 0f;
+    public const float MaxStress = 100f;
+
+    // First-pass constants (no design-doc anchor — disclosed, tunable via
+    // simulate_utility_decay like every constant table here): a +25 stress
+    // event frays an NPC for ~2.5 days of passive relaxation, and one
+    // stress-relief action (DrinkAlone / PickArgument) buys ~1.5 days back.
+    public const float StressRelaxationPerHour = 0.4f;
+    public const float StressReliefPerAction = 15f;
 
     private readonly Dictionary<string, NpcRuntime> _npcs = new();
     // Dictionary enumeration order isn't a documented guarantee; tracked
@@ -34,11 +49,15 @@ public sealed class LifeSimManager
     private readonly List<string> _order = new();
     private readonly ActionWeights _weights;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
+    private readonly Action<StressImpulseEvent> _onStressImpulse;
+    private readonly Action<FundsImpulseEvent> _onFundsImpulse;
 
     public LifeSimManager(ActionWeights? weights = null)
     {
         _weights = weights ?? UtilityCalculator.DefaultWeights;
         _onDayAdvanced = OnDayAdvanced;
+        _onStressImpulse = OnStressImpulse;
+        _onFundsImpulse = OnFundsImpulse;
     }
 
     public int NpcCount => _order.Count;
@@ -82,9 +101,22 @@ public sealed class LifeSimManager
         }
     }
 
-    public void AttachTo(EventBus bus) => bus.Subscribe(_onDayAdvanced);
+    public void AttachTo(EventBus bus)
+    {
+        bus.Subscribe(_onDayAdvanced);
+        // Cross-system signals arrive via the bus, never a direct call
+        // (life_sim_needs_decay.md §10) — gritty events raise stress and move
+        // money through these two impulses.
+        bus.Subscribe(_onStressImpulse);
+        bus.Subscribe(_onFundsImpulse);
+    }
 
-    public void DetachFrom(EventBus bus) => bus.Unsubscribe(_onDayAdvanced);
+    public void DetachFrom(EventBus bus)
+    {
+        bus.Unsubscribe(_onDayAdvanced);
+        bus.Unsubscribe(_onStressImpulse);
+        bus.Unsubscribe(_onFundsImpulse);
+    }
 
     public bool TryGetNeeds(string playerId, out NeedsState needs)
     {
@@ -108,6 +140,44 @@ public sealed class LifeSimManager
         return false;
     }
 
+    public bool TryGetStress(string playerId, out float stress)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            stress = runtime.Stress;
+            return true;
+        }
+        stress = 0f;
+        return false;
+    }
+
+    /// <summary>Overwrites a tracked NPC's stress (harness fixtures / future hydration). No-op when untracked, like SetNeeds.</summary>
+    public void SetStress(string playerId, float stress)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            runtime.Stress = Math.Clamp(stress, MinStress, MaxStress);
+        }
+    }
+
+    private void OnStressImpulse(StressImpulseEvent e)
+    {
+        if (_npcs.TryGetValue(e.PlayerId, out NpcRuntime? runtime))
+        {
+            runtime.Stress = Math.Clamp(runtime.Stress + e.Delta, MinStress, MaxStress);
+        }
+    }
+
+    // The DB row already moved (the applier's atomic floor-clamped UPDATE);
+    // this keeps the in-memory mirror the utility layer reads in step.
+    private void OnFundsImpulse(FundsImpulseEvent e)
+    {
+        if (_npcs.TryGetValue(e.PlayerId, out NpcRuntime? runtime))
+        {
+            runtime.Funds = Math.Max(0.0, runtime.Funds + e.Delta);
+        }
+    }
+
     private void OnDayAdvanced(DayAdvancedEvent e)
     {
         for (int i = 0; i < _order.Count; i++)
@@ -122,7 +192,10 @@ public sealed class LifeSimManager
 
     private void TickHour(NpcRuntime npc)
     {
-        bool critical = npc.Needs.AnyAtOrBelow(NeedsEngine.CriticalThreshold);
+        // Crisis = a critical need OR high stress (life_sim_ai.md's two override
+        // triggers — the stress one live since Phase 7 gave the scalar a source).
+        bool critical = npc.Needs.AnyAtOrBelow(NeedsEngine.CriticalThreshold)
+            || npc.Stress >= UtilityCalculator.StressOverrideThreshold;
 
         if (critical)
         {
@@ -131,7 +204,7 @@ public sealed class LifeSimManager
             // in-progress action is still the right call, let it run uninterrupted
             // (no double-restore); otherwise abandon it now, not when its
             // countdown happens to finish.
-            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _);
+            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _, npc.Stress);
             if (npc.BusyHoursRemaining <= 0 || picked != npc.CurrentAction)
             {
                 ApplyAction(npc, picked);
@@ -139,7 +212,7 @@ public sealed class LifeSimManager
         }
         else if (npc.BusyHoursRemaining <= 0)
         {
-            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _);
+            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _, npc.Stress);
             ApplyAction(npc, picked);
         }
 
@@ -148,11 +221,16 @@ public sealed class LifeSimManager
             npc.BusyHoursRemaining--;
         }
 
-        // life_sim_needs_decay.md §4.1: the hour decays under the current activity's
-        // per-need Environmental Multiplier (CurrentAction is always this hour's
-        // activity — every path above either re-selects or is mid-action). Stress
-        // stays 1.0: the §4.2 stress scalar has no live source until Gritty Events.
-        npc.Needs = NeedsEngine.DecayHour(npc.Needs, ActionCatalog.Get(npc.CurrentAction).Environment);
+        // life_sim_needs_decay.md §4.1/§4.2: the hour decays under the current
+        // activity's per-need Environmental Multiplier and the live stress
+        // scalar's S (stress 0 → S=1, bit-identical to the pre-Phase-7 traces).
+        npc.Needs = NeedsEngine.DecayHour(
+            npc.Needs,
+            ActionCatalog.Get(npc.CurrentAction).Environment,
+            NeedsEngine.StressModifierFor(npc.Stress));
+
+        // Passive relaxation: an arc fades unless events keep feeding it.
+        npc.Stress = Math.Max(MinStress, npc.Stress - StressRelaxationPerHour);
     }
 
     private static void ApplyAction(NpcRuntime npc, NpcActionId id)
@@ -161,6 +239,10 @@ public sealed class LifeSimManager
         if (def.PrimaryNeed is NeedType need)
         {
             npc.Needs.Restore(need, def.RestoreAmount);
+        }
+        if (def.IsStressRelief)
+        {
+            npc.Stress = Math.Max(MinStress, npc.Stress - StressReliefPerAction);
         }
         npc.Funds = Math.Max(0.0, npc.Funds - def.FinancialCost);
         npc.CurrentAction = id;

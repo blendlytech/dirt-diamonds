@@ -36,6 +36,38 @@ public sealed class PlayerQueries
     private const string SqlUpdateTeam =
         "UPDATE Players SET team_id = @teamId WHERE player_id = @playerId;";
 
+    // Targeted single-player age write — heir mechanics (design doc §5.5): the
+    // yearly aging tick itself is a separate, not-yet-built surface (a
+    // set-based age = age + 1 over every player, owned by the succession
+    // handoff), but the harness needs to seed a specific player's age directly
+    // to exercise the §1.2 direction invariant before that tick exists.
+    private const string SqlUpdateAge =
+        "UPDATE Players SET age = @age WHERE player_id = @playerId;";
+
+    // The yearly aging tick (heir mechanics §5.5): one set-based statement over
+    // every player, fired once per SeasonRolledOverEvent by the succession
+    // owner (CareerManager). No join, no filter — retirees keep aging (the FA
+    // signability window reads age) and heirs must mature.
+    private const string SqlAgeAllPlayers =
+        "UPDATE Players SET age = age + 1;";
+
+    // Targeted single-player interest write. Production sets interest once at
+    // conception (via Insert); this exists so the harness can seed the §8
+    // check-10 lineage-failure fixtures (an heir forced unwilling) exactly the
+    // way SqlUpdateAge seeds ages — and it is the write path Phase 7 gritty
+    // events will use when they re-weight a not-yet-revealed heir's interest.
+    private const string SqlUpdateInterest =
+        "UPDATE Players SET baseball_interest = @interest WHERE player_id = @playerId;";
+
+    // Gritty-event consequence writers (gritty_event_framework.md §4): atomic
+    // read-modify-write with the clamp in SQL (the PED-cost precedent), so a
+    // consequence never races a stale C#-side read of the current value.
+    private const string SqlAdjustFunds =
+        "UPDATE Players SET funds = MAX(0, funds + @delta) WHERE player_id = @playerId;";
+
+    private const string SqlAdjustInterest =
+        "UPDATE Players SET baseball_interest = MAX(0, MIN(100, baseball_interest + @delta)) WHERE player_id = @playerId;";
+
     private const string SqlDeletePlayer =
         "DELETE FROM Players WHERE player_id = @playerId;";
 
@@ -84,6 +116,11 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _countPlayers;
     private readonly SqliteCommand _updateFunds;
     private readonly SqliteCommand _updateTeam;
+    private readonly SqliteCommand _updateAge;
+    private readonly SqliteCommand _ageAllPlayers;
+    private readonly SqliteCommand _updateInterest;
+    private readonly SqliteCommand _adjustFunds;
+    private readonly SqliteCommand _adjustInterest;
     private readonly SqliteCommand _deletePlayer;
     private readonly SqliteCommand _insertBattingSeason;
     private readonly SqliteCommand _selectBattingByPlayer;
@@ -109,6 +146,11 @@ public sealed class PlayerQueries
         _countPlayers = Acquire(SqlCountPlayers);
         _updateFunds = Acquire(SqlUpdateFunds, ("@funds", SqliteType.Real), ("@playerId", SqliteType.Text));
         _updateTeam = Acquire(SqlUpdateTeam, ("@teamId", SqliteType.Integer), ("@playerId", SqliteType.Text));
+        _updateAge = Acquire(SqlUpdateAge, ("@age", SqliteType.Integer), ("@playerId", SqliteType.Text));
+        _ageAllPlayers = Acquire(SqlAgeAllPlayers);
+        _updateInterest = Acquire(SqlUpdateInterest, ("@interest", SqliteType.Integer), ("@playerId", SqliteType.Text));
+        _adjustFunds = Acquire(SqlAdjustFunds, ("@delta", SqliteType.Real), ("@playerId", SqliteType.Text));
+        _adjustInterest = Acquire(SqlAdjustInterest, ("@delta", SqliteType.Integer), ("@playerId", SqliteType.Text));
         _deletePlayer = Acquire(SqlDeletePlayer, ("@playerId", SqliteType.Text));
 
         _insertBattingSeason = Acquire(SqlInsertBattingSeason,
@@ -243,6 +285,61 @@ public sealed class PlayerQueries
         _updateTeam.Parameters["@teamId"].Value = teamId.HasValue ? teamId.Value : DBNull.Value;
         _updateTeam.Parameters["@playerId"].Value = playerId;
         _db.ExecuteNonQuery(_updateTeam);
+    }
+
+    /// <summary>
+    /// Sets a player's age directly — a targeted single-row write, distinct
+    /// from the not-yet-built yearly aging tick (a set-based age = age + 1
+    /// over every player, design doc §5.5). Lets the harness seed exact ages
+    /// to exercise the heir-mechanics §1.2 direction invariant.
+    /// </summary>
+    public void SetAge(string playerId, int age)
+    {
+        _updateAge.Parameters["@age"].Value = age;
+        _updateAge.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_updateAge);
+    }
+
+    /// <summary>
+    /// The §5.5 yearly aging tick: ages every player by one year in a single
+    /// set-based statement (its own implicit transaction — one statement per
+    /// season rollover, never one per row). Returns the rows touched.
+    /// </summary>
+    public int AgeAllPlayers() => _db.ExecuteNonQuery(_ageAllPlayers);
+
+    /// <summary>
+    /// Sets a player's hidden baseball_interest directly — harness fixture
+    /// seeding today (heir mechanics §8 check 10), the Phase 7 gritty-event
+    /// write path for re-weighting a not-yet-revealed heir later.
+    /// </summary>
+    public void SetBaseballInterest(string playerId, int interest)
+    {
+        _updateInterest.Parameters["@interest"].Value = interest;
+        _updateInterest.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_updateInterest);
+    }
+
+    /// <summary>
+    /// Gritty-event funds writer: atomic delta, floor-clamped at 0 in SQL.
+    /// The applier pairs this with a FundsImpulseEvent so the Life sim's
+    /// in-memory funds mirror moves identically.
+    /// </summary>
+    public void AdjustFunds(string playerId, double delta)
+    {
+        _adjustFunds.Parameters["@delta"].Value = delta;
+        _adjustFunds.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_adjustFunds);
+    }
+
+    /// <summary>
+    /// Gritty-event interest writer (heir_mechanics.md §11.2 — events
+    /// re-weight a not-yet-revealed heir): atomic delta, clamped [0,100] in SQL.
+    /// </summary>
+    public void AdjustBaseballInterest(string playerId, int delta)
+    {
+        _adjustInterest.Parameters["@delta"].Value = delta;
+        _adjustInterest.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_adjustInterest);
     }
 
     /// <summary>Removes a player; stats, flags and relationships cascade via FK rules.</summary>

@@ -13,6 +13,25 @@ public static class GameStateKeys
 
     /// <summary>player_id (text) of the career avatar; absent until the player creates one.</summary>
     public const string AvatarPlayerId = "avatar_player_id";
+
+    /// <summary>
+    /// Current dynasty generation (long) — heir mechanics (design doc §1.3).
+    /// 1 at founder creation, +1 on every successful succession handoff (§5.3).
+    /// Written by the succession-handoff owner; the 3-generation exit
+    /// criterion asserts this reaches 3.
+    /// </summary>
+    public const string DynastyGeneration = "dynasty_generation";
+
+    /// <summary>player_id (text) of the gen-1 founder avatar (design doc §1.3) — legacy/records display.</summary>
+    public const string DynastyFounderId = "dynasty_founder_id";
+
+    /// <summary>
+    /// Absent while the bloodline is still in play; set to a LineageFailure
+    /// reason string (design doc §6: NoHeirs/NoWillingHeir/NoPlayableHeir)
+    /// once a retirement trigger finds no eligible heir. Its presence IS the
+    /// game-over flag.
+    /// </summary>
+    public const string LineageOverReason = "lineage_over_reason";
 }
 
 /// <summary>

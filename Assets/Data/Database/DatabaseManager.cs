@@ -289,6 +289,122 @@ public sealed class DatabaseManager : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // Read-only companion view (the Gritty Event dispatcher's poll channel)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Opens the read-only companion connection the Phase-7 Gritty Event
+    /// dispatcher polls from its background thread. WAL (enabled on the main
+    /// connection since Phase 1 for exactly this reader) lets the poll run
+    /// while a sim batch commits. DatabaseManager remains the only class that
+    /// opens connections — the view is a nested type only this method
+    /// constructs. The caller owns disposal and must dispose the view before
+    /// this manager is disposed.
+    /// </summary>
+    public ReadOnlyView CreateReadOnlyView()
+    {
+        lock (_dbLock)
+        {
+            ThrowIfDisposed();
+        }
+        return new ReadOnlyView(DatabasePath);
+    }
+
+    /// <summary>
+    /// A second, strictly read-only connection to the same save file, for the
+    /// background polling thread. Mirrors the pooled-prepared-command
+    /// discipline of the main connection; it can never write (SQLite
+    /// read-only open mode), never holds a transaction, and is meant to be
+    /// touched by exactly one thread (the poller) — the lock is a guard, not
+    /// a sharing invitation.
+    /// </summary>
+    public sealed class ReadOnlyView : IDisposable
+    {
+        private readonly SqliteConnection _connection;
+        private readonly Dictionary<string, SqliteCommand> _commandPool = new();
+        private readonly object _viewLock = new();
+        private bool _disposed;
+
+        internal ReadOnlyView(string databasePath)
+        {
+            var builder = new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false,
+            };
+            _connection = new SqliteConnection(builder.ConnectionString);
+            _connection.Open();
+
+            // Briefly colliding with a WAL checkpoint must wait, not throw —
+            // same pairing the main connection uses.
+            using SqliteCommand pragma = _connection.CreateCommand();
+            pragma.CommandText = "PRAGMA busy_timeout = 5000;";
+            pragma.ExecuteNonQuery();
+        }
+
+        /// <summary>Same contract as <see cref="DatabaseManager.GetPooledCommand"/>: compile-time-constant SQL only.</summary>
+        public SqliteCommand GetPooledCommand(string sql)
+        {
+            lock (_viewLock)
+            {
+                ThrowIfDisposed();
+                if (!_commandPool.TryGetValue(sql, out SqliteCommand? command))
+                {
+                    command = _connection.CreateCommand();
+                    command.CommandText = sql;
+                    _commandPool.Add(sql, command);
+                }
+                return command;
+            }
+        }
+
+        public SqliteDataReader ExecuteReader(SqliteCommand command)
+        {
+            lock (_viewLock)
+            {
+                ThrowIfDisposed();
+                return command.ExecuteReader();
+            }
+        }
+
+        public object? ExecuteScalar(SqliteCommand command)
+        {
+            lock (_viewLock)
+            {
+                ThrowIfDisposed();
+                return command.ExecuteScalar();
+            }
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(ReadOnlyView));
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_viewLock)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+                _disposed = true;
+                foreach (SqliteCommand command in _commandPool.Values)
+                {
+                    command.Dispose();
+                }
+                _commandPool.Clear();
+                _connection.Dispose();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Internals
     // ------------------------------------------------------------------
 

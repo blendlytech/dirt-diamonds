@@ -1,0 +1,108 @@
+{
+  "//": "Seed gritty-event batch (gritty_event_framework.md §2-§4). Doubles as the pipeline fixture set: the bribe → compromised_syndicate → shakedown pair is the Phase-7 exit-criteria cascade; beanball_grudge is the organic rivalry writer; backyard_catch is the heir interest writer. Sonnet 5 content batches join this folder and must pass check_event_graph_integrity.",
+  "events": [
+    {
+      "id": "back_alley_bribe",
+      "scope": "any",
+      "weight": 0.1,
+      "cooldown_days": 120,
+      "prerequisites": [
+        { "field": "funds", "op": "<", "value": 500 },
+        { "field": "recklessness", "op": ">", "value": 75 },
+        { "flag_inactive": "compromised_syndicate" }
+      ],
+      "choices": [
+        {
+          "id": "take_the_envelope",
+          "autopilot_weight": 3,
+          "consequences": [
+            { "type": "funds", "amount": 2000 },
+            { "type": "set_flag", "flag": "compromised_syndicate" },
+            { "type": "stress", "amount": 25 }
+          ]
+        },
+        {
+          "id": "walk_away",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "stress", "amount": 10 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "syndicate_shakedown",
+      "scope": "any",
+      "weight": 0.25,
+      "cooldown_days": 180,
+      "prerequisites": [
+        { "flag_active": "compromised_syndicate", "min_days_since": 365 }
+      ],
+      "choices": [
+        {
+          "id": "pay_up",
+          "autopilot_weight": 2,
+          "consequences": [
+            { "type": "funds", "amount": -3000 },
+            { "type": "stress", "amount": 20 }
+          ]
+        },
+        {
+          "id": "defy_them",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "set_flag", "flag": "syndicate_marked" },
+            { "type": "stress", "amount": 40 },
+            { "type": "relationship", "kind": "rival", "affinity": -50, "target": "league" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beanball_grudge",
+      "scope": "any",
+      "weight": 0.03,
+      "cooldown_days": 90,
+      "prerequisites": [
+        { "field": "recklessness", "op": ">", "value": 60 },
+        { "field": "age", "op": ">=", "value": 18 }
+      ],
+      "choices": [
+        {
+          "id": "charge_the_mound",
+          "autopilot_weight": 2,
+          "consequences": [
+            { "type": "relationship", "kind": "rival", "affinity": -35, "target": "opponent" },
+            { "type": "stress", "amount": 10 }
+          ]
+        },
+        {
+          "id": "brush_it_off",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "stress", "amount": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "backyard_catch",
+      "scope": "any",
+      "weight": 0.05,
+      "cooldown_days": 30,
+      "prerequisites": [
+        { "field": "age", "op": "<", "value": 16 }
+      ],
+      "choices": [
+        {
+          "id": "caught_the_bug",
+          "autopilot_weight": 1,
+          "consequences": [
+            { "type": "interest", "amount": 8 },
+            { "type": "stress", "amount": -5 }
+          ]
+        }
+      ]
+    }
+  ]
+}

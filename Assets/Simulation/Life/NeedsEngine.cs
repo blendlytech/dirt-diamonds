@@ -128,6 +128,14 @@ public static class NeedsEngine
     // during a high-stress arc can't produce a physically absurd per-hour cliff.
     public const float MaxCombinedModifier = 3f;
 
+    // §4.2's S_max: an all-consuming arc (stress 100) decays everything 2.5x faster.
+    public const float MaxStressModifier = 2.5f;
+
+    // The §4.2 mapping verbatim: S = 1 + (S_max − 1) · (stress / 100). Stress 0 → 1.0
+    // (bit-identical to every pre-Phase-7 trace); stress never *helps* a need (S ≥ 1).
+    public static float StressModifierFor(float stress0To100) =>
+        1f + (MaxStressModifier - 1f) * Math.Clamp(stress0To100, 0f, 100f) / 100f;
+
     // Tuned via Tools/NeedsDecayHarness (simulate_utility_decay skill) against two anchors:
     // a 3-hour attended baseball game must not leave a standard NPC starving, and a full
     // 168-hour week of total neglect must drive every need into desperation.

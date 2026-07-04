@@ -189,7 +189,16 @@ public static class LeagueGenerator
         return true;
     }
 
-    private static (string PlayerId, int PitStuff) GeneratePlayer(
+    /// <summary>
+    /// Invents one player (Players + ratings + role row when a pitcher) on
+    /// <paramref name="teamId"/>, joining the caller's open batch. Internal
+    /// because it is a building block, not a lifecycle: world-gen and EnsureV4
+    /// call it in bulk, and the succession handoff (heir mechanics §5.4) calls
+    /// it for a replacement-level backfill filler when the free-agent pool has
+    /// nobody of the vacated role. A pitcher still needs
+    /// <see cref="GenerateArsenal"/> called after.
+    /// </summary>
+    internal static (string PlayerId, int PitStuff) GeneratePlayer(
         PlayerQueries players, BaseballQueries baseball, int teamId, PitcherRole role,
         int ratingSpread, ref RngState rng)
     {

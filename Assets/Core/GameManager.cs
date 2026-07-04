@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
 using Godot;
@@ -25,6 +26,9 @@ public sealed partial class GameManager : Node
     // (Phase 9), SchemaDefinitions.sql must be added to the export include
     // filter or FileAccess won't find it inside the .pck.
     private const string SchemaResourcePath = "res://Assets/Data/Database/SchemaDefinitions.sql";
+    // NOTE: like the .sql above, .json is not a Godot resource type — Phase 9
+    // export presets must add Content/*.json to the export include filters.
+    private const string GrittyEventContentDir = "res://Assets/Narrative/Events/Content";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -58,6 +62,14 @@ public sealed partial class GameManager : Node
     // both baseball sims. Owned here because it exists exactly as long as the
     // bus does; the sims only hold the optional reference.
     private RivalryLedger _rivalryLedger = null!;
+
+    // Phase 7 Gritty Events: the background poller (own read-only WAL view)
+    // and its main-thread consequence applier. GameManager owns both
+    // lifecycles; the dispatcher must stop before the database disposes.
+    public GrittyEventLibrary GrittyEvents { get; private set; } = null!;
+    private DatabaseManager.ReadOnlyView? _pollView;
+    private EventDispatcher? _grittyDispatcher;
+    private EventConsequenceApplier _grittyApplier = null!;
 
     public override void _Ready()
     {
@@ -178,13 +190,29 @@ public sealed partial class GameManager : Node
         Relationships.AttachTo(Events);
         Events.Subscribe<DayAdvancedEvent>(PersistRelationships);
 
+        // Phase 7: Gritty Events. Content loads from every batch file in the
+        // Content folder (a new Sonnet batch is a dropped-in file); the applier
+        // subscribes on the main pump; the dispatcher polls from its own
+        // thread against a read-only WAL view. Wall-clock seeds, same
+        // determinism contract as the league (the harness seeds its own).
+        GrittyEvents = GrittyEventJson.Parse(LoadGrittyEventContent());
+        _grittyApplier = new EventConsequenceApplier(
+            _database, Players, GrittyEvents, Relationships, Events,
+            unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);
+        _grittyApplier.AttachTo(Events);
+        _pollView = _database.CreateReadOnlyView();
+        _grittyDispatcher = new EventDispatcher(
+            GrittyEvents, new NarrativePollQueries(_pollView), Events,
+            unchecked((ulong)System.Environment.TickCount64));
+        _grittyDispatcher.Start();
+
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
             $"[GameManager] Save open at '{databasePath}' — schema v{schemaVersion}, journal={journalMode}, " +
             $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}), " +
             $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams), " +
             $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}, " +
-            $"relationships {Relationships.EdgeCount}.");
+            $"relationships {Relationships.EdgeCount}, gritty events {GrittyEvents.Count} (dispatcher polling).");
     }
 
     public override void _Process(double delta)
@@ -198,6 +226,12 @@ public sealed partial class GameManager : Node
         {
             Instance = null;
         }
+        // Stop the poller before any teardown touches the database; its view
+        // closes with it. Dispose is idempotent and joins the thread.
+        _grittyDispatcher?.Dispose();
+        _grittyDispatcher = null;
+        _pollView?.Dispose();
+        _pollView = null;
         if (_database is not null && LifeSim is not null)
         {
             // Final flush so a mid-day quit doesn't lose that day's progress —
@@ -210,6 +244,43 @@ public sealed partial class GameManager : Node
         }
         _database?.Dispose();
         _database = null;
+    }
+
+    /// <summary>
+    /// Reads every gritty-event content batch (Content/*.json) through Godot
+    /// FileAccess — res:// lives inside the .pck when exported, same reason
+    /// the schema DDL loads this way. Loud when the folder or every batch is
+    /// missing: the seed batch is checked in, so absence is a broken build.
+    /// </summary>
+    private static List<string> LoadGrittyEventContent()
+    {
+        using DirAccess dir = DirAccess.Open(GrittyEventContentDir)
+            ?? throw new InvalidOperationException(
+                $"Could not open '{GrittyEventContentDir}' ({DirAccess.GetOpenError()}) — gritty event content is missing.");
+
+        var documents = new List<string>();
+        foreach (string file in dir.GetFiles())
+        {
+            if (!file.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            string path = $"{GrittyEventContentDir}/{file}";
+            string json = FileAccess.GetFileAsString(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                throw new InvalidOperationException(
+                    $"Could not read gritty event batch '{path}' ({FileAccess.GetOpenError()}).");
+            }
+            documents.Add(json);
+        }
+
+        if (documents.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"No gritty event content batches found under '{GrittyEventContentDir}'.");
+        }
+        return documents;
     }
 
     private void PersistLifeSimNeeds(DayAdvancedEvent _)

@@ -33,6 +33,14 @@ public sealed class BaseballQueries
         "pit_stuff = excluded.pit_stuff, pit_control = excluded.pit_control, pit_stamina = excluded.pit_stamina, " +
         "fielding = excluded.fielding;";
 
+    // Single-player ratings lookup (heir mechanics §9.2: resolving a parent's
+    // ratings by id — the roster join in SqlSelectRoster only covers ROSTERED
+    // players, but a Partner or a not-yet-succeeded heir may be unrostered).
+    // Rides the Player_Ratings PK directly — no join, no plan check needed.
+    private const string SqlSelectRatingsById =
+        "SELECT player_id, is_pitcher, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding " +
+        "FROM Player_Ratings WHERE player_id = @playerId;";
+
     // The macro-sim's single up-front bulk load. Ordered (team, player) so the
     // simulator's lineup/rotation assignment is deterministic across sessions.
     // Schema v4 adds the Pitcher_Roles LEFT JOIN (COALESCE 0 = None for position
@@ -49,12 +57,35 @@ public sealed class BaseballQueries
         "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
         "WHERE p.team_id IS NOT NULL ORDER BY p.team_id, p.player_id;";
 
+    // Signable free agents for succession backfill (heir mechanics §5.4): the
+    // roster join's exact column shape over the team_id IS NULL bucket (0
+    // stands in for the absent team_id so the reader stays shared), windowed
+    // to playable people — of age, not aged out, not health-retired — so an
+    // underage heir or a retired avatar can never be "promoted" back onto a
+    // roster. Bounds arrive as parameters because the constants live in the
+    // Baseball layer's HeirGeneticsProfile, above this one. Plan validated via
+    // the sqlite MCP (No Blind Queries): idx_players_team seeks the NULL
+    // bucket, both PK autoindexes probe the joins.
+    private const string SqlSelectFreeAgents =
+        "SELECT p.player_id, p.first_name, p.last_name, 0, r.is_pitcher, COALESCE(pr.role, 0), " +
+        "r.bat_power, r.bat_contact, r.bat_discipline, " +
+        "r.pit_stuff, r.pit_control, r.pit_stamina, r.fielding " +
+        "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
+        "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
+        "WHERE p.team_id IS NULL AND p.age >= @minAge AND p.age < @maxAge AND p.health_ceiling > @minHealth " +
+        "ORDER BY p.player_id;";
+
     // Schema v4: bullpen role + arsenal writes (world-gen / avatar creation) and
     // the arsenal bulk load (rides the composite PK; ordered so slot-indexed
     // arsenal assembly is deterministic across sessions).
     private const string SqlUpsertPitcherRole =
         "INSERT INTO Pitcher_Roles (player_id, role) VALUES (@playerId, @role) " +
         "ON CONFLICT (player_id) DO UPDATE SET role = excluded.role;";
+
+    // Single-player role lookup (heir mechanics §9.2: a pitcher heir inherits
+    // parent A's bullpen role when it has one). Rides the PK directly.
+    private const string SqlSelectPitcherRoleById =
+        "SELECT role FROM Pitcher_Roles WHERE player_id = @playerId;";
 
     private const string SqlUpsertArsenalPitch =
         "INSERT INTO Pitch_Arsenals (player_id, pitch_type, velocity, movement, usage_weight) VALUES " +
@@ -140,8 +171,11 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _selectAllTeams;
     private readonly SqliteCommand _countTeams;
     private readonly SqliteCommand _upsertRatings;
+    private readonly SqliteCommand _selectRatingsById;
     private readonly SqliteCommand _selectRoster;
+    private readonly SqliteCommand _selectFreeAgents;
     private readonly SqliteCommand _upsertPitcherRole;
+    private readonly SqliteCommand _selectPitcherRoleById;
     private readonly SqliteCommand _upsertArsenalPitch;
     private readonly SqliteCommand _selectAllArsenals;
     private readonly SqliteCommand _selectActiveFlagPlayerIds;
@@ -171,10 +205,17 @@ public sealed class BaseballQueries
             ("@pitStuff", SqliteType.Integer), ("@pitControl", SqliteType.Integer), ("@pitStamina", SqliteType.Integer),
             ("@fielding", SqliteType.Integer));
 
+        _selectRatingsById = Acquire(SqlSelectRatingsById, ("@playerId", SqliteType.Text));
+
         _selectRoster = Acquire(SqlSelectRoster);
+
+        _selectFreeAgents = Acquire(SqlSelectFreeAgents,
+            ("@minAge", SqliteType.Integer), ("@maxAge", SqliteType.Integer), ("@minHealth", SqliteType.Integer));
 
         _upsertPitcherRole = Acquire(SqlUpsertPitcherRole,
             ("@playerId", SqliteType.Text), ("@role", SqliteType.Integer));
+
+        _selectPitcherRoleById = Acquire(SqlSelectPitcherRoleById, ("@playerId", SqliteType.Text));
 
         _upsertArsenalPitch = Acquire(SqlUpsertArsenalPitch,
             ("@playerId", SqliteType.Text), ("@pitchType", SqliteType.Text),
@@ -283,6 +324,36 @@ public sealed class BaseballQueries
     }
 
     /// <summary>
+    /// Single-player ratings lookup by id — false when the player has no
+    /// Player_Ratings row (e.g. a non-baseball Partner NPC). Unlike
+    /// <see cref="LoadRoster"/> this is not restricted to rostered players,
+    /// so it also resolves an unrostered heir or Partner.
+    /// </summary>
+    public bool TryGetRatings(string playerId, out PlayerRatingsRow ratings)
+    {
+        _selectRatingsById.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectRatingsById);
+        if (!reader.Read())
+        {
+            ratings = default;
+            return false;
+        }
+        ratings = new PlayerRatingsRow
+        {
+            PlayerId = reader.GetString(0),
+            IsPitcher = reader.GetInt64(1) != 0,
+            BatPower = reader.GetInt32(2),
+            BatContact = reader.GetInt32(3),
+            BatDiscipline = reader.GetInt32(4),
+            PitStuff = reader.GetInt32(5),
+            PitControl = reader.GetInt32(6),
+            PitStamina = reader.GetInt32(7),
+            Fielding = reader.GetInt32(8),
+        };
+        return true;
+    }
+
+    /// <summary>
     /// Bulk-loads every rostered, baseball-active player (Players ⋈ Player_Ratings,
     /// team_id set) into <paramref name="destination"/> (cleared first), ordered by
     /// (team_id, player_id). The macro-sim calls this once at load — never
@@ -292,6 +363,42 @@ public sealed class BaseballQueries
     {
         destination.Clear();
         using SqliteDataReader reader = _db.ExecuteReader(_selectRoster);
+        while (reader.Read())
+        {
+            destination.Add(new RosterPlayerRow
+            {
+                PlayerId = reader.GetString(0),
+                FirstName = reader.GetString(1),
+                LastName = reader.GetString(2),
+                TeamId = reader.GetInt32(3),
+                IsPitcher = reader.GetInt64(4) != 0,
+                Role = (PitcherRole)reader.GetInt32(5),
+                BatPower = reader.GetInt32(6),
+                BatContact = reader.GetInt32(7),
+                BatDiscipline = reader.GetInt32(8),
+                PitStuff = reader.GetInt32(9),
+                PitControl = reader.GetInt32(10),
+                PitStamina = reader.GetInt32(11),
+                Fielding = reader.GetInt32(12),
+            });
+        }
+        return destination.Count;
+    }
+
+    /// <summary>
+    /// Loads every signable free agent (heir mechanics §5.4 backfill pool):
+    /// unrostered players with ratings, inside the caller's playable window —
+    /// age in [minAge, maxAge) and health_ceiling above minHealth. TeamId is 0
+    /// on every returned row. A cold succession-time read, never per-PA.
+    /// </summary>
+    public int LoadFreeAgents(List<RosterPlayerRow> destination, int minAge, int maxAge, int minHealth)
+    {
+        SqliteParameterCollection p = _selectFreeAgents.Parameters;
+        p["@minAge"].Value = minAge;
+        p["@maxAge"].Value = maxAge;
+        p["@minHealth"].Value = minHealth;
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectFreeAgents);
         while (reader.Read())
         {
             destination.Add(new RosterPlayerRow
@@ -325,6 +432,20 @@ public sealed class BaseballQueries
         p["@playerId"].Value = playerId;
         p["@role"].Value = (int)role;
         _db.ExecuteNonQuery(_upsertPitcherRole);
+    }
+
+    /// <summary>Single-player bullpen-role lookup by id — false when the player has no Pitcher_Roles row (position players).</summary>
+    public bool TryGetPitcherRole(string playerId, out PitcherRole role)
+    {
+        _selectPitcherRoleById.Parameters["@playerId"].Value = playerId;
+        object? result = _db.ExecuteScalar(_selectPitcherRoleById);
+        if (result is null)
+        {
+            role = PitcherRole.None;
+            return false;
+        }
+        role = (PitcherRole)Convert.ToInt32(result);
+        return true;
     }
 
     /// <summary>Writes one pitch of a pitcher's arsenal (schema v4).</summary>

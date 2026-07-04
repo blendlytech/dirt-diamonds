@@ -61,6 +61,10 @@ internal static class Program
         string careerScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_career_{Guid.NewGuid():N}.db");
         string v4ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_v4_{Guid.NewGuid():N}.db");
         string rivalryScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_rivalry_{Guid.NewGuid():N}.db");
+        string heirScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_heir_{Guid.NewGuid():N}.db");
+        string lineageScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineage_{Guid.NewGuid():N}.db");
+        string lineageFailScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineagefail_{Guid.NewGuid():N}.db");
+        string lineageEdgeScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineageedge_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -72,6 +76,10 @@ internal static class Program
             RunCareerWiringSuite(schemaPath, careerScratchPath);
             RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
             RunRivalrySuite(schemaPath, rivalryScratchPath);
+            RunHeirGeneticsSuite(schemaPath, heirScratchPath);
+            RunLineageSuccessionSuite(schemaPath, lineageScratchPath);
+            RunLineageFailureSuite(schemaPath, lineageFailScratchPath);
+            RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
         }
         catch (Exception ex)
         {
@@ -96,6 +104,15 @@ internal static class Program
                 TryDelete(variant);
                 TryDelete(variant + "-wal");
                 TryDelete(variant + "-shm");
+            }
+            TryDelete(heirScratchPath);
+            TryDelete(heirScratchPath + "-wal");
+            TryDelete(heirScratchPath + "-shm");
+            foreach (string lineage in new[] { lineageScratchPath, lineageFailScratchPath, lineageEdgeScratchPath })
+            {
+                TryDelete(lineage);
+                TryDelete(lineage + "-wal");
+                TryDelete(lineage + "-shm");
             }
         }
 
@@ -1470,6 +1487,628 @@ internal static class Program
         a.HomeScore == b.HomeScore && a.AwayScore == b.AwayScore && a.Innings == b.Innings
         && a.HumanPa == b.HumanPa && a.HomeStarterPitches.Equals(b.HomeStarterPitches)
         && a.AwayStarterPitches.Equals(b.AwayStarterPitches);
+
+    // ------------------------------------------------------------------
+    // 9. Phase 6 heir mechanics: genetic blending & hidden interest
+    //    (docs/design/heir_mechanics.md §7/§8 checks 1–6 — Sonnet 5's half;
+    //    the succession handoff + 3-generation suite, checks 7–11, is
+    //    Fable 5's and is not exercised here). Checks 1–5 are pure math
+    //    (HeirGenetics never touches the database); check 6 needs a real
+    //    avatar + Child edges to exercise the direction invariant.
+    // ------------------------------------------------------------------
+
+    private static void RunHeirGeneticsSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 6 heir mechanics: genetic blending & interest (design doc §7/§8 checks 1–6) ---");
+
+        // ---- (1) §7 worked fixtures under injected bell, incl. one full-vector case ----
+        int f1 = HeirGenetics.BlendRating(85, 75, bell: 0.667);
+        Check("F1 two elite parents -> good-not-great heir (bat_power 73)", f1 == 73, $"got {f1}");
+
+        var f1VectorA = new PlayerRatingsRow { BatPower = 85, BatContact = 85, BatDiscipline = 85, PitStuff = 85, PitControl = 85, PitStamina = 85, Fielding = 85 };
+        var f1VectorB = new PlayerRatingsRow { BatPower = 75, BatContact = 75, BatDiscipline = 75, PitStuff = 75, PitControl = 75, PitStamina = 75, Fielding = 75 };
+        PlayerRatingsRow f1Vector = HeirGenetics.BlendRatings(in f1VectorA, in f1VectorB, isPitcher: false, bell: 0.667);
+        Check("F1 full-vector: the same law blends all seven ratings independently (all -> 73)",
+            f1Vector.BatPower == 73 && f1Vector.BatContact == 73 && f1Vector.BatDiscipline == 73
+            && f1Vector.PitStuff == 73 && f1Vector.PitControl == 73 && f1Vector.PitStamina == 73 && f1Vector.Fielding == 73,
+            $"{f1Vector.BatPower}/{f1Vector.BatContact}/{f1Vector.BatDiscipline}/{f1Vector.PitStuff}/{f1Vector.PitControl}/{f1Vector.PitStamina}/{f1Vector.Fielding}");
+
+        int f2 = HeirGenetics.BlendRating(85, HeirGenetics.AverageParent().BatPower, bell: -0.42);
+        Check("F2 lone-parent regression, mate = average-parent vector (bat_power 54)", f2 == 54, $"got {f2}");
+
+        int f4 = HeirGenetics.RollInterest(childEdgeAffinity: HeirGenetics.HeirGeneticsProfile.BirthAffinity, bell: -0.85);
+        Check("F4 interest reveal fails -> game over fixture (interest 34, below the 40 threshold)",
+            f4 == 34 && f4 < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold, $"got {f4}");
+
+        // F3 ("both parents 55 -> lucky bell -> 72") does not reconcile under the
+        // stated model: blended = 52.5 and Spread = 12 bound the lottery term to
+        // (-12, 12), so the reachable ceiling for this pair is <64.5 — 72 is
+        // unreachable at any valid bell. Treated as a design-doc inconsistency
+        // (flagged back, not silently patched): adapted into a qualitative check
+        // that a near-maximal lucky roll still meaningfully beats the blended
+        // baseline, using the verified formula rather than a fabricated bell.
+        int f3Adapted = HeirGenetics.BlendRating(55, 55, bell: 0.9);
+        Check("F3 (adapted — doc's '72' target is unreachable given Spread=12; see comment) lucky lottery beats the blended baseline",
+            f3Adapted > 52.5 + 8 && f3Adapted <= 100, $"got {f3Adapted} (blended 52.5)");
+
+        // ---- (2) Regression identity: at bell=0 the lottery term vanishes regardless
+        //          of Spread's actual value, leaving exactly round(50 + h·(midparent-50)) ----
+        bool regressionHolds = true;
+        int[] ratingSweep = { 0, 20, 40, 50, 60, 80, 100 };
+        foreach (int a in ratingSweep)
+        {
+            foreach (int b in ratingSweep)
+            {
+                double midparent = (a + b) / 2.0;
+                int expected = (int)Math.Round(50 + HeirGenetics.HeirGeneticsProfile.Heritability * (midparent - 50), MidpointRounding.AwayFromZero);
+                regressionHolds &= HeirGenetics.BlendRating(a, b, bell: 0.0) == expected;
+            }
+        }
+        PlayerRatingsRow averageParent = HeirGenetics.AverageParent();
+        foreach (int a in ratingSweep)
+        {
+            var loneParentA = new PlayerRatingsRow { BatPower = a };
+            double midparent = (a + averageParent.BatPower) / 2.0;
+            int expected = (int)Math.Round(50 + HeirGenetics.HeirGeneticsProfile.Heritability * (midparent - 50), MidpointRounding.AwayFromZero);
+            PlayerRatingsRow blended = HeirGenetics.BlendRatings(in loneParentA, in averageParent, isPitcher: false, bell: 0.0);
+            regressionHolds &= blended.BatPower == expected;
+        }
+        Check("regression identity: at bell=0, child_r == round(50 + h·(midparent−50)) for two-parent and lone-parent sweeps", regressionHolds);
+
+        // ---- (3) Bounds: extreme parents/affinity × extreme bell never escape [0,100] ----
+        bool allInBounds = true;
+        double[] extremeBells = { -0.999, -0.5, 0.0, 0.5, 0.999 };
+        int[] extremeRatings = { 0, 50, 100 };
+        foreach (int a in extremeRatings)
+        {
+            foreach (int b in extremeRatings)
+            {
+                foreach (double bell in extremeBells)
+                {
+                    int rating = HeirGenetics.BlendRating(a, b, bell);
+                    allInBounds &= rating is >= 0 and <= 100;
+                }
+            }
+        }
+        int[] extremeAffinities = { -100, 0, 100 };
+        foreach (int affinity in extremeAffinities)
+        {
+            foreach (double bell in extremeBells)
+            {
+                int interest = HeirGenetics.RollInterest(affinity, bell);
+                allInBounds &= interest is >= 0 and <= 100;
+            }
+        }
+        Check("bounds: every blended rating and rolled interest stays in [0,100] (0/0, 100/100 parents never clamp-overflow)", allInBounds);
+
+        // ---- (4) The lottery is mean-zero: no directional bias over many draws ----
+        var meanRng = new RngState(0x4EA7_0BE5_1234_5678UL);
+        const int trials = 100_000;
+        long sum = 0;
+        for (int i = 0; i < trials; i++)
+        {
+            sum += HeirGenetics.BlendRating(90, 70, ref meanRng); // blended = 50 + 0.5·(80−50) = 65.0 exactly
+        }
+        double mean = sum / (double)trials;
+        Check("lottery is mean-zero: mean of 100k draws lands within 0.5 of the unrounded blended value (65.0)",
+            Math.Abs(mean - 65.0) < 0.5, $"mean {mean:F3}");
+
+        // ---- (5) Interest gate: willing/unwilling classification at the threshold boundary ----
+        int atThreshold = HeirGenetics.RollInterest(HeirGenetics.HeirGeneticsProfile.BirthAffinity, bell: -0.64);  // -> 40
+        int justBelow = HeirGenetics.RollInterest(HeirGenetics.HeirGeneticsProfile.BirthAffinity, bell: -0.67);    // -> 39
+        Check($"interest gate: reveal threshold ({HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold}) classifies willing/unwilling exactly at the boundary",
+            atThreshold == 40 && atThreshold >= HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold
+            && justBelow == 39 && justBelow < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold,
+            $"at-threshold={atThreshold} (willing), just-below={justBelow} (unwilling)");
+
+        // ---- (6) §1.2 direction invariant: the older Child-edge endpoint is always the parent ----
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+            var state = new GlobalState();
+            var gameState = new GameStateQueries(db);
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+            league.Initialize();
+            var micro = new MicroGame(db, baseball);
+            micro.Initialize();
+            var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 40));
+
+            career.CreateAvatar("Founder", "Line", teamId: 4, new PlayerRatingsRow
+            {
+                IsPitcher = false,
+                BatPower = 70,
+                BatContact = 65,
+                BatDiscipline = 60,
+                PitStuff = 50,
+                PitControl = 50,
+                PitStamina = 50,
+                Fielding = 55,
+            });
+
+            var childIds = new List<string>();
+            foreach (int birthAge in new[] { 0, 5, 10, 15, 18 })
+            {
+                childIds.Add(career.ConceiveChild("Kid", "Line", birthAge));
+            }
+            // Seed the PARENT's age too (design doc §5.5: "the harness sets ages
+            // directly" — no aging tick exists yet), so the sweep covers both
+            // sides of the invariant, not just the heir's birth age.
+            players.SetAge(career.AvatarPlayerId, 35);
+            childIds.Add(career.ConceiveChild("LateKid", "Line", birthAge: 2));
+
+            players.TryGetById(career.AvatarPlayerId, out PlayerRow avatarRow);
+            var relationships = new List<RelationshipRow>();
+            players.LoadRelationshipsFor(career.AvatarPlayerId, relationships);
+
+            int childEdgesChecked = 0;
+            bool allDirectionsCorrect = true;
+            foreach (RelationshipRow rel in relationships)
+            {
+                if (rel.Type != RelationshipType.Child)
+                {
+                    continue;
+                }
+                string otherId = rel.Player1Id == career.AvatarPlayerId ? rel.Player2Id : rel.Player1Id;
+                if (!childIds.Contains(otherId))
+                {
+                    continue;
+                }
+                players.TryGetById(otherId, out PlayerRow heirRow);
+                // Resolved without presupposing which column holds which id —
+                // exactly the §1.2 algorithm — then checked against the known avatar.
+                string olderId = avatarRow.Age > heirRow.Age ? career.AvatarPlayerId : otherId;
+                allDirectionsCorrect &= olderId == career.AvatarPlayerId;
+                childEdgesChecked++;
+            }
+            Check($"§1.2 direction invariant: the older Child-edge endpoint always resolves as parent, across a birth-age/parent-age sweep ({childEdgesChecked} edges)",
+                allDirectionsCorrect && childEdgesChecked == childIds.Count,
+                $"avatar age {avatarRow.Age}");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 10. Phase 6 lineage & succession (design doc §5/§6/§8 checks 7–11)
+    // ------------------------------------------------------------------
+
+    /// <summary>Every team holds exactly 9 position players + 5 starters + 3 relievers.</summary>
+    private static bool RosterInvariantHolds(BaseballQueries baseball, out string detail)
+    {
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        var counts = new int[LeagueSimulator.TeamCount + 1, 3];
+        foreach (RosterPlayerRow row in roster)
+        {
+            if (row.TeamId < 1 || row.TeamId > LeagueSimulator.TeamCount)
+            {
+                detail = $"player {row.PlayerId[..8]}… on unknown team {row.TeamId}";
+                return false;
+            }
+            counts[row.TeamId, (int)row.Role]++;
+        }
+        for (int teamId = 1; teamId <= LeagueSimulator.TeamCount; teamId++)
+        {
+            if (counts[teamId, (int)PitcherRole.None] != LeagueSimulator.LineupSize
+                || counts[teamId, (int)PitcherRole.Starter] != LeagueSimulator.RotationSize
+                || counts[teamId, (int)PitcherRole.Reliever] != LeagueSimulator.BullpenSize)
+            {
+                detail = $"team {teamId}: {counts[teamId, 0]}/{counts[teamId, 1]}/{counts[teamId, 2]} (want 9/5/3)";
+                return false;
+            }
+        }
+        detail = $"{roster.Count} rostered";
+        return true;
+    }
+
+    /// <summary>
+    /// §8 checks 7–9 + 11: the 3-generation exit-criteria run through the REAL
+    /// event loop — founder → heir → heir across two season rollovers, one
+    /// same-role slot-inherit handoff and one role-mismatch displace-and-backfill
+    /// handoff, then a full post-succession season asserted against the §8
+    /// bands and a cold reload of the mid-lineage save.
+    /// </summary>
+    private static void RunLineageSuccessionSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 6 lineage: 3-generation succession run (design doc §8 checks 7–9, 11) ---");
+
+        string founderId, heir1Id, heir2Id, heir3Id;
+        int founderBatPower;
+
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var gameState = new GameStateQueries(db);
+            var clock = new TimeManager(db, gameState, state, bus);
+            clock.Initialize(StartYear);
+
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+            league.Initialize();
+            league.AttachTo(bus);
+            var micro = new MicroGame(db, baseball);
+            micro.Initialize();
+            var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 60));
+            career.AttachTo(bus);
+
+            // ---- generation 1: an elite founder (drift math needs a high anchor) ----
+            const int founderTeam = 2;
+            founderBatPower = 90;
+            var preRoster = new List<RosterPlayerRow>();
+            baseball.LoadRoster(preRoster);
+            career.CreateAvatar("Gen", "One", founderTeam, new PlayerRatingsRow
+            {
+                IsPitcher = false,
+                BatPower = founderBatPower,
+                BatContact = 85,
+                BatDiscipline = 80,
+                PitStuff = 50,
+                PitControl = 50,
+                PitStamina = 50,
+                Fielding = 50,
+            });
+            founderId = career.AvatarPlayerId;
+            var postRoster = new List<RosterPlayerRow>();
+            baseball.LoadRoster(postRoster);
+            string benchedBatterId = preRoster.First(pre => postRoster.All(post => post.PlayerId != pre.PlayerId)).PlayerId;
+
+            gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long gen0);
+            gameState.TryGetText(GameStateKeys.DynastyFounderId, out string storedFounder);
+            Check("founder bootstrap: CreateAvatar writes dynasty_generation = 1 and dynasty_founder_id",
+                gen0 == 1 && storedFounder == founderId);
+
+            // Fast-forward the career by seeding ages (§5.5: the harness sets
+            // ages; the TICK still has to do the final 41 → 42 increment).
+            players.SetAge(founderId, 41);
+            heir1Id = career.ConceiveChild("Gen", "Two", birthAge: 18);
+            players.SetBaseballInterest(heir1Id, 100); // deterministic willingness for the exit-criteria run
+            string npcProbeId = preRoster[0].PlayerId;
+            players.TryGetById(npcProbeId, out PlayerRow npcBefore);
+
+            // ---- season 1 + the rollover tick (handoff 1: same-role slot-inherit) ----
+            var stopwatch = Stopwatch.StartNew();
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+
+            players.TryGetById(founderId, out PlayerRow founderRow);
+            players.TryGetById(heir1Id, out PlayerRow heir1Row);
+            players.TryGetById(npcProbeId, out PlayerRow npcAfter);
+            Check("aging tick: one rollover ages founder 41→42, heir 18→19, and an untouched NPC by exactly +1",
+                founderRow.Age == 42 && heir1Row.Age == 19 && npcAfter.Age == npcBefore.Age + 1,
+                $"founder {founderRow.Age}, heir {heir1Row.Age}, npc {npcBefore.Age}→{npcAfter.Age}");
+
+            gameState.TryGetText(GameStateKeys.AvatarPlayerId, out string avatarAfter1);
+            gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long gen1);
+            Check("handoff 1 (age trigger, same role): avatar_player_id re-pointed to the heir, dynasty_generation = 2",
+                career.AvatarPlayerId == heir1Id && avatarAfter1 == heir1Id && gen1 == 2
+                && career.LastSuccession.Kind == SuccessionOutcomeKind.Succeeded && career.LastSuccession.HeirId == heir1Id,
+                $"gen {gen1}");
+            var founderSeasons = new List<BattingStatsRow>();
+            players.LoadBattingSeasons(founderId, founderSeasons);
+            Check("handoff 1: retiree benched to FA with career stats intact; heir inherits the exact slot (team, roster size)",
+                !founderRow.TeamId.HasValue && founderSeasons.Count >= 1 && founderSeasons[0].Pa > 0
+                && heir1Row.TeamId == founderTeam && career.AvatarTeamId == founderTeam && career.AvatarSlot >= 0,
+                $"founder seasons {founderSeasons.Count} ({founderSeasons[0].Pa} PA)");
+            Check("roster invariant after slot-inherit handoff: every team 9+5+3, no displacement, no backfill",
+                RosterInvariantHolds(baseball, out string inv1) && players.Count() == preRoster.Count + 2,
+                $"{inv1}; players {players.Count()} (136 world + founder + heir; benched batter keeps its row)");
+
+            // ---- generation 2 → 3 (handoff 2: role mismatch, displace-and-backfill) ----
+            players.SetAge(heir1Id, 41);
+            heir2Id = career.ConceiveChild("Gen", "Three", birthAge: 18);
+            players.SetBaseballInterest(heir2Id, 100);
+            // The §2.2 per-heir position override the succession UI will offer:
+            // flip the blended heir to a pitcher (role row + stuff-derived
+            // arsenal), forcing the §5.4 mismatch path at the next handoff.
+            baseball.TryGetRatings(heir2Id, out PlayerRatingsRow heir2Ratings);
+            heir2Ratings.IsPitcher = true;
+            baseball.UpsertRatings(in heir2Ratings);
+            baseball.UpsertPitcherRole(heir2Id, PitcherRole.Starter);
+            var overrideRng = new RngState(0xFEED_FACEUL);
+            LeagueGenerator.GenerateArsenal(baseball, heir2Id, heir2Ratings.PitStuff, ratingSpread: 0, ref overrideRng);
+
+            var team2Starters = new List<RosterPlayerRow>();
+            baseball.LoadRoster(team2Starters);
+            string expectedDisplaced = team2Starters
+                .Where(r => r.TeamId == founderTeam && r.Role == PitcherRole.Starter)
+                .OrderBy(r => r.PlayerId, StringComparer.Ordinal)
+                .First().PlayerId; // spread-0 world: all sums tie, lowest player_id is the deterministic weakest
+
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+
+            gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long gen2);
+            players.TryGetById(heir1Id, out PlayerRow heir1After);
+            players.TryGetById(benchedBatterId, out PlayerRow promotedBatter);
+            players.TryGetById(expectedDisplaced, out PlayerRow displacedStarter);
+            Check("3-generation exit criterion: two handoffs through the real event loop, dynasty_generation = 3",
+                gen2 == 3 && career.AvatarPlayerId == heir2Id,
+                $"gen {gen2}");
+            Check("handoff 2 (role mismatch): pitcher heir displaces the weakest starter; retiree's batter slot backfilled by the strongest FA batter",
+                !heir1After.TeamId.HasValue && !displacedStarter.TeamId.HasValue
+                && promotedBatter.TeamId == founderTeam,
+                $"displaced {expectedDisplaced[..8]}…, promoted {benchedBatterId[..8]}… back to team {founderTeam}");
+            Check("roster invariant after mismatch handoff: every team 9+5+3, player count unchanged (FA promoted, no filler)",
+                RosterInvariantHolds(baseball, out string inv2) && players.Count() == preRoster.Count + 3,
+                inv2);
+            var founderRoster = new List<RosterPlayerRow>();
+            baseball.LoadRoster(founderRoster);
+            Check("the retired founder (aged past 42) is NOT signable — never promoted back onto a roster",
+                founderRoster.All(r => r.PlayerId != founderId));
+
+            // ---- check 9: a full season under generation 3 stays inside the §8 bands ----
+            for (int i = 0; i < LeagueSimulator.RegularSeasonDays; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            stopwatch.Stop();
+            Console.WriteLine($"  3-generation run ({2 * GlobalState.DaysPerSeason + LeagueSimulator.RegularSeasonDays} days, 2 handoffs): {stopwatch.ElapsedMilliseconds} ms");
+
+            int fullSeasonGames = LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount / 2;
+            LeaguePitchingTotals pit2 = baseball.LoadLeaguePitchingTotals(StartYear + 1);
+            LeaguePitchingTotals pit3 = baseball.LoadLeaguePitchingTotals(StartYear + 2);
+            Check("GS/W/L identities hold across both succession seasons (every game counted exactly once)",
+                pit2.Gs == 2L * fullSeasonGames && pit2.W == fullSeasonGames && pit2.L == fullSeasonGames
+                && pit3.Gs == 2L * fullSeasonGames && pit3.W == fullSeasonGames && pit3.L == fullSeasonGames,
+                $"s2 gs={pit2.Gs} w={pit2.W}, s3 gs={pit3.Gs} w={pit3.W} (want gs={2 * fullSeasonGames}, w=l={fullSeasonGames})");
+            LeagueBattingTotals bat3 = baseball.LoadLeagueBattingTotals(StartYear + 2);
+            double avg3 = (double)bat3.H / bat3.Ab;
+            double obp3 = (double)(bat3.H + bat3.Bb) / bat3.Pa;
+            Check("check 9: the generation-3 season still lands inside the §8 AVG/OBP bands (no band moved)",
+                avg3 is >= 0.240 and <= 0.260 && obp3 is >= 0.308 and <= 0.325,
+                $"{avg3:.000}/{obp3:.000}");
+            Check("check 9 ledger identity: composed batting/pitching agree in the generation-3 season",
+                bat3.H == pit3.HAllowed && bat3.Bb == pit3.Bb && bat3.So == pit3.So
+                && pit3.OutsRecorded == bat3.Pa - bat3.H - bat3.Bb);
+
+            // ---- drift bound (§3/F5): the bloodline regresses toward the mean ----
+            baseball.TryGetRatings(heir1Id, out PlayerRatingsRow heir1Final);
+            baseball.TryGetRatings(heir2Id, out PlayerRatingsRow heir2Final);
+            Check("drift bound: lone-parent bloodline regresses (founder 90 → gen2 ≤ 73 → gen3 within ±20 of the mean), no upward ratchet",
+                heir1Final.BatPower < founderBatPower && heir1Final.BatPower is >= 40 and <= 73
+                && heir2Final.BatPower < founderBatPower && Math.Abs(heir2Final.BatPower - 50) <= 20,
+                $"bat_power 90 → {heir1Final.BatPower} → {heir2Final.BatPower}");
+
+            // Mid-lineage state for the reload check: an heir conceived, not yet succeeded.
+            heir3Id = career.ConceiveChild("Gen", "Four", birthAge: 0);
+
+            Check("no batch left open after the 3-generation run", !db.IsBatchActive);
+            Check("3-generation database integrity ok / no FK violations",
+                db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+        }
+
+        // ---- check 11: reload fidelity — a cold boot rehydrates the whole lineage ----
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var state = new GlobalState();
+            var gameState = new GameStateQueries(db);
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed + 1));
+            league.Initialize();
+            var micro = new MicroGame(db, baseball);
+            micro.Initialize();
+            var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 61));
+
+            bool loaded = career.LoadExistingAvatar();
+            gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long gen);
+            gameState.TryGetText(GameStateKeys.DynastyFounderId, out string founder);
+            var relationships = new List<RelationshipRow>();
+            players.LoadRelationshipsFor(career.AvatarPlayerId, relationships);
+            bool heir3Linked = relationships.Any(r => r.Type == RelationshipType.Child
+                && (r.Player1Id == heir3Id || r.Player2Id == heir3Id));
+            bool parentLinked = relationships.Any(r => r.Type == RelationshipType.Child
+                && (r.Player1Id == heir1Id || r.Player2Id == heir1Id));
+            Check("check 11 reload fidelity: generation, founder, avatar and Child edges all rehydrate mid-lineage",
+                loaded && career.AvatarPlayerId == heir2Id && gen == 3 && founder == founderId
+                && !career.IsLineageOver && heir3Linked && parentLinked,
+                $"gen {gen}, {relationships.Count} relationship rows");
+        }
+    }
+
+    /// <summary>
+    /// §8 check 10: every lineage-failure reason, plus the persisted game-over
+    /// flag semantics and the post-game-over rollover guard (aging continues,
+    /// succession stops). Terminal states, so this world is never reused.
+    /// </summary>
+    private static void RunLineageFailureSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 6 lineage: failure reasons & game-over flag (design doc §6/§8 check 10) ---");
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var gameState = new GameStateQueries(db);
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Initialize();
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 70));
+
+        career.CreateAvatar("Last", "Line", teamId: 5, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 55,
+            BatContact = 55,
+            BatDiscipline = 55,
+            PitStuff = 50,
+            PitControl = 50,
+            PitStamina = 50,
+            Fielding = 50,
+        });
+        string avatarId = career.AvatarPlayerId;
+
+        players.SetAge(avatarId, 41);
+        SuccessionOutcome below = career.RunSuccessionCheck();
+        Check("no trigger below both thresholds (age 41, health 100): NotTriggered, no game-over key",
+            below.Kind == SuccessionOutcomeKind.NotTriggered
+            && !gameState.TryGetText(GameStateKeys.LineageOverReason, out _) && !career.IsLineageOver);
+
+        players.SetAge(avatarId, 42);
+        SuccessionOutcome noHeirs = career.RunSuccessionCheck();
+        players.TryGetById(avatarId, out PlayerRow avatarRow);
+        gameState.TryGetText(GameStateKeys.LineageOverReason, out string reason1);
+        Check("childless retirement: GameOver(NoHeirs), lineage_over_reason persisted — its presence is the flag",
+            noHeirs.Kind == SuccessionOutcomeKind.GameOver && noHeirs.Reason == LineageFailure.NoHeirs
+            && reason1 == "NoHeirs" && career.IsLineageOver,
+            $"key '{reason1}'");
+        Check("game-over mutates nothing but the flag: avatar still rostered, every team still 9+5+3",
+            RosterInvariantHolds(baseball, out string invariantDetail) && avatarRow.TeamId == 5, invariantDetail);
+
+        string childId = career.ConceiveChild("Only", "Child", birthAge: 19);
+        players.SetBaseballInterest(childId, 20);
+        SuccessionOutcome unwilling = career.RunSuccessionCheck();
+        gameState.TryGetText(GameStateKeys.LineageOverReason, out string reason2);
+        Check("single unwilling heir (interest 20 < 40): GameOver(NoWillingHeir)",
+            unwilling.Kind == SuccessionOutcomeKind.GameOver && unwilling.Reason == LineageFailure.NoWillingHeir
+            && reason2 == "NoWillingHeir");
+
+        players.SetBaseballInterest(childId, 100);
+        players.SetAge(childId, 10);
+        SuccessionOutcome tooYoung = career.RunSuccessionCheck();
+        gameState.TryGetText(GameStateKeys.LineageOverReason, out string reason3);
+        Check("willing but underage heir (age 10 < 19): GameOver(NoPlayableHeir)",
+            tooYoung.Kind == SuccessionOutcomeKind.GameOver && tooYoung.Reason == LineageFailure.NoPlayableHeir
+            && reason3 == "NoPlayableHeir");
+
+        // The rollover handler after game-over: the world keeps aging, the
+        // succession check does not re-fire (LastSuccession is untouched).
+        var bus = new EventBus();
+        career.AttachTo(bus);
+        bus.Publish(new SeasonRolledOverEvent(StartYear, StartYear + 1));
+        bus.DispatchPending();
+        players.TryGetById(avatarId, out PlayerRow agedAvatar);
+        players.TryGetById(childId, out PlayerRow agedChild);
+        Check("post-game-over rollover: aging tick still runs (42→43, 10→11), succession check stays parked",
+            agedAvatar.Age == 43 && agedChild.Age == 11
+            && career.LastSuccession.Kind == SuccessionOutcomeKind.GameOver
+            && career.LastSuccession.Reason == LineageFailure.NoPlayableHeir);
+    }
+
+    /// <summary>
+    /// The remaining §5 edges: the health_ceiling retirement trigger (the PED
+    /// coupling, §5.1) driving a real handoff, and the §5.4 generated-filler
+    /// backfill when the free-agent pool has nobody of the vacated role.
+    /// </summary>
+    private static void RunSuccessionEdgeSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 6 lineage: health trigger & filler backfill (design doc §5.1/§5.4 edges) ---");
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var gameState = new GameStateQueries(db);
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Initialize();
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 80));
+
+        career.CreateAvatar("Glass", "Cannon", teamId: 1, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 60,
+            BatContact = 60,
+            BatDiscipline = 60,
+            PitStuff = 50,
+            PitControl = 50,
+            PitStamina = 50,
+            Fielding = 50,
+        });
+        string founderId = career.AvatarPlayerId;
+
+        // ---- health trigger: PED erosion forces retirement at age 30 ----
+        players.SetAge(founderId, 30);
+        string child1Id = career.ConceiveChild("Tough", "Kid", birthAge: 19);
+        players.SetBaseballInterest(child1Id, 100);
+        baseball.ApplyPedGameCosts(founderId, healthCost: 60, riskGain: 0); // 100 → 40 = the retirement floor
+        SuccessionOutcome healthOutcome = career.RunSuccessionCheck();
+        gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long genAfterHealth);
+        Check("health trigger (§5.1 PED coupling): health_ceiling eroded to 40 forces succession at age 30",
+            healthOutcome.Kind == SuccessionOutcomeKind.Succeeded && healthOutcome.HeirId == child1Id
+            && career.AvatarPlayerId == child1Id && genAfterHealth == 2);
+
+        // ---- filler backfill: mismatch handoff with an empty same-role FA pool ----
+        // Age the whole bloodline consistently: the §1.2 direction invariant
+        // (parent strictly older) is maintained-by-construction in real play
+        // (one shared aging tick), so age-seeded fixtures must preserve it —
+        // aging ONLY child1 to 42 would leave the 30-year-old retired founder
+        // "younger than his own child", and EvaluateSuccession would correctly
+        // resolve the founder as a willing, unrostered heir. (This exact
+        // mistake picked grandpa as the successor in an earlier draft.)
+        players.SetAge(founderId, 65);
+        players.SetAge(child1Id, 42);
+        string heir2Id = career.ConceiveChild("Bull", "Pen", birthAge: 19);
+        players.SetBaseballInterest(heir2Id, 100);
+        baseball.TryGetRatings(heir2Id, out PlayerRatingsRow heir2Ratings);
+        heir2Ratings.IsPitcher = true;
+        baseball.UpsertRatings(in heir2Ratings);
+        baseball.UpsertPitcherRole(heir2Id, PitcherRole.Reliever);
+        var overrideRng = new RngState(0xBADC_0FFEUL);
+        LeagueGenerator.GenerateArsenal(baseball, heir2Id, heir2Ratings.PitStuff, ratingSpread: 0, ref overrideRng);
+
+        // Empty the signable batter pool: the founder is already excluded by
+        // the health window (40 is not > 40); age out everyone else.
+        var pool = new List<RosterPlayerRow>();
+        baseball.LoadFreeAgents(pool,
+            minAge: HeirGenetics.HeirGeneticsProfile.MaturityAge,
+            maxAge: HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge,
+            minHealth: HeirGenetics.HeirGeneticsProfile.HealthRetirementFloor);
+        foreach (RosterPlayerRow freeAgent in pool)
+        {
+            if (freeAgent.Role == PitcherRole.None)
+            {
+                players.SetAge(freeAgent.PlayerId, 50);
+            }
+        }
+
+        var rosterBefore = new List<RosterPlayerRow>();
+        baseball.LoadRoster(rosterBefore);
+        int playersBefore = players.Count();
+        SuccessionOutcome fillerOutcome = career.RunSuccessionCheck();
+        var rosterAfter = new List<RosterPlayerRow>();
+        baseball.LoadRoster(rosterAfter);
+        var knownIds = new HashSet<string>(rosterBefore.Select(r => r.PlayerId)) { heir2Id };
+        RosterPlayerRow? filler = rosterAfter.Where(r => !knownIds.Contains(r.PlayerId))
+            .Select(r => (RosterPlayerRow?)r).FirstOrDefault();
+        players.TryGetById(child1Id, out PlayerRow retiree2);
+        Check("filler backfill: empty FA pool generates a replacement-level batter in the vacated slot (player count +1)",
+            fillerOutcome.Kind == SuccessionOutcomeKind.Succeeded && fillerOutcome.HeirId == heir2Id
+            && players.Count() == playersBefore + 1
+            && filler is { Role: PitcherRole.None, TeamId: 1 },
+            filler is null ? "no filler found" : $"filler {filler.Value.PlayerId[..8]}… on team {filler.Value.TeamId}");
+        Check("filler handoff preserves the roster invariant: reliever heir rostered, weakest reliever displaced, every team 9+5+3",
+            RosterInvariantHolds(baseball, out string fillerInvariant)
+            && rosterAfter.Any(r => r.PlayerId == heir2Id && r.Role == PitcherRole.Reliever && r.TeamId == 1)
+            && !retiree2.TeamId.HasValue,
+            fillerInvariant);
+    }
 
     private static void Check(string name, bool pass, string detail = "") =>
         Results.Add((name, pass, detail));
