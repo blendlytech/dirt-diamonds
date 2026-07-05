@@ -56,6 +56,9 @@ public sealed partial class GameManager : Node
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
 
+    /// <summary>Phase 8c roster availability — public like Relationships so the UI can render "out until day N".</summary>
+    public AvailabilityLedger Absences { get; private set; } = null!;
+
     /// <summary>Phase 8b Layer 2 orchestration — Narcotics/Fencing context building and resolution application.</summary>
     public HustleService Hustles { get; private set; } = null!;
 
@@ -139,6 +142,15 @@ public sealed partial class GameManager : Node
         _rivalryLedger = new RivalryLedger();
         _rivalryLedger.AttachTo(Events);
 
+        // Phase 8c: roster availability. Hydrate the ledger from the persisted
+        // Player_Absences rows still in effect today (RelationshipGraph's
+        // hydrate-then-attach pattern), then hand it to every sim below.
+        Absences = new AvailabilityLedger();
+        var absenceRows = new List<PlayerAbsenceRow>();
+        Players.LoadActiveAbsences(State.CurrentDay, absenceRows);
+        Absences.Seed(absenceRows);
+        Absences.AttachTo(Events);
+
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
         // own 8-team league, each with its own forked rng stream. All six run
         // the same day loop off the bus; the avatar's tier is resolved by
@@ -151,6 +163,7 @@ public sealed partial class GameManager : Node
                 _database, Baseball, normalizer, new RngState(rng.NextUInt64() | 1UL), (LeagueTier)t);
             tierSim.Initialize();
             tierSim.Rivalries = _rivalryLedger;
+            tierSim.Availability = Absences;
             tierSim.AttachTo(Events);
             Leagues.Register(tierSim);
         }
@@ -163,8 +176,10 @@ public sealed partial class GameManager : Node
         Micro = new MicroGame(_database, Baseball);
         Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
+        Micro.Availability = Absences;
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
+        Career.Availability = Absences;
         // The real game pauses succession for the heir-reveal/choice UI;
         // headless/harness callers construct their own CareerManager and
         // never touch this flag, so their autopilot pick is unaffected.
@@ -395,14 +410,40 @@ public sealed partial class GameManager : Node
     public void ClearPendingHustleSession() => _hasPendingHustleSession = false;
 
     /// <summary>
+    /// True while the avatar will still be in jail when the next day ticks —
+    /// an arrested player doesn't get to plan their day (the whole day
+    /// autopilots; injury and suspension leave life scheduling alone, they
+    /// only take the Game away). The ScheduleScreen hides/disables on this;
+    /// SubmitDaySchedule enforces it regardless, so a stale click can never
+    /// plan a jail day.
+    /// </summary>
+    public bool AvatarScheduleLocked
+    {
+        get
+        {
+            if (!Career.HasAvatar || !Absences.TryGet(Career.AvatarPlayerId, out AbsenceEntry entry))
+            {
+                return false;
+            }
+            return entry.Reason == AbsenceReason.Arrest
+                && entry.StateOn(State.CurrentDay + 1) == SlotAvailability.Absent;
+        }
+    }
+
+    /// <summary>
     /// The ScheduleScreen's Confirm path: submits the day's block allocation
     /// AND which Work activity to run under it in one call, so the two are
     /// always captured together (§2) — LifeSim only ever learns whether
     /// today's Work block should use the HustleWork definition, never which
     /// named hustle, keeping the Life↔Baseball/Economy wall intact.
+    /// A jailed avatar's submission is dropped outright (8c).
     /// </summary>
     public void SubmitDaySchedule(in DaySchedule schedule, WorkActivity workActivity)
     {
+        if (AvatarScheduleLocked)
+        {
+            return;
+        }
         LifeSim.SetTodaySchedule(schedule);
         LifeSim.AvatarWorkIsHustle = workActivity != WorkActivity.LegalWork;
         _plannedWorkActivity = workActivity;

@@ -47,6 +47,16 @@ public readonly struct PendingGrittyChoice
 
 public sealed class EventConsequenceApplier
 {
+    /// <summary>
+    /// Injury-rust ceiling (Phase 8c): the effective-rating deduction a
+    /// completely broken-down player (health_ceiling 0) carries through the
+    /// post-return rust window. Scales linearly down to 0 at health 100, so a
+    /// healthy player's injury heals clean. Same magnitude class as the
+    /// rivalry ±16 / tier −20..0 modifiers; a calibration constant, tunable
+    /// behind run_monte_carlo_batch like every effective-ratings knob.
+    /// </summary>
+    public const int InjuryRustMaxPenalty = 12;
+
     private readonly DatabaseManager _db;
     private readonly PlayerQueries _players;
     private readonly GrittyEventLibrary _library;
@@ -64,6 +74,12 @@ public sealed class EventConsequenceApplier
     // Edge-walk scratch for the Partner lookups (exclusivity guard + the
     // conception request's co-parent resolution).
     private readonly List<RelationshipEdge> _edgeScratch = new(8);
+
+    // Absence publications staged inside the DB batch (where the rust penalty
+    // is computed against the same state the write saw), published after the
+    // commit — the standard commit-then-publish ordering. Pooled; fires are
+    // rare and the list is cleared per fire.
+    private readonly List<PlayerAbsenceChangedEvent> _absenceScratch = new(4);
 
     /// <summary>
     /// True (default, headless-safe): every fire — including the avatar's —
@@ -172,6 +188,7 @@ public sealed class EventConsequenceApplier
         }
 
         // Database consequences commit atomically in this handler's own batch.
+        _absenceScratch.Clear();
         _db.RunInBatch(() =>
         {
             for (int i = 0; i < consequences.Length; i++)
@@ -181,6 +198,9 @@ public sealed class EventConsequenceApplier
                 {
                     case ConsequenceKind.Funds:
                         _players.AdjustFunds(fired.SubjectPlayerId, consequence.Amount);
+                        break;
+                    case ConsequenceKind.Absence:
+                        ApplyAbsence(fired, in consequence);
                         break;
                     case ConsequenceKind.Interest:
                         _players.AdjustBaseballInterest(fired.SubjectPlayerId, (int)Math.Round(consequence.Amount));
@@ -238,7 +258,53 @@ public sealed class EventConsequenceApplier
             }
         }
 
+        // Absence publications follow the committed batch like every other
+        // impulse, so the AvailabilityLedger only ever mirrors persisted rows.
+        for (int i = 0; i < _absenceScratch.Count; i++)
+        {
+            _bus.Publish(_absenceScratch[i]);
+        }
+        _absenceScratch.Clear();
+
         _bus.Publish(new GrittyEventResolvedEvent(fired.EventId, fired.SubjectPlayerId, choiceIndex, fired.Day));
+    }
+
+    /// <summary>
+    /// The Phase 8c roster/availability mutation. An event fires during day
+    /// D's pump — AFTER day D's games have played — so "benched for N days"
+    /// covers days D+1 through D+N (until_day = D+N+1, exclusive): the
+    /// subject misses exactly N game days. Injuries additionally compute the
+    /// post-return rust penalty from the subject's health_ceiling AS OF THIS
+    /// BATCH — after any HealthCeiling consequence earlier in the same
+    /// choice, so "lose 20 health AND get hurt" prices the rust off the
+    /// damaged body — with the rust window as long as the absence itself
+    /// (you rehab as long as you sat). Writes through the keep-later upsert
+    /// (a shorter overlapping absence is a DB no-op; the ledger applies the
+    /// identical rule to the staged publication, so mirror and row can never
+    /// disagree).
+    /// </summary>
+    private void ApplyAbsence(GrittyEventFiredEvent fired, in EventConsequence consequence)
+    {
+        int days = (int)consequence.Amount;
+        long untilDay = fired.Day + days + 1;
+
+        int penalty = 0;
+        long penaltyUntilDay = 0;
+        if (consequence.AbsenceReason == AbsenceReason.Injury)
+        {
+            if (!_players.TryGetById(fired.SubjectPlayerId, out PlayerRow subject))
+            {
+                throw new InvalidOperationException(
+                    $"Absence consequence fired for '{fired.SubjectPlayerId}' but the Players row is missing.");
+            }
+            // Round-half-up of max·(100−health)/100, the RivalryEffects idiom.
+            penalty = (InjuryRustMaxPenalty * (100 - subject.HealthCeiling) + 50) / 100;
+            penaltyUntilDay = penalty > 0 ? untilDay + days : 0;
+        }
+
+        _players.SetAbsence(fired.SubjectPlayerId, consequence.AbsenceReason, untilDay, penalty, penaltyUntilDay);
+        _absenceScratch.Add(new PlayerAbsenceChangedEvent(
+            fired.SubjectPlayerId, (byte)consequence.AbsenceReason, untilDay, (byte)penalty, penaltyUntilDay));
     }
 
     /// <summary>Weighted draw over autopilot_weight; an all-zero table falls back to the first choice.</summary>

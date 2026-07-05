@@ -119,3 +119,32 @@ public struct EntityFlagRow
     public bool IsActive;
     public long? SetOnDay;
 }
+
+/// <summary>
+/// Player_Absences.reason values (schema v8) — why a player is out of games.
+/// The numeric values are load-bearing (the CHECK constraint and the
+/// PlayerAbsenceChangedEvent's byte payload both carry them); None is the
+/// query-layer value for "no row", never stored.
+/// </summary>
+public enum AbsenceReason : byte
+{
+    None = 0,
+    Injury = 1,
+    Suspension = 2,
+    Arrest = 3,
+}
+
+/// <summary>
+/// Row DTO for Player_Absences (schema v8). A player is absent while
+/// current_day &lt; UntilDay; an injury additionally plays rusty (effective
+/// ratings down RatingPenalty points) while UntilDay ≤ current_day &lt;
+/// PenaltyUntilDay. RatingPenalty/PenaltyUntilDay are 0 for non-injuries.
+/// </summary>
+public struct PlayerAbsenceRow
+{
+    public string PlayerId;
+    public AbsenceReason Reason;
+    public long UntilDay;
+    public int RatingPenalty;
+    public long PenaltyUntilDay;
+}

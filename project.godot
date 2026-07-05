@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="Dirt & Diamonds"
-config/features=PackedStringArray("4.7", "C#")
 run/main_scene="res://Assets/Main.tscn"
+config/features=PackedStringArray("4.7", "C#")
 
 [autoload]
 

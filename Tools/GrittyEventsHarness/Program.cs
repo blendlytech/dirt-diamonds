@@ -54,6 +54,7 @@ internal static class Program
             RunMarriageConceptionChecks();
             RunStressChecks();
             RunHustleIntegrationChecks();
+            RunAbsenceChecks();
             RunThreadingCheck();
             RunAllocationCheck();
             RunDeterminismCheck();
@@ -973,6 +974,95 @@ internal static class Program
         Check("hustle integration: supplier edge created as Friend with the trust delta",
             supplierKind == RelationshipKind.Friend && supplierAffinity == 10,
             $"affinity={supplierAffinity} kind={supplierKind}");
+    }
+
+    // ------------------------------------------------------------------
+    // 5b. Phase 8c absence consequence (roster availability). The ledger
+    // itself lives in the Baseball assembly — MonteCarloHarness proves it;
+    // here the contract is the Narrative half: the Player_Absences row and
+    // the post-commit PlayerAbsenceChangedEvent transport.
+    // ------------------------------------------------------------------
+
+    private static void RunAbsenceChecks()
+    {
+        Console.WriteLine("--- Phase 8c absence consequence ---");
+
+        GrittyEventLibrary parsed = GrittyEventJson.Parse(
+            """
+            { "events": [ { "id": "triad", "scope": "any", "weight": 1.0, "choices": [ { "id": "a", "consequences": [
+                { "type": "absence", "reason": "injury", "days": 10 },
+                { "type": "absence", "reason": "suspension", "days": 5 },
+                { "type": "absence", "reason": "arrest", "days": 30 } ] } ] } ] }
+            """);
+        parsed.TryGetById("triad", out GrittyEventDefinition triad);
+        EventConsequence[] parsedConsequences = triad.Choices[0].Consequences;
+        Check("absence consequence parses all three reasons with their day counts",
+            parsedConsequences.Length == 3
+            && parsedConsequences[0].Kind == ConsequenceKind.Absence
+            && parsedConsequences[0].AbsenceReason == AbsenceReason.Injury && (int)parsedConsequences[0].Amount == 10
+            && parsedConsequences[1].AbsenceReason == AbsenceReason.Suspension && (int)parsedConsequences[1].Amount == 5
+            && parsedConsequences[2].AbsenceReason == AbsenceReason.Arrest && (int)parsedConsequences[2].Amount == 30);
+
+        Check("loader rejects an unknown absence reason", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 1.0, "choices": [ { "id": "a", "consequences": [ { "type": "absence", "reason": "vacation", "days": 3 } ] } ] } ] }"""));
+        Check("loader rejects zero and fractional absence days",
+            Throws("""{ "events": [ { "id": "x", "scope": "any", "weight": 1.0, "choices": [ { "id": "a", "consequences": [ { "type": "absence", "reason": "arrest", "days": 0 } ] } ] } ] }""")
+            && Throws("""{ "events": [ { "id": "x", "scope": "any", "weight": 1.0, "choices": [ { "id": "a", "consequences": [ { "type": "absence", "reason": "injury", "days": 2.5 } ] } ] } ] }"""));
+
+        // End-to-end: a PED-test suspension keyed on detection_risk (the 8b §8
+        // contract's reader) and an injury priced off live health_ceiling.
+        using World world = World.Create("absence", GrittyEventJson.Parse(
+            """
+            { "events": [
+              { "id": "ped_test", "scope": "any", "weight": 1.0,
+                "prerequisites": [ { "field": "detection_risk", "op": ">=", "value": 80 } ],
+                "choices": [ { "id": "suspended", "consequences": [
+                  { "type": "absence", "reason": "suspension", "days": 5 },
+                  { "type": "detection_risk", "amount": -40 },
+                  { "type": "set_flag", "flag": "served_suspension" } ] } ] },
+              { "id": "breakdown", "scope": "any", "weight": 1.0,
+                "prerequisites": [ { "field": "health_ceiling", "op": "<", "value": 50 } ],
+                "choices": [ { "id": "hurt", "consequences": [
+                  { "type": "absence", "reason": "injury", "days": 10 } ] } ] }
+            ] }
+            """));
+        world.AddPlayer("doper", age: 27, teamId: 1);
+        world.AddPlayer("brittle", age: 27, teamId: 1);
+        world.Players.AdjustDetectionRisk("doper", 85);
+        world.Players.AdjustHealthCeiling("brittle", -60); // 100 → 40
+        var published = new List<PlayerAbsenceChangedEvent>();
+        world.Bus.Subscribe<PlayerAbsenceChangedEvent>(published.Add);
+        world.Dispatcher.PollOnce();
+
+        world.Clock.AdvanceDay(); // day 2 — both prerequisites hold, both fire
+        world.Bus.DispatchPending();
+        world.Dispatcher.PollOnce();
+        world.Bus.DispatchPending();
+
+        bool suspensionRow = world.Players.TryGetAbsence("doper", out PlayerAbsenceRow suspension);
+        bool injuryRow = world.Players.TryGetAbsence("brittle", out PlayerAbsenceRow injury);
+        world.Players.TryGetById("doper", out PlayerRow doper);
+        Check("suspension row: until_day = fire day + days + 1 (misses exactly N game days), no rust",
+            suspensionRow && suspension.Reason == AbsenceReason.Suspension && suspension.UntilDay == 8
+            && suspension.RatingPenalty == 0 && suspension.PenaltyUntilDay == 0,
+            $"until {suspension.UntilDay} penalty {suspension.RatingPenalty}");
+        Check("same choice: detection_risk cooled by serving the suspension (85 → 45)",
+            doper.DetectionRisk == 45, $"{doper.DetectionRisk}");
+        Check("injury row: rust priced off live health (40 → penalty 7), rust window as long as the absence",
+            injuryRow && injury.Reason == AbsenceReason.Injury && injury.UntilDay == 13
+            && injury.RatingPenalty == 7 && injury.PenaltyUntilDay == 23,
+            $"until {injury.UntilDay} penalty {injury.RatingPenalty} rustUntil {injury.PenaltyUntilDay}");
+        Check("PlayerAbsenceChangedEvent published post-commit for each absence (ledger transport)",
+            published.Count == 2
+            && published.Exists(p => p.PlayerId == "doper" && p.Reason == (byte)AbsenceReason.Suspension && p.UntilDay == 8)
+            && published.Exists(p => p.PlayerId == "brittle" && p.Reason == (byte)AbsenceReason.Injury
+                && p.RatingPenalty == 7 && p.PenaltyUntilDay == 23),
+            $"{published.Count} publications");
+
+        var flags = new List<EntityFlagRow>();
+        world.Players.LoadActiveFlags("doper", flags);
+        Check("absence composes with flags in one choice (served_suspension set on the fire day)",
+            flags.Exists(f => f.FlagName == "served_suspension" && f.IsActive && f.SetOnDay == 2));
     }
 
     // ------------------------------------------------------------------

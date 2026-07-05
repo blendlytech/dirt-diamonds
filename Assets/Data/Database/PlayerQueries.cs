@@ -123,6 +123,29 @@ public sealed class PlayerQueries
     private const string SqlSelectAllRelationships =
         "SELECT rel_id, player_1_id, player_2_id, affinity_score, type_enum FROM Relationships;";
 
+    // Roster-availability writer (schema v8, Phase 8c): one absence per player,
+    // whichever ends LATER wins wholesale — the conditional DO UPDATE ... WHERE
+    // makes a shorter overlapping absence a no-op, so the AvailabilityLedger's
+    // in-memory mirror can apply the identical rule without a read-back.
+    private const string SqlUpsertAbsence =
+        "INSERT INTO Player_Absences (player_id, reason, until_day, rating_penalty, penalty_until_day) " +
+        "VALUES (@playerId, @reason, @untilDay, @ratingPenalty, @penaltyUntilDay) " +
+        "ON CONFLICT (player_id) DO UPDATE SET " +
+        "reason = excluded.reason, until_day = excluded.until_day, " +
+        "rating_penalty = excluded.rating_penalty, penalty_until_day = excluded.penalty_until_day " +
+        "WHERE excluded.until_day >= Player_Absences.until_day;";
+
+    // Boot-time AvailabilityLedger hydration: every absence still in effect on
+    // @day (absent OR still in its injury-rust window). Deliberate full scan —
+    // the table holds at most one row per ever-absent player.
+    private const string SqlSelectActiveAbsences =
+        "SELECT player_id, reason, until_day, rating_penalty, penalty_until_day " +
+        "FROM Player_Absences WHERE until_day > @day OR penalty_until_day > @day;";
+
+    private const string SqlSelectAbsenceById =
+        "SELECT player_id, reason, until_day, rating_penalty, penalty_until_day " +
+        "FROM Player_Absences WHERE player_id = @playerId;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertPlayer;
     private readonly SqliteCommand _selectPlayerById;
@@ -147,6 +170,9 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _upsertRelationship;
     private readonly SqliteCommand _selectRelationshipsFor;
     private readonly SqliteCommand _selectAllRelationships;
+    private readonly SqliteCommand _upsertAbsence;
+    private readonly SqliteCommand _selectActiveAbsences;
+    private readonly SqliteCommand _selectAbsenceById;
 
     public PlayerQueries(DatabaseManager db)
     {
@@ -196,6 +222,12 @@ public sealed class PlayerQueries
 
         _selectRelationshipsFor = Acquire(SqlSelectRelationshipsFor, ("@playerId", SqliteType.Text));
         _selectAllRelationships = Acquire(SqlSelectAllRelationships);
+
+        _upsertAbsence = Acquire(SqlUpsertAbsence,
+            ("@playerId", SqliteType.Text), ("@reason", SqliteType.Integer), ("@untilDay", SqliteType.Integer),
+            ("@ratingPenalty", SqliteType.Integer), ("@penaltyUntilDay", SqliteType.Integer));
+        _selectActiveAbsences = Acquire(SqlSelectActiveAbsences, ("@day", SqliteType.Integer));
+        _selectAbsenceById = Acquire(SqlSelectAbsenceById, ("@playerId", SqliteType.Text));
     }
 
     private SqliteCommand Acquire(string sql, params (string Name, SqliteType Type)[] parameters)
@@ -589,5 +621,72 @@ public sealed class PlayerQueries
         Player2Id = reader.GetString(2),
         AffinityScore = reader.GetInt32(3),
         Type = RelationshipTypeMap.FromDbString(reader.GetString(4)),
+    };
+
+    // ------------------------------------------------------------------
+    // Player absences (roster availability, schema v8)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Records an absence: the player is out of games until <paramref name="untilDay"/>
+    /// (exclusive — available again ON that day), then, for injuries, plays
+    /// rusty until <paramref name="penaltyUntilDay"/>. One absence per player;
+    /// whichever ends later wins wholesale (a shorter overlapping absence is a
+    /// no-op — the conditional upsert enforces it in SQL, and the
+    /// AvailabilityLedger applies the identical rule in memory).
+    /// </summary>
+    public void SetAbsence(string playerId, AbsenceReason reason, long untilDay, int ratingPenalty, long penaltyUntilDay)
+    {
+        if (reason == AbsenceReason.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason), reason, "None is the no-row sentinel, never stored.");
+        }
+        SqliteParameterCollection p = _upsertAbsence.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@reason"].Value = (int)reason;
+        p["@untilDay"].Value = untilDay;
+        p["@ratingPenalty"].Value = ratingPenalty;
+        p["@penaltyUntilDay"].Value = penaltyUntilDay;
+        _db.ExecuteNonQuery(_upsertAbsence);
+    }
+
+    /// <summary>
+    /// Every absence still in effect on <paramref name="day"/> (absent or in
+    /// its injury-rust window) into <paramref name="destination"/> (cleared
+    /// first) — boot-time AvailabilityLedger hydration.
+    /// </summary>
+    public int LoadActiveAbsences(long day, List<PlayerAbsenceRow> destination)
+    {
+        destination.Clear();
+        _selectActiveAbsences.Parameters["@day"].Value = day;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectActiveAbsences);
+        while (reader.Read())
+        {
+            destination.Add(ReadAbsence(reader));
+        }
+        return destination.Count;
+    }
+
+    /// <summary>The player's absence row (active or expired), if one exists.</summary>
+    public bool TryGetAbsence(string playerId, out PlayerAbsenceRow absence)
+    {
+        _selectAbsenceById.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAbsenceById);
+        if (!reader.Read())
+        {
+            absence = default;
+            return false;
+        }
+        absence = ReadAbsence(reader);
+        return true;
+    }
+
+    private static PlayerAbsenceRow ReadAbsence(SqliteDataReader reader) => new()
+    {
+        PlayerId = reader.GetString(0),
+        Reason = (AbsenceReason)reader.GetInt32(1),
+        UntilDay = reader.GetInt64(2),
+        RatingPenalty = reader.GetInt32(3),
+        PenaltyUntilDay = reader.GetInt64(4),
     };
 }

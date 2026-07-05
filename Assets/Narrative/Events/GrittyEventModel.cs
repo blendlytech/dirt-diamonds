@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Life;
 
 namespace DirtAndDiamonds.Narrative.Events;
@@ -108,6 +109,15 @@ public enum ConsequenceKind : byte
 
     /// <summary>Atomic clamped health_ceiling delta — see <see cref="DetectionRisk"/>.</summary>
     HealthCeiling,
+
+    /// <summary>
+    /// The roster/availability mutation (Phase 8c — the type the framework's
+    /// §4 deferral note reserved): benches the subject for N days via
+    /// Player_Absences + the AvailabilityLedger transport. Injury absences
+    /// additionally compute a post-return rust penalty from the subject's
+    /// live health_ceiling at apply time.
+    /// </summary>
+    Absence,
 }
 
 /// <summary>Who a relationship consequence pairs the subject with (§4), resolved at apply time.</summary>
@@ -131,15 +141,20 @@ public readonly struct EventConsequence
     public readonly RelationshipKind RelationshipKind;
     public readonly RelationshipTargetSelector Target;
 
+    // Absence form (Amount carries the day count):
+    public readonly AbsenceReason AbsenceReason;
+
     private EventConsequence(
         ConsequenceKind kind, double amount, string? flagName,
-        RelationshipKind relationshipKind, RelationshipTargetSelector target)
+        RelationshipKind relationshipKind, RelationshipTargetSelector target,
+        AbsenceReason absenceReason = AbsenceReason.None)
     {
         Kind = kind;
         Amount = amount;
         FlagName = flagName;
         RelationshipKind = relationshipKind;
         Target = target;
+        AbsenceReason = absenceReason;
     }
 
     public static EventConsequence ForAmount(ConsequenceKind kind, double amount)
@@ -168,6 +183,20 @@ public readonly struct EventConsequence
     /// <summary>Payload-free by design (§4) — twins/birth-age/co-parent selection would be additive fields, not a reshape.</summary>
     public static EventConsequence ForConceiveChild() =>
         new(ConsequenceKind.ConceiveChild, 0, null, default, default);
+
+    /// <summary>Benches the subject for <paramref name="days"/> days (Phase 8c). Amount carries the day count.</summary>
+    public static EventConsequence ForAbsence(AbsenceReason reason, int days)
+    {
+        if (reason == AbsenceReason.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason), reason, "An absence needs a real reason.");
+        }
+        if (days < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(days), days, "An absence must last at least one day.");
+        }
+        return new EventConsequence(ConsequenceKind.Absence, days, null, default, default, reason);
+    }
 }
 
 public sealed class EventChoice

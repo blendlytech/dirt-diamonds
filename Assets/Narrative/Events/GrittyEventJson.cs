@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Life;
 
 namespace DirtAndDiamonds.Narrative.Events;
@@ -253,6 +254,29 @@ public static class GrittyEventJson
                 return EventConsequence.ForAmount(ConsequenceKind.DetectionRisk, RequireNumber(element, "amount", eventId));
             case "health_ceiling":
                 return EventConsequence.ForAmount(ConsequenceKind.HealthCeiling, RequireNumber(element, "amount", eventId));
+            case "absence":
+            {
+                // Phase 8c roster availability. Days are a whole-day count ≥ 1
+                // — a fractional or zero-day bench is a content error, loud at
+                // load like every other malformed consequence.
+                string reasonText = RequireString(element, "reason", eventId);
+                AbsenceReason reason = reasonText switch
+                {
+                    "injury" => AbsenceReason.Injury,
+                    "suspension" => AbsenceReason.Suspension,
+                    "arrest" => AbsenceReason.Arrest,
+                    _ => throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': unknown absence reason '{reasonText}' " +
+                        "(expected 'injury', 'suspension' or 'arrest')."),
+                };
+                double daysRaw = RequireNumber(element, "days", eventId);
+                if (daysRaw < 1 || daysRaw != Math.Floor(daysRaw))
+                {
+                    throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': absence 'days' must be a whole number ≥ 1 (got {daysRaw}).");
+                }
+                return EventConsequence.ForAbsence(reason, (int)daysRaw);
+            }
             case "set_flag":
                 return EventConsequence.ForFlag(ConsequenceKind.SetFlag, RequireString(element, "flag", eventId));
             case "clear_flag":

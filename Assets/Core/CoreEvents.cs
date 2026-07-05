@@ -219,6 +219,42 @@ public readonly struct AvatarChangedEvent : IGameEvent
     }
 }
 
+/// <summary>
+/// Published by the Narrative consequence applier AFTER an absence row has
+/// committed to Player_Absences (Phase 8c roster availability) — the Baseball
+/// sims' AvailabilityLedger consumes it, the same Narrative → bus → ledger
+/// routing as <see cref="RivalryChangedEvent"/>. The payload is primitives
+/// only (reason mirrors Data's AbsenceReason byte values: 1 = Injury,
+/// 2 = Suspension, 3 = Arrest) — this file is compiled by the Data-free
+/// NeedsDecayHarness, so no Data enum may appear here.
+/// </summary>
+public readonly struct PlayerAbsenceChangedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+
+    /// <summary>AbsenceReason byte value (1 = Injury, 2 = Suspension, 3 = Arrest).</summary>
+    public readonly byte Reason;
+
+    /// <summary>Absent while current_day &lt; this; available again ON this day.</summary>
+    public readonly long UntilDay;
+
+    /// <summary>Injury rust: effective-rating deduction while in the penalty window (0 = none).</summary>
+    public readonly byte RatingPenalty;
+
+    /// <summary>Rusty while UntilDay ≤ current_day &lt; this (0 when no rust window).</summary>
+    public readonly long PenaltyUntilDay;
+
+    public PlayerAbsenceChangedEvent(
+        string playerId, byte reason, long untilDay, byte ratingPenalty, long penaltyUntilDay)
+    {
+        PlayerId = playerId;
+        Reason = reason;
+        UntilDay = untilDay;
+        RatingPenalty = ratingPenalty;
+        PenaltyUntilDay = penaltyUntilDay;
+    }
+}
+
 public readonly struct RivalryChangedEvent : IGameEvent
 {
     /// <summary>Canonical pair order: <see cref="PlayerAId"/> sorts before <see cref="PlayerBId"/> ordinally.</summary>

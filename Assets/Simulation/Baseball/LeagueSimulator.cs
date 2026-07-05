@@ -93,6 +93,36 @@ public sealed class LeagueSimulator
     private int _rivalryVersionSeen = -1;
     private bool _hasRivalries;
 
+    /// <summary>
+    /// Roster-availability source (Phase 8c), same optional-attachment pattern
+    /// as <see cref="Rivalries"/>: null — the default for every existing
+    /// harness path — leaves the per-PA hot path bit-identical to the
+    /// pre-availability code (a single false branch), so the M1 season lines
+    /// cannot move unless an absence actually exists.
+    /// </summary>
+    public AvailabilityLedger? Availability;
+
+    /// <summary>
+    /// The nameless replacement-level call-up who shadows an absent player's
+    /// slot: every rating this many points below league average (50), before
+    /// tier shifting. A calibration constant like the tier/rivalry deltas —
+    /// tuning is a data edit behind run_monte_carlo_batch.
+    /// </summary>
+    public const int ReplacementRating = 40;
+
+    // Per-slot availability caches rebuilt when the ledger's Version OR the
+    // day moves (absences expire by the calendar, not by an event); the
+    // per-PA cost is one bool read when any absence is live, one false
+    // branch when none is.
+    private bool[] _slotUnavailable = Array.Empty<bool>();
+    private byte[] _slotRustPenalty = Array.Empty<byte>();
+    private readonly List<AbsenceEntry> _absenceScratch = new();
+    private int _absenceVersionSeen = -1;
+    private long _absenceDaySeen = -1;
+    private bool _hasAbsences;
+    private BatterRatings _replacementBatter;
+    private PitcherRatings _replacementPitcher;
+
     /// <summary>Season year with simulated-but-unflushed games; 0 = clean.</summary>
     private int _unflushedSeasonYear;
 
@@ -180,12 +210,20 @@ public sealed class LeagueSimulator
         _slotByPlayerId = new Dictionary<string, int>(slots, StringComparer.Ordinal);
         _rivalryVersionSeen = -1; // roster changed — force a cache rebuild
         _hasRivalries = false;
+        _slotUnavailable = new bool[slots];
+        _slotRustPenalty = new byte[slots];
+        _absenceVersionSeen = -1; // roster changed — force a cache rebuild
+        _absenceDaySeen = -1;
+        _hasAbsences = false;
         _batterRatings = new BatterRatings[slots];
         _pitcherRatings = new PitcherRatings[slots];
         _pedActive = new bool[slots];
         _pedGamesPlayed = new int[slots];
-        _batting = new BattingLine[slots];
-        _pitching = new PitchingLine[slots];
+        // One extra line past the roster: the discard row replacement-level
+        // call-ups accumulate into. FlushAccumulated loops the roster length
+        // only, so nothing a nameless call-up does ever reaches the database.
+        _batting = new BattingLine[slots + 1];
+        _pitching = new PitchingLine[slots + 1];
         _lineupSlots = new int[TeamCount * LineupSize];
         _rotationSlots = new int[TeamCount * RotationSize];
         _teamDefense = new byte[TeamCount];
@@ -201,6 +239,17 @@ public sealed class LeagueSimulator
         // layered on the raw ones. MLB's vector is all-zero, so an MLB world's
         // arrays are bit-identical to the pre-tier code.
         TierRatingDeltas tierDeltas = TierEffects.For(Tier);
+
+        // Phase 8c: the replacement-level call-up plays in this league's
+        // environment too, so its ratings tier-shift exactly like a rostered
+        // player's.
+        _replacementBatter = new BatterRatings(
+            TierEffects.Shift(ReplacementRating, tierDeltas.BatPower),
+            TierEffects.Shift(ReplacementRating, tierDeltas.BatContact),
+            TierEffects.Shift(ReplacementRating, tierDeltas.BatDiscipline), pedActive: false);
+        _replacementPitcher = new PitcherRatings(
+            TierEffects.Shift(ReplacementRating, tierDeltas.PitStuff),
+            TierEffects.Shift(ReplacementRating, tierDeltas.PitControl), (byte)ReplacementRating);
 
         for (int i = 0; i < slots; i++)
         {
@@ -305,6 +354,7 @@ public sealed class LeagueSimulator
             return; // offseason
         }
 
+        RefreshAvailability(e.Day);
         SimulateGameDay(e.DayOfSeason);
         _unflushedSeasonYear = e.SeasonYear;
 
@@ -379,12 +429,24 @@ public sealed class LeagueSimulator
         _teamGamesPlayed[homeTeam]++;
         _teamGamesPlayed[awayTeam]++;
 
+        // Phase 8c: an absent starter's slot is shadowed by the replacement
+        // call-up — his stats land on the discard line, the rotation clock
+        // ticks as normal (he "would have" started). A rusty starter pitches
+        // himself, ratings docked. The no-absence path selects the exact
+        // pre-8c values.
+        bool homeStarterOut = _hasAbsences && _slotUnavailable[homeStarter];
+        bool awayStarterOut = _hasAbsences && _slotUnavailable[awayStarter];
+        int homeStarterStat = homeStarterOut ? _roster.Length : homeStarter;
+        int awayStarterStat = awayStarterOut ? _roster.Length : awayStarter;
+        PitcherRatings homePitcher = EffectivePitcher(homeStarter, homeStarterOut);
+        PitcherRatings awayPitcher = EffectivePitcher(awayStarter, awayStarterOut);
+
         // Complete games for both starters — bullpens arrive with the Phase 4
         // micro-sim's stamina model.
-        _pitching[homeStarter].G++;
-        _pitching[homeStarter].Gs++;
-        _pitching[awayStarter].G++;
-        _pitching[awayStarter].Gs++;
+        _pitching[homeStarterStat].G++;
+        _pitching[homeStarterStat].Gs++;
+        _pitching[awayStarterStat].G++;
+        _pitching[awayStarterStat].Gs++;
 
         int homeScore = 0;
         int awayScore = 0;
@@ -393,12 +455,16 @@ public sealed class LeagueSimulator
 
         for (int inning = 1; ; inning++)
         {
-            awayScore += PlayHalfInning(awayTeam, homeStarter, _teamDefense[homeTeam], ref awayOrder);
+            awayScore += PlayHalfInning(
+                awayTeam, homeStarter, homeStarterStat, in homePitcher, homeStarterOut,
+                _teamDefense[homeTeam], ref awayOrder);
             if (inning >= 9 && homeScore > awayScore)
             {
                 break; // home leads after the top of the 9th (or later) — no bottom half
             }
-            homeScore += PlayHalfInning(homeTeam, awayStarter, _teamDefense[awayTeam], ref homeOrder);
+            homeScore += PlayHalfInning(
+                homeTeam, awayStarter, awayStarterStat, in awayPitcher, awayStarterOut,
+                _teamDefense[awayTeam], ref homeOrder);
             if (inning >= 9 && homeScore != awayScore)
             {
                 break; // decided in the 9th or extras; ties play on
@@ -407,13 +473,13 @@ public sealed class LeagueSimulator
 
         if (homeScore > awayScore)
         {
-            _pitching[homeStarter].W++;
-            _pitching[awayStarter].L++;
+            _pitching[homeStarterStat].W++;
+            _pitching[awayStarterStat].L++;
         }
         else
         {
-            _pitching[awayStarter].W++;
-            _pitching[homeStarter].L++;
+            _pitching[awayStarterStat].W++;
+            _pitching[homeStarterStat].L++;
         }
 
         // §6 post-game hook bookkeeping: every flagged participant logs a game
@@ -429,9 +495,84 @@ public sealed class LeagueSimulator
 
     private void CountPedGame(int slot)
     {
-        if (_pedActive[slot])
+        // An absent (shadowed) player did not take the field — no game under
+        // the influence, no PED cost. Rusty players play and pay as normal.
+        if (_pedActive[slot] && !(_hasAbsences && _slotUnavailable[slot]))
         {
             _pedGamesPlayed[slot]++;
+        }
+    }
+
+    /// <summary>
+    /// The ratings a pitching slot actually throws with today: the
+    /// replacement call-up when absent, rust-docked when recovering from an
+    /// injury, the baked array value otherwise (the exact pre-8c bytes).
+    /// </summary>
+    private PitcherRatings EffectivePitcher(int slot, bool shadowed)
+    {
+        if (shadowed)
+        {
+            return _replacementPitcher;
+        }
+        byte rust = _hasAbsences ? _slotRustPenalty[slot] : (byte)0;
+        if (rust == 0)
+        {
+            return _pitcherRatings[slot];
+        }
+        ref readonly PitcherRatings p = ref _pitcherRatings[slot];
+        return new PitcherRatings(
+            TierEffects.Shift(p.Stuff, -rust), TierEffects.Shift(p.Control, -rust), p.Stamina);
+    }
+
+    /// <summary>Batter-side rust dock (0 = the array value unchanged). PED flag rides along — the resolver layers its multiplier as usual. Internal so run_monte_carlo_batch pins the arithmetic.</summary>
+    internal static BatterRatings ApplyRust(in BatterRatings b, byte rust) =>
+        rust == 0 ? b : new BatterRatings(
+            TierEffects.Shift(b.Power, -rust), TierEffects.Shift(b.Contact, -rust),
+            TierEffects.Shift(b.Discipline, -rust), b.PedActive);
+
+    /// <summary>
+    /// Rebuilds the per-slot availability caches when the ledger's Version or
+    /// the day has moved (an absence expires by the calendar advancing, so
+    /// Version alone is not enough). Ids the ledger knows but the roster
+    /// doesn't are skipped. Runs at day granularity, never per PA; internal
+    /// so the harness can pair it with a direct SimulateGameDay drive.
+    /// </summary>
+    internal void RefreshAvailability(long day)
+    {
+        if (Availability is null || _slotByPlayerId is null)
+        {
+            _hasAbsences = false;
+            return;
+        }
+        if (Availability.Version == _absenceVersionSeen && day == _absenceDaySeen)
+        {
+            return;
+        }
+        _absenceVersionSeen = Availability.Version;
+        _absenceDaySeen = day;
+        Array.Clear(_slotUnavailable);
+        Array.Clear(_slotRustPenalty);
+        _hasAbsences = false;
+
+        Availability.CopyActive(day, _absenceScratch);
+        for (int i = 0; i < _absenceScratch.Count; i++)
+        {
+            AbsenceEntry entry = _absenceScratch[i];
+            if (!_slotByPlayerId.TryGetValue(entry.PlayerId, out int slot))
+            {
+                continue;
+            }
+            switch (entry.StateOn(day))
+            {
+                case SlotAvailability.Absent:
+                    _slotUnavailable[slot] = true;
+                    _hasAbsences = true;
+                    break;
+                case SlotAvailability.Rusty:
+                    _slotRustPenalty[slot] = entry.RatingPenalty;
+                    _hasAbsences = true;
+                    break;
+            }
         }
     }
 
@@ -475,10 +616,16 @@ public sealed class LeagueSimulator
     /// §7 base-out state machine. Bases are 3 bits (1 = 1B, 2 = 2B, 4 = 3B).
     /// Returns runs scored; charges the pitching line (all runs earned — no
     /// errors in the macro-sim) and credits batter counting stats + RBI.
+    /// The pitcher's effective ratings and stat line are the caller's picks
+    /// (Phase 8c: a shadowed starter throws replacement stuff into the
+    /// discard line); an absent batter's PA plays as the replacement call-up
+    /// with stats discarded, and neither side of a shadowed matchup carries a
+    /// rivalry (the call-up is a different person).
     /// </summary>
-    private int PlayHalfInning(int battingTeam, int pitcherSlot, byte defense, ref int orderPos)
+    private int PlayHalfInning(
+        int battingTeam, int pitcherSlot, int pitcherStatSlot, in PitcherRatings pitcher, bool pitcherShadowed,
+        byte defense, ref int orderPos)
     {
-        PitcherRatings pitcher = _pitcherRatings[pitcherSlot];
         int outs = 0;
         int bases = 0;
         int runs = 0;
@@ -488,25 +635,42 @@ public sealed class LeagueSimulator
             int batterSlot = _lineupSlots[battingTeam * LineupSize + orderPos];
             orderPos = (orderPos + 1) % LineupSize;
 
+            bool batterShadowed = false;
+            byte batterRust = 0;
+            if (_hasAbsences)
+            {
+                batterShadowed = _slotUnavailable[batterSlot];
+                batterRust = _slotRustPenalty[batterSlot];
+            }
+            int batterStatSlot = batterShadowed ? _roster.Length : batterSlot;
+
             // Phase 6: an active batter-pitcher rivalry bends this PA through
             // effective ratings (RivalryEffects), same resolver. Intensity 0
             // takes the exact pre-rivalry call — bit-identical M1 lines.
-            byte rivalry = _hasRivalries ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
+            byte rivalry = _hasRivalries && !batterShadowed && !pitcherShadowed
+                ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
             PaOutcome outcome;
-            if (rivalry == 0)
+            if (rivalry == 0 && !batterShadowed && batterRust == 0)
             {
                 outcome = AtBatResolver.Resolve(
                     in _batterRatings[batterSlot], in pitcher, defense, ref _rng);
             }
             else
             {
-                BatterRatings rivalBatter = RivalryEffects.Batter(in _batterRatings[batterSlot], rivalry);
-                PitcherRatings rivalPitcher = RivalryEffects.Pitcher(in pitcher, rivalry);
-                outcome = AtBatResolver.Resolve(in rivalBatter, in rivalPitcher, defense, ref _rng);
+                BatterRatings paBatter = batterShadowed
+                    ? _replacementBatter
+                    : ApplyRust(in _batterRatings[batterSlot], batterRust);
+                PitcherRatings paPitcher = pitcher;
+                if (rivalry != 0)
+                {
+                    paBatter = RivalryEffects.Batter(in paBatter, rivalry);
+                    paPitcher = RivalryEffects.Pitcher(in pitcher, rivalry);
+                }
+                outcome = AtBatResolver.Resolve(in paBatter, in paPitcher, defense, ref _rng);
             }
 
-            ref BattingLine bat = ref _batting[batterSlot];
-            ref PitchingLine pit = ref _pitching[pitcherSlot];
+            ref BattingLine bat = ref _batting[batterStatSlot];
+            ref PitchingLine pit = ref _pitching[pitcherStatSlot];
             bat.Pa++;
             int paRuns = 0;
 

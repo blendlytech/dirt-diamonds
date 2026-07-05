@@ -209,6 +209,16 @@ public sealed class CareerManager
     public bool AutopilotAttendedGames = true;
 
     /// <summary>
+    /// Roster-availability source (Phase 8c), optional like the sims' own
+    /// references: null — every pre-8c harness path — changes nothing. When
+    /// the avatar is absent (arrest/injury/suspension) on a game day, the
+    /// team's game still happens but resolves straight through the autopilot
+    /// (the micro-sim shadows the avatar's slot with the call-up), so the UI
+    /// never sees a pending interactive game the player isn't allowed to play.
+    /// </summary>
+    public AvailabilityLedger? Availability;
+
+    /// <summary>
     /// True (default, headless/harness-safe): a fired retirement trigger
     /// hands off to the single best-rated eligible heir immediately via
     /// <see cref="RunSuccessionCheck"/>. False: a Succeeded outcome instead
@@ -1090,11 +1100,16 @@ public sealed class CareerManager
             _teamIds[pairing.HomeTeam], _teamIds[pairing.AwayTeam]);
         _hasPending = true;
 
-        if (AutopilotAttendedGames)
+        if (AutopilotAttendedGames || IsAvatarAbsentOn(e.Day))
         {
             ResolvePendingWithAutopilot();
         }
     }
+
+    /// <summary>True when the avatar is benched (absent, not merely rusty) on the given absolute day.</summary>
+    public bool IsAvatarAbsentOn(long day) =>
+        HasAvatar && Availability is not null
+        && Availability.StateFor(_avatarPlayerId!, day) == SlotAvailability.Absent;
 
     /// <summary>The game waiting on the player, when <see cref="HasPendingGame"/>.</summary>
     public bool TryGetPendingGame(out PendingAttendedGame pending)
@@ -1138,6 +1153,12 @@ public sealed class CareerManager
         _gameInFlight = true;
         try
         {
+            // Phase 8c: the micro-sim's availability caches are day-scoped and
+            // it has no calendar of its own — refresh for the pending game's
+            // day (covers the UI path, the autopilot path, and a stale
+            // pending game forfeited a day late). Version+day-gated, so this
+            // is a no-op on the common no-absence path.
+            _micro.RefreshAvailability(_pending.AbsoluteDay);
             MicroGameResult result = _micro.PlayGame(
                 _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot,
                 ref batterPolicy, ref pitcherPolicy, ref _rng);

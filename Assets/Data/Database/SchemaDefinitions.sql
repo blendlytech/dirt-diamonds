@@ -307,8 +307,30 @@ CREATE TABLE IF NOT EXISTS Team_Tiers (
 INSERT OR IGNORE INTO Team_Tiers (team_id, tier)
     SELECT team_id, 5 FROM Teams;
 
+-- ----------------------------------------------------------------------------
+-- Player_Absences — schema v8. The roster-availability store (Phase 8c): one
+-- row per player naming why they are out of games and until when. A player is
+-- ABSENT (replacement-level call-up shadows their slot, no stats accrue) while
+-- current_day < until_day, and — injury only — plays RUSTY (effective ratings
+-- down rating_penalty points) while until_day <= current_day < penalty_until_day.
+-- reason mirrors the C# AbsenceReason enum: 1 = Injury, 2 = Suspension,
+-- 3 = Arrest. One absence per player (PK); the query-layer upsert keeps
+-- whichever absence ends LATER (a shorter overlapping absence is ignored
+-- wholesale — disclosed simplification, absences don't stack). A separate
+-- additive table, the Pitcher_Roles/Life_Stress/Team_Tiers pattern. No
+-- backfill: nothing produced absences before v8. The hydration read is a full
+-- scan by design — the table holds at most one row per ever-absent player.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Absences (
+    player_id         TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    reason            INTEGER NOT NULL CHECK (reason IN (1, 2, 3)),
+    until_day         INTEGER NOT NULL CHECK (until_day >= 0),
+    rating_penalty    INTEGER NOT NULL DEFAULT 0 CHECK (rating_penalty    BETWEEN 0 AND 100),
+    penalty_until_day INTEGER NOT NULL DEFAULT 0 CHECK (penalty_until_day >= 0)
+) STRICT;
+
 COMMIT;
 
--- Schema version 7 — adds Team_Tiers (purely additive; existing teams backfill
--- as MLB, see comment on the table above). Bump with every migration.
-PRAGMA user_version = 7;
+-- Schema version 8 — adds Player_Absences (purely additive, no backfill; see
+-- comment on the table above). Bump with every migration.
+PRAGMA user_version = 8;

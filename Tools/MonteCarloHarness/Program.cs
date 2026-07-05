@@ -67,6 +67,7 @@ internal static class Program
         string lineageEdgeScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineageedge_{Guid.NewGuid():N}.db");
         string conceptionScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_conception_{Guid.NewGuid():N}.db");
         string tierScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_tier_{Guid.NewGuid():N}.db");
+        string availScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_avail_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -84,6 +85,7 @@ internal static class Program
             RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
             RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
             RunTierLadderSuite(schemaPath, tierScratchPath);
+            RunAvailabilitySuite(schemaPath, availScratchPath);
         }
         catch (Exception ex)
         {
@@ -119,6 +121,13 @@ internal static class Program
                 TryDelete(lineage + "-shm");
             }
             foreach (string variant in new[] { tierScratchPath, tierScratchPath + ".ref" })
+            {
+                TryDelete(variant);
+                TryDelete(variant + "-wal");
+                TryDelete(variant + "-shm");
+            }
+            foreach (string variant in new[]
+                { availScratchPath, availScratchPath + ".bare", availScratchPath + ".abs", availScratchPath + ".career" })
             {
                 TryDelete(variant);
                 TryDelete(variant + "-wal");
@@ -272,7 +281,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v7", db.GetSchemaVersion() == 7, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v8", db.GetSchemaVersion() == 8, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -2525,6 +2534,314 @@ internal static class Program
             && mlbPit.OutsRecorded == refPit.OutsRecorded && mlbPit.HAllowed == refPit.HAllowed
             && mlbPit.Er == refPit.Er && mlbPit.Bb == refPit.Bb && mlbPit.So == refPit.So,
             $"PA {mlbBat.Pa}/{refBat.Pa} H {mlbBat.H}/{refBat.H} ER {mlbPit.Er}/{refPit.Er}");
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 8c: roster availability (arrest / injury / suspension)
+    // ------------------------------------------------------------------
+
+    private static void RunAvailabilitySuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 8c roster availability: ledger semantics, replacement shadowing, career benching ---");
+
+        // ---- pure ledger semantics (no DB) ----
+        var probeLedger = new AvailabilityLedger();
+        var probeBus = new EventBus();
+        probeLedger.AttachTo(probeBus);
+        probeBus.Publish(new PlayerAbsenceChangedEvent("p1", (byte)AbsenceReason.Suspension, untilDay: 110, 0, 0));
+        probeBus.DispatchPending();
+        Check("ledger day boundaries: absent through until_day−1, available ON until_day",
+            probeLedger.StateFor("p1", 100) == SlotAvailability.Absent
+            && probeLedger.StateFor("p1", 109) == SlotAvailability.Absent
+            && probeLedger.StateFor("p1", 110) == SlotAvailability.Available
+            && probeLedger.StateFor("nobody", 100) == SlotAvailability.Available);
+
+        int versionBefore = probeLedger.Version;
+        probeBus.Publish(new PlayerAbsenceChangedEvent("p1", (byte)AbsenceReason.Arrest, 105, 0, 0));
+        probeBus.DispatchPending();
+        bool shorterIgnored = probeLedger.Version == versionBefore
+            && probeLedger.TryGet("p1", out AbsenceEntry kept)
+            && kept.Reason == AbsenceReason.Suspension && kept.UntilDay == 110;
+        probeBus.Publish(new PlayerAbsenceChangedEvent("p1", (byte)AbsenceReason.Injury, 120, 8, 130));
+        probeBus.DispatchPending();
+        Check("keep-later merge (shorter overlap ignored, longer replaces) + injury rust window [until, penaltyUntil)",
+            shorterIgnored && probeLedger.Version != versionBefore
+            && probeLedger.StateFor("p1", 119) == SlotAvailability.Absent
+            && probeLedger.StateFor("p1", 120) == SlotAvailability.Rusty
+            && probeLedger.StateFor("p1", 129) == SlotAvailability.Rusty
+            && probeLedger.StateFor("p1", 130) == SlotAvailability.Available);
+
+        var rustSource = new BatterRatings(60, 60, 60, pedActive: true);
+        BatterRatings rusted = LeagueSimulator.ApplyRust(in rustSource, 12);
+        Check("rust dock arithmetic: −rust on every batter rating, PED flag preserved, rust 0 = identity",
+            rusted.Power == 48 && rusted.Contact == 48 && rusted.Discipline == 48 && rusted.PedActive
+            && LeagueSimulator.ApplyRust(in rustSource, 0).Power == 60);
+
+        // ---- bit-identity: an ATTACHED but empty ledger changes nothing ----
+        string barePath = scratchPath + ".bare";
+        LeagueBattingTotals ledgeredBat;
+        LeaguePitchingTotals ledgeredPit;
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+            clock.Initialize(StartYear);
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed + 200));
+            league.Initialize();
+            league.Availability = new AvailabilityLedger(); // attached-and-empty — must be inert
+            league.AttachTo(bus);
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            ledgeredBat = baseball.LoadLeagueBattingTotals(StartYear);
+            ledgeredPit = baseball.LoadLeaguePitchingTotals(StartYear);
+        }
+        using (var bareDb = new DatabaseManager(barePath))
+        {
+            bareDb.InitializeSchema(schemaPath);
+            var barePlayers = new PlayerQueries(bareDb);
+            var bareBaseball = new BaseballQueries(bareDb);
+            var bareGenRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(bareDb, barePlayers, bareBaseball, ratingSpread: 0, ref bareGenRng);
+            var bareState = new GlobalState();
+            var bareBus = new EventBus();
+            var bareClock = new TimeManager(bareDb, new GameStateQueries(bareDb), bareState, bareBus);
+            bareClock.Initialize(StartYear);
+            var bareLeague = new LeagueSimulator(
+                bareDb, bareBaseball, new StatsNormalizer(bareDb, bareBaseball), new RngState(SeasonSeed + 200));
+            bareLeague.Initialize();
+            bareLeague.AttachTo(bareBus); // no ledger at all — the pre-8c shape
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                bareClock.AdvanceDay();
+                bareBus.DispatchPending();
+            }
+            LeagueBattingTotals bareBat = bareBaseball.LoadLeagueBattingTotals(StartYear);
+            LeaguePitchingTotals barePit = bareBaseball.LoadLeaguePitchingTotals(StartYear);
+            Check("empty-ledger season is BIT-IDENTICAL to a no-ledger season (the pre-8c guarantee)",
+                ledgeredBat.Pa == bareBat.Pa && ledgeredBat.Ab == bareBat.Ab && ledgeredBat.H == bareBat.H
+                && ledgeredBat.Doubles == bareBat.Doubles && ledgeredBat.Triples == bareBat.Triples
+                && ledgeredBat.Hr == bareBat.Hr && ledgeredBat.Bb == bareBat.Bb && ledgeredBat.So == bareBat.So
+                && ledgeredBat.Rbi == bareBat.Rbi
+                && ledgeredPit.G == barePit.G && ledgeredPit.Gs == barePit.Gs
+                && ledgeredPit.W == barePit.W && ledgeredPit.L == barePit.L
+                && ledgeredPit.OutsRecorded == barePit.OutsRecorded && ledgeredPit.HAllowed == barePit.HAllowed
+                && ledgeredPit.Er == barePit.Er && ledgeredPit.Bb == barePit.Bb && ledgeredPit.So == barePit.So,
+                $"PA {ledgeredBat.Pa}/{bareBat.Pa} H {ledgeredBat.H}/{bareBat.H} ER {ledgeredPit.Er}/{barePit.Er}");
+        }
+
+        // ---- macro shadowing: a suspension costs exactly the absent window ----
+        string absencePath = scratchPath + ".abs";
+        using (var absDb = new DatabaseManager(absencePath))
+        {
+            absDb.InitializeSchema(schemaPath);
+            var absPlayers = new PlayerQueries(absDb);
+            var absBaseball = new BaseballQueries(absDb);
+            var absGenRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(absDb, absPlayers, absBaseball, ratingSpread: 0, ref absGenRng);
+
+            // ---- DB round-trip while the world is fresh: SQL keep-later + hydration ----
+            var roster = new List<RosterPlayerRow>();
+            absBaseball.LoadRoster(roster);
+            string dbProbeId = roster[0].PlayerId;
+            absPlayers.SetAbsence(dbProbeId, AbsenceReason.Suspension, 110, 0, 0);
+            absPlayers.SetAbsence(dbProbeId, AbsenceReason.Arrest, 105, 0, 0); // shorter — SQL no-op
+            bool sqlKeepLater = absPlayers.TryGetAbsence(dbProbeId, out PlayerAbsenceRow keptRow)
+                && keptRow.Reason == AbsenceReason.Suspension && keptRow.UntilDay == 110;
+            absPlayers.SetAbsence(dbProbeId, AbsenceReason.Injury, 120, 8, 130); // longer — replaces
+            var hydrationRows = new List<PlayerAbsenceRow>();
+            absPlayers.LoadActiveAbsences(100, hydrationRows);
+            var hydrated = new AvailabilityLedger();
+            hydrated.Seed(hydrationRows);
+            var inertRows = new List<PlayerAbsenceRow>();
+            Check("SQL keep-later upsert + LoadActiveAbsences→Seed hydration reproduce the row exactly",
+                sqlKeepLater
+                && hydrationRows.Count == 1
+                && hydrated.StateFor(dbProbeId, 119) == SlotAvailability.Absent
+                && hydrated.StateFor(dbProbeId, 125) == SlotAvailability.Rusty
+                && hydrated.StateFor(dbProbeId, 130) == SlotAvailability.Available
+                && absPlayers.LoadActiveAbsences(130, inertRows) == 0);
+
+            // Targets: a lineup batter on the first team, a rotation starter on
+            // the second — both suspended for days 15–21 (one full flush cycle).
+            string batterId = roster.First(r => r.TeamId == roster[0].TeamId && !r.IsPitcher).PlayerId;
+            string teammateId = roster.First(r => r.TeamId == roster[0].TeamId && !r.IsPitcher && r.PlayerId != batterId).PlayerId;
+            int secondTeamId = roster.First(r => r.TeamId != roster[0].TeamId).TeamId;
+            string starterId = roster.First(r => r.TeamId == secondTeamId && r.Role == PitcherRole.Starter).PlayerId;
+
+            var absState = new GlobalState();
+            var absBus = new EventBus();
+            var absClock = new TimeManager(absDb, new GameStateQueries(absDb), absState, absBus);
+            absClock.Initialize(StartYear);
+            var absLedger = new AvailabilityLedger();
+            absLedger.AttachTo(absBus);
+            var absLeague = new LeagueSimulator(
+                absDb, absBaseball, new StatsNormalizer(absDb, absBaseball), new RngState(SeasonSeed + 300));
+            absLeague.Initialize();
+            absLeague.Availability = absLedger;
+            absLeague.AttachTo(absBus);
+
+            // Days 2..14 (the known seed-day artifact: day 1 fires no event).
+            for (long day = absState.CurrentDay; day < 14; day = absState.CurrentDay)
+            {
+                absClock.AdvanceDay();
+                absBus.DispatchPending();
+            }
+            absLeague.FlushPending();
+            int batterPa0 = SeasonPa(absPlayers, batterId);
+            int teammatePa0 = SeasonPa(absPlayers, teammateId);
+            int starterG0 = SeasonG(absPlayers, starterId);
+            Check("pre-absence baseline: both targets have been playing", batterPa0 > 0 && starterG0 > 0,
+                $"batter PA {batterPa0}, starter G {starterG0}");
+
+            // Suspend both for days 15..21 (until_day 22), published on the
+            // same bus the day events ride — FIFO puts it ahead of day 15.
+            absBus.Publish(new PlayerAbsenceChangedEvent(batterId, (byte)AbsenceReason.Suspension, 22, 0, 0));
+            absBus.Publish(new PlayerAbsenceChangedEvent(starterId, (byte)AbsenceReason.Suspension, 22, 0, 0));
+            for (int i = 0; i < 7; i++)
+            {
+                absClock.AdvanceDay();
+                absBus.DispatchPending();
+            }
+            absLeague.FlushPending();
+            int batterPa1 = SeasonPa(absPlayers, batterId);
+            int teammatePa1 = SeasonPa(absPlayers, teammateId);
+            int starterG1 = SeasonG(absPlayers, starterId);
+            Check("suspended window: batter PA and starter G frozen while the teammate keeps accruing",
+                batterPa1 == batterPa0 && starterG1 == starterG0 && teammatePa1 > teammatePa0,
+                $"batter PA {batterPa0}→{batterPa1}, starter G {starterG0}→{starterG1}, teammate PA {teammatePa0}→{teammatePa1}");
+
+            // Days 22..28 — both are back.
+            for (int i = 0; i < 7; i++)
+            {
+                absClock.AdvanceDay();
+                absBus.DispatchPending();
+            }
+            absLeague.FlushPending();
+            Check("post-absence window: both targets play again",
+                SeasonPa(absPlayers, batterId) > batterPa1 && SeasonG(absPlayers, starterId) > starterG1,
+                $"batter PA {batterPa1}→{SeasonPa(absPlayers, batterId)}, starter G {starterG1}→{SeasonG(absPlayers, starterId)}");
+            Check("absence season: integrity ok, no FK violations, no open batch",
+                !absDb.IsBatchActive && absDb.RunIntegrityCheck() == "ok" && absDb.RunForeignKeyCheck() == 0);
+        }
+
+        // ---- career benching: an absent avatar's game auto-resolves, stats freeze ----
+        string careerPath = scratchPath + ".career";
+        using var carDb = new DatabaseManager(careerPath);
+        carDb.InitializeSchema(schemaPath);
+        var carPlayers = new PlayerQueries(carDb);
+        var carBaseball = new BaseballQueries(carDb);
+        var carGenRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(carDb, carPlayers, carBaseball, ratingSpread: 0, ref carGenRng);
+        var carState = new GlobalState();
+        var carBus = new EventBus();
+        var carGameState = new GameStateQueries(carDb);
+        var carClock = new TimeManager(carDb, carGameState, carState, carBus);
+        carClock.Initialize(StartYear);
+        var carLedger = new AvailabilityLedger();
+        carLedger.AttachTo(carBus);
+        var carLeague = new LeagueSimulator(
+            carDb, carBaseball, new StatsNormalizer(carDb, carBaseball), new RngState(SeasonSeed + 400));
+        carLeague.Initialize();
+        carLeague.Availability = carLedger;
+        carLeague.AttachTo(carBus);
+        var carMicro = new MicroGame(carDb, carBaseball);
+        carMicro.Initialize();
+        carMicro.Availability = carLedger;
+        carMicro.LoggingEnabled = false;
+        var carCareer = new CareerManager(
+            carDb, carPlayers, carBaseball, carGameState, carState, Solo(carLeague), carMicro, new RngState(MicroSeed + 100));
+        carCareer.Availability = carLedger;
+        carCareer.AttachTo(carBus);
+        carCareer.CreateAvatar("Benched", "Rookie", teamId: 3, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 60,
+            BatContact = 60,
+            BatDiscipline = 60,
+            PitStuff = 50,
+            PitControl = 50,
+            PitStamina = 50,
+            Fielding = 50,
+        });
+
+        for (int i = 0; i < 5; i++)
+        {
+            carClock.AdvanceDay();
+            carBus.DispatchPending();
+        }
+        int avatarPa0 = SeasonPa(carPlayers, carCareer.AvatarPlayerId);
+        Check("avatar baseline: attended autopilot games accruing", avatarPa0 > 0, $"PA {avatarPa0}");
+
+        // Suspend the avatar for the next 3 days, then flip to interactive
+        // mode — the benched days must STILL resolve straight through the
+        // autopilot (no pending game the player isn't allowed to play).
+        carBus.Publish(new PlayerAbsenceChangedEvent(
+            carCareer.AvatarPlayerId, (byte)AbsenceReason.Suspension, carState.CurrentDay + 4, 0, 0));
+        carCareer.AutopilotAttendedGames = false;
+        LeagueBattingTotals beforeBat = carBaseball.LoadLeagueBattingTotals(StartYear);
+        bool neverPending = true;
+        bool absentReported = true;
+        for (int i = 0; i < 3; i++)
+        {
+            carClock.AdvanceDay();
+            carBus.DispatchPending();
+            neverPending &= !carCareer.HasPendingGame;
+            absentReported &= carCareer.IsAvatarAbsentOn(carState.CurrentDay);
+        }
+        int avatarPa1 = SeasonPa(carPlayers, carCareer.AvatarPlayerId);
+        Check("benched avatar in interactive mode: every game auto-resolves, avatar PA frozen, absence reported",
+            neverPending && absentReported && avatarPa1 == avatarPa0,
+            $"PA {avatarPa0}→{avatarPa1}");
+        LeagueBattingTotals duringBat = carBaseball.LoadLeagueBattingTotals(StartYear);
+        Check("the team's games still happened while the avatar sat (attended-game flushes kept landing)",
+            duringBat.Pa > beforeBat.Pa, $"league PA {beforeBat.Pa}→{duringBat.Pa}");
+
+        carClock.AdvanceDay();
+        carBus.DispatchPending();
+        bool backPending = carCareer.HasPendingGame && !carCareer.IsAvatarAbsentOn(carState.CurrentDay);
+        var neutral = new NeutralBatterPolicy();
+        if (carCareer.HasPendingGame)
+        {
+            carCareer.PlayPendingGame(ref neutral);
+        }
+        Check("suspension over: the next day parks a pending interactive game again and the avatar plays",
+            backPending && SeasonPa(carPlayers, carCareer.AvatarPlayerId) > avatarPa1,
+            $"PA {avatarPa1}→{SeasonPa(carPlayers, carCareer.AvatarPlayerId)}");
+        Check("career benching world: integrity ok, no FK violations, no open batch",
+            !carDb.IsBatchActive && carDb.RunIntegrityCheck() == "ok" && carDb.RunForeignKeyCheck() == 0);
+    }
+
+    private static int SeasonPa(PlayerQueries players, string playerId)
+    {
+        var seasons = new List<BattingStatsRow>();
+        players.LoadBattingSeasons(playerId, seasons);
+        int pa = 0;
+        foreach (BattingStatsRow row in seasons)
+        {
+            pa += row.Pa;
+        }
+        return pa;
+    }
+
+    private static int SeasonG(PlayerQueries players, string playerId)
+    {
+        var seasons = new List<PitchingStatsRow>();
+        players.LoadPitchingSeasons(playerId, seasons);
+        int g = 0;
+        foreach (PitchingStatsRow row in seasons)
+        {
+            g += row.G;
+        }
+        return g;
     }
 
     /// <summary>
