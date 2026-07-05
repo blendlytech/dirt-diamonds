@@ -29,6 +29,15 @@ public sealed class LifeSimManager
         // GameManager hydrates via SetStress and flushes via TryGetStress,
         // the same bridge pattern needs use (gritty_event_framework.md §9).
         public float Stress;
+
+        // Phase 8a: Funds changed by THIS NPC's own actions/blocks/drain since
+        // GameManager's last flush — NOT touched by OnFundsImpulse (that
+        // portion is already committed to the DB by whoever published the
+        // impulse, e.g. a gritty event's own AdjustFunds call). GameManager
+        // peeks/clears this once a day and applies it via the same atomic
+        // AdjustFunds writer gritty events use, keeping Players.funds
+        // single-writer-clean end to end (see ApplyFundsDelta below).
+        public double UnflushedFundsDelta;
     }
 
     private const int HoursPerDay = 24;
@@ -42,6 +51,17 @@ public sealed class LifeSimManager
     // stress-relief action (DrinkAlone / PickArgument) buys ~1.5 days back.
     public const float StressRelaxationPerHour = 0.4f;
     public const float StressReliefPerAction = 15f;
+
+    // Phase 8a survival economy: a bundled weekly rent+food+gear cost-of-living
+    // drain — deliberately ONE line item, not three (disclosed simplification),
+    // applied to the AVATAR ONLY (see OnDayAdvanced). NPCs have no schedule and
+    // can never reach School/LegalWork via autopilot, so they have no possible
+    // income mechanic under this design — draining their funds too would just
+    // monotonically zero out the whole background population with no validated
+    // purpose. First-pass constants, tunable via simulate_utility_decay like
+    // every other table here.
+    public const int CostOfLivingCadenceDays = 7;
+    public const double WeeklyCostOfLiving = 70.0;
 
     private readonly Dictionary<string, NpcRuntime> _npcs = new();
     // Dictionary enumeration order isn't a documented guarantee; tracked
@@ -235,6 +255,26 @@ public sealed class LifeSimManager
         }
     }
 
+    /// <summary>
+    /// Non-destructive read of the funds delta accrued since the last
+    /// <see cref="ClearFundsDelta"/> (GameManager's persistence bridge, Phase
+    /// 8a). Deliberately a separate call from clearing — GameManager peeks
+    /// every tracked id, applies each nonzero delta via PlayerQueries.AdjustFunds
+    /// inside its own batch, and only clears (below) once that batch commits,
+    /// so a rolled-back transaction leaves nothing lost. 0 for an untracked id.
+    /// </summary>
+    public double PeekFundsDelta(string playerId) =>
+        _npcs.TryGetValue(playerId, out NpcRuntime? runtime) ? runtime.UnflushedFundsDelta : 0.0;
+
+    /// <summary>Resets a tracked NPC's unflushed funds delta to 0 (call only after its value has been durably persisted). No-op when untracked.</summary>
+    public void ClearFundsDelta(string playerId)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            runtime.UnflushedFundsDelta = 0.0;
+        }
+    }
+
     private void OnStressImpulse(StressImpulseEvent e)
     {
         if (_npcs.TryGetValue(e.PlayerId, out NpcRuntime? runtime))
@@ -255,13 +295,24 @@ public sealed class LifeSimManager
 
     private void OnDayAdvanced(DayAdvancedEvent e)
     {
+        bool costOfLivingDue = e.Day % CostOfLivingCadenceDays == 0;
         for (int i = 0; i < _order.Count; i++)
         {
             NpcRuntime npc = _npcs[_order[i]];
+            bool isAvatar = string.Equals(_order[i], _avatarPlayerId, StringComparison.Ordinal);
+
+            // 8a: the recurring cost-of-living bill — avatar-only (see the
+            // constants' doc comment), fires regardless of whether today is
+            // planned or autopiloted.
+            if (costOfLivingDue && isAvatar)
+            {
+                ApplyFundsDelta(npc, -WeeklyCostOfLiving);
+            }
+
             // 9b: a planned avatar day runs its blocks instead of the
             // autopilot; everyone else (and an unplanned avatar) days through
             // the pre-9b loop unchanged.
-            if (_hasTodaySchedule && string.Equals(_order[i], _avatarPlayerId, StringComparison.Ordinal))
+            if (_hasTodaySchedule && isAvatar)
             {
                 TickScheduledDay(npc, in _todaySchedule);
                 _hasTodaySchedule = false;
@@ -293,14 +344,15 @@ public sealed class LifeSimManager
         npc.BusyHoursRemaining = 0;
         npc.CurrentAction = NpcActionId.Idle;
 
-        // School/Practice are inert until 9d's development curves, Game is
-        // life-side inert (CareerManager owns the attended game), Work is
-        // inert until 8a's hustles plug in — each rides Idle's neutral
-        // definition so the future upgrade is a one-line definition swap.
-        TickBlockHours(npc, schedule.SchoolHours, in ActionCatalog.Idle);
+        // Practice is inert until 9d's development curves, Game is life-side
+        // inert (CareerManager owns the attended game) — both still ride
+        // Idle's neutral definition. School and Work got their real 8a
+        // definitions (meal access + neutral env for School; meal access +
+        // income + heavy Sleep/Fitness drain for LegalWork).
+        TickBlockHours(npc, schedule.SchoolHours, in ActionCatalog.School);
         TickBlockHours(npc, schedule.PracticeHours, in ActionCatalog.Idle);
         TickBlockHours(npc, schedule.GameHours, in ActionCatalog.Idle);
-        TickBlockHours(npc, schedule.WorkHours, in ActionCatalog.Idle);
+        TickBlockHours(npc, schedule.WorkHours, in ActionCatalog.LegalWork);
 
         for (int hour = 0; hour < schedule.FreeHours; hour++)
         {
@@ -323,16 +375,47 @@ public sealed class LifeSimManager
         float restorePerHour = def.PrimaryNeed is not null && def.TemporalCostHours > 0f
             ? def.RestoreAmount / def.TemporalCostHours
             : 0f;
+        // Same per-hour proration as restorePerHour above, applied to funds —
+        // guarded on the SAME denominator (TemporalCostHours > 0), never on
+        // FinancialCost == 0, so a future zero-hours block definition can
+        // never divide into a NaN that permanently corrupts Funds (Math.Max
+        // propagates NaN forever once it lands in the mirror). A true no-op
+        // for every block whose FinancialCost is 0 (Sleep, Idle-backed
+        // Practice/Game) — only LegalWork's negative cost (income) is nonzero.
+        double fundsPerHour = def.TemporalCostHours > 0f
+            ? -def.FinancialCost / def.TemporalCostHours
+            : 0.0;
         for (int hour = 0; hour < hours; hour++)
         {
             if (def.PrimaryNeed is NeedType need)
             {
                 npc.Needs.Restore(need, restorePerHour);
             }
+            if (fundsPerHour != 0.0)
+            {
+                ApplyFundsDelta(npc, fundsPerHour);
+            }
             npc.Needs = NeedsEngine.DecayHour(
                 npc.Needs, def.Environment, NeedsEngine.StressModifierFor(npc.Stress));
             npc.Stress = Math.Max(MinStress, npc.Stress - StressRelaxationPerHour);
         }
+    }
+
+    /// <summary>
+    /// The sole mutator of NpcRuntime.Funds for LifeSim-internal reasons
+    /// (autopilot ApplyAction, schedule blocks, the recurring drain) — diffs
+    /// the CLAMPED value (not the nominal delta) into UnflushedFundsDelta, so
+    /// a debit that bottoms out at the zero floor never queues more "debt"
+    /// than the mirror actually gave up (matching AdjustFunds' own SQL-side
+    /// MAX(0, ...) clamp when GameManager later applies this delta to the DB).
+    /// OnFundsImpulse (gritty events) deliberately does NOT go through this —
+    /// that portion is already committed to the DB by whoever published it.
+    /// </summary>
+    private static void ApplyFundsDelta(NpcRuntime npc, double delta)
+    {
+        double before = npc.Funds;
+        npc.Funds = Math.Max(0.0, npc.Funds + delta);
+        npc.UnflushedFundsDelta += npc.Funds - before;
     }
 
     private void TickHour(NpcRuntime npc)
@@ -389,7 +472,7 @@ public sealed class LifeSimManager
         {
             npc.Stress = Math.Max(MinStress, npc.Stress - StressReliefPerAction);
         }
-        npc.Funds = Math.Max(0.0, npc.Funds - def.FinancialCost);
+        ApplyFundsDelta(npc, -def.FinancialCost);
         npc.CurrentAction = id;
         npc.BusyHoursRemaining = Math.Max(0, (int)MathF.Ceiling(def.TemporalCostHours) - 1);
     }

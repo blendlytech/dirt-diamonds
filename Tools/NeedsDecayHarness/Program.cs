@@ -65,6 +65,7 @@ internal static class Program
         RunActionThresholdChecks();
         RunLifeSimChecks();
         RunDailyClockChecks();
+        RunSurvivalEconomyChecks();
         RunRelationshipGraphChecks();
 
         int failed = 0;
@@ -291,6 +292,23 @@ internal static class Program
             }
         }
         Check("every catalog action's Environment multipliers stay in the §4.1 range [0.25, 3.0]", allInRange);
+
+        // Phase 8a: School/LegalWork are schedule-block-only, deliberately
+        // excluded from ActionCatalog.All (so the sweep above never sees
+        // them) — a separate assertion keeps the §4.1 range guarantee whole.
+        bool blockOnlyInRange = true;
+        foreach (NpcActionDefinition def in new[] { ActionCatalog.School, ActionCatalog.LegalWork })
+        {
+            foreach (NeedType need in AllNeeds)
+            {
+                float e = def.Environment.Get(need);
+                if (e < 0.25f || e > 3.0f)
+                {
+                    blockOnlyInRange = false;
+                }
+            }
+        }
+        Check("schedule-block-only actions (School/LegalWork) also stay in the §4.1 Environment range", blockOnlyInRange);
 
         Console.WriteLine();
     }
@@ -529,21 +547,53 @@ internal static class Program
         Check("SetAvatar drops any pending plan (an heir never inherits the retiree's day)",
             !gated.HasTodaySchedule);
 
-        // --- Guarantee 1: never-planned avatar ≡ plain NPC, bit-for-bit, 30 days ---
+        // --- Guarantee 1: never-planned avatar's Needs/Stress reproduce the
+        // pre-9b autopilot trace bit-for-bit, 30 days. Funds no longer stay
+        // bit-identical to a plain NPC (8a design): the recurring cost-of-
+        // living drain fires for the avatar whether or not a schedule was
+        // ever submitted, so "becoming the avatar" alone is no longer fully
+        // inert — but nothing BEYOND that intentional, exactly-quantifiable
+        // divergence should differ. The bystander NPC (never the avatar in
+        // either world) must stay FULLY bit-identical, funds included. ---
         (LifeSimManager control, EventBus controlBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, SeedStress, markAvatar: false);
         (LifeSimManager marked, EventBus markedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, SeedStress, markAvatar: true);
 
-        bool bitIdentical = true;
-        for (int day = 1; day <= 30 && bitIdentical; day++)
+        bool needsStressIdentical = true;
+        bool bystanderFullyIdentical = true;
+        int costOfLivingDays = 0;
+        for (int day = 1; day <= 30; day++)
         {
             controlBus.Publish(new DayAdvancedEvent(day, 2026, day));
             controlBus.DispatchPending();
             markedBus.Publish(new DayAdvancedEvent(day, 2026, day));
             markedBus.DispatchPending();
-            bitIdentical = PersonStateIdentical(control, marked, AvatarId)
-                && PersonStateIdentical(control, marked, BystanderId);
+            if (day % LifeSimManager.CostOfLivingCadenceDays == 0)
+            {
+                costOfLivingDays++;
+            }
+
+            control.TryGetNeeds(AvatarId, out NeedsState controlAvatarNeeds);
+            marked.TryGetNeeds(AvatarId, out NeedsState markedAvatarNeeds);
+            foreach (NeedType need in AllNeeds)
+            {
+                needsStressIdentical &= controlAvatarNeeds.Get(need) == markedAvatarNeeds.Get(need);
+            }
+            control.TryGetStress(AvatarId, out float controlAvatarStress);
+            marked.TryGetStress(AvatarId, out float markedAvatarStress);
+            needsStressIdentical &= controlAvatarStress == markedAvatarStress;
+            bystanderFullyIdentical &= PersonStateIdentical(control, marked, BystanderId);
         }
-        Check("never-planned avatar reproduces the pre-9b autopilot trace bit-for-bit over 30 days", bitIdentical);
+        Check("never-planned avatar's Needs/Stress reproduce the pre-9b autopilot trace bit-for-bit over 30 days",
+            needsStressIdentical);
+        Check("bystander NPC stays fully bit-identical (needs+stress+funds) regardless of who's marked avatar",
+            bystanderFullyIdentical);
+
+        control.TryGetFunds(AvatarId, out double controlAvatarFunds);
+        marked.TryGetFunds(AvatarId, out double markedAvatarFunds);
+        double expectedDrain = costOfLivingDays * LifeSimManager.WeeklyCostOfLiving;
+        Check($"never-planned avatar's Funds diverge from a plain NPC by EXACTLY the 8a cost-of-living drain ({costOfLivingDays} cadence day(s) x ${LifeSimManager.WeeklyCostOfLiving:F0})",
+            controlAvatarFunds - markedAvatarFunds == expectedDrain,
+            $"control {controlAvatarFunds:F2} - marked {markedAvatarFunds:F2} = {controlAvatarFunds - markedAvatarFunds:F2}, expected {expectedDrain:F2}");
 
         // --- Guarantee 2a: a fully-allocated day matches the closed form exactly ---
         // 8 Sleep + 6 School + 4 Practice + 3 Game + 3 Work = 24h, zero free.
@@ -553,15 +603,30 @@ internal static class Program
         plannedBus.Publish(new DayAdvancedEvent(1, 2026, 1));
         plannedBus.DispatchPending();
 
-        // Canonical day order: the 16 inert daytime hours first, Sleep as the
-        // night cap (run first it would burn the restore against the clamp).
+        // Canonical day order: School (8a: real meal-access restore + neutral
+        // env) -> Practice+Game (still Idle-equivalent, neutral, no restore)
+        // -> Work (8a: real meal-access restore + income + heavy Sleep/Fitness
+        // drain) -> Sleep as the night cap (run first it would burn the
+        // restore against the clamp).
         NeedsState expected = NeedsState.FullySatisfied();
         float sleepRestorePerHour = ActionCatalog.Sleep.RestoreAmount / ActionCatalog.Sleep.TemporalCostHours;
-        for (int h = 0; h < 16; h++)
+        float schoolRestorePerHour = ActionCatalog.School.RestoreAmount / ActionCatalog.School.TemporalCostHours;
+        float workRestorePerHour = ActionCatalog.LegalWork.RestoreAmount / ActionCatalog.LegalWork.TemporalCostHours;
+        for (int h = 0; h < 6; h++) // School
+        {
+            expected.Restore(NeedType.Hunger, schoolRestorePerHour);
+            expected = NeedsEngine.DecayHour(expected, ActionCatalog.School.Environment, NeedsEngine.StressModifierFor(0f));
+        }
+        for (int h = 0; h < 4 + 3; h++) // Practice + Game
         {
             expected = NeedsEngine.DecayHour(expected, ActionCatalog.Idle.Environment, NeedsEngine.StressModifierFor(0f));
         }
-        for (int h = 0; h < 8; h++)
+        for (int h = 0; h < 3; h++) // Work
+        {
+            expected.Restore(NeedType.Hunger, workRestorePerHour);
+            expected = NeedsEngine.DecayHour(expected, ActionCatalog.LegalWork.Environment, NeedsEngine.StressModifierFor(0f));
+        }
+        for (int h = 0; h < 8; h++) // Sleep
         {
             expected.Restore(NeedType.Sleep, sleepRestorePerHour);
             expected = NeedsEngine.DecayHour(expected, ActionCatalog.Sleep.Environment, NeedsEngine.StressModifierFor(0f));
@@ -575,9 +640,18 @@ internal static class Program
                 blocksExact = false;
             }
         }
-        Check("fully-allocated day matches the closed-form block math bit-exactly (sleep env + inert neutral)",
+        Check("fully-allocated day matches the closed-form block math bit-exactly (School/Work meal access + income, sleep env, inert neutral)",
             blocksExact, $"Sleep {actual.Sleep:F2}, Hunger {actual.Hunger:F2}");
         Check("the plan is one-shot (consumed by the day it ran)", !planned.HasTodaySchedule);
+
+        // Day 1 isn't a cost-of-living cadence day (1 % 7 != 0), so Work's 3h
+        // of LegalWork income is the ONLY funds-affecting event this fully-
+        // allocated day (no free hours, so no autopilot spending either) —
+        // an exact, noise-free arithmetic check.
+        planned.TryGetFunds(AvatarId, out double actualFunds);
+        double expectedFunds = SeedFunds + 3 * (-ActionCatalog.LegalWork.FinancialCost / ActionCatalog.LegalWork.TemporalCostHours);
+        Check("fully-allocated day: Work block income lands exactly (3h x $10/hr, no cadence/free-hour noise)",
+            actualFunds == expectedFunds, $"{actualFunds:F2} vs expected {expectedFunds:F2}");
 
         // --- Guarantee 2b: a scripted week of manual plans + free-hour autopilot ---
         // 19h planned (8 Sleep + 6 School + 2 Practice + 3 Game), 5h free for
@@ -597,6 +671,7 @@ internal static class Program
         }
         bool oneShotAllWeek = true;
         bool bystanderUntouched = true;
+        float weekHungerSum = 0f;
         for (int day = 1; day <= 7; day++)
         {
             week.SetTodaySchedule(new DaySchedule(8, 6, 2, 3, 0));
@@ -612,6 +687,7 @@ internal static class Program
             {
                 weekEndMin[need] = Math.Min(weekEndMin[need], avatarNeeds.Get(need));
             }
+            weekHungerSum += avatarNeeds.Hunger;
         }
         Console.WriteLine("  Scripted-week avatar (8 Sleep/6 School/2 Practice/3 Game + 5 free) — worst END-OF-DAY value per need:");
         foreach (NeedType need in AllNeeds)
@@ -627,23 +703,47 @@ internal static class Program
         // Sleep must end every day restored well clear of critical (the 8h
         // block's whole point), and Hygiene must stay off-critical via
         // free-hour Showers (passive Hygiene floors at 0 by 72h — staying up
-        // proves the evening autopilot washed the avatar). Hunger is
-        // DELIBERATELY unasserted: one evening Eat (+45) cannot outrun the
-        // ~100/day hunger decay under a 19h-committed plan, so a heavy
-        // schedule genuinely starves the avatar — a real, disclosed tuning
-        // reality for 8a/9d (meal access on Work/School blocks), not an
-        // engine defect. Social/Fitness likewise ride unasserted.
+        // proves the evening autopilot washed the avatar). Social/Fitness
+        // still ride unasserted (out of scope).
         Check("scripted week: every day ends with Sleep well restored (night cap did its job)",
             weekEndMin[NeedType.Sleep] > 2f * NeedsEngine.CriticalThreshold,
             $"worst end-of-day Sleep {weekEndMin[NeedType.Sleep]:F1}");
         Check("scripted week: Hygiene stays off-critical all week (evening autopilot Showers happened)",
             weekEndMin[NeedType.Hygiene] > NeedsEngine.CriticalThreshold,
             $"worst end-of-day Hygiene {weekEndMin[NeedType.Hygiene]:F1}");
-        // Blocks never spend; only autopilot actions do (Eat $12, Socialize
-        // $40). Falling funds are therefore exact proof the free evening
-        // hours ran the utility loop rather than idling silently.
+
+        // Hunger under THIS heavily-committed plan (19h/24h, only 5 free
+        // hours for autopilot Eat) still floors by week's end even with 8a's
+        // meal access — Hunger's own decay curve floors within 24h of PURE
+        // PASSIVE neglect (see the very first table this harness prints), so
+        // no "modest" restore was ever going to fully prevent flooring under
+        // a comparably packed day; that's a genuine, disclosed tuning
+        // reality, not an engine defect (same conclusion 9b originally
+        // reached, now re-confirmed after actually trying the fix). What 8a
+        // DOES prove: meal access measurably helps. A/B control below runs
+        // the IDENTICAL 19-committed/5-free split with School's 6h reassigned
+        // to inert Practice instead (same autopilot noise, same everything
+        // else) — an apples-to-apples isolation of School's meal access alone.
+        (LifeSimManager weekNoMeal, EventBus weekNoMealBus) =
+            NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        float noMealHungerSum = 0f;
+        for (int day = 1; day <= 7; day++)
+        {
+            weekNoMeal.SetTodaySchedule(new DaySchedule(8, 0, 8, 3, 0));
+            weekNoMealBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            weekNoMealBus.DispatchPending();
+            weekNoMeal.TryGetNeeds(AvatarId, out NeedsState noMealNeeds);
+            noMealHungerSum += noMealNeeds.Hunger;
+        }
+        Check("scripted week: School's meal access leaves Hunger measurably higher than an equivalent all-inert schedule (8a fix; sum of end-of-day Hunger across the week)",
+            weekHungerSum > noMealHungerSum,
+            $"meal-access sum {weekHungerSum:F1} vs inert-control sum {noMealHungerSum:F1}");
+        // Work is 0 in this fixture's schedule, so School (meal access, no
+        // funds effect) is the only block-side funds touch here — still $0.
+        // Falling funds are therefore exact proof the free evening hours ran
+        // the utility loop rather than idling silently.
         week.TryGetFunds(AvatarId, out double weekEndFunds);
-        Check("scripted week: avatar funds fell (free-hour autopilot really acted — blocks themselves never spend)",
+        Check("scripted week: avatar funds fell (free-hour autopilot really acted — School doesn't spend/earn, Work is 0 this week)",
             weekEndFunds < SeedFunds, $"{SeedFunds:F0} -> {weekEndFunds:F0}");
     }
 
@@ -694,6 +794,53 @@ internal static class Program
         {
             return true;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 8a: survival economy solvency — the interleave plan's explicit
+    // "funds-solvency check over a simulated month" ask. Two scripted
+    // avatars (each its own LifeSimManager/EventBus world, mirroring
+    // RunDailyClockChecks' NewClockWorld helper) from CareerManager's real
+    // starting funds ($500 — this harness stays Baseball-free, so the value
+    // is a literal, not a reference): one schedules Work daily, one doesn't.
+    // ------------------------------------------------------------------
+
+    private const double SurvivalStartingFunds = 500.0; // mirrors CareerManager.StartingFunds
+
+    private static void RunSurvivalEconomyChecks()
+    {
+        Console.WriteLine("--- 8a survival economy: 30-day funds solvency (Work vs no Work) ---\n");
+
+        const int SimulatedDays = 30;
+
+        (LifeSimManager worker, EventBus workerBus) =
+            NewClockWorld("working-avatar", "bystander-a", SurvivalStartingFunds, stress: 0f, markAvatar: true);
+        (LifeSimManager idler, EventBus idlerBus) =
+            NewClockWorld("idle-avatar", "bystander-b", SurvivalStartingFunds, stress: 0f, markAvatar: true);
+
+        for (int day = 1; day <= SimulatedDays; day++)
+        {
+            worker.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 8)); // 8 Sleep + 8 Work + 8 free
+            workerBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            workerBus.DispatchPending();
+
+            idler.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0)); // 8 Sleep + 16 free, no Work
+            idlerBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            idlerBus.DispatchPending();
+        }
+
+        worker.TryGetFunds("working-avatar", out double workerFunds);
+        idler.TryGetFunds("idle-avatar", out double idlerFunds);
+        Console.WriteLine($"  Working avatar (8 Sleep/8 Work/8 free): ${SurvivalStartingFunds:F0} -> ${workerFunds:F0} over {SimulatedDays} days");
+        Console.WriteLine($"  Idle avatar (8 Sleep/16 free, no Work):  ${SurvivalStartingFunds:F0} -> ${idlerFunds:F0} over {SimulatedDays} days");
+        Console.WriteLine();
+
+        Check("30-day solvency: a working avatar's funds GROW (Legal Work income outpaces rent + autopilot spend)",
+            workerFunds > SurvivalStartingFunds, $"{SurvivalStartingFunds:F0} -> {workerFunds:F0}");
+        Check("30-day solvency: a non-working avatar's funds SHRINK (recurring cost-of-living + autopilot spend, no income)",
+            idlerFunds < SurvivalStartingFunds, $"{SurvivalStartingFunds:F0} -> {idlerFunds:F0}");
+        Check("30-day solvency: working clearly beats not working",
+            workerFunds > idlerFunds, $"worker {workerFunds:F0} vs idler {idlerFunds:F0}");
     }
 
     // ------------------------------------------------------------------

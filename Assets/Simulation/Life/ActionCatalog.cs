@@ -12,6 +12,11 @@ public enum NpcActionId
     Workout = 5,
     DrinkAlone = 6,
     PickArgument = 7,
+
+    // Schedule-block-only (Phase 9b/8a) — never autopilot-selected, so these
+    // are deliberately NOT added to ActionCatalog.All/UtilityCalculator's scan.
+    School = 8,
+    LegalWork = 9,
 }
 
 // PrimaryNeed is null for actions that don't restore a tracked need directly
@@ -22,6 +27,11 @@ public readonly struct NpcActionDefinition
     public readonly NeedType? PrimaryNeed;
     public readonly float RestoreAmount;
     public readonly float TemporalCostHours;
+
+    // Positive = costs money per occurrence (every autopilot action so far);
+    // negative = EARNS money (LegalWork, Phase 8a) — both ApplyAction's and
+    // TickBlockHours' funds math compute Funds - FinancialCost, so a negative
+    // value already falls out correctly as income, no separate field needed.
     public readonly double FinancialCost;
     public readonly float Risk0To100;
     public readonly bool IsStressRelief;
@@ -81,8 +91,34 @@ public static class ActionCatalog
     public static readonly NpcActionDefinition DrinkAlone = new(NpcActionId.DrinkAlone, null, 0f, 2f, 25.0, 30f, true);
     public static readonly NpcActionDefinition PickArgument = new(NpcActionId.PickArgument, null, 0f, 1f, 0.0, 45f, true);
 
+    // Phase 9b/8a schedule blocks — plan-driven only (LifeSimManager.TickBlockHours),
+    // never autopilot-selected, so deliberately excluded from All below.
+    //
+    // School: a modest built-in lunch (+3/hr) closing the 9b-disclosed
+    // Hunger-starvation gap for a school-heavy day. Environment neutral (a
+    // classroom isn't a punishing environment).
+    public static readonly NpcActionDefinition School =
+        new(NpcActionId.School, NeedType.Hunger, 18f, 6f, 0.0, 0f, false);
+
+    // LegalWork ("Legal Work" hustle, gritty_events.md: "time-skip abstraction
+    // that heavily drains Energy and Fitness for minimal payout" — this
+    // codebase's only Energy analog is Sleep): a work lunch break (+2/hr,
+    // closing the same meal-access gap for Work) at $25/hr (FinancialCost
+    // negative = income), zero risk, heavy Sleep/Fitness drain via Environment.
+    // $25/hr (not a smaller "modest" number) is a tuned first-pass constant,
+    // not a design-doc anchor: a broke NPC's OWN free-hour autopilot spend
+    // (Eat/Shower/SocializeEvening/Workout, funds-blind — SelectAction only
+    // discourages a cost via FinancialCostScore, never refuses it) already
+    // runs well past the $70/week cost-of-living drain on its own (harness-
+    // measured), so Legal Work has to outpace BOTH to make working genuinely
+    // pay off — tunable via simulate_utility_decay like every other table here.
+    public static readonly NpcActionDefinition LegalWork =
+        new(NpcActionId.LegalWork, NeedType.Hunger, 16f, 8f, -200.0, 0f, false,
+            new EnvironmentalModifiers(hunger: 1f, sleep: 2f, hygiene: 1f, social: 1f, fitness: 1.8f));
+
     // Idle listed first: SelectAction's strict-greater-than tie-break means Idle
     // — the guaranteed always-affordable fallback — wins any exact utility tie.
+    // School/LegalWork deliberately absent — schedule-block-only (see above).
     public static readonly NpcActionDefinition[] All =
     {
         Idle, Eat, Sleep, Shower, SocializeEvening, Workout, DrinkAlone, PickArgument,
@@ -98,6 +134,8 @@ public static class ActionCatalog
         NpcActionId.Workout => Workout,
         NpcActionId.DrinkAlone => DrinkAlone,
         NpcActionId.PickArgument => PickArgument,
+        NpcActionId.School => School,
+        NpcActionId.LegalWork => LegalWork,
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 }

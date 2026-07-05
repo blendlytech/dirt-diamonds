@@ -206,7 +206,7 @@ public sealed partial class GameManager : Node
         // needs after that day's 24 hourly ticks have already run (EventBus
         // preserves per-channel subscriber order). Own batch transaction — Life-sim
         // writes never share the calendar tick's (database_rules.md).
-        Events.Subscribe<DayAdvancedEvent>(PersistLifeSimNeeds);
+        Events.Subscribe<DayAdvancedEvent>(PersistLifeSimState);
 
         // 9b daily-clock bridge: keep the Life sim's avatar pointer and the
         // tier-derived school gate in sync. Creation/succession arrive via the
@@ -286,7 +286,7 @@ public sealed partial class GameManager : Node
         {
             // Final flush so a mid-day quit doesn't lose that day's progress —
             // the day-tick handler above only fires on a completed calendar day.
-            PersistLifeSimNeeds(default);
+            PersistLifeSimState(default);
         }
         if (_database is not null && Relationships is not null)
         {
@@ -356,7 +356,23 @@ public sealed partial class GameManager : Node
             && tier is LeagueTier.HS or LeagueTier.College;
     }
 
-    private void PersistLifeSimNeeds(DayAdvancedEvent _)
+    /// <summary>
+    /// Once-a-day (plus a final exit flush) persistence of everything
+    /// LifeSimManager tracks in memory: Needs and Stress (straight overwrites,
+    /// unchanged since Phase 7) and, since Phase 8a, Funds — via
+    /// PlayerQueries.AdjustFunds (an atomic delta), NOT UpdateFunds. A blind
+    /// overwrite would race a same-pump gritty-event funds consequence: the
+    /// dispatcher fires off its own background thread and is bus-deferred, so
+    /// its FundsImpulseEvent can still be queued (not yet applied to the
+    /// mirror) when this handler runs for that same DayAdvancedEvent — an
+    /// overwrite would clobber the DB value AdjustFunds just committed one
+    /// step earlier in the same pump. Routing through AdjustFunds instead
+    /// keeps it the sole writer of Players.funds end to end (deltas commute;
+    /// overwrites don't). Clearing each NPC's accumulator is deferred until
+    /// AFTER the batch commits, so a rollback leaves nothing lost — the next
+    /// flush attempt naturally retries with whatever has accrued since.
+    /// </summary>
+    private void PersistLifeSimState(DayAdvancedEvent _)
     {
         _needsScratch.Clear();
         _stressScratch.Clear();
@@ -388,12 +404,24 @@ public sealed partial class GameManager : Node
         {
             Needs.BulkUpsert(CollectionsMarshal.AsSpan(_needsScratch));
             Needs.BulkUpsertStress(CollectionsMarshal.AsSpan(_stressScratch));
+            for (int i = 0; i < ids.Count; i++)
+            {
+                double fundsDelta = LifeSim.PeekFundsDelta(ids[i]);
+                if (fundsDelta != 0.0)
+                {
+                    Players.AdjustFunds(ids[i], fundsDelta);
+                }
+            }
             Database.CommitBatch();
         }
         catch
         {
             Database.RollbackBatch();
             throw;
+        }
+        for (int i = 0; i < ids.Count; i++)
+        {
+            LifeSim.ClearFundsDelta(ids[i]);
         }
     }
 
