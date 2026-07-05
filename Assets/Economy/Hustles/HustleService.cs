@@ -12,14 +12,18 @@ namespace DirtAndDiamonds.Economy.Hustles;
 /// Which Work-block activity the avatar has selected for the planned day
 /// (docs/design/hustles_narcotics_fencing.md §2) — a GameManager-owned intent,
 /// mirroring how it already owns the daily-schedule bridge. LegalWork is the
-/// 8a passive payout (default); Narcotics/Fencing arm an interactive
-/// <see cref="PendingHustleSession"/> once that day's Work block runs.
+/// 8a passive payout (default); Narcotics/Fencing/Poker each arm an
+/// interactive <see cref="PendingHustleSession"/> once that day's Work block
+/// runs. Poker's arming/forfeit needs no GameManager changes at all — every
+/// call site below already branches on "any non-LegalWork activity", so this
+/// one enum member is the entire daily-clock integration (docs/design/hustles_texas_holdem.md §2).
 /// </summary>
 public enum WorkActivity : byte
 {
     LegalWork,
     Narcotics,
     Fencing,
+    Poker,
 }
 
 /// <summary>One armed-but-unplayed interactive hustle session, awaiting the player (§2's Game-block mirror).</summary>
@@ -127,6 +131,13 @@ public sealed class HustleService
         return new FencingContext(row.DetectionRisk / 100.0, fenceStanding);
     }
 
+    /// <summary>Snapshots docs/design/hustles_texas_holdem.md §9's context for <paramref name="playerId"/> — simpler than Narcotics'/Fencing's: no faction reps at all, so no graph/Game_State touch.</summary>
+    public HoldemContext BuildHoldemContext(string playerId)
+    {
+        PlayerRow row = RequirePlayer(playerId);
+        return new HoldemContext(row.Funds, row.DetectionRisk / 100.0, row.Recklessness / 100.0);
+    }
+
     // ------------------------------------------------------------------
     // Resolution application (§5)
     // ------------------------------------------------------------------
@@ -166,6 +177,10 @@ public sealed class HustleService
     public void ApplyFencingResolution(string playerId, in HustleResolution resolution, long day) =>
         ApplyCore(playerId, in resolution, day);
 
+    /// <summary>Applies a resolved Hold'em session — the shared primitives only; Hold'em never touches the faction graph (§9/§11).</summary>
+    public void ApplyHoldemResolution(string playerId, in HustleResolution resolution, long day) =>
+        ApplyCore(playerId, in resolution, day);
+
     private void ApplyCore(string playerId, in HustleResolution resolution, long day)
     {
         _db.BeginBatch();
@@ -198,6 +213,10 @@ public sealed class HustleService
             if (resolution.SetSpoiledGoodsFlag)
             {
                 _players.SetFlag(playerId, "spoiled_goods", true, day);
+            }
+            if (resolution.SetGamblingBustFlag)
+            {
+                _players.SetFlag(playerId, "gambling_bust", true, day);
             }
             _db.CommitBatch();
         }
