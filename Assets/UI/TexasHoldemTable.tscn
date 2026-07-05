@@ -1,0 +1,196 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/TexasHoldemTable.cs" id="1_holdem"]
+
+[node name="TexasHoldemTable" type="Control"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -260.0
+offset_right = 300.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+script = ExtResource("1_holdem")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+text = "Texas Hold'em"
+
+[node name="StatusLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="StartPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="TierRow" type="HBoxContainer" parent="Panel/Layout/StartPanel"]
+layout_mode = 2
+
+[node name="TierLabel" type="Label" parent="Panel/Layout/StartPanel/TierRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Stakes"
+
+[node name="TierOption" type="OptionButton" parent="Panel/Layout/StartPanel/TierRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 3
+selected = 0
+popup/item_0/text = "Low"
+popup/item_0/id = 0
+popup/item_1/text = "Mid"
+popup/item_1/id = 1
+popup/item_2/text = "High"
+popup/item_2/id = 2
+
+[node name="OpponentsRow" type="HBoxContainer" parent="Panel/Layout/StartPanel"]
+layout_mode = 2
+
+[node name="OpponentsLabel" type="Label" parent="Panel/Layout/StartPanel/OpponentsRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Opponents"
+
+[node name="OpponentsSlider" type="HSlider" parent="Panel/Layout/StartPanel/OpponentsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1
+max_value = 5
+step = 1
+value = 5
+
+[node name="OpponentsValueLabel" type="Label" parent="Panel/Layout/StartPanel/OpponentsRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(30, 0)
+text = "5"
+
+[node name="BuyInRow" type="HBoxContainer" parent="Panel/Layout/StartPanel"]
+layout_mode = 2
+
+[node name="BuyInLabel" type="Label" parent="Panel/Layout/StartPanel/BuyInRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Buy-in $"
+
+[node name="BuyInSlider" type="HSlider" parent="Panel/Layout/StartPanel/BuyInRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 20
+max_value = 200
+step = 1
+value = 20
+
+[node name="BuyInValueLabel" type="Label" parent="Panel/Layout/StartPanel/BuyInRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(60, 0)
+text = "20"
+
+[node name="SitDownButton" type="Button" parent="Panel/Layout/StartPanel"]
+layout_mode = 2
+text = "Sit Down"
+
+[node name="TablePanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="BoardLabel" type="Label" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+text = "Board: —"
+
+[node name="HeroCardsLabel" type="Label" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+text = "Your hand: —"
+
+[node name="PotLabel" type="Label" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+text = "Pot: $0"
+
+[node name="SeatsLabel" type="Label" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ActionLogLabel" type="Label" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ActionPanel" type="HBoxContainer" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+visible = false
+
+[node name="FoldButton" type="Button" parent="Panel/Layout/TablePanel/ActionPanel"]
+layout_mode = 2
+text = "Fold"
+
+[node name="CheckCallButton" type="Button" parent="Panel/Layout/TablePanel/ActionPanel"]
+layout_mode = 2
+text = "Check"
+
+[node name="RaiseBox" type="HBoxContainer" parent="Panel/Layout/TablePanel/ActionPanel"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RaiseSlider" type="HSlider" parent="Panel/Layout/TablePanel/ActionPanel/RaiseBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0
+max_value = 100
+step = 1
+value = 0
+
+[node name="RaiseValueLabel" type="Label" parent="Panel/Layout/TablePanel/ActionPanel/RaiseBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(60, 0)
+text = "0"
+
+[node name="RaiseButton" type="Button" parent="Panel/Layout/TablePanel/ActionPanel/RaiseBox"]
+layout_mode = 2
+text = "Raise to $0"
+
+[node name="HandEndPanel" type="VBoxContainer" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+visible = false
+
+[node name="HandResultLabel" type="Label" parent="Panel/Layout/TablePanel/HandEndPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="HandEndButtonsRow" type="HBoxContainer" parent="Panel/Layout/TablePanel/HandEndPanel"]
+layout_mode = 2
+
+[node name="NextHandButton" type="Button" parent="Panel/Layout/TablePanel/HandEndPanel/HandEndButtonsRow"]
+layout_mode = 2
+text = "Next Hand"
+
+[node name="StandUpButton" type="Button" parent="Panel/Layout/TablePanel/HandEndPanel/HandEndButtonsRow"]
+layout_mode = 2
+text = "Stand Up (Bank & Exit)"
+
+[node name="ResultPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="ResultLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="DoneButton" type="Button" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+text = "Done"

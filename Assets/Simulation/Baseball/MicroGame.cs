@@ -170,6 +170,22 @@ public sealed class MicroGame
     private BatterRatings[] _replacementBatterByTeam = Array.Empty<BatterRatings>();
     private PitcherRatings[] _replacementPitcherByTeam = Array.Empty<PitcherRatings>();
 
+    /// <summary>
+    /// Purchased-gear source (Phase 8e), optional like <see cref="Rivalries"/>:
+    /// null leaves every PA on the exact pre-equipment path. Version-gated
+    /// cache refreshed at game start; the human's interactive pitch-chain
+    /// at-bats flow through the same effective-ratings sites, so the avatar's
+    /// gear shifts the anchor p* with zero extra plumbing.
+    /// </summary>
+    public EquipmentLedger? Equipment;
+
+    // Per-slot gear-boost cache (Phase 8e), rebuilt when the ledger's Version
+    // moves — gear never expires by calendar, so Version alone gates it.
+    private byte[] _slotGearBoost = Array.Empty<byte>();
+    private readonly List<EquipmentEntry> _equipmentScratch = new();
+    private int _equipmentVersionSeen = -1;
+    private bool _hasEquipment;
+
     private bool _initialized;
 
     public MicroGame(DatabaseManager db, BaseballQueries queries)
@@ -281,6 +297,9 @@ public sealed class MicroGame
         _absenceVersionSeen = -1; // roster changed — force a cache rebuild
         _absenceDaySeen = -1;
         _hasAbsences = false;
+        _slotGearBoost = new byte[slots];
+        _equipmentVersionSeen = -1; // roster changed — force a cache rebuild
+        _hasEquipment = false;
         // One extra line past the roster: the discard row a shadowed slot's
         // replacement accumulates into. FlushGame loops the roster length
         // only, so a call-up's stats and PED bookkeeping never reach the
@@ -466,13 +485,17 @@ public sealed class MicroGame
         {
             return _replacementPitcherByTeam[team];
         }
+        // Phase 8e: gear boosts the tier-baked value BEFORE any rust dock
+        // (equipment_quality.md §5 order) — and before fatigue seeding, so
+        // fatigue erodes geared ratings the same way it erodes rusty ones.
+        byte gear = _hasEquipment ? _slotGearBoost[slot] : (byte)0;
         byte rust = _hasAbsences ? _slotRustPenalty[slot] : (byte)0;
-        if (rust == 0)
+        if (gear == 0 && rust == 0)
         {
             return _pitcherRatings[slot];
         }
-        ref readonly PitcherRatings p = ref _pitcherRatings[slot];
-        return new PitcherRatings(
+        PitcherRatings p = EquipmentEffects.Pitcher(in _pitcherRatings[slot], gear);
+        return rust == 0 ? p : new PitcherRatings(
             TierEffects.Shift(p.Stuff, -rust), TierEffects.Shift(p.Control, -rust), p.Stamina);
     }
 
@@ -487,6 +510,40 @@ public sealed class MicroGame
     /// outside the roster are skipped; the linear <see cref="FindRosterSlot"/>
     /// probe is fine here — rebuilds are version-gated and rivalries sparse.
     /// </summary>
+    /// <summary>
+    /// Rebuilds the per-slot gear-boost cache when the ledger has moved
+    /// (Phase 8e). Ids outside the roster are skipped; the linear
+    /// <see cref="FindRosterSlot"/> probe is fine here — rebuilds are
+    /// version-gated and equipped players sparse.
+    /// </summary>
+    private void RefreshEquipmentCache()
+    {
+        if (Equipment is null)
+        {
+            _hasEquipment = false;
+            return;
+        }
+        if (Equipment.Version == _equipmentVersionSeen)
+        {
+            return;
+        }
+        _equipmentVersionSeen = Equipment.Version;
+        Array.Clear(_slotGearBoost);
+        _hasEquipment = false;
+
+        Equipment.CopyAll(_equipmentScratch);
+        for (int i = 0; i < _equipmentScratch.Count; i++)
+        {
+            EquipmentEntry entry = _equipmentScratch[i];
+            int slot = FindRosterSlot(entry.PlayerId);
+            if (slot != NoHuman)
+            {
+                _slotGearBoost[slot] = EquipmentEffects.BoostFor(entry.Quality);
+                _hasEquipment |= _slotGearBoost[slot] > 0;
+            }
+        }
+    }
+
     private void RefreshRivalryCache()
     {
         if (Rivalries is null)
@@ -555,6 +612,7 @@ public sealed class MicroGame
             throw new InvalidOperationException("MicroGame.PlayGame before Initialize().");
         }
         RefreshRivalryCache();
+        RefreshEquipmentCache();
         int homeTeam = TeamIndexOf(homeTeamId);
         int awayTeam = TeamIndexOf(awayTeamId);
         if (homeTeam == awayTeam)
@@ -776,9 +834,14 @@ public sealed class MicroGame
             // No rivalry crosses a shadowed slot — the call-up is a stranger.
             byte rivalry = _hasRivalries && !batterShadowed && !pitcherShadowed
                 ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
+            // Phase 8e: gear boosts the batter's tier-baked ratings BEFORE any
+            // rust dock (equipment_quality.md §5 order); the call-up carries
+            // no gear. Boost 0 is the identity — a no-gear PA keeps the exact
+            // pre-8e bytes on both the macro and pitch-chain paths.
+            byte batterGear = _hasEquipment && !batterShadowed ? _slotGearBoost[batterSlot] : (byte)0;
             BatterRatings batter = batterShadowed
                 ? _replacementBatterByTeam[battingTeam]
-                : ApplyRust(in _batterRatings[batterSlot], batterRust);
+                : ApplyRust(EquipmentEffects.Batter(in _batterRatings[batterSlot], batterGear), batterRust);
             if (rivalry != 0)
             {
                 batter = RivalryEffects.Batter(in batter, rivalry);

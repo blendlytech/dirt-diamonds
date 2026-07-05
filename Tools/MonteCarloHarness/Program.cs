@@ -68,6 +68,7 @@ internal static class Program
         string conceptionScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_conception_{Guid.NewGuid():N}.db");
         string tierScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_tier_{Guid.NewGuid():N}.db");
         string availScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_avail_{Guid.NewGuid():N}.db");
+        string equipScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_equip_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -86,6 +87,7 @@ internal static class Program
             RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
             RunTierLadderSuite(schemaPath, tierScratchPath);
             RunAvailabilitySuite(schemaPath, availScratchPath);
+            RunEquipmentSuite(schemaPath, equipScratchPath);
         }
         catch (Exception ex)
         {
@@ -128,6 +130,13 @@ internal static class Program
             }
             foreach (string variant in new[]
                 { availScratchPath, availScratchPath + ".bare", availScratchPath + ".abs", availScratchPath + ".career" })
+            {
+                TryDelete(variant);
+                TryDelete(variant + "-wal");
+                TryDelete(variant + "-shm");
+            }
+            foreach (string variant in new[]
+                { equipScratchPath, equipScratchPath + ".bare", equipScratchPath + ".bat", equipScratchPath + ".pit" })
             {
                 TryDelete(variant);
                 TryDelete(variant + "-wal");
@@ -281,7 +290,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v8", db.GetSchemaVersion() == 8, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v9", db.GetSchemaVersion() == 9, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -2818,6 +2827,303 @@ internal static class Program
             $"PA {avatarPa1}→{SeasonPa(carPlayers, carCareer.AvatarPlayerId)}");
         Check("career benching world: integrity ok, no FK violations, no open batch",
             !carDb.IsBatchActive && carDb.RunIntegrityCheck() == "ok" && carDb.RunForeignKeyCheck() == 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 8e: equipment quality (docs/design/equipment_quality.md §8)
+    // ------------------------------------------------------------------
+
+    private static void RunEquipmentSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 8e equipment quality: boost arithmetic, ledger parity, league direction ---");
+
+        // ---- §2 boost table + applier arithmetic (no DB) ----
+        Check("boost table pinned: quality 0/1/2/3 → +0/+2/+4/+6 (quality 0 all-zero by contract)",
+            EquipmentEffects.BoostFor(0) == 0 && EquipmentEffects.BoostFor(1) == 2
+            && EquipmentEffects.BoostFor(2) == 4 && EquipmentEffects.BoostFor(3) == 6);
+
+        var gearBatter = new BatterRatings(60, 60, 60, pedActive: true);
+        BatterRatings boosted = EquipmentEffects.Batter(in gearBatter, 6);
+        BatterRatings identityB = EquipmentEffects.Batter(in gearBatter, 0);
+        Check("batter boost: +6 Power/Contact, Discipline and PED untouched, boost 0 = identity",
+            boosted.Power == 66 && boosted.Contact == 66 && boosted.Discipline == 60 && boosted.PedActive
+            && identityB.Power == 60 && identityB.Contact == 60 && identityB.Discipline == 60 && identityB.PedActive);
+
+        var gearPitcher = new PitcherRatings(60, 60, 55);
+        PitcherRatings boostedP = EquipmentEffects.Pitcher(in gearPitcher, 4);
+        PitcherRatings identityP = EquipmentEffects.Pitcher(in gearPitcher, 0);
+        Check("pitcher boost: +4 Stuff/Control, Stamina untouched, boost 0 = identity",
+            boostedP.Stuff == 64 && boostedP.Control == 64 && boostedP.Stamina == 55
+            && identityP.Stuff == 60 && identityP.Control == 60 && identityP.Stamina == 55);
+
+        // §5 order pinned at the clamp: gear applies to the baked value FIRST,
+        // rust docks the boosted package. 97 +6 clamps to 100, then −8 → 92 —
+        // the reversed order (97−8+6 = 95) would differ, so this pins it.
+        var nearCap = new BatterRatings(97, 50, 50, pedActive: false);
+        BatterRatings gearThenRust = LeagueSimulator.ApplyRust(EquipmentEffects.Batter(in nearCap, 6), 8);
+        Check("gear-then-rust order pinned at the 100-clamp (97 → 100 → 92, not 95)",
+            gearThenRust.Power == 92 && gearThenRust.Contact == 48 && gearThenRust.Discipline == 42);
+
+        // ---- ledger merge = the SQL keep-higher rule (no DB) ----
+        var probeLedger = new EquipmentLedger();
+        var probeBus = new EventBus();
+        probeLedger.AttachTo(probeBus);
+        probeBus.Publish(new PlayerEquipmentChangedEvent("p1", 2));
+        probeBus.DispatchPending();
+        int versionAfterFirst = probeLedger.Version;
+        probeBus.Publish(new PlayerEquipmentChangedEvent("p1", 1)); // downgrade — no-op
+        probeBus.Publish(new PlayerEquipmentChangedEvent("p1", 2)); // same — no-op
+        probeBus.Publish(new PlayerEquipmentChangedEvent("p2", 0)); // zero — never tracked
+        probeBus.DispatchPending();
+        bool noOpsIgnored = probeLedger.Version == versionAfterFirst
+            && probeLedger.QualityFor("p1") == 2 && probeLedger.QualityFor("p2") == 0
+            && probeLedger.QualityFor("nobody") == 0;
+        probeBus.Publish(new PlayerEquipmentChangedEvent("p1", 3)); // upgrade — replaces
+        probeBus.DispatchPending();
+        Check("keep-higher merge: downgrade/same/zero are version-silent no-ops, upgrade replaces",
+            noOpsIgnored && probeLedger.Version != versionAfterFirst && probeLedger.QualityFor("p1") == 3
+            && probeLedger.Count == 1);
+
+        // ---- bit-identity: an ATTACHED but empty ledger changes nothing ----
+        string barePath = scratchPath + ".bare";
+        LeagueBattingTotals ledgeredBat;
+        LeaguePitchingTotals ledgeredPit;
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+            clock.Initialize(StartYear);
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed + 500));
+            league.Initialize();
+            league.Equipment = new EquipmentLedger(); // attached-and-empty — must be inert
+            league.AttachTo(bus);
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            ledgeredBat = baseball.LoadLeagueBattingTotals(StartYear);
+            ledgeredPit = baseball.LoadLeaguePitchingTotals(StartYear);
+        }
+
+        LeagueBattingTotals bareBat;
+        LeaguePitchingTotals barePit;
+        using (var bareDb = new DatabaseManager(barePath))
+        {
+            bareDb.InitializeSchema(schemaPath);
+            var barePlayers = new PlayerQueries(bareDb);
+            var bareBaseball = new BaseballQueries(bareDb);
+            var bareGenRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(bareDb, barePlayers, bareBaseball, ratingSpread: 0, ref bareGenRng);
+            var bareState = new GlobalState();
+            var bareBus = new EventBus();
+            var bareClock = new TimeManager(bareDb, new GameStateQueries(bareDb), bareState, bareBus);
+            bareClock.Initialize(StartYear);
+            var bareLeague = new LeagueSimulator(
+                bareDb, bareBaseball, new StatsNormalizer(bareDb, bareBaseball), new RngState(SeasonSeed + 500));
+            bareLeague.Initialize();
+            bareLeague.AttachTo(bareBus); // no ledger at all — the pre-8e shape
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                bareClock.AdvanceDay();
+                bareBus.DispatchPending();
+            }
+            bareBat = bareBaseball.LoadLeagueBattingTotals(StartYear);
+            barePit = bareBaseball.LoadLeaguePitchingTotals(StartYear);
+            Check("empty-ledger season is BIT-IDENTICAL to a no-ledger season (the pre-8e guarantee)",
+                ledgeredBat.Pa == bareBat.Pa && ledgeredBat.Ab == bareBat.Ab && ledgeredBat.H == bareBat.H
+                && ledgeredBat.Doubles == bareBat.Doubles && ledgeredBat.Triples == bareBat.Triples
+                && ledgeredBat.Hr == bareBat.Hr && ledgeredBat.Bb == bareBat.Bb && ledgeredBat.So == bareBat.So
+                && ledgeredBat.Rbi == bareBat.Rbi
+                && ledgeredPit.G == barePit.G && ledgeredPit.Gs == barePit.Gs
+                && ledgeredPit.W == barePit.W && ledgeredPit.L == barePit.L
+                && ledgeredPit.OutsRecorded == barePit.OutsRecorded && ledgeredPit.HAllowed == barePit.HAllowed
+                && ledgeredPit.Er == barePit.Er && ledgeredPit.Bb == barePit.Bb && ledgeredPit.So == barePit.So,
+                $"PA {ledgeredBat.Pa}/{bareBat.Pa} H {ledgeredBat.H}/{bareBat.H} ER {ledgeredPit.Er}/{barePit.Er}");
+
+            // ---- micro consistency on the bare world (never flushed) ----
+            var microNone = new MicroGame(bareDb, bareBaseball);
+            microNone.Initialize();
+            microNone.LoggingEnabled = false;
+            var neutralA = new NeutralBatterPolicy();
+            var microRngA = new RngState(MicroSeed + 500);
+            MicroGameResult resultNone = microNone.PlayGame(1, 2, MicroGame.NoHuman, ref neutralA, ref microRngA);
+
+            var microEmpty = new MicroGame(bareDb, bareBaseball);
+            microEmpty.Initialize();
+            microEmpty.LoggingEnabled = false;
+            microEmpty.Equipment = new EquipmentLedger();
+            var neutralB = new NeutralBatterPolicy();
+            var microRngB = new RngState(MicroSeed + 500);
+            MicroGameResult resultEmpty = microEmpty.PlayGame(1, 2, MicroGame.NoHuman, ref neutralB, ref microRngB);
+            Check("micro: attached-empty ledger game is bit-identical to a no-ledger game",
+                resultNone.HomeScore == resultEmpty.HomeScore && resultNone.AwayScore == resultEmpty.AwayScore
+                && resultNone.Innings == resultEmpty.Innings
+                && resultNone.HomeStarterPitches == resultEmpty.HomeStarterPitches
+                && resultNone.AwayStarterPitches == resultEmpty.AwayStarterPitches,
+                $"{resultNone.HomeScore}-{resultNone.AwayScore}/{resultEmpty.HomeScore}-{resultEmpty.AwayScore}");
+
+            var microGeared = new MicroGame(bareDb, bareBaseball);
+            microGeared.Initialize();
+            microGeared.LoggingEnabled = false;
+            var gearedLedger = new EquipmentLedger();
+            var gearedBus = new EventBus();
+            gearedLedger.AttachTo(gearedBus);
+            var bareRoster = new List<RosterPlayerRow>();
+            bareBaseball.LoadRoster(bareRoster);
+            foreach (RosterPlayerRow row in bareRoster)
+            {
+                if (!row.IsPitcher && row.TeamId == 1)
+                {
+                    gearedBus.Publish(new PlayerEquipmentChangedEvent(row.PlayerId, 3));
+                }
+            }
+            gearedBus.DispatchPending();
+            microGeared.Equipment = gearedLedger;
+            var neutralC = new NeutralBatterPolicy();
+            var microRngC = new RngState(MicroSeed + 500);
+            MicroGameResult resultGeared = microGeared.PlayGame(1, 2, MicroGame.NoHuman, ref neutralC, ref microRngC);
+            Check("micro: a geared home lineup diverges a same-seed game (the boost is live in the micro path)",
+                resultGeared.HomeScore != resultNone.HomeScore || resultGeared.AwayScore != resultNone.AwayScore
+                || resultGeared.Innings != resultNone.Innings
+                || resultGeared.HomeStarterPitches != resultNone.HomeStarterPitches
+                || resultGeared.AwayStarterPitches != resultNone.AwayStarterPitches,
+                $"none {resultNone.HomeScore}-{resultNone.AwayScore}, geared {resultGeared.HomeScore}-{resultGeared.AwayScore}");
+        }
+
+        // ---- all-batters-geared season: league offense rises ----
+        string batPath = scratchPath + ".bat";
+        using (var batDb = new DatabaseManager(batPath))
+        {
+            batDb.InitializeSchema(schemaPath);
+            var batPlayers = new PlayerQueries(batDb);
+            var batBaseball = new BaseballQueries(batDb);
+            var batGenRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(batDb, batPlayers, batBaseball, ratingSpread: 0, ref batGenRng);
+
+            // ---- SQL keep-higher upsert + hydration round-trip while fresh ----
+            var roster = new List<RosterPlayerRow>();
+            batBaseball.LoadRoster(roster);
+            string probeId = roster[0].PlayerId;
+            batPlayers.SetEquipment(probeId, 1, purchasedDay: 10);
+            batPlayers.SetEquipment(probeId, 3, purchasedDay: 20);
+            batPlayers.SetEquipment(probeId, 2, purchasedDay: 30); // downgrade — SQL no-op
+            var equipmentRows = new List<PlayerEquipmentRow>();
+            bool sqlKeepHigher = batPlayers.LoadAllEquipment(equipmentRows) == 1
+                && equipmentRows[0].Quality == 3 && equipmentRows[0].PurchasedDay == 20;
+            var hydrated = new EquipmentLedger();
+            hydrated.Seed(equipmentRows);
+            bool rejectsSentinel;
+            try
+            {
+                batPlayers.SetEquipment(probeId, 0, purchasedDay: 1);
+                rejectsSentinel = false;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                rejectsSentinel = true;
+            }
+            Check("SQL keep-higher upsert + LoadAllEquipment→Seed hydration reproduce the row exactly; quality 0 write rejected",
+                sqlKeepHigher && hydrated.QualityFor(probeId) == 3 && rejectsSentinel);
+            batDb.ExecuteNonQuery(batDb.GetPooledCommand("DELETE FROM Player_Equipment;")); // clean slate for the geared season below
+
+            var batState = new GlobalState();
+            var batBus = new EventBus();
+            var batClock = new TimeManager(batDb, new GameStateQueries(batDb), batState, batBus);
+            batClock.Initialize(StartYear);
+            var batLedger = new EquipmentLedger();
+            batLedger.AttachTo(batBus);
+            foreach (RosterPlayerRow row in roster)
+            {
+                if (!row.IsPitcher)
+                {
+                    batBus.Publish(new PlayerEquipmentChangedEvent(row.PlayerId, 3));
+                }
+            }
+            batBus.DispatchPending();
+            var batLeague = new LeagueSimulator(
+                batDb, batBaseball, new StatsNormalizer(batDb, batBaseball), new RngState(SeasonSeed + 500));
+            batLeague.Initialize();
+            batLeague.Equipment = batLedger;
+            batLeague.AttachTo(batBus);
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                batClock.AdvanceDay();
+                batBus.DispatchPending();
+            }
+            LeagueBattingTotals gearedBat = batBaseball.LoadLeagueBattingTotals(StartYear);
+            double bareAvg = (double)bareBat.H / bareBat.Ab;
+            double gearedAvg = (double)gearedBat.H / gearedBat.Ab;
+            Check("all-batters-geared (q3) season lifts league AVG and HR vs the same-seed bare world",
+                gearedAvg > bareAvg + 0.002 && gearedBat.Hr > bareBat.Hr,
+                $"AVG {bareAvg:F3}→{gearedAvg:F3}, HR {bareBat.Hr}→{gearedBat.Hr}");
+
+            // ---- zero-alloc: a warm GEARED game day stays flat (the non-fast
+            // PA path is pure struct math). Season totals were captured above;
+            // these extra in-memory days are never flushed.
+            for (int day = 1; day <= 7; day++)
+            {
+                batLeague.SimulateGameDay(day);
+            }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int day = 8; day <= 27; day++)
+            {
+                batLeague.SimulateGameDay(day);
+            }
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Check("warm geared game day allocates zero bytes (20 days / 80 games)", allocated == 0, $"{allocated} B");
+            Check("geared season world: integrity ok, no FK violations, no open batch",
+                !batDb.IsBatchActive && batDb.RunIntegrityCheck() == "ok" && batDb.RunForeignKeyCheck() == 0);
+        }
+
+        // ---- all-pitchers-geared season: league offense falls, strikeouts rise ----
+        string pitPath = scratchPath + ".pit";
+        using var pitDb = new DatabaseManager(pitPath);
+        pitDb.InitializeSchema(schemaPath);
+        var pitPlayers = new PlayerQueries(pitDb);
+        var pitBaseball = new BaseballQueries(pitDb);
+        var pitGenRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(pitDb, pitPlayers, pitBaseball, ratingSpread: 0, ref pitGenRng);
+        var pitState = new GlobalState();
+        var pitBus = new EventBus();
+        var pitClock = new TimeManager(pitDb, new GameStateQueries(pitDb), pitState, pitBus);
+        pitClock.Initialize(StartYear);
+        var pitLedger = new EquipmentLedger();
+        pitLedger.AttachTo(pitBus);
+        var pitRoster = new List<RosterPlayerRow>();
+        pitBaseball.LoadRoster(pitRoster);
+        foreach (RosterPlayerRow row in pitRoster)
+        {
+            if (row.IsPitcher)
+            {
+                pitBus.Publish(new PlayerEquipmentChangedEvent(row.PlayerId, 3));
+            }
+        }
+        pitBus.DispatchPending();
+        var pitLeague = new LeagueSimulator(
+            pitDb, pitBaseball, new StatsNormalizer(pitDb, pitBaseball), new RngState(SeasonSeed + 500));
+        pitLeague.Initialize();
+        pitLeague.Equipment = pitLedger;
+        pitLeague.AttachTo(pitBus);
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            pitClock.AdvanceDay();
+            pitBus.DispatchPending();
+        }
+        LeagueBattingTotals gearedPitBat = pitBaseball.LoadLeagueBattingTotals(StartYear);
+        double bareAvg2 = (double)bareBat.H / bareBat.Ab;
+        double pitAvg = (double)gearedPitBat.H / gearedPitBat.Ab;
+        Check("all-pitchers-geared (q3) season cuts league AVG and raises strikeouts vs the same-seed bare world",
+            pitAvg < bareAvg2 - 0.002 && gearedPitBat.So > bareBat.So,
+            $"AVG {bareAvg2:F3}→{pitAvg:F3}, SO {bareBat.So}→{gearedPitBat.So}");
+        Check("pitcher-geared season world: integrity ok, no FK violations, no open batch",
+            !pitDb.IsBatchActive && pitDb.RunIntegrityCheck() == "ok" && pitDb.RunForeignKeyCheck() == 0);
     }
 
     private static int SeasonPa(PlayerQueries players, string playerId)

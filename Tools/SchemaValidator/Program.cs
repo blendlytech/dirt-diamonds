@@ -26,7 +26,7 @@ internal static class Program
     {
         "Players", "Batting_Stats", "Pitching_Stats", "Relationships", "Entity_Flags", "Game_Logs", "Game_State",
         "Teams", "Player_Ratings", "Pitcher_Roles", "Pitch_Arsenals", "Life_Needs", "Life_Stress", "Team_Tiers",
-        "Player_Absences",
+        "Player_Absences", "Player_Equipment",
     };
 
     private static int Main(string[] args)
@@ -102,7 +102,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 8", db.GetSchemaVersion() == 8, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 9", db.GetSchemaVersion() == 9, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);

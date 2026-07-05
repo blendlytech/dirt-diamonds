@@ -255,6 +255,28 @@ public readonly struct PlayerAbsenceChangedEvent : IGameEvent
     }
 }
 
+/// <summary>
+/// Published by the Economy equipment service AFTER a purchase row has
+/// committed to Player_Equipment (Phase 8e equipment quality) — the Baseball
+/// sims' EquipmentLedger consumes it, the same Economy/Narrative → bus →
+/// ledger routing as <see cref="PlayerAbsenceChangedEvent"/>. The payload is
+/// primitives only — this file is compiled by the Data-free NeedsDecayHarness,
+/// so no Data type may appear here.
+/// </summary>
+public readonly struct PlayerEquipmentChangedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+
+    /// <summary>Owned gear quality, 1–3 (0 is the no-gear default and is never published).</summary>
+    public readonly byte Quality;
+
+    public PlayerEquipmentChangedEvent(string playerId, byte quality)
+    {
+        PlayerId = playerId;
+        Quality = quality;
+    }
+}
+
 public readonly struct RivalryChangedEvent : IGameEvent
 {
     /// <summary>Canonical pair order: <see cref="PlayerAId"/> sorts before <see cref="PlayerBId"/> ordinally.</summary>

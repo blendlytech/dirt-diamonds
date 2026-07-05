@@ -1,7 +1,9 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Hustles;
 using DirtAndDiamonds.Simulation.Life;
 
@@ -54,6 +56,7 @@ internal static class Program
             RunMarriageConceptionChecks();
             RunStressChecks();
             RunHustleIntegrationChecks();
+            RunEquipmentIntegrationChecks();
             RunAbsenceChecks();
             RunThreadingCheck();
             RunAllocationCheck();
@@ -979,6 +982,95 @@ internal static class Program
         Check("hustle integration: supplier edge created as Friend with the trust delta",
             supplierKind == RelationshipKind.Friend && supplierAffinity == 10,
             $"affinity={supplierAffinity} kind={supplierKind}");
+    }
+
+    // ------------------------------------------------------------------
+    // 5c. Phase 8e equipment Layer-2/DB integration (equipment_quality.md §8
+    // check 6) — EquipmentService is the same Data + Core orchestration class
+    // as HustleService, so its integration checks live here too. The sim-side
+    // consumption of the ledger is MonteCarloHarness's job; this proves the
+    // purchase path: validation, the one batch, and the post-commit events.
+    // ------------------------------------------------------------------
+
+    private static void RunEquipmentIntegrationChecks()
+    {
+        Console.WriteLine("--- Equipment Layer-2 integration (Phase 8e) ---");
+
+        string path = Path.Combine(Path.GetTempPath(), $"dnd_gritty_equip_{Guid.NewGuid():N}.db");
+        ScratchFiles.Add(path);
+        using var db = new DatabaseManager(path);
+        db.InitializeSchema(_schemaPath);
+
+        var players = new PlayerQueries(db);
+        var bus = new EventBus();
+        players.Insert(new PlayerRow
+        {
+            PlayerId = "buyer", FirstName = "Test", LastName = "Buyer", Age = 22, TeamId = null,
+            Funds = 10_000, HealthCeiling = 100, Recklessness = 0, BaseballInterest = 100, DetectionRisk = 0,
+        });
+        players.Insert(new PlayerRow
+        {
+            PlayerId = "pauper", FirstName = "Test", LastName = "Pauper", Age = 22, TeamId = null,
+            Funds = 100, HealthCeiling = 100, Recklessness = 0, BaseballInterest = 0, DetectionRisk = 0,
+        });
+
+        // The live transport: the same bus feeds the sims' ledger and the Life
+        // sim's funds mirror, so both event streams are observed here.
+        var ledger = new EquipmentLedger();
+        ledger.AttachTo(bus);
+        var fundsEvents = new List<FundsImpulseEvent>();
+        bus.Subscribe<FundsImpulseEvent>(fundsEvents.Add);
+
+        var shop = new EquipmentService(db, players, bus);
+
+        EquipmentShopState fresh = shop.GetShopState("buyer");
+        Check("equipment integration: fresh shop snapshot reads funds + standard-issue tier",
+            fresh.Funds == 10_000 && fresh.OwnedQuality == 0);
+
+        bool bought1 = shop.TryPurchase("buyer", 1, day: 12, out EquipmentPurchaseFailure firstFailure);
+        bus.DispatchPending();
+        players.TryGetById("buyer", out PlayerRow afterFirst);
+        bool rowExact = players.TryGetEquipment("buyer", out PlayerEquipmentRow firstRow)
+            && firstRow.Quality == 1 && firstRow.PurchasedDay == 12;
+        Check("equipment integration: q1 purchase — funds down exactly $750, row exact, ledger + funds mirror events observed",
+            bought1 && firstFailure == EquipmentPurchaseFailure.None && afterFirst.Funds == 9_250 && rowExact
+            && ledger.QualityFor("buyer") == 1
+            && fundsEvents.Count == 1 && fundsEvents[0].PlayerId == "buyer" && fundsEvents[0].Delta == -750,
+            $"funds={afterFirst.Funds} ledger={ledger.QualityFor("buyer")} impulses={fundsEvents.Count}");
+
+        bool boughtSame = shop.TryPurchase("buyer", 1, 13, out EquipmentPurchaseFailure sameFailure);
+        bool boughtBroke = shop.TryPurchase("pauper", 1, 13, out EquipmentPurchaseFailure brokeFailure);
+        bool boughtInvalid = shop.TryPurchase("buyer", 4, 13, out EquipmentPurchaseFailure invalidFailure);
+        bool boughtGhost = shop.TryPurchase("ghost", 1, 13, out EquipmentPurchaseFailure ghostFailure);
+        bus.DispatchPending();
+        players.TryGetById("buyer", out PlayerRow afterRejects);
+        players.TryGetById("pauper", out PlayerRow pauperAfter);
+        Check("equipment integration: rejections are typed clean no-ops (re-buy / broke / invalid quality / unknown player)",
+            !boughtSame && sameFailure == EquipmentPurchaseFailure.NotAnUpgrade
+            && !boughtBroke && brokeFailure == EquipmentPurchaseFailure.InsufficientFunds
+            && !boughtInvalid && invalidFailure == EquipmentPurchaseFailure.InvalidQuality
+            && !boughtGhost && ghostFailure == EquipmentPurchaseFailure.UnknownPlayer
+            && afterRejects.Funds == 9_250 && pauperAfter.Funds == 100
+            && ledger.QualityFor("buyer") == 1 && ledger.QualityFor("pauper") == 0
+            && fundsEvents.Count == 1);
+
+        // Skipping a rung is legal — upgrade-only means strictly higher, not
+        // adjacent. Full sticker, no trade-in credit.
+        bool bought3 = shop.TryPurchase("buyer", 3, day: 40, out EquipmentPurchaseFailure ladderFailure);
+        bus.DispatchPending();
+        players.TryGetById("buyer", out PlayerRow afterLadder);
+        EquipmentShopState finalState = shop.GetShopState("buyer");
+        Check("equipment integration: 1→3 rung-skip at full sticker — funds −$7,500, row/ledger/snapshot all read q3",
+            bought3 && ladderFailure == EquipmentPurchaseFailure.None && afterLadder.Funds == 1_750
+            && players.TryGetEquipment("buyer", out PlayerEquipmentRow ladderRow)
+            && ladderRow.Quality == 3 && ladderRow.PurchasedDay == 40
+            && ledger.QualityFor("buyer") == 3
+            && finalState.Funds == 1_750 && finalState.OwnedQuality == 3
+            && fundsEvents.Count == 2 && fundsEvents[1].Delta == -7_500,
+            $"funds={afterLadder.Funds} ledger={ledger.QualityFor("buyer")}");
+
+        Check("equipment integration: no open batch, integrity ok",
+            !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
     }
 
     // ------------------------------------------------------------------

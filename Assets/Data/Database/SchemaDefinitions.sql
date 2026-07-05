@@ -329,8 +329,26 @@ CREATE TABLE IF NOT EXISTS Player_Absences (
     penalty_until_day INTEGER NOT NULL DEFAULT 0 CHECK (penalty_until_day >= 0)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Player_Equipment — schema v9. Purchasable gear quality (Phase 8e): one row
+-- per player naming their owned gear tier (1 = Quality, 2 = Premium,
+-- 3 = Custom Pro). No row = quality 0 (standard issue) — quality 0 is never
+-- stored (the AbsenceReason.None rule). Upgrade-only: the query-layer upsert's
+-- conditional DO UPDATE makes a same-or-lower write a wholesale no-op, so the
+-- EquipmentLedger's in-memory keep-higher merge applies the identical rule
+-- without a read-back. A separate additive table, the Pitcher_Roles/
+-- Life_Stress/Team_Tiers/Player_Absences pattern. No backfill: nothing
+-- produced equipment before v9. The hydration read is a full scan by design —
+-- the table holds at most one row per ever-equipped player.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Equipment (
+    player_id     TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    quality       INTEGER NOT NULL CHECK (quality BETWEEN 1 AND 3),
+    purchased_day INTEGER NOT NULL CHECK (purchased_day >= 0)
+) STRICT;
+
 COMMIT;
 
--- Schema version 8 — adds Player_Absences (purely additive, no backfill; see
+-- Schema version 9 — adds Player_Equipment (purely additive, no backfill; see
 -- comment on the table above). Bump with every migration.
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;

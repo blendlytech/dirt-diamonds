@@ -123,6 +123,22 @@ public sealed class LeagueSimulator
     private BatterRatings _replacementBatter;
     private PitcherRatings _replacementPitcher;
 
+    /// <summary>
+    /// Purchased-gear source (Phase 8e), same optional-attachment pattern as
+    /// <see cref="Rivalries"/>: null — the default for every existing harness
+    /// path — leaves the per-PA hot path bit-identical to the pre-equipment
+    /// code (a single false branch), so the M1 season lines cannot move
+    /// unless someone actually owns upgraded gear.
+    /// </summary>
+    public EquipmentLedger? Equipment;
+
+    // Per-slot gear-boost cache rebuilt only when the ledger's Version moves
+    // (gear never expires by calendar, unlike absences); PAs read one byte.
+    private byte[] _slotGearBoost = Array.Empty<byte>();
+    private readonly List<EquipmentEntry> _equipmentScratch = new();
+    private int _equipmentVersionSeen = -1;
+    private bool _hasEquipment;
+
     /// <summary>Season year with simulated-but-unflushed games; 0 = clean.</summary>
     private int _unflushedSeasonYear;
 
@@ -215,6 +231,9 @@ public sealed class LeagueSimulator
         _absenceVersionSeen = -1; // roster changed — force a cache rebuild
         _absenceDaySeen = -1;
         _hasAbsences = false;
+        _slotGearBoost = new byte[slots];
+        _equipmentVersionSeen = -1; // roster changed — force a cache rebuild
+        _hasEquipment = false;
         _batterRatings = new BatterRatings[slots];
         _pitcherRatings = new PitcherRatings[slots];
         _pedActive = new bool[slots];
@@ -407,6 +426,7 @@ public sealed class LeagueSimulator
     internal void SimulateGameDay(int dayOfSeason)
     {
         RefreshRivalryCache();
+        RefreshEquipmentCache();
         Span<SchedulePairing> pairings = stackalloc SchedulePairing[LeagueSchedule.PairingsPerDay];
         LeagueSchedule.GetDayPairings(dayOfSeason, pairings);
 
@@ -514,13 +534,17 @@ public sealed class LeagueSimulator
         {
             return _replacementPitcher;
         }
+        // Phase 8e: gear boosts the tier-baked value BEFORE any rust dock
+        // (equipment_quality.md §5 order); boost 0 is the identity, so a
+        // no-gear pitcher keeps the exact pre-8e bytes.
+        byte gear = _hasEquipment ? _slotGearBoost[slot] : (byte)0;
         byte rust = _hasAbsences ? _slotRustPenalty[slot] : (byte)0;
-        if (rust == 0)
+        if (gear == 0 && rust == 0)
         {
             return _pitcherRatings[slot];
         }
-        ref readonly PitcherRatings p = ref _pitcherRatings[slot];
-        return new PitcherRatings(
+        PitcherRatings p = EquipmentEffects.Pitcher(in _pitcherRatings[slot], gear);
+        return rust == 0 ? p : new PitcherRatings(
             TierEffects.Shift(p.Stuff, -rust), TierEffects.Shift(p.Control, -rust), p.Stamina);
     }
 
@@ -582,6 +606,39 @@ public sealed class LeagueSimulator
     /// simply skipped. Runs at day granularity, never per PA; the scratch
     /// list reuse keeps even the rebuild allocation-free once warm.
     /// </summary>
+    /// <summary>
+    /// Rebuilds the per-slot gear-boost cache when the ledger's Version has
+    /// moved (gear never expires by calendar, so Version alone gates it —
+    /// unlike absences). Ids the ledger knows but the roster doesn't are
+    /// skipped. Runs at day granularity, never per PA.
+    /// </summary>
+    private void RefreshEquipmentCache()
+    {
+        if (Equipment is null || _slotByPlayerId is null)
+        {
+            _hasEquipment = false;
+            return;
+        }
+        if (Equipment.Version == _equipmentVersionSeen)
+        {
+            return;
+        }
+        _equipmentVersionSeen = Equipment.Version;
+        Array.Clear(_slotGearBoost);
+        _hasEquipment = false;
+
+        Equipment.CopyAll(_equipmentScratch);
+        for (int i = 0; i < _equipmentScratch.Count; i++)
+        {
+            EquipmentEntry entry = _equipmentScratch[i];
+            if (_slotByPlayerId.TryGetValue(entry.PlayerId, out int slot))
+            {
+                _slotGearBoost[slot] = EquipmentEffects.BoostFor(entry.Quality);
+                _hasEquipment |= _slotGearBoost[slot] > 0;
+            }
+        }
+    }
+
     private void RefreshRivalryCache()
     {
         if (Rivalries is null || _slotByPlayerId is null)
@@ -649,8 +706,14 @@ public sealed class LeagueSimulator
             // takes the exact pre-rivalry call — bit-identical M1 lines.
             byte rivalry = _hasRivalries && !batterShadowed && !pitcherShadowed
                 ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
+            // Phase 8e: gear boosts the batter's tier-baked ratings BEFORE any
+            // rust dock (equipment_quality.md §5 order). A shadowed slot's
+            // call-up carries no gear — a stranger, the same rule that stops
+            // rivalries crossing a shadowed slot. Boost 0 keeps the exact
+            // pre-8e fast path.
+            byte batterGear = _hasEquipment && !batterShadowed ? _slotGearBoost[batterSlot] : (byte)0;
             PaOutcome outcome;
-            if (rivalry == 0 && !batterShadowed && batterRust == 0)
+            if (rivalry == 0 && !batterShadowed && batterRust == 0 && batterGear == 0)
             {
                 outcome = AtBatResolver.Resolve(
                     in _batterRatings[batterSlot], in pitcher, defense, ref _rng);
@@ -659,7 +722,7 @@ public sealed class LeagueSimulator
             {
                 BatterRatings paBatter = batterShadowed
                     ? _replacementBatter
-                    : ApplyRust(in _batterRatings[batterSlot], batterRust);
+                    : ApplyRust(EquipmentEffects.Batter(in _batterRatings[batterSlot], batterGear), batterRust);
                 PitcherRatings paPitcher = pitcher;
                 if (rivalry != 0)
                 {

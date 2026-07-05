@@ -148,3 +148,16 @@ public struct PlayerAbsenceRow
     public int RatingPenalty;
     public long PenaltyUntilDay;
 }
+
+/// <summary>
+/// Row DTO for Player_Equipment (schema v9). Quality is the owned gear tier
+/// (1 = Quality, 2 = Premium, 3 = Custom Pro); quality 0 (standard issue) is
+/// the query-layer value for "no row", never stored — the AbsenceReason.None
+/// rule. Upgrade-only: the upsert no-ops a same-or-lower quality wholesale.
+/// </summary>
+public struct PlayerEquipmentRow
+{
+    public string PlayerId;
+    public int Quality;
+    public long PurchasedDay;
+}

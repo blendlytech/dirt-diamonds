@@ -1,0 +1,79 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/EquipmentShopScreen.cs" id="1_equipshop"]
+
+[node name="EquipmentShopScreen" type="Control"]
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -240.0
+offset_right = 340.0
+offset_bottom = -20.0
+grow_vertical = 0
+visible = false
+script = ExtResource("1_equipshop")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+text = "Pro Shop"
+
+[node name="FundsLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+text = "Funds: $0"
+
+[node name="OwnedLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+text = "Gear: Standard issue"
+
+[node name="QualityRow" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="QualityNameLabel" type="Label" parent="Panel/Layout/QualityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Quality gear"
+
+[node name="QualityBuyButton" type="Button" parent="Panel/Layout/QualityRow"]
+layout_mode = 2
+text = "Buy"
+
+[node name="PremiumRow" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="PremiumNameLabel" type="Label" parent="Panel/Layout/PremiumRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Premium gear"
+
+[node name="PremiumBuyButton" type="Button" parent="Panel/Layout/PremiumRow"]
+layout_mode = 2
+text = "Buy"
+
+[node name="ProRow" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="ProNameLabel" type="Label" parent="Panel/Layout/ProRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Custom pro gear"
+
+[node name="ProBuyButton" type="Button" parent="Panel/Layout/ProRow"]
+layout_mode = 2
+text = "Buy"
+
+[node name="StatusLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+autowrap_mode = 2
+visible = false
+text = ""

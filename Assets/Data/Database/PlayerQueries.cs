@@ -146,6 +146,25 @@ public sealed class PlayerQueries
         "SELECT player_id, reason, until_day, rating_penalty, penalty_until_day " +
         "FROM Player_Absences WHERE player_id = @playerId;";
 
+    // Equipment writer (schema v9, Phase 8e): one quality per player,
+    // upgrade-only — the conditional DO UPDATE ... WHERE makes a same-or-lower
+    // quality a wholesale no-op, so the EquipmentLedger's in-memory keep-higher
+    // merge can apply the identical rule without a read-back.
+    private const string SqlUpsertEquipment =
+        "INSERT INTO Player_Equipment (player_id, quality, purchased_day) " +
+        "VALUES (@playerId, @quality, @purchasedDay) " +
+        "ON CONFLICT (player_id) DO UPDATE SET " +
+        "quality = excluded.quality, purchased_day = excluded.purchased_day " +
+        "WHERE excluded.quality > Player_Equipment.quality;";
+
+    // Boot-time EquipmentLedger hydration. Deliberate full scan — the table
+    // holds at most one row per ever-equipped player.
+    private const string SqlSelectAllEquipment =
+        "SELECT player_id, quality, purchased_day FROM Player_Equipment;";
+
+    private const string SqlSelectEquipmentById =
+        "SELECT player_id, quality, purchased_day FROM Player_Equipment WHERE player_id = @playerId;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertPlayer;
     private readonly SqliteCommand _selectPlayerById;
@@ -173,6 +192,9 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _upsertAbsence;
     private readonly SqliteCommand _selectActiveAbsences;
     private readonly SqliteCommand _selectAbsenceById;
+    private readonly SqliteCommand _upsertEquipment;
+    private readonly SqliteCommand _selectAllEquipment;
+    private readonly SqliteCommand _selectEquipmentById;
 
     public PlayerQueries(DatabaseManager db)
     {
@@ -228,6 +250,12 @@ public sealed class PlayerQueries
             ("@ratingPenalty", SqliteType.Integer), ("@penaltyUntilDay", SqliteType.Integer));
         _selectActiveAbsences = Acquire(SqlSelectActiveAbsences, ("@day", SqliteType.Integer));
         _selectAbsenceById = Acquire(SqlSelectAbsenceById, ("@playerId", SqliteType.Text));
+
+        _upsertEquipment = Acquire(SqlUpsertEquipment,
+            ("@playerId", SqliteType.Text), ("@quality", SqliteType.Integer),
+            ("@purchasedDay", SqliteType.Integer));
+        _selectAllEquipment = Acquire(SqlSelectAllEquipment);
+        _selectEquipmentById = Acquire(SqlSelectEquipmentById, ("@playerId", SqliteType.Text));
     }
 
     private SqliteCommand Acquire(string sql, params (string Name, SqliteType Type)[] parameters)
@@ -688,5 +716,62 @@ public sealed class PlayerQueries
         UntilDay = reader.GetInt64(2),
         RatingPenalty = reader.GetInt32(3),
         PenaltyUntilDay = reader.GetInt64(4),
+    };
+
+    /// <summary>
+    /// Records <paramref name="playerId"/>'s gear as <paramref name="quality"/>
+    /// (1–3), purchased on <paramref name="purchasedDay"/>. Upgrade-only: a
+    /// same-or-lower quality is a wholesale no-op — the conditional upsert
+    /// enforces it in SQL, and the EquipmentLedger applies the identical
+    /// keep-higher rule in memory.
+    /// </summary>
+    public void SetEquipment(string playerId, int quality, long purchasedDay)
+    {
+        if (quality < 1 || quality > 3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quality), quality,
+                "Quality 0 is the no-row sentinel, never stored; 3 is the ladder's top.");
+        }
+        SqliteParameterCollection p = _upsertEquipment.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@quality"].Value = quality;
+        p["@purchasedDay"].Value = purchasedDay;
+        _db.ExecuteNonQuery(_upsertEquipment);
+    }
+
+    /// <summary>
+    /// Every equipped player into <paramref name="destination"/> (cleared
+    /// first) — boot-time EquipmentLedger hydration.
+    /// </summary>
+    public int LoadAllEquipment(List<PlayerEquipmentRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllEquipment);
+        while (reader.Read())
+        {
+            destination.Add(ReadEquipment(reader));
+        }
+        return destination.Count;
+    }
+
+    /// <summary>The player's equipment row, if one exists (no row = quality 0, standard issue).</summary>
+    public bool TryGetEquipment(string playerId, out PlayerEquipmentRow equipment)
+    {
+        _selectEquipmentById.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectEquipmentById);
+        if (!reader.Read())
+        {
+            equipment = default;
+            return false;
+        }
+        equipment = ReadEquipment(reader);
+        return true;
+    }
+
+    private static PlayerEquipmentRow ReadEquipment(SqliteDataReader reader) => new()
+    {
+        PlayerId = reader.GetString(0),
+        Quality = reader.GetInt32(1),
+        PurchasedDay = reader.GetInt64(2),
     };
 }

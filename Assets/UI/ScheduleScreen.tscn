@@ -156,7 +156,7 @@ text = "Work as"
 [node name="WorkActivityOption" type="OptionButton" parent="Panel/Layout/WorkActivityRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-item_count = 3
+item_count = 4
 selected = 0
 popup/item_0/text = "Legal Work"
 popup/item_0/id = 0
@@ -164,6 +164,8 @@ popup/item_1/text = "Narcotics"
 popup/item_1/id = 1
 popup/item_2/text = "Fencing"
 popup/item_2/id = 2
+popup/item_3/text = "Poker"
+popup/item_3/id = 3
 
 [node name="FreeHoursLabel" type="Label" parent="Panel/Layout"]
 layout_mode = 2

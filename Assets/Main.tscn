@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/Main.cs" id="1_main"]
 [ext_resource type="PackedScene" path="res://Assets/UI/NewGameScreen.tscn" id="2_newgame"]
@@ -9,6 +9,8 @@
 [ext_resource type="PackedScene" path="res://Assets/UI/ScheduleScreen.tscn" id="7_scheduleplan"]
 [ext_resource type="PackedScene" path="res://Assets/UI/NarcoticsHustleScreen.tscn" id="8_narcotics"]
 [ext_resource type="PackedScene" path="res://Assets/UI/FencingScreen.tscn" id="9_fencing"]
+[ext_resource type="PackedScene" path="res://Assets/UI/TexasHoldemTable.tscn" id="10_holdem"]
+[ext_resource type="PackedScene" path="res://Assets/UI/EquipmentShopScreen.tscn" id="11_equipshop"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -28,3 +30,7 @@ AttendedGameScreenScene = ExtResource("3_attended")
 [node name="NarcoticsHustleScreen" parent="." instance=ExtResource("8_narcotics")]
 
 [node name="FencingScreen" parent="." instance=ExtResource("9_fencing")]
+
+[node name="TexasHoldemTable" parent="." instance=ExtResource("10_holdem")]
+
+[node name="EquipmentShopScreen" parent="." instance=ExtResource("11_equipshop")]

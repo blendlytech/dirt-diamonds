@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -58,6 +59,12 @@ public sealed partial class GameManager : Node
 
     /// <summary>Phase 8c roster availability — public like Relationships so the UI can render "out until day N".</summary>
     public AvailabilityLedger Absences { get; private set; } = null!;
+
+    /// <summary>Phase 8e purchased gear — public like Absences so the UI can render the owned tier.</summary>
+    public EquipmentLedger Gear { get; private set; } = null!;
+
+    /// <summary>Phase 8e Layer 2 orchestration — gear-shop snapshots and purchase application.</summary>
+    public EquipmentService GearShop { get; private set; } = null!;
 
     /// <summary>Phase 8b Layer 2 orchestration — Narcotics/Fencing context building and resolution application.</summary>
     public HustleService Hustles { get; private set; } = null!;
@@ -151,6 +158,16 @@ public sealed partial class GameManager : Node
         Absences.Seed(absenceRows);
         Absences.AttachTo(Events);
 
+        // Phase 8e: purchased gear. Hydrate the ledger from the persisted
+        // Player_Equipment rows (the Absences pattern exactly — gear never
+        // expires, so the scan is unconditional), then hand it to every sim
+        // below alongside the rivalry/availability ledgers.
+        Gear = new EquipmentLedger();
+        var equipmentRows = new List<PlayerEquipmentRow>();
+        Players.LoadAllEquipment(equipmentRows);
+        Gear.Seed(equipmentRows);
+        Gear.AttachTo(Events);
+
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
         // own 8-team league, each with its own forked rng stream. All six run
         // the same day loop off the bus; the avatar's tier is resolved by
@@ -164,6 +181,7 @@ public sealed partial class GameManager : Node
             tierSim.Initialize();
             tierSim.Rivalries = _rivalryLedger;
             tierSim.Availability = Absences;
+            tierSim.Equipment = Gear;
             tierSim.AttachTo(Events);
             Leagues.Register(tierSim);
         }
@@ -177,6 +195,7 @@ public sealed partial class GameManager : Node
         Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
         Micro.Availability = Absences;
+        Micro.Equipment = Gear;
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
         Career.Availability = Absences;
@@ -272,6 +291,11 @@ public sealed partial class GameManager : Node
             _database, Players, GameState, Relationships, Events,
             unchecked((ulong)System.Environment.TickCount64) ^ 0xD1A5D1A5D1A5D1A5UL);
         Events.Subscribe<DayAdvancedEvent>(OnHustleDayAdvanced);
+
+        // Phase 8e: the gear shop. Pure request/response against the UI — no
+        // day-tick subscription; the purchase itself publishes the ledger and
+        // funds-mirror events post-commit.
+        GearShop = new EquipmentService(_database, Players, Events);
 
         // Phase 7: Gritty Events. Content loads from every batch file in the
         // Content folder (a new Sonnet batch is a dropped-in file); the applier

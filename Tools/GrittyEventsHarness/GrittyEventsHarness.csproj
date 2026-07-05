@@ -33,5 +33,18 @@
     -->
     <Compile Include="..\..\Assets\Simulation\Hustles\*.cs" Link="Hustles\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Economy\Hustles\*.cs" Link="Economy\Hustles\%(Filename)%(Extension)" />
+    <!--
+      Phase 8e (equipment_quality.md §8 check 6, Layer-2/DB integration):
+      EquipmentService is the same Data + Core orchestration class as
+      HustleService, so its integration checks live here too. It leans on
+      EquipmentEffects/EquipmentLedger (and their AtBatResolver/TierEffects
+      rating-struct dependencies) — all pure math/Core+Data, pulled in as
+      single files like RngState.cs.
+    -->
+    <Compile Include="..\..\Assets\Economy\Equipment\*.cs" Link="Economy\Equipment\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\AtBatResolver.cs" Link="Baseball\AtBatResolver.cs" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\TierEffects.cs" Link="Baseball\TierEffects.cs" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\EquipmentEffects.cs" Link="Baseball\EquipmentEffects.cs" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\EquipmentLedger.cs" Link="Baseball\EquipmentLedger.cs" />
   </ItemGroup>
 </Project>
