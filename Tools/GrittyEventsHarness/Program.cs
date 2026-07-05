@@ -1,6 +1,8 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Simulation.Hustles;
 using DirtAndDiamonds.Simulation.Life;
 
 namespace DirtAndDiamonds.Tools.GrittyEventsHarness;
@@ -51,6 +53,7 @@ internal static class Program
             RunChoiceUiChecks();
             RunMarriageConceptionChecks();
             RunStressChecks();
+            RunHustleIntegrationChecks();
             RunThreadingCheck();
             RunAllocationCheck();
             RunDeterminismCheck();
@@ -883,6 +886,93 @@ internal static class Program
                 && viaDefault.Hygiene == viaStressZero.Hygiene && viaDefault.Social == viaStressZero.Social
                 && viaDefault.Fitness == viaStressZero.Fitness);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 5b. Hustles Layer-2/DB integration (hustles_narcotics_fencing.md §9
+    // check 9) — HustleService and the pure Hustles resolvers are Data-free
+    // themselves, so this runs in "whichever harness compiles Data" rather
+    // than a redundant third project just for one check.
+    // ------------------------------------------------------------------
+
+    private static void RunHustleIntegrationChecks()
+    {
+        Console.WriteLine("--- Hustles Layer-2 integration ---");
+
+        string path = Path.Combine(Path.GetTempPath(), $"dnd_gritty_hustle_{Guid.NewGuid():N}.db");
+        ScratchFiles.Add(path);
+        using var db = new DatabaseManager(path);
+        db.InitializeSchema(_schemaPath);
+
+        var gameState = new GameStateQueries(db);
+        var players = new PlayerQueries(db);
+        var bus = new EventBus();
+        var graph = new RelationshipGraph();
+        graph.AttachTo(bus);
+
+        players.Insert(new PlayerRow
+        {
+            PlayerId = "avatar", FirstName = "Test", LastName = "Avatar", Age = 22, TeamId = null,
+            Funds = 500, HealthCeiling = 15, Recklessness = 10, BaseballInterest = 100, DetectionRisk = 95,
+        });
+        for (int i = 0; i < 10; i++)
+        {
+            players.Insert(new PlayerRow
+            {
+                PlayerId = $"npc{i}", FirstName = "Test", LastName = $"Npc{i}", Age = 25, TeamId = null,
+                Funds = 100, HealthCeiling = 100, Recklessness = 0, BaseballInterest = 0, DetectionRisk = 0,
+            });
+        }
+
+        var service = new HustleService(db, players, gameState, graph, bus, rngSeed: 555UL);
+
+        var rivalryEvents = new List<RivalryChangedEvent>();
+        bus.Subscribe<RivalryChangedEvent>(rivalryEvents.Add);
+
+        service.BuildNarcoticsContext("avatar", day: 10);
+        bool supplierResolved = gameState.TryGetText(GameStateKeys.HustleSupplierPlayerId, out string supplierId);
+        bool crewResolved = gameState.TryGetText(GameStateKeys.HustleCrewPlayerId, out string crewId);
+        Check("hustle integration: BuildNarcoticsContext resolves and caches supplier/crew reps",
+            supplierResolved && crewResolved && supplierId != "avatar" && crewId != "avatar" && supplierId != crewId,
+            $"supplier={supplierId} crew={crewId}");
+
+        var flags = new List<EntityFlagRow>();
+        players.LoadActiveFlags(supplierId, flags);
+        bool supplierTagged = flags.Exists(f => f.FlagName == "faction_supplier" && f.IsActive);
+        players.LoadActiveFlags(crewId, flags);
+        bool crewTagged = flags.Exists(f => f.FlagName == "faction_crew_1" && f.IsActive);
+        Check("hustle integration: faction reps are narratively tagged via Entity_Flags", supplierTagged && crewTagged);
+
+        // A resolution that exercises every writer at once, with clamping
+        // deliberately in play (detection_risk 95+20 must clamp to 100;
+        // health_ceiling 15-30 must floor at 0) and a crew delta deep enough
+        // to push a fresh edge into Rival territory, publishing RivalryChangedEvent.
+        var resolution = new HustleResolution(
+            fundsDelta: 250, detectionRiskDelta: 20, healthCeilingDelta: -30, recklessnessDelta: 5, stressDelta: 12,
+            supplierTrustDelta: 10, crewStandingDelta: -45,
+            setWatchlistFlag: true, setBadProductFlag: true, setSpoiledGoodsFlag: false, setControlsTurfFlag: false);
+        service.ApplyNarcoticsResolution("avatar", in resolution, day: 10);
+        bus.DispatchPending();
+
+        players.TryGetById("avatar", out PlayerRow after);
+        Check("hustle integration: funds/detection/health/recklessness move by the clamped deltas",
+            after.Funds == 750 && after.DetectionRisk == 100 && after.HealthCeiling == 0 && after.Recklessness == 15,
+            $"funds={after.Funds} detect={after.DetectionRisk} health={after.HealthCeiling} reck={after.Recklessness}");
+
+        players.LoadActiveFlags("avatar", flags);
+        bool watchlistSet = flags.Exists(f => f.FlagName == "narc_watchlist" && f.IsActive && f.SetOnDay == 10);
+        bool badProductSet = flags.Exists(f => f.FlagName == "bad_product" && f.IsActive && f.SetOnDay == 10);
+        Check("hustle integration: flags are set with the resolution's day", watchlistSet && badProductSet);
+
+        graph.TryGetRelationship("avatar", crewId, out int crewAffinity, out RelationshipKind crewKind);
+        Check("hustle integration: crew edge lands a deep Rival (<= -40) and publishes RivalryChangedEvent",
+            crewKind == RelationshipKind.Rival && crewAffinity <= -40 && rivalryEvents.Count > 0,
+            $"affinity={crewAffinity} kind={crewKind} events={rivalryEvents.Count}");
+
+        graph.TryGetRelationship("avatar", supplierId, out int supplierAffinity, out RelationshipKind supplierKind);
+        Check("hustle integration: supplier edge created as Friend with the trust delta",
+            supplierKind == RelationshipKind.Friend && supplierAffinity == 10,
+            $"affinity={supplierAffinity} kind={supplierKind}");
     }
 
     // ------------------------------------------------------------------

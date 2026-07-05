@@ -24,5 +24,14 @@
     <Compile Include="..\..\Assets\Simulation\Life\*.cs" Link="Life\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Narrative\Events\*.cs" Link="Narrative\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\RngState.cs" Link="Baseball\RngState.cs" />
+    <!--
+      Phase 8b check 9 (Layer-2/DB integration, hustles_narcotics_fencing.md
+      §9): HustleService is Data-free-adjacent orchestration (Data + Core +
+      Life, no Godot), and the pure resolvers it drives are Data-free too — this
+      is "whichever harness compiles Data" the design doc's check 9 asks for,
+      avoiding a redundant third Data-compiling project just for one check.
+    -->
+    <Compile Include="..\..\Assets\Simulation\Hustles\*.cs" Link="Hustles\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Economy\Hustles\*.cs" Link="Economy\Hustles\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -185,6 +185,12 @@ public sealed class EventConsequenceApplier
                     case ConsequenceKind.Interest:
                         _players.AdjustBaseballInterest(fired.SubjectPlayerId, (int)Math.Round(consequence.Amount));
                         break;
+                    case ConsequenceKind.DetectionRisk:
+                        _players.AdjustDetectionRisk(fired.SubjectPlayerId, (int)Math.Round(consequence.Amount));
+                        break;
+                    case ConsequenceKind.HealthCeiling:
+                        _players.AdjustHealthCeiling(fired.SubjectPlayerId, (int)Math.Round(consequence.Amount));
+                        break;
                     case ConsequenceKind.SetFlag:
                         _players.SetFlag(fired.SubjectPlayerId, consequence.FlagName!, true, fired.Day);
                         break;

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>DirtAndDiamonds.Tools.HustleHarness</RootNamespace>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!--
+      Same trick as the other harnesses: compile the Hustles resolvers'
+      exact engine-free sources headless — Data-free, Baseball-free (per
+      docs/design/hustles_narcotics_fencing.md §1, the resolvers reference
+      only RngState, folder-homed in Simulation/Baseball but pure math, the
+      same established exception the Narrative dispatcher already relies on).
+      If a Data/Godot type leaks into either resolver, this project stops
+      building.
+    -->
+    <Compile Include="..\..\Assets\Simulation\Hustles\*.cs" Link="Hustles\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\RngState.cs" Link="Baseball\RngState.cs" />
+  </ItemGroup>
+</Project>

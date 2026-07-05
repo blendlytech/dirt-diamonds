@@ -68,6 +68,20 @@ public sealed class PlayerQueries
     private const string SqlAdjustInterest =
         "UPDATE Players SET baseball_interest = MAX(0, MIN(100, baseball_interest + @delta)) WHERE player_id = @playerId;";
 
+    // Hustle/gritty-event risk writers (hustles_narcotics_fencing.md §5): atomic
+    // read-modify-write with BOTH clamps in SQL, generalizing ApplyPedGameCosts'
+    // one-directional halves (that writer only ever grows detection_risk and
+    // shrinks health_ceiling; these accept either sign, since a hustle's
+    // resolution can raise or lower each of the three independently).
+    private const string SqlAdjustDetectionRisk =
+        "UPDATE Players SET detection_risk = MAX(0, MIN(100, detection_risk + @delta)) WHERE player_id = @playerId;";
+
+    private const string SqlAdjustHealthCeiling =
+        "UPDATE Players SET health_ceiling = MAX(0, MIN(100, health_ceiling + @delta)) WHERE player_id = @playerId;";
+
+    private const string SqlAdjustRecklessness =
+        "UPDATE Players SET recklessness = MAX(0, MIN(100, recklessness + @delta)) WHERE player_id = @playerId;";
+
     private const string SqlDeletePlayer =
         "DELETE FROM Players WHERE player_id = @playerId;";
 
@@ -121,6 +135,9 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _updateInterest;
     private readonly SqliteCommand _adjustFunds;
     private readonly SqliteCommand _adjustInterest;
+    private readonly SqliteCommand _adjustDetectionRisk;
+    private readonly SqliteCommand _adjustHealthCeiling;
+    private readonly SqliteCommand _adjustRecklessness;
     private readonly SqliteCommand _deletePlayer;
     private readonly SqliteCommand _insertBattingSeason;
     private readonly SqliteCommand _selectBattingByPlayer;
@@ -151,6 +168,9 @@ public sealed class PlayerQueries
         _updateInterest = Acquire(SqlUpdateInterest, ("@interest", SqliteType.Integer), ("@playerId", SqliteType.Text));
         _adjustFunds = Acquire(SqlAdjustFunds, ("@delta", SqliteType.Real), ("@playerId", SqliteType.Text));
         _adjustInterest = Acquire(SqlAdjustInterest, ("@delta", SqliteType.Integer), ("@playerId", SqliteType.Text));
+        _adjustDetectionRisk = Acquire(SqlAdjustDetectionRisk, ("@delta", SqliteType.Integer), ("@playerId", SqliteType.Text));
+        _adjustHealthCeiling = Acquire(SqlAdjustHealthCeiling, ("@delta", SqliteType.Integer), ("@playerId", SqliteType.Text));
+        _adjustRecklessness = Acquire(SqlAdjustRecklessness, ("@delta", SqliteType.Integer), ("@playerId", SqliteType.Text));
         _deletePlayer = Acquire(SqlDeletePlayer, ("@playerId", SqliteType.Text));
 
         _insertBattingSeason = Acquire(SqlInsertBattingSeason,
@@ -340,6 +360,38 @@ public sealed class PlayerQueries
         _adjustInterest.Parameters["@delta"].Value = delta;
         _adjustInterest.Parameters["@playerId"].Value = playerId;
         _db.ExecuteNonQuery(_adjustInterest);
+    }
+
+    /// <summary>
+    /// Hustle/gritty-event risk writer: atomic delta, clamped [0,100] in SQL.
+    /// Generalizes ApplyPedGameCosts' detection_risk half to accept either
+    /// sign (hustles_narcotics_fencing.md §5).
+    /// </summary>
+    public void AdjustDetectionRisk(string playerId, int delta)
+    {
+        _adjustDetectionRisk.Parameters["@delta"].Value = delta;
+        _adjustDetectionRisk.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_adjustDetectionRisk);
+    }
+
+    /// <summary>
+    /// Hustle/gritty-event risk writer: atomic delta, clamped [0,100] in SQL.
+    /// Generalizes ApplyPedGameCosts' health_ceiling half to accept either
+    /// sign (hustles_narcotics_fencing.md §5).
+    /// </summary>
+    public void AdjustHealthCeiling(string playerId, int delta)
+    {
+        _adjustHealthCeiling.Parameters["@delta"].Value = delta;
+        _adjustHealthCeiling.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_adjustHealthCeiling);
+    }
+
+    /// <summary>Hustle/gritty-event risk writer: atomic delta, clamped [0,100] in SQL (hustles_narcotics_fencing.md §5).</summary>
+    public void AdjustRecklessness(string playerId, int delta)
+    {
+        _adjustRecklessness.Parameters["@delta"].Value = delta;
+        _adjustRecklessness.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_adjustRecklessness);
     }
 
     /// <summary>Removes a player; stats, flags and relationships cascade via FK rules.</summary>

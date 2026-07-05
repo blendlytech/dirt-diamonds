@@ -98,6 +98,16 @@ public enum ConsequenceKind : byte
     /// §4). Payload-free; valid only on scope-avatar events (load-time gate).
     /// </summary>
     ConceiveChild,
+
+    /// <summary>
+    /// Atomic clamped detection_risk delta (hustles_narcotics_fencing.md §5) —
+    /// the same writer 8b's Hustles introduce, extended into the gritty-event
+    /// vocabulary here so 8c's content can reuse a tested consequence type.
+    /// </summary>
+    DetectionRisk,
+
+    /// <summary>Atomic clamped health_ceiling delta — see <see cref="DetectionRisk"/>.</summary>
+    HealthCeiling,
 }
 
 /// <summary>Who a relationship consequence pairs the subject with (§4), resolved at apply time.</summary>
@@ -134,7 +144,8 @@ public readonly struct EventConsequence
 
     public static EventConsequence ForAmount(ConsequenceKind kind, double amount)
     {
-        if (kind is not (ConsequenceKind.Funds or ConsequenceKind.Stress or ConsequenceKind.Interest))
+        if (kind is not (ConsequenceKind.Funds or ConsequenceKind.Stress or ConsequenceKind.Interest
+            or ConsequenceKind.DetectionRisk or ConsequenceKind.HealthCeiling))
         {
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not an amount-shaped consequence.");
         }

@@ -249,6 +249,10 @@ public static class GrittyEventJson
                 return EventConsequence.ForAmount(ConsequenceKind.Stress, RequireNumber(element, "amount", eventId));
             case "interest":
                 return EventConsequence.ForAmount(ConsequenceKind.Interest, RequireNumber(element, "amount", eventId));
+            case "detection_risk":
+                return EventConsequence.ForAmount(ConsequenceKind.DetectionRisk, RequireNumber(element, "amount", eventId));
+            case "health_ceiling":
+                return EventConsequence.ForAmount(ConsequenceKind.HealthCeiling, RequireNumber(element, "amount", eventId));
             case "set_flag":
                 return EventConsequence.ForFlag(ConsequenceKind.SetFlag, RequireString(element, "flag", eventId));
             case "clear_flag":

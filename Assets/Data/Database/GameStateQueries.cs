@@ -32,6 +32,19 @@ public static class GameStateKeys
     /// game-over flag.
     /// </summary>
     public const string LineageOverReason = "lineage_over_reason";
+
+    /// <summary>
+    /// player_id (text) of the Narcotics supplier faction rep, resolved once
+    /// at the avatar's first Narcotics run and cached here so later runs
+    /// don't rescan the player pool (hustles_narcotics_fencing.md §6).
+    /// </summary>
+    public const string HustleSupplierPlayerId = "hustle_supplier_player_id";
+
+    /// <summary>player_id (text) of the local turf-crew faction rep (§6) — same resolve-once-and-cache pattern as <see cref="HustleSupplierPlayerId"/>.</summary>
+    public const string HustleCrewPlayerId = "hustle_crew_player_id";
+
+    /// <summary>player_id (text) of the Fencing "fence" rep — same pattern, filling the gap the design doc's §6 faction list left implicit for fenceStanding (§4.1).</summary>
+    public const string HustleFencePlayerId = "hustle_fence_player_id";
 }
 
 /// <summary>
