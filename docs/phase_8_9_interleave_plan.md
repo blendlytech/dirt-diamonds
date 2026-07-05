@@ -15,6 +15,7 @@ A Plan-agent pressure-test against the live code (`LeagueSimulator.cs`, `CareerM
 Each step below is sized as one session's work, matching this project's own established cadence (see `progress.md`'s per-session entries) — schema-first where relevant, harness-proven before merge, model assignment stated. Standing rule carried forward unchanged: re-run `run_monte_carlo_batch` after anything touching the sim assembly; escalate to Fable 5 if any band moves.
 
 ### 9a — Tier Schema + Multi-Tier Macro-Sim
+
 **Owner: Fable 5** (re-enters the calibrated core; carries the "no band moved" burden across every tier).
 
 - Schema v7 (No Blind Queries: validate scratch + live via the `sqlite` MCP before writing DDL): add a `tier` dimension to `Teams` (HS, College, MinorA, MinorAA, MinorAAA, MLB) as a new column or reference table — additive, idempotent, same pattern as every prior migration (v2→v6).
@@ -27,6 +28,7 @@ Each step below is sized as one session's work, matching this project's own esta
 - **Validate:** `run_monte_carlo_batch` gains a per-tier band check (Opus's designed ranges) **and** a regression guard that the existing MLB band is still exactly where Phase 3 left it (.247/.315/.412-ish). This is the step that could silently break the whole game's calibration if rushed — treat it with the same rigor as the v4 bullpen pass.
 
 ### 9b — Bare Daily-Clock Skeleton
+
 **Owner: Fable 5 engine, Sonnet 5 UI.**
 
 - Split the avatar out of `LifeSimManager`'s per-NPC autopilot tick — the avatar's hourly actions become player-chosen (or default-autopiloted if the player does nothing, mirroring the existing `AutopilotAttendedGames` precedent so headless harnesses keep working unmodified).
@@ -35,6 +37,7 @@ Each step below is sized as one session's work, matching this project's own esta
 - **Validate:** extend `NeedsDecayHarness`/a new harness path proving a scripted week of manual block choices behaves as expected and that an untouched (autopilot) avatar-day reproduces the pre-9b trace bit-for-bit (the "nothing broke for headless callers" guarantee, same discipline as every prior additive pass).
 
 ### 8a — Survival Economy + Legal Work
+
 **Owner: Sonnet 5** (low architectural risk — routes through existing, proven primitives).
 
 - Recurring rent/food/gear drain on a calendar cadence, through the already-atomic `PlayerQueries.AdjustFunds` (floor-clamped SQL, already the gritty-event consequence pipeline's writer).
@@ -43,12 +46,14 @@ Each step below is sized as one session's work, matching this project's own esta
 - **Validate:** `simulate_utility_decay` extended with a funds-solvency check over a simulated month; `run_monte_carlo_batch` not touched (no sim-assembly surface moved).
 
 ### 8b — Narcotics (3-tier state machine) + Fencing Negotiation
+
 **Owner: Opus 4.8 designs the risk/reward math and state machine; Sonnet 5 implements; Fable 5 reviews.**
 
 - Isolated Hustle scene nodes per `ui_conventions.md` (`godot_scene_mapper` before any UI logic). Narcotics: Inventory Drop → Profit/Toxicity Cut → Territory Control vs Factions (using the existing `RelationshipGraph`). Fencing: negotiation mechanic, structure TBD by Opus's design doc.
 - These are the first writers of accumulated "risk" state that step 8c's triad will consume.
 
 ### 8c — Arrest / Injury / Suspension Risk Triad
+
 **Owner: Fable 5** (new engine surface — the roster-invariant/availability discipline, same weight class as the succession handoff); **Sonnet 5** for event content.
 
 - Genuinely new engine surface, confirmed by exploration: today a rostered player is unconditionally in every game (`LeagueSimulator`/`MicroGame` build fixed lineup/rotation/bullpen slots once at `Initialize()`; no `IsAvailable`/benched-for-N-games concept exists anywhere).
@@ -56,11 +61,14 @@ Each step below is sized as one session's work, matching this project's own esta
 - Extends the Gritty Event consequence vocabulary (`gritty_event_framework.md` §4's closed enum) with a new roster/availability mutation type — genuinely new, not reconfiguration, per the design doc's own explicit deferral note.
 
 ### 8d — Texas Hold'em, 8e — Equipment Quality (can run in parallel with or after 8b/8c)
+
 - **8d owner:** Opus 4.8 (pot-odds/bluffing math), Sonnet 5 (implementation), Fable 5 (review).
 - **8e owner:** Fable 5 (calibrated-core-adjacent: purchasable gear tiers as effective-ratings modifiers, same precedent as PED/fatigue/rivalry — never touching `AtBatResolver`'s calibration tables directly, behind the `run_monte_carlo_batch` band check).
 
 ### 9c — Promotion / Advancement Gates, 9d — Player Development / Decline Curves
+
 Resume once Phase 8 is done.
+
 - **9c owner:** Opus 4.8 designs the promotion model (performance + scouting); Fable 5 owns the tier-transfer handoff (the avatar changes team *and* tier mid-save — the succession-handoff's sibling, same roster-invariant discipline).
 - **9d owner:** Opus 4.8 designs peak-age growth/veteran decline curves; Sonnet 5 owns the tuning harness. This is where the Practice block (built inert in 9b) finally produces a real stat effect.
 - **Exit criteria (BUILD_PLAN's own):** a generated player climbs HS→MLB across simulated seasons via performance + development; each tier's league line sits in its own calibrated band; the avatar's daily schedule measurably moves both stats and needs.

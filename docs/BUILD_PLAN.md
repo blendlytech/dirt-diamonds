@@ -87,7 +87,9 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 *Note: Per the `docs/phase_8_9_interleave_plan.md`, Phase 8 and 9 are being interleaved to stand up a skeletal career clock before layering on hustles.*
 
 ### 9a — Tier Schema + Multi-Tier Macro-Sim
+
 **Owner: Fable 5**
+
 - Schema v7: add a `tier` dimension to `Teams` (HS, College, MinorA, MinorAA, MinorAAA, MLB).
 - Query-layer tier filters for `BaseballQueries`.
 - `LeagueGenerator` seeds one independent 8-team league per tier.
@@ -98,32 +100,42 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 - **Validate:** `run_monte_carlo_batch` gains a per-tier band check and a regression guard for the existing MLB band.
 
 ### 9b — Bare Daily-Clock Skeleton
+
 **Owner: Fable 5 engine, Sonnet 5 UI.**
+
 - Split the avatar out of `LifeSimManager`'s autopilot tick — avatar's hourly actions become player-chosen.
 - Schedule surface: allocate hours across Sleep / School / Practice / Game / Work blocks. Game reuses `CareerManager` flow. Practice/School are inert placeholders for now.
 - New UI scene: `Assets/UI/ScheduleScreen.tscn`.
 - **Validate:** Extend `NeedsDecayHarness` / new harness proving scripted manual block choices behave as expected and untouched autopilot reproduces pre-9b traces.
 
 ### 8a — Survival Economy + Legal Work
+
 **Owner: Sonnet 5**
+
 - Recurring rent/food/gear drain on a calendar cadence, through `PlayerQueries.AdjustFunds`.
 - Legal Work becomes the first real Work-block payout (modest funds, energy/fitness drain).
 - **Validate:** `simulate_utility_decay` extended with funds-solvency check over a simulated month.
 
 ### 8b — Narcotics (3-tier state machine) + Fencing Negotiation
+
 **Owner: Opus 4.8 designs, Sonnet 5 implements, Fable 5 reviews.**
+
 - Isolated Hustle scene nodes. Narcotics: Inventory Drop → Profit/Toxicity Cut → Territory Control. Fencing negotiation.
 
 ### 8c — Arrest / Injury / Suspension Risk Triad
+
 **Owner: Fable 5 (engine), Sonnet 5 (event content).**
+
 - Roster/availability mutation type for Gritty Events.
 - Arrest (jail time-skip), Injury (availability/rating hit), Suspension (`detection_risk` benching).
 
 ### 8d — Texas Hold'em, 8e — Equipment Quality
+
 - **8d owner:** Opus 4.8 (pot-odds math), Sonnet 5 (implementation).
 - **8e owner:** Fable 5 (gear tiers as effective-ratings modifiers).
 
 ### 9c — Promotion / Advancement Gates, 9d — Player Development / Decline Curves
+
 - **9c owner:** Opus 4.8 (promotion model), Fable 5 (tier-transfer handoff).
 - **9d owner:** Opus 4.8 (growth/decline curves), Sonnet 5 (tuning harness). Practice block finally produces a real stat effect.
 
