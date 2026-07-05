@@ -197,6 +197,28 @@ public readonly struct ChildBornEvent : IGameEvent
     }
 }
 
+/// <summary>
+/// Published by CareerManager after the avatar activates on a team — first
+/// creation and succession both land here (a boot-time load activates before
+/// the career attaches to the bus, so the bridge syncs that case directly).
+/// GameManager bridges it into the Life sim's daily clock (avatar pointer +
+/// the tier-derived school gate); the two sims still never reference each
+/// other, per the architectural wall.
+/// </summary>
+public readonly struct AvatarChangedEvent : IGameEvent
+{
+    public readonly string AvatarPlayerId;
+
+    /// <summary>The team the avatar activated on — the bridge derives the tier (and the 9b school gate) from it.</summary>
+    public readonly int TeamId;
+
+    public AvatarChangedEvent(string avatarPlayerId, int teamId)
+    {
+        AvatarPlayerId = avatarPlayerId;
+        TeamId = teamId;
+    }
+}
+
 public readonly struct RivalryChangedEvent : IGameEvent
 {
     /// <summary>Canonical pair order: <see cref="PlayerAId"/> sorts before <see cref="PlayerBId"/> ordinally.</summary>

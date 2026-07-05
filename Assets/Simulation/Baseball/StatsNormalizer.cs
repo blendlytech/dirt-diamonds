@@ -38,4 +38,28 @@ public sealed class StatsNormalizer
         }
         return rows;
     }
+
+    /// <summary>
+    /// Tier-scoped variant (Phase 9a): recomputes one ladder tier's rate rows
+    /// only — six per-tier sims flushing on the same day each rewrite their
+    /// own league instead of the whole season six times over, and no reader
+    /// ever sees a transient cross-tier mix of fresh and stale rates.
+    /// </summary>
+    public int NormalizeSeason(int seasonYear, LeagueTier tier)
+    {
+        int rows = 0;
+        _db.BeginBatch();
+        try
+        {
+            rows += _queries.NormalizeBattingRates(seasonYear, tier);
+            rows += _queries.NormalizePitchingRates(seasonYear, tier);
+            _db.CommitBatch();
+        }
+        catch
+        {
+            _db.RollbackBatch();
+            throw;
+        }
+        return rows;
+    }
 }

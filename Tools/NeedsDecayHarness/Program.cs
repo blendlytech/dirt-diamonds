@@ -64,6 +64,7 @@ internal static class Program
         RunUtilityChecks();
         RunActionThresholdChecks();
         RunLifeSimChecks();
+        RunDailyClockChecks();
         RunRelationshipGraphChecks();
 
         int failed = 0;
@@ -482,6 +483,217 @@ internal static class Program
             && brokeMin[NeedType.Social] <= NeedsEngine.MinNeed
             && brokeMin[NeedType.Fitness] <= NeedsEngine.MinNeed;
         Check("broke NPC's money-gated needs (Hunger/Social/Fitness) collapse without an income mechanic (expected — no Phase 8 economy yet)", paidNeedsCollapse);
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 9b: the avatar daily clock. Two guarantees under test:
+    //   1. An untouched (never-planned) avatar day reproduces the pre-9b
+    //      autopilot trace bit-for-bit — marking an avatar alone changes
+    //      NOTHING for headless callers (the AutopilotAttendedGames mirror).
+    //   2. A planned day runs its blocks exactly: sleep restores at the
+    //      catalog rate under the catalog environment, inert blocks decay
+    //      neutrally, free hours autopilot, and the plan is one-shot.
+    // ------------------------------------------------------------------
+
+    private static void RunDailyClockChecks()
+    {
+        Console.WriteLine("--- 9b daily clock: avatar schedule blocks vs autopilot (bit-for-bit guarantee) ---\n");
+
+        const string AvatarId = "avatar";
+        const string BystanderId = "bystander-npc";
+        const double SeedFunds = 50000.0;
+        const float SeedStress = 50f; // nonzero so the stress path is exercised on both sides
+
+        // --- DaySchedule validation ---
+        bool negativeThrows = Throws(() => new DaySchedule(-1, 0, 0, 0, 0));
+        bool overflowThrows = Throws(() => new DaySchedule(10, 8, 4, 3, 3)); // 28h
+        Check("DaySchedule rejects negative hours and >24h totals", negativeThrows && overflowThrows);
+
+        // --- Surface guards: avatar pointer + school gate ---
+        var gated = new LifeSimManager();
+        gated.Seed(new[] { new NpcSeed(AvatarId, SeedFunds) });
+        bool untrackedThrows = Throws(() => gated.SetAvatar("nobody"));
+        bool noAvatarThrows = Throws(() => gated.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0)));
+        gated.SetAvatar(AvatarId);
+        // AvatarSchoolAvailable defaults false — an MLB avatar has no school.
+        bool schoolBlocked = Throws(() => gated.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0)));
+        gated.AvatarSchoolAvailable = true;
+        gated.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0));
+        bool accepted = gated.TryGetTodaySchedule(out DaySchedule roundTrip)
+            && roundTrip.SleepHours == 8 && roundTrip.SchoolHours == 6 && roundTrip.FreeHours == 10;
+        Check("untracked avatar / plan-without-avatar both throw", untrackedThrows && noAvatarThrows);
+        Check("School hours rejected unless AvatarSchoolAvailable (the HS/College tier projection)",
+            schoolBlocked && accepted);
+        // Re-pointing the avatar (succession) drops the pending plan.
+        gated.SetAvatar(AvatarId);
+        Check("SetAvatar drops any pending plan (an heir never inherits the retiree's day)",
+            !gated.HasTodaySchedule);
+
+        // --- Guarantee 1: never-planned avatar ≡ plain NPC, bit-for-bit, 30 days ---
+        (LifeSimManager control, EventBus controlBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, SeedStress, markAvatar: false);
+        (LifeSimManager marked, EventBus markedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, SeedStress, markAvatar: true);
+
+        bool bitIdentical = true;
+        for (int day = 1; day <= 30 && bitIdentical; day++)
+        {
+            controlBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            controlBus.DispatchPending();
+            markedBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            markedBus.DispatchPending();
+            bitIdentical = PersonStateIdentical(control, marked, AvatarId)
+                && PersonStateIdentical(control, marked, BystanderId);
+        }
+        Check("never-planned avatar reproduces the pre-9b autopilot trace bit-for-bit over 30 days", bitIdentical);
+
+        // --- Guarantee 2a: a fully-allocated day matches the closed form exactly ---
+        // 8 Sleep + 6 School + 4 Practice + 3 Game + 3 Work = 24h, zero free.
+        (LifeSimManager planned, EventBus plannedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        planned.AvatarSchoolAvailable = true;
+        planned.SetTodaySchedule(new DaySchedule(8, 6, 4, 3, 3));
+        plannedBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        plannedBus.DispatchPending();
+
+        // Canonical day order: the 16 inert daytime hours first, Sleep as the
+        // night cap (run first it would burn the restore against the clamp).
+        NeedsState expected = NeedsState.FullySatisfied();
+        float sleepRestorePerHour = ActionCatalog.Sleep.RestoreAmount / ActionCatalog.Sleep.TemporalCostHours;
+        for (int h = 0; h < 16; h++)
+        {
+            expected = NeedsEngine.DecayHour(expected, ActionCatalog.Idle.Environment, NeedsEngine.StressModifierFor(0f));
+        }
+        for (int h = 0; h < 8; h++)
+        {
+            expected.Restore(NeedType.Sleep, sleepRestorePerHour);
+            expected = NeedsEngine.DecayHour(expected, ActionCatalog.Sleep.Environment, NeedsEngine.StressModifierFor(0f));
+        }
+        planned.TryGetNeeds(AvatarId, out NeedsState actual);
+        bool blocksExact = true;
+        foreach (NeedType need in AllNeeds)
+        {
+            if (actual.Get(need) != expected.Get(need))
+            {
+                blocksExact = false;
+            }
+        }
+        Check("fully-allocated day matches the closed-form block math bit-exactly (sleep env + inert neutral)",
+            blocksExact, $"Sleep {actual.Sleep:F2}, Hunger {actual.Hunger:F2}");
+        Check("the plan is one-shot (consumed by the day it ran)", !planned.HasTodaySchedule);
+
+        // --- Guarantee 2b: a scripted week of manual plans + free-hour autopilot ---
+        // 19h planned (8 Sleep + 6 School + 2 Practice + 3 Game), 5h free for
+        // the autopilot to feed/wash the avatar. The bystander NPC in the same
+        // world must stay bit-identical to the no-avatar control world.
+        // Calm world (stress 0): the stress path is the 30-day check's job,
+        // and a ~1.7× stress decay multiplier would drown what this check
+        // measures — whether the free evening hours cover the basics at all.
+        (LifeSimManager weekControl, EventBus weekControlBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: false);
+        (LifeSimManager week, EventBus weekBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        week.AvatarSchoolAvailable = true;
+
+        var weekEndMin = new Dictionary<NeedType, float>();
+        foreach (NeedType need in AllNeeds)
+        {
+            weekEndMin[need] = NeedsEngine.MaxNeed;
+        }
+        bool oneShotAllWeek = true;
+        bool bystanderUntouched = true;
+        for (int day = 1; day <= 7; day++)
+        {
+            week.SetTodaySchedule(new DaySchedule(8, 6, 2, 3, 0));
+            weekBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            weekBus.DispatchPending();
+            weekControlBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            weekControlBus.DispatchPending();
+
+            oneShotAllWeek &= !week.HasTodaySchedule;
+            bystanderUntouched &= PersonStateIdentical(weekControl, week, BystanderId);
+            week.TryGetNeeds(AvatarId, out NeedsState avatarNeeds);
+            foreach (NeedType need in AllNeeds)
+            {
+                weekEndMin[need] = Math.Min(weekEndMin[need], avatarNeeds.Get(need));
+            }
+        }
+        Console.WriteLine("  Scripted-week avatar (8 Sleep/6 School/2 Practice/3 Game + 5 free) — worst END-OF-DAY value per need:");
+        foreach (NeedType need in AllNeeds)
+        {
+            Console.WriteLine($"    {need,-8} min {weekEndMin[need],6:F1}");
+        }
+        Console.WriteLine();
+
+        Check("scripted week: plan re-set daily, consumed daily", oneShotAllWeek);
+        Check("scripted week: bystander NPC in the same world stays bit-identical to the no-avatar control",
+            bystanderUntouched);
+        // End-of-day (post-night-cap) state is the "does the plan work" bar:
+        // Sleep must end every day restored well clear of critical (the 8h
+        // block's whole point), and Hygiene must stay off-critical via
+        // free-hour Showers (passive Hygiene floors at 0 by 72h — staying up
+        // proves the evening autopilot washed the avatar). Hunger is
+        // DELIBERATELY unasserted: one evening Eat (+45) cannot outrun the
+        // ~100/day hunger decay under a 19h-committed plan, so a heavy
+        // schedule genuinely starves the avatar — a real, disclosed tuning
+        // reality for 8a/9d (meal access on Work/School blocks), not an
+        // engine defect. Social/Fitness likewise ride unasserted.
+        Check("scripted week: every day ends with Sleep well restored (night cap did its job)",
+            weekEndMin[NeedType.Sleep] > 2f * NeedsEngine.CriticalThreshold,
+            $"worst end-of-day Sleep {weekEndMin[NeedType.Sleep]:F1}");
+        Check("scripted week: Hygiene stays off-critical all week (evening autopilot Showers happened)",
+            weekEndMin[NeedType.Hygiene] > NeedsEngine.CriticalThreshold,
+            $"worst end-of-day Hygiene {weekEndMin[NeedType.Hygiene]:F1}");
+        // Blocks never spend; only autopilot actions do (Eat $12, Socialize
+        // $40). Falling funds are therefore exact proof the free evening
+        // hours ran the utility loop rather than idling silently.
+        week.TryGetFunds(AvatarId, out double weekEndFunds);
+        Check("scripted week: avatar funds fell (free-hour autopilot really acted — blocks themselves never spend)",
+            weekEndFunds < SeedFunds, $"{SeedFunds:F0} -> {weekEndFunds:F0}");
+    }
+
+    /// <summary>Two-person world for the clock checks: avatar + bystander, both stress-seeded, optionally avatar-marked.</summary>
+    private static (LifeSimManager, EventBus) NewClockWorld(
+        string avatarId, string bystanderId, double funds, float stress, bool markAvatar)
+    {
+        var bus = new EventBus();
+        var manager = new LifeSimManager();
+        manager.Seed(new[] { new NpcSeed(avatarId, funds), new NpcSeed(bystanderId, funds) });
+        manager.SetStress(avatarId, stress);
+        manager.SetStress(bystanderId, stress);
+        if (markAvatar)
+        {
+            manager.SetAvatar(avatarId);
+        }
+        manager.AttachTo(bus);
+        return (manager, bus);
+    }
+
+    /// <summary>Float-exact needs + stress + funds equality for one person across two managers.</summary>
+    private static bool PersonStateIdentical(LifeSimManager a, LifeSimManager b, string playerId)
+    {
+        a.TryGetNeeds(playerId, out NeedsState needsA);
+        b.TryGetNeeds(playerId, out NeedsState needsB);
+        foreach (NeedType need in AllNeeds)
+        {
+            if (needsA.Get(need) != needsB.Get(need))
+            {
+                return false;
+            }
+        }
+        a.TryGetStress(playerId, out float stressA);
+        b.TryGetStress(playerId, out float stressB);
+        a.TryGetFunds(playerId, out double fundsA);
+        b.TryGetFunds(playerId, out double fundsB);
+        return stressA == stressB && fundsA == fundsB;
+    }
+
+    private static bool Throws(Action action)
+    {
+        try
+        {
+            action();
+            return false;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
     }
 
     // ------------------------------------------------------------------

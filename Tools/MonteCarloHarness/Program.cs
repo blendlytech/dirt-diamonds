@@ -66,6 +66,7 @@ internal static class Program
         string lineageFailScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineagefail_{Guid.NewGuid():N}.db");
         string lineageEdgeScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineageedge_{Guid.NewGuid():N}.db");
         string conceptionScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_conception_{Guid.NewGuid():N}.db");
+        string tierScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_tier_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -82,6 +83,7 @@ internal static class Program
             RunLineageFailureSuite(schemaPath, lineageFailScratchPath);
             RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
             RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
+            RunTierLadderSuite(schemaPath, tierScratchPath);
         }
         catch (Exception ex)
         {
@@ -115,6 +117,12 @@ internal static class Program
                 TryDelete(lineage);
                 TryDelete(lineage + "-wal");
                 TryDelete(lineage + "-shm");
+            }
+            foreach (string variant in new[] { tierScratchPath, tierScratchPath + ".ref" })
+            {
+                TryDelete(variant);
+                TryDelete(variant + "-wal");
+                TryDelete(variant + "-shm");
             }
         }
 
@@ -264,7 +272,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v6", db.GetSchemaVersion() == 6, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v7", db.GetSchemaVersion() == 7, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -813,7 +821,7 @@ internal static class Program
         var micro = new MicroGame(db, baseball);
         micro.Initialize();
         var career = new CareerManager(
-            db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 9));
+            db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 9));
         career.AttachTo(bus);
 
         // ---- avatar creation ----
@@ -848,7 +856,7 @@ internal static class Program
 
         // A second manager restores the same avatar from Game_State (boot path).
         var rebooted = new CareerManager(
-            db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 10));
+            db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 10));
         Check("existing save reboots into the same avatar", rebooted.LoadExistingAvatar()
             && rebooted.AvatarPlayerId == career.AvatarPlayerId && rebooted.AvatarTeamId == avatarTeam);
 
@@ -1660,7 +1668,7 @@ internal static class Program
             league.Initialize();
             var micro = new MicroGame(db, baseball);
             micro.Initialize();
-            var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 40));
+            var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 40));
 
             career.CreateAvatar("Founder", "Line", teamId: 4, new PlayerRatingsRow
             {
@@ -1781,7 +1789,7 @@ internal static class Program
             league.AttachTo(bus);
             var micro = new MicroGame(db, baseball);
             micro.Initialize();
-            var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 60));
+            var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 60));
             career.AttachTo(bus);
 
             // ---- generation 1: an elite founder (drift math needs a high anchor) ----
@@ -1948,7 +1956,7 @@ internal static class Program
             league.Initialize();
             var micro = new MicroGame(db, baseball);
             micro.Initialize();
-            var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 61));
+            var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 61));
 
             bool loaded = career.LoadExistingAvatar();
             gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long gen);
@@ -1988,7 +1996,7 @@ internal static class Program
         league.Initialize();
         var micro = new MicroGame(db, baseball);
         micro.Initialize();
-        var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 70));
+        var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 70));
 
         career.CreateAvatar("Last", "Line", teamId: 5, new PlayerRatingsRow
         {
@@ -2091,7 +2099,7 @@ internal static class Program
         league.Initialize();
         var micro = new MicroGame(db, baseball);
         micro.Initialize();
-        var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 80));
+        var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 80));
 
         career.CreateAvatar("Glass", "Cannon", teamId: 1, new PlayerRatingsRow
         {
@@ -2203,7 +2211,7 @@ internal static class Program
         league.Initialize();
         var micro = new MicroGame(db, baseball);
         micro.Initialize();
-        var career = new CareerManager(db, players, baseball, gameState, state, league, micro, new RngState(MicroSeed + 90));
+        var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 90));
 
         var bus = new EventBus();
         career.AttachTo(bus);
@@ -2336,6 +2344,199 @@ internal static class Program
             && heirIds.All(id => candidates.Any(c => c.HeirId == id))
             && heirIds.Contains(outcome.HeirId!),
             $"{candidates.Count} candidates, picked {(outcome.HeirId is null ? "none" : outcome.HeirId[..8] + "…")}");
+    }
+
+    // ------------------------------------------------------------------
+    // 13. Phase 9a tier ladder: 6-tier world-gen, per-tier environments
+    //     (docs/design/tier_league_environments.md §2/§4/§5)
+    // ------------------------------------------------------------------
+
+    /// <summary>One tier's §4 acceptance band (design doc tier_league_environments.md).</summary>
+    private readonly record struct TierBand(
+        double AvgLo, double AvgHi, double ObpLo, double ObpHi, double SlgLo, double SlgHi,
+        double KLo, double KHi, double BbLo, double BbHi, double HrLo, double HrHi,
+        double RgLo, double RgHi);
+
+    // §4 table verbatim; the MLB row is the shipped Phase 3 §8 band and
+    // doubles as the 9a regression guard on the calibrated core.
+    private static readonly TierBand[] TierBands =
+    {
+        new(.296, .316, .379, .399, .493, .523, .177, .207, .109, .129, .034, .042, 6.4, 8.0), // HS
+        new(.284, .304, .364, .384, .473, .503, .184, .214, .103, .123, .033, .041, 5.8, 7.1), // College
+        new(.272, .292, .348, .368, .453, .483, .190, .220, .097, .117, .032, .040, 5.3, 6.5), // MinorA
+        new(.260, .280, .334, .354, .434, .464, .197, .227, .091, .111, .030, .039, 4.9, 5.9), // MinorAA
+        new(.248, .268, .319, .339, .415, .445, .203, .233, .085, .105, .029, .037, 4.5, 5.4), // MinorAAA
+        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.2, 4.8), // MLB (§8)
+    };
+
+    private static void RunTierLadderSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 9a tier ladder: 6-tier world, per-tier environments (design doc §2/§4/§5) ---");
+
+        // ---- §5 HS resolver fixture: all-50 roster after the HS shift ----
+        TierRatingDeltas hs = TierEffects.For(LeagueTier.HS);
+        var hsBatter = new BatterRatings(
+            TierEffects.Shift(50, hs.BatPower), TierEffects.Shift(50, hs.BatContact),
+            TierEffects.Shift(50, hs.BatDiscipline), pedActive: false);
+        var hsPitcher = new PitcherRatings(
+            TierEffects.Shift(50, hs.PitStuff), TierEffects.Shift(50, hs.PitControl), 50);
+        Span<double> hsProbs = stackalloc double[AtBatResolver.OutcomeCount];
+        AtBatResolver.ComputeProbabilities(in hsBatter, in hsPitcher, TierEffects.Shift(50, hs.Defense), hsProbs);
+        double[] hsExpected = { 0.41916, 0.19193, 0.11920, 0.17275, 0.05447, 0.00443, 0.03805 };
+        bool hsFixtureOk = true;
+        for (int o = 0; o < AtBatResolver.OutcomeCount; o++)
+        {
+            hsFixtureOk &= Math.Abs(hsProbs[o] - hsExpected[o]) <= 6e-5;
+        }
+        Check("§5 HS fixture: all-50 roster after the HS shift reproduces the doc's 7-outcome vector",
+            hsFixtureOk,
+            $"p=[{hsProbs[0]:F5} {hsProbs[1]:F5} {hsProbs[2]:F5} {hsProbs[3]:F5} {hsProbs[4]:F5} {hsProbs[5]:F5} {hsProbs[6]:F5}]");
+
+        // ---- §2 MLB contract: the MLB delta vector is exactly zero ----
+        TierRatingDeltas mlb = TierEffects.For(LeagueTier.MLB);
+        Check("§2 MLB contract: delta vector all-zero, Shift(r, 0) is the identity over 0–100",
+            mlb.BatPower == 0 && mlb.BatContact == 0 && mlb.BatDiscipline == 0
+            && mlb.PitStuff == 0 && mlb.PitControl == 0 && mlb.Defense == 0
+            && Enumerable.Range(0, 101).All(r => TierEffects.Shift(r, 0) == r));
+
+        // ---- 6-tier flat world + a same-seed MLB-only reference world ----
+        string referencePath = scratchPath + ".ref";
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+        var tierGenRng = new RngState(LeagueSeed + 1);
+        bool tiersSeeded = LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref tierGenRng);
+        bool secondSkipped = !LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref tierGenRng);
+
+        bool tierCountsOk = baseball.CountTeams() == 6 * LeagueSimulator.TeamCount;
+        var tierRoster = new List<RosterPlayerRow>();
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            tierCountsOk &= baseball.CountTeamsInTier((LeagueTier)t) == LeagueSimulator.TeamCount;
+            tierCountsOk &= baseball.LoadRosterByTier((LeagueTier)t, tierRoster)
+                == LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
+        }
+        var globalRoster = new List<RosterPlayerRow>();
+        Check("EnsureTierLeagues seeds 5 missing tiers once (idempotent): 48 teams, 8 + full 9+5+3 per tier",
+            tiersSeeded && secondSkipped && tierCountsOk
+            && baseball.LoadRoster(globalRoster) == 6 * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam,
+            $"teams={baseball.CountTeams()} roster={globalRoster.Count}");
+
+        // One season, all six sims on the same bus/clock. The MLB sim's seed is
+        // shared with the reference world below, so its season must come out
+        // bit-identical — the "9a moved nothing in the calibrated core" guard.
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var gameState = new GameStateQueries(db);
+        var clock = new TimeManager(db, gameState, state, bus);
+        clock.Initialize(StartYear);
+        var normalizer = new StatsNormalizer(db, baseball);
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            var tierSim = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed + (ulong)t), (LeagueTier)t);
+            tierSim.Initialize();
+            tierSim.AttachTo(bus);
+        }
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+        Check("6-tier season: integrity ok, no FK violations, no open batch",
+            !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+
+        // ---- §4 per-tier bands + strictly monotone ladder ----
+        Span<double> avgByTier = stackalloc double[LeagueDirectory.TierCount];
+        Span<double> rgByTier = stackalloc double[LeagueDirectory.TierCount];
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            var tier = (LeagueTier)t;
+            LeagueBattingTotals bat = baseball.LoadLeagueBattingTotals(StartYear, tier);
+            LeaguePitchingTotals pit = baseball.LoadLeaguePitchingTotals(StartYear, tier);
+            long hits = bat.H;
+            long singles = hits - bat.Doubles - bat.Triples - bat.Hr;
+            long tb = singles + 2 * bat.Doubles + 3 * bat.Triples + 4 * bat.Hr;
+            double avg = (double)hits / bat.Ab;
+            double obp = (double)(hits + bat.Bb) / bat.Pa;
+            double slg = (double)tb / bat.Ab;
+            double kRate = (double)bat.So / bat.Pa;
+            double bbRate = (double)bat.Bb / bat.Pa;
+            double hrRate = (double)bat.Hr / bat.Pa;
+            double runsPerTeamGame = (double)pit.Er / pit.Gs;
+            avgByTier[t] = avg;
+            rgByTier[t] = runsPerTeamGame;
+
+            Console.WriteLine($"  {tier,-8} {avg:.000}/{obp:.000}/{slg:.000}  K% {kRate:P1}  BB% {bbRate:P1}  " +
+                $"HR/PA {hrRate:P1}  R/G {runsPerTeamGame:F2}  ({bat.Pa:N0} PA)");
+
+            TierBand band = TierBands[t];
+            Check($"§4 [{tier}] slash line inside the tier band",
+                avg >= band.AvgLo && avg <= band.AvgHi && obp >= band.ObpLo && obp <= band.ObpHi
+                && slg >= band.SlgLo && slg <= band.SlgHi,
+                $"{avg:.000}/{obp:.000}/{slg:.000}");
+            Check($"§4 [{tier}] K/BB/HR rates and R/G inside the tier band",
+                kRate >= band.KLo && kRate <= band.KHi && bbRate >= band.BbLo && bbRate <= band.BbHi
+                && hrRate >= band.HrLo && hrRate <= band.HrHi
+                && runsPerTeamGame >= band.RgLo && runsPerTeamGame <= band.RgHi,
+                $"K {kRate:P1} BB {bbRate:P1} HR {hrRate:P1} R/G {runsPerTeamGame:F2}");
+        }
+        bool monotone = true;
+        for (int t = 1; t < LeagueDirectory.TierCount; t++)
+        {
+            monotone &= avgByTier[t] < avgByTier[t - 1] && rgByTier[t] < rgByTier[t - 1];
+        }
+        Check("tier ladder is strictly monotone HS→MLB on AVG and R/G (legibility contract)", monotone,
+            $"AVG {avgByTier[0]:.000}→{avgByTier[5]:.000}  R/G {rgByTier[0]:F2}→{rgByTier[5]:F2}");
+
+        // ---- MLB bit-identity: the same seed in an MLB-only world ----
+        using var refDb = new DatabaseManager(referencePath);
+        refDb.InitializeSchema(schemaPath);
+        var refPlayers = new PlayerQueries(refDb);
+        var refBaseball = new BaseballQueries(refDb);
+        var refGenRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(refDb, refPlayers, refBaseball, ratingSpread: 0, ref refGenRng);
+        var refState = new GlobalState();
+        var refBus = new EventBus();
+        var refClock = new TimeManager(refDb, new GameStateQueries(refDb), refState, refBus);
+        refClock.Initialize(StartYear);
+        var refLeague = new LeagueSimulator(
+            refDb, refBaseball, new StatsNormalizer(refDb, refBaseball),
+            new RngState(SeasonSeed + (ulong)LeagueTier.MLB));
+        refLeague.Initialize();
+        refLeague.AttachTo(refBus);
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            refClock.AdvanceDay();
+            refBus.DispatchPending();
+        }
+        LeagueBattingTotals mlbBat = baseball.LoadLeagueBattingTotals(StartYear, LeagueTier.MLB);
+        LeaguePitchingTotals mlbPit = baseball.LoadLeaguePitchingTotals(StartYear, LeagueTier.MLB);
+        LeagueBattingTotals refBat = refBaseball.LoadLeagueBattingTotals(StartYear);
+        LeaguePitchingTotals refPit = refBaseball.LoadLeaguePitchingTotals(StartYear);
+        Check("MLB regression guard: the 6-tier world's MLB season is BIT-IDENTICAL to a same-seed MLB-only world",
+            mlbBat.Pa == refBat.Pa && mlbBat.Ab == refBat.Ab && mlbBat.H == refBat.H
+            && mlbBat.Doubles == refBat.Doubles && mlbBat.Triples == refBat.Triples && mlbBat.Hr == refBat.Hr
+            && mlbBat.Bb == refBat.Bb && mlbBat.So == refBat.So && mlbBat.Rbi == refBat.Rbi
+            && mlbPit.G == refPit.G && mlbPit.Gs == refPit.Gs && mlbPit.W == refPit.W && mlbPit.L == refPit.L
+            && mlbPit.OutsRecorded == refPit.OutsRecorded && mlbPit.HAllowed == refPit.HAllowed
+            && mlbPit.Er == refPit.Er && mlbPit.Bb == refPit.Bb && mlbPit.So == refPit.So,
+            $"PA {mlbBat.Pa}/{refBat.Pa} H {mlbBat.H}/{refBat.H} ER {mlbPit.Er}/{refPit.Er}");
+    }
+
+    /// <summary>
+    /// Wraps a single simulator as the directory CareerManager takes since 9a
+    /// (sparse registration is the harness contract — fixtures that exercise
+    /// one tier register just that sim).
+    /// </summary>
+    private static LeagueDirectory Solo(LeagueSimulator league)
+    {
+        var directory = new LeagueDirectory();
+        directory.Register(league);
+        return directory;
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

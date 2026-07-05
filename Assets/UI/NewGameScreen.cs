@@ -117,8 +117,10 @@ public sealed partial class NewGameScreen : Control
 
     private void PopulateTeams()
     {
+        // Phase 9a: every career starts on the bottom rung — the picker offers
+        // only the HS tier's teams; the ladder above is 9c's promotion arc.
         var teams = new System.Collections.Generic.List<TeamRow>();
-        GameManager.Instance!.Baseball.LoadAllTeams(teams);
+        GameManager.Instance!.Baseball.LoadTeamsByTier(LeagueTier.HS, teams);
         for (int i = 0; i < teams.Count; i++)
         {
             TeamRow team = teams[i];

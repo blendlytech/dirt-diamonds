@@ -19,11 +19,37 @@ public sealed class BaseballQueries
         "INSERT INTO Teams (team_id, city, name, abbreviation, league, division) VALUES " +
         "(@teamId, @city, @name, @abbreviation, @league, @division);";
 
+    // Tier rides a LEFT JOIN + COALESCE(…, 5) so a Teams row missing its
+    // Team_Tiers row degrades to MLB (the v6→v7 backfill value) instead of
+    // silently vanishing from the load. Plan validated on a v7 scratch db:
+    // Teams scan + Team_Tiers PK probe (No Blind Queries).
     private const string SqlSelectAllTeams =
-        "SELECT team_id, city, name, abbreviation, league, division FROM Teams ORDER BY team_id;";
+        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, COALESCE(tt.tier, 5) " +
+        "FROM Teams AS t LEFT JOIN Team_Tiers AS tt ON tt.team_id = t.team_id ORDER BY t.team_id;";
+
+    // Tier-scoped teams load (schema v7): one ladder tier's league, ordered by
+    // team_id so team indexes stay deterministic within the tier. INNER JOIN —
+    // a tier-scoped caller by definition wants only tiered teams.
+    private const string SqlSelectTeamsByTier =
+        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, tt.tier " +
+        "FROM Teams AS t JOIN Team_Tiers AS tt ON tt.team_id = t.team_id " +
+        "WHERE tt.tier = @tier ORDER BY t.team_id;";
 
     private const string SqlCountTeams =
         "SELECT COUNT(*) FROM Teams;";
+
+    private const string SqlCountTeamsInTier =
+        "SELECT COUNT(*) FROM Team_Tiers WHERE tier = @tier;";
+
+    private const string SqlUpsertTeamTier =
+        "INSERT INTO Team_Tiers (team_id, tier) VALUES (@teamId, @tier) " +
+        "ON CONFLICT (team_id) DO UPDATE SET tier = excluded.tier;";
+
+    // One team's ladder tier; the COALESCE-through-Teams shape distinguishes a
+    // missing team (no row → null scalar) from a merely untiered one (→ MLB).
+    private const string SqlSelectTeamTier =
+        "SELECT COALESCE(tt.tier, 5) FROM Teams AS t " +
+        "LEFT JOIN Team_Tiers AS tt ON tt.team_id = t.team_id WHERE t.team_id = @teamId;";
 
     private const string SqlUpsertRatings =
         "INSERT INTO Player_Ratings (player_id, is_pitcher, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding) VALUES " +
@@ -56,6 +82,21 @@ public sealed class BaseballQueries
         "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
         "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
         "WHERE p.team_id IS NOT NULL ORDER BY p.team_id, p.player_id;";
+
+    // Tier-scoped roster load (schema v7): the exact SqlSelectRoster shape
+    // narrowed to one ladder tier via a Team_Tiers probe — each per-tier
+    // LeagueSimulator bulk-loads only its own league instead of every player
+    // in the universe. Plan validated on a v7 scratch db: idx_players_team
+    // scan + Team_Tiers/Player_Ratings/Pitcher_Roles PK probes (No Blind
+    // Queries).
+    private const string SqlSelectRosterByTier =
+        "SELECT p.player_id, p.first_name, p.last_name, p.team_id, r.is_pitcher, COALESCE(pr.role, 0), " +
+        "r.bat_power, r.bat_contact, r.bat_discipline, " +
+        "r.pit_stuff, r.pit_control, r.pit_stamina, r.fielding " +
+        "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
+        "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE tt.tier = @tier ORDER BY p.team_id, p.player_id;";
 
     // Signable free agents for succession backfill (heir mechanics §5.4): the
     // roster join's exact column shape over the team_id IS NULL bucket (0
@@ -156,6 +197,31 @@ public sealed class BaseballQueries
         "whip = CASE WHEN outs_recorded > 0 THEN 3.0 * (bb + h_allowed) / outs_recorded ELSE 0.0 END " +
         "WHERE season_year = @seasonYear;";
 
+    // Tier-scoped rate denormalization (schema v7): the same set-based UPDATEs
+    // restricted to players CURRENTLY rostered in the tier, so six per-tier
+    // sims flushing on the same day each rewrite only their own league's rows
+    // instead of the whole season six times over. Free agents (team_id NULL)
+    // fall outside every tier — harmless, their counting stats can't move
+    // while unrostered. Plan validated on a v7 scratch db: Batting_Stats
+    // UNIQUE-index probe + LIST SUBQUERY over idx_players_team/Team_Tiers PK.
+    private const string SqlNormalizeBattingRatesTier =
+        "UPDATE Batting_Stats SET " +
+        "avg = CASE WHEN ab > 0 THEN CAST(h AS REAL) / ab ELSE 0.0 END, " +
+        "obp = CASE WHEN ab + bb > 0 THEN CAST(h + bb AS REAL) / (ab + bb) ELSE 0.0 END, " +
+        "slg = CASE WHEN ab > 0 THEN CAST(h + doubles + 2 * triples + 3 * hr AS REAL) / ab ELSE 0.0 END, " +
+        "ops = CASE WHEN ab + bb > 0 THEN CAST(h + bb AS REAL) / (ab + bb) ELSE 0.0 END " +
+        "    + CASE WHEN ab > 0 THEN CAST(h + doubles + 2 * triples + 3 * hr AS REAL) / ab ELSE 0.0 END " +
+        "WHERE season_year = @seasonYear AND player_id IN " +
+        "(SELECT p.player_id FROM Players AS p JOIN Team_Tiers AS tt ON tt.team_id = p.team_id WHERE tt.tier = @tier);";
+
+    private const string SqlNormalizePitchingRatesTier =
+        "UPDATE Pitching_Stats SET " +
+        "ip = outs_recorded / 3.0, " +
+        "era = CASE WHEN outs_recorded > 0 THEN 27.0 * er / outs_recorded ELSE 0.0 END, " +
+        "whip = CASE WHEN outs_recorded > 0 THEN 3.0 * (bb + h_allowed) / outs_recorded ELSE 0.0 END " +
+        "WHERE season_year = @seasonYear AND player_id IN " +
+        "(SELECT p.player_id FROM Players AS p JOIN Team_Tiers AS tt ON tt.team_id = p.team_id WHERE tt.tier = @tier);";
+
     private const string SqlLeagueBattingTotals =
         "SELECT COALESCE(SUM(pa), 0), COALESCE(SUM(ab), 0), COALESCE(SUM(h), 0), COALESCE(SUM(doubles), 0), " +
         "COALESCE(SUM(triples), 0), COALESCE(SUM(hr), 0), COALESCE(SUM(bb), 0), COALESCE(SUM(so), 0), " +
@@ -166,10 +232,39 @@ public sealed class BaseballQueries
         "COALESCE(SUM(outs_recorded), 0), COALESCE(SUM(h_allowed), 0), COALESCE(SUM(er), 0), " +
         "COALESCE(SUM(bb), 0), COALESCE(SUM(so), 0) FROM Pitching_Stats WHERE season_year = @seasonYear;";
 
+    // Tier-scoped league aggregates (schema v7): the run_monte_carlo_batch
+    // per-tier band checks sum one ladder tier's season by the players'
+    // CURRENT team's tier. Plan validated on a v7 scratch db: stats scan +
+    // Players/Team_Tiers PK probes.
+    private const string SqlLeagueBattingTotalsTier =
+        "SELECT COALESCE(SUM(bs.pa), 0), COALESCE(SUM(bs.ab), 0), COALESCE(SUM(bs.h), 0), COALESCE(SUM(bs.doubles), 0), " +
+        "COALESCE(SUM(bs.triples), 0), COALESCE(SUM(bs.hr), 0), COALESCE(SUM(bs.bb), 0), COALESCE(SUM(bs.so), 0), " +
+        "COALESCE(SUM(bs.rbi), 0) FROM Batting_Stats AS bs " +
+        "JOIN Players AS p ON p.player_id = bs.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE bs.season_year = @seasonYear AND tt.tier = @tier;";
+
+    private const string SqlLeaguePitchingTotalsTier =
+        "SELECT COALESCE(SUM(ps.g), 0), COALESCE(SUM(ps.gs), 0), COALESCE(SUM(ps.w), 0), COALESCE(SUM(ps.l), 0), " +
+        "COALESCE(SUM(ps.outs_recorded), 0), COALESCE(SUM(ps.h_allowed), 0), COALESCE(SUM(ps.er), 0), " +
+        "COALESCE(SUM(ps.bb), 0), COALESCE(SUM(ps.so), 0) FROM Pitching_Stats AS ps " +
+        "JOIN Players AS p ON p.player_id = ps.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE ps.season_year = @seasonYear AND tt.tier = @tier;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertTeam;
     private readonly SqliteCommand _selectAllTeams;
+    private readonly SqliteCommand _selectTeamsByTier;
     private readonly SqliteCommand _countTeams;
+    private readonly SqliteCommand _countTeamsInTier;
+    private readonly SqliteCommand _upsertTeamTier;
+    private readonly SqliteCommand _selectTeamTier;
+    private readonly SqliteCommand _selectRosterByTier;
+    private readonly SqliteCommand _normalizeBattingRatesTier;
+    private readonly SqliteCommand _normalizePitchingRatesTier;
+    private readonly SqliteCommand _leagueBattingTotalsTier;
+    private readonly SqliteCommand _leaguePitchingTotalsTier;
     private readonly SqliteCommand _upsertRatings;
     private readonly SqliteCommand _selectRatingsById;
     private readonly SqliteCommand _selectRoster;
@@ -197,7 +292,21 @@ public sealed class BaseballQueries
             ("@abbreviation", SqliteType.Text), ("@league", SqliteType.Text), ("@division", SqliteType.Text));
 
         _selectAllTeams = Acquire(SqlSelectAllTeams);
+        _selectTeamsByTier = Acquire(SqlSelectTeamsByTier, ("@tier", SqliteType.Integer));
         _countTeams = Acquire(SqlCountTeams);
+        _countTeamsInTier = Acquire(SqlCountTeamsInTier, ("@tier", SqliteType.Integer));
+        _upsertTeamTier = Acquire(SqlUpsertTeamTier,
+            ("@teamId", SqliteType.Integer), ("@tier", SqliteType.Integer));
+        _selectTeamTier = Acquire(SqlSelectTeamTier, ("@teamId", SqliteType.Integer));
+        _selectRosterByTier = Acquire(SqlSelectRosterByTier, ("@tier", SqliteType.Integer));
+        _normalizeBattingRatesTier = Acquire(SqlNormalizeBattingRatesTier,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer));
+        _normalizePitchingRatesTier = Acquire(SqlNormalizePitchingRatesTier,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer));
+        _leagueBattingTotalsTier = Acquire(SqlLeagueBattingTotalsTier,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer));
+        _leaguePitchingTotalsTier = Acquire(SqlLeaguePitchingTotalsTier,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer));
 
         _upsertRatings = Acquire(SqlUpsertRatings,
             ("@playerId", SqliteType.Text), ("@isPitcher", SqliteType.Integer),
@@ -287,6 +396,25 @@ public sealed class BaseballQueries
     {
         destination.Clear();
         using SqliteDataReader reader = _db.ExecuteReader(_selectAllTeams);
+        ReadTeamRows(reader, destination);
+        return destination.Count;
+    }
+
+    /// <summary>
+    /// Loads one ladder tier's teams (schema v7), ordered by team_id — the
+    /// per-tier sims' team-index order is deterministic within the tier.
+    /// </summary>
+    public int LoadTeamsByTier(LeagueTier tier, List<TeamRow> destination)
+    {
+        destination.Clear();
+        _selectTeamsByTier.Parameters["@tier"].Value = (int)tier;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectTeamsByTier);
+        ReadTeamRows(reader, destination);
+        return destination.Count;
+    }
+
+    private static void ReadTeamRows(SqliteDataReader reader, List<TeamRow> destination)
+    {
         while (reader.Read())
         {
             destination.Add(new TeamRow
@@ -297,12 +425,45 @@ public sealed class BaseballQueries
                 Abbreviation = reader.GetString(3),
                 League = reader.IsDBNull(4) ? null : reader.GetString(4),
                 Division = reader.IsDBNull(5) ? null : reader.GetString(5),
+                Tier = (LeagueTier)reader.GetInt32(6),
             });
         }
-        return destination.Count;
     }
 
     public int CountTeams() => Convert.ToInt32(_db.ExecuteScalar(_countTeams) ?? 0);
+
+    public int CountTeamsInTier(LeagueTier tier)
+    {
+        _countTeamsInTier.Parameters["@tier"].Value = (int)tier;
+        return Convert.ToInt32(_db.ExecuteScalar(_countTeamsInTier) ?? 0);
+    }
+
+    /// <summary>Sets a team's ladder tier (schema v7). World-gen writes one row per team.</summary>
+    public void UpsertTeamTier(int teamId, LeagueTier tier)
+    {
+        SqliteParameterCollection p = _upsertTeamTier.Parameters;
+        p["@teamId"].Value = teamId;
+        p["@tier"].Value = (int)tier;
+        _db.ExecuteNonQuery(_upsertTeamTier);
+    }
+
+    /// <summary>
+    /// One team's ladder tier — false when the team itself does not exist. A
+    /// team missing only its Team_Tiers row reads as MLB, matching the v6→v7
+    /// backfill (and <see cref="LoadAllTeams"/>'s COALESCE).
+    /// </summary>
+    public bool TryGetTeamTier(int teamId, out LeagueTier tier)
+    {
+        _selectTeamTier.Parameters["@teamId"].Value = teamId;
+        object? result = _db.ExecuteScalar(_selectTeamTier);
+        if (result is null)
+        {
+            tier = default;
+            return false;
+        }
+        tier = (LeagueTier)Convert.ToInt32(result);
+        return true;
+    }
 
     // ------------------------------------------------------------------
     // Ratings & roster
@@ -363,6 +524,26 @@ public sealed class BaseballQueries
     {
         destination.Clear();
         using SqliteDataReader reader = _db.ExecuteReader(_selectRoster);
+        ReadRosterRows(reader, destination);
+        return destination.Count;
+    }
+
+    /// <summary>
+    /// Tier-scoped variant of <see cref="LoadRoster"/> (schema v7): every
+    /// rostered, baseball-active player whose team plays in <paramref name="tier"/>,
+    /// same (team_id, player_id) order. Each per-tier sim's one up-front load.
+    /// </summary>
+    public int LoadRosterByTier(LeagueTier tier, List<RosterPlayerRow> destination)
+    {
+        destination.Clear();
+        _selectRosterByTier.Parameters["@tier"].Value = (int)tier;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectRosterByTier);
+        ReadRosterRows(reader, destination);
+        return destination.Count;
+    }
+
+    private static void ReadRosterRows(SqliteDataReader reader, List<RosterPlayerRow> destination)
+    {
         while (reader.Read())
         {
             destination.Add(new RosterPlayerRow
@@ -382,7 +563,6 @@ public sealed class BaseballQueries
                 Fielding = reader.GetInt32(12),
             });
         }
-        return destination.Count;
     }
 
     /// <summary>
@@ -399,25 +579,7 @@ public sealed class BaseballQueries
         p["@minHealth"].Value = minHealth;
         destination.Clear();
         using SqliteDataReader reader = _db.ExecuteReader(_selectFreeAgents);
-        while (reader.Read())
-        {
-            destination.Add(new RosterPlayerRow
-            {
-                PlayerId = reader.GetString(0),
-                FirstName = reader.GetString(1),
-                LastName = reader.GetString(2),
-                TeamId = reader.GetInt32(3),
-                IsPitcher = reader.GetInt64(4) != 0,
-                Role = (PitcherRole)reader.GetInt32(5),
-                BatPower = reader.GetInt32(6),
-                BatContact = reader.GetInt32(7),
-                BatDiscipline = reader.GetInt32(8),
-                PitStuff = reader.GetInt32(9),
-                PitControl = reader.GetInt32(10),
-                PitStamina = reader.GetInt32(11),
-                Fielding = reader.GetInt32(12),
-            });
-        }
+        ReadRosterRows(reader, destination);
         return destination.Count;
     }
 
@@ -599,15 +761,60 @@ public sealed class BaseballQueries
         return _db.ExecuteNonQuery(_normalizePitchingRates);
     }
 
+    /// <summary>Tier-scoped variant (schema v7): rewrites only rows of players currently rostered in the tier.</summary>
+    public int NormalizeBattingRates(int seasonYear, LeagueTier tier)
+    {
+        SqliteParameterCollection p = _normalizeBattingRatesTier.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        return _db.ExecuteNonQuery(_normalizeBattingRatesTier);
+    }
+
+    /// <summary>Tier-scoped variant (schema v7): rewrites only rows of players currently rostered in the tier.</summary>
+    public int NormalizePitchingRates(int seasonYear, LeagueTier tier)
+    {
+        SqliteParameterCollection p = _normalizePitchingRatesTier.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        return _db.ExecuteNonQuery(_normalizePitchingRatesTier);
+    }
+
     // ------------------------------------------------------------------
     // League aggregates (validation harness / future standings UI)
     // ------------------------------------------------------------------
+
+    /// <summary>Tier-scoped variant (schema v7): one ladder tier's season sums, by the players' current team's tier.</summary>
+    public LeagueBattingTotals LoadLeagueBattingTotals(int seasonYear, LeagueTier tier)
+    {
+        SqliteParameterCollection p = _leagueBattingTotalsTier.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        using SqliteDataReader reader = _db.ExecuteReader(_leagueBattingTotalsTier);
+        reader.Read();
+        return ReadBattingTotals(reader);
+    }
+
+    /// <summary>Tier-scoped variant (schema v7): one ladder tier's season sums, by the players' current team's tier.</summary>
+    public LeaguePitchingTotals LoadLeaguePitchingTotals(int seasonYear, LeagueTier tier)
+    {
+        SqliteParameterCollection p = _leaguePitchingTotalsTier.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        using SqliteDataReader reader = _db.ExecuteReader(_leaguePitchingTotalsTier);
+        reader.Read();
+        return ReadPitchingTotals(reader);
+    }
 
     public LeagueBattingTotals LoadLeagueBattingTotals(int seasonYear)
     {
         _leagueBattingTotals.Parameters["@seasonYear"].Value = seasonYear;
         using SqliteDataReader reader = _db.ExecuteReader(_leagueBattingTotals);
         reader.Read();
+        return ReadBattingTotals(reader);
+    }
+
+    private static LeagueBattingTotals ReadBattingTotals(SqliteDataReader reader)
+    {
         return new LeagueBattingTotals
         {
             Pa = reader.GetInt64(0),
@@ -627,6 +834,11 @@ public sealed class BaseballQueries
         _leaguePitchingTotals.Parameters["@seasonYear"].Value = seasonYear;
         using SqliteDataReader reader = _db.ExecuteReader(_leaguePitchingTotals);
         reader.Read();
+        return ReadPitchingTotals(reader);
+    }
+
+    private static LeaguePitchingTotals ReadPitchingTotals(SqliteDataReader reader)
+    {
         return new LeaguePitchingTotals
         {
             G = reader.GetInt64(0),

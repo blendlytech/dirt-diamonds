@@ -106,12 +106,23 @@ public sealed class LeagueSimulator
 
     private int[] _teamIds = Array.Empty<int>();
 
-    public LeagueSimulator(DatabaseManager db, BaseballQueries queries, StatsNormalizer normalizer, RngState rng)
+    /// <summary>
+    /// The ladder tier this instance simulates (Phase 9a). One simulator per
+    /// tier; each bulk-loads only its own 8-team league and bakes its tier's
+    /// <see cref="TierEffects"/> deltas into the rating arrays at Initialize.
+    /// Defaults to MLB so every pre-9a construction site (and harness fixture)
+    /// keeps its exact behavior — the MLB delta vector is all-zero by contract.
+    /// </summary>
+    public LeagueTier Tier { get; }
+
+    public LeagueSimulator(DatabaseManager db, BaseballQueries queries, StatsNormalizer normalizer, RngState rng,
+        LeagueTier tier = LeagueTier.MLB)
     {
         _db = db;
         _queries = queries;
         _normalizer = normalizer;
         _rng = rng;
+        Tier = tier;
         // Allocate the handler delegates once so Attach/Detach never churn.
         _onDayAdvanced = OnDayAdvanced;
         _onSeasonRolledOver = OnSeasonRolledOver;
@@ -140,15 +151,16 @@ public sealed class LeagueSimulator
     public void Initialize()
     {
         var teams = new List<TeamRow>(TeamCount);
-        _queries.LoadAllTeams(teams);
+        _queries.LoadTeamsByTier(Tier, teams);
         if (teams.Count != TeamCount)
         {
             throw new InvalidOperationException(
-                $"League requires exactly {TeamCount} teams; found {teams.Count}. Run LeagueGenerator first.");
+                $"League tier {Tier} requires exactly {TeamCount} teams; found {teams.Count}. " +
+                "Run LeagueGenerator (and EnsureTierLeagues) first.");
         }
 
         var rosterRows = new List<RosterPlayerRow>(TeamCount * RosterSizePerTeam);
-        _queries.LoadRoster(rosterRows);
+        _queries.LoadRosterByTier(Tier, rosterRows);
         _roster = rosterRows.ToArray();
 
         var pedIds = new List<string>();
@@ -183,6 +195,13 @@ public sealed class LeagueSimulator
         Span<int> rotationCount = stackalloc int[TeamCount];
         Span<int> fieldingSum = stackalloc int[TeamCount];
 
+        // Phase 9a: the tier's league-environment deltas bake into the rating
+        // arrays here, once — the per-PA hot path is untouched, and rivalry/PED
+        // effects layer on top of the tier-shifted values exactly as they
+        // layered on the raw ones. MLB's vector is all-zero, so an MLB world's
+        // arrays are bit-identical to the pre-tier code.
+        TierRatingDeltas tierDeltas = TierEffects.For(Tier);
+
         for (int i = 0; i < slots; i++)
         {
             ref readonly RosterPlayerRow row = ref _roster[i];
@@ -195,8 +214,13 @@ public sealed class LeagueSimulator
             _slotByPlayerId.Add(row.PlayerId, i);
             bool ped = pedSet.Contains(row.PlayerId);
             _pedActive[i] = ped;
-            _batterRatings[i] = new BatterRatings((byte)row.BatPower, (byte)row.BatContact, (byte)row.BatDiscipline, ped);
-            _pitcherRatings[i] = new PitcherRatings((byte)row.PitStuff, (byte)row.PitControl, (byte)row.PitStamina);
+            _batterRatings[i] = new BatterRatings(
+                TierEffects.Shift(row.BatPower, tierDeltas.BatPower),
+                TierEffects.Shift(row.BatContact, tierDeltas.BatContact),
+                TierEffects.Shift(row.BatDiscipline, tierDeltas.BatDiscipline), ped);
+            _pitcherRatings[i] = new PitcherRatings(
+                TierEffects.Shift(row.PitStuff, tierDeltas.PitStuff),
+                TierEffects.Shift(row.PitControl, tierDeltas.PitControl), (byte)row.PitStamina);
 
             if (row.IsPitcher)
             {
@@ -228,8 +252,10 @@ public sealed class LeagueSimulator
                     $"Team {teams[t].TeamId} ({teams[t].Abbreviation}) has {lineupCount[t]}/{LineupSize} " +
                     $"position players and {rotationCount[t]}/{RotationSize} starters — cannot field a season.");
             }
-            // §3: team defense = mean fielding of the lineup, rounded.
-            _teamDefense[t] = (byte)((fieldingSum[t] + LineupSize / 2) / LineupSize);
+            // §3: team defense = mean fielding of the lineup, rounded, then
+            // tier-shifted (9a — a zero delta is the exact pre-tier value).
+            _teamDefense[t] = TierEffects.Shift(
+                (fieldingSum[t] + LineupSize / 2) / LineupSize, tierDeltas.Defense);
         }
 
         _initialized = true;
@@ -590,8 +616,9 @@ public sealed class LeagueSimulator
         }
 
         // Rates are denormalized after the counting-stat batch, in the
-        // normalizer's own transaction.
-        _normalizer.NormalizeSeason(seasonYear);
+        // normalizer's own transaction — tier-scoped (9a) so six sims flushing
+        // the same day each rewrite only their own league's rows.
+        _normalizer.NormalizeSeason(seasonYear, Tier);
 
         Array.Clear(_batting);
         Array.Clear(_pitching);

@@ -189,10 +189,19 @@ public sealed class MicroGame
         }
         _teamCount = teams.Count;
         _teamIds = new int[_teamCount];
+        // Phase 9a: the micro-sim stays global (it hosts whichever tier the
+        // avatar plays in), so tier environment deltas bake PER TEAM here —
+        // each player shifted by their own team's tier at load, the same
+        // load-time baking LeagueSimulator does per instance. An attended HS
+        // game therefore plays in the HS environment the macro-sim calibrates,
+        // and the §11 macro/micro consistency holds tier by tier by
+        // construction. MLB (and every pre-v7 world) is all-zero deltas.
+        var teamTiers = new LeagueTier[_teamCount];
         var teamIndexById = new Dictionary<int, int>(_teamCount);
         for (int t = 0; t < _teamCount; t++)
         {
             _teamIds[t] = teams[t].TeamId;
+            teamTiers[t] = teams[t].Tier;
             teamIndexById.Add(teams[t].TeamId, t);
         }
 
@@ -260,8 +269,14 @@ public sealed class MicroGame
 
             bool ped = pedSet.Contains(row.PlayerId);
             _pedActive[i] = ped;
-            _batterRatings[i] = new BatterRatings((byte)row.BatPower, (byte)row.BatContact, (byte)row.BatDiscipline, ped);
-            _pitcherRatings[i] = new PitcherRatings((byte)row.PitStuff, (byte)row.PitControl, (byte)row.PitStamina);
+            TierRatingDeltas tierDeltas = TierEffects.For(teamTiers[team]);
+            _batterRatings[i] = new BatterRatings(
+                TierEffects.Shift(row.BatPower, tierDeltas.BatPower),
+                TierEffects.Shift(row.BatContact, tierDeltas.BatContact),
+                TierEffects.Shift(row.BatDiscipline, tierDeltas.BatDiscipline), ped);
+            _pitcherRatings[i] = new PitcherRatings(
+                TierEffects.Shift(row.PitStuff, tierDeltas.PitStuff),
+                TierEffects.Shift(row.PitControl, tierDeltas.PitControl), (byte)row.PitStamina);
 
             if (row.IsPitcher)
             {
@@ -307,7 +322,11 @@ public sealed class MicroGame
                     $"{bullpenCount[t]}/{LeagueSimulator.BullpenSize} relievers — cannot host an attended game " +
                     "(did LeagueGenerator.EnsureV4 run?).");
             }
-            _teamDefense[t] = (byte)((fieldingSum[t] + LeagueSimulator.LineupSize / 2) / LeagueSimulator.LineupSize);
+            // Mean-then-shift, the exact formula LeagueSimulator bakes, so the
+            // same team carries the same defense byte in both sims.
+            _teamDefense[t] = TierEffects.Shift(
+                (fieldingSum[t] + LeagueSimulator.LineupSize / 2) / LeagueSimulator.LineupSize,
+                TierEffects.For(teamTiers[t]).Defense);
         }
 
         _initialized = true;

@@ -165,7 +165,7 @@ public sealed class CareerManager
     private readonly BaseballQueries _baseball;
     private readonly GameStateQueries _gameState;
     private readonly GlobalState _state;
-    private readonly LeagueSimulator _league;
+    private readonly LeagueDirectory _leagues;
     private readonly MicroGame _micro;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
     private readonly Action<SeasonRolledOverEvent> _onSeasonRolledOver;
@@ -267,14 +267,14 @@ public sealed class CareerManager
     public CareerManager(
         DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
         GameStateQueries gameState, GlobalState state,
-        LeagueSimulator league, MicroGame micro, RngState rng)
+        LeagueDirectory leagues, MicroGame micro, RngState rng)
     {
         _db = db;
         _players = players;
         _baseball = baseball;
         _gameState = gameState;
         _state = state;
-        _league = league;
+        _leagues = leagues;
         _micro = micro;
         _rng = rng;
         _onDayAdvanced = OnDayAdvanced;
@@ -346,7 +346,11 @@ public sealed class CareerManager
         string displacedId = FindDisplacedPlayer(teamId, displacedRole);
         string avatarId = Guid.NewGuid().ToString();
 
-        _league.FlushPending();
+        // 9a: the avatar's tier's sim is the one whose roster this mutates —
+        // resolve it before the flush so nothing in flight is lost to the
+        // reload. The other tiers' sims never see this team and stay warm.
+        LeagueSimulator league = ResolveLeagueFor(teamId);
+        league.FlushPending();
 
         _db.BeginBatch();
         try
@@ -388,9 +392,23 @@ public sealed class CareerManager
         }
 
         // Both sims re-bulk-load so their roster arrays include the avatar.
-        _league.Initialize();
+        league.Initialize();
         _micro.Initialize();
         ActivateAvatar(avatarId, teamId);
+    }
+
+    /// <summary>
+    /// The macro-sim owning <paramref name="teamId"/>'s league (9a): tier from
+    /// the team's Team_Tiers row, sim from the directory. Loud on a missing
+    /// team — a career can only ever attach to a real, tiered franchise.
+    /// </summary>
+    private LeagueSimulator ResolveLeagueFor(int teamId)
+    {
+        if (!_baseball.TryGetTeamTier(teamId, out LeagueTier tier))
+        {
+            throw new InvalidOperationException($"Team {teamId} has no Teams row — cannot resolve its league tier.");
+        }
+        return _leagues.Get(tier);
     }
 
     /// <summary>
@@ -499,8 +517,13 @@ public sealed class CareerManager
 
     private void ActivateAvatar(string avatarId, int teamId)
     {
+        // 9a: the schedule index must be TIER-relative — LeagueSchedule's
+        // round-robin runs 0..7 WITHIN one league, so _teamIds holds only the
+        // avatar tier's teams (ordered by team_id, matching the tier sim's own
+        // team-index order) and _avatarTeamIndex indexes into that.
+        LeagueSimulator league = ResolveLeagueFor(teamId);
         var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
-        _baseball.LoadAllTeams(teams);
+        _baseball.LoadTeamsByTier(league.Tier, teams);
         _teamIds = new int[teams.Count];
         for (int t = 0; t < teams.Count; t++)
         {
@@ -510,7 +533,7 @@ public sealed class CareerManager
         _avatarTeamIndex = Array.IndexOf(_teamIds, teamId);
         if (_avatarTeamIndex < 0)
         {
-            throw new InvalidOperationException($"Avatar team_id {teamId} has no Teams row.");
+            throw new InvalidOperationException($"Avatar team_id {teamId} has no Teams row in tier {league.Tier}.");
         }
         _avatarSlot = _micro.FindRosterSlot(avatarId);
         if (_avatarSlot == MicroGame.NoHuman)
@@ -520,7 +543,13 @@ public sealed class CareerManager
         }
         _avatarPlayerId = avatarId;
         _avatarTeamId = teamId;
-        _league.SetAttendedTeam(teamId);
+        league.SetAttendedTeam(teamId);
+
+        // 9b: announce the activation so the Life-sim bridge can re-point the
+        // daily clock (creation and succession both pass through here). Null
+        // _bus = not attached yet (boot-time LoadExistingAvatar, headless
+        // fixtures) — the boot path syncs directly instead.
+        _bus?.Publish(new AvatarChangedEvent(avatarId, teamId));
     }
 
     /// <summary>
@@ -707,7 +736,11 @@ public sealed class CareerManager
             backfillId = FindStrongestFreeAgent(retireeRole, excludeId: heirId);
         }
 
-        _league.FlushPending();
+        // 9a: succession stays within the family franchise's tier — the heir
+        // inherits the retiree's team, so the retiree-team sim is the one
+        // whose roster mutates (a cross-tier handoff is 9c's promotion seam).
+        LeagueSimulator league = ResolveLeagueFor(teamId);
+        league.FlushPending();
 
         _db.BeginBatch();
         try
@@ -747,7 +780,7 @@ public sealed class CareerManager
 
         // Identical to the tail of CreateAvatar: both sims re-bulk-load, then
         // the avatar slot/team/attended filter re-resolve against the new roster.
-        _league.Initialize();
+        league.Initialize();
         _micro.Initialize();
         ActivateAvatar(heirId, teamId);
     }

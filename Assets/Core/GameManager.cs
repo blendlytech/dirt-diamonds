@@ -44,7 +44,9 @@ public sealed partial class GameManager : Node
     public PlayerQueries Players { get; private set; } = null!;
     public NeedsQueries Needs { get; private set; } = null!;
     public BaseballQueries Baseball { get; private set; } = null!;
-    public LeagueSimulator League { get; private set; } = null!;
+
+    /// <summary>The tier → macro-sim map (Phase 9a): one LeagueSimulator per ladder tier.</summary>
+    public LeagueDirectory Leagues { get; private set; } = null!;
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
@@ -110,30 +112,46 @@ public sealed partial class GameManager : Node
         // v3→v4 save top-up: invents the relievers the DDL backfill cannot
         // (roles/arsenals for migrated pitchers come from the schema script).
         LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        // v6→v7 world top-up (Phase 9a): seeds the five ladder tiers below MLB
+        // on both migrated saves and fresh worlds. No-op once they exist.
+        LeagueGenerator.EnsureTierLeagues(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
 
-        // Split the wall-clock stream before the league copies it, so the two
-        // sims never replay each other's draws.
+        // Split the wall-clock stream before the sims copy it, so no two
+        // consumers ever replay each other's draws.
         var careerRng = new RngState(rng.NextUInt64() | 1UL);
-        League = new LeagueSimulator(_database, Baseball, new StatsNormalizer(_database, Baseball), rng);
-        League.Initialize();
-        League.AttachTo(Events);
 
-        // Career driver (Phase 5): micro-sim + avatar wiring. On a save with
-        // an avatar, the attended team is reclaimed from the macro sim here;
-        // otherwise the career lies dormant until the UI creates one. The
-        // career handler is attached AFTER the league's so an attended day is
-        // resolved once the rest of the league has played.
-        Micro = new MicroGame(_database, Baseball);
-        Micro.Initialize();
         // Rivalry ledger before any RelationshipGraph publications are pumped
         // (dispatch is deferred, so subscribing anywhere inside _Ready is
         // early enough — the first _Process pump delivers boot publications).
         _rivalryLedger = new RivalryLedger();
         _rivalryLedger.AttachTo(Events);
-        League.Rivalries = _rivalryLedger;
+
+        // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
+        // own 8-team league, each with its own forked rng stream. All six run
+        // the same day loop off the bus; the avatar's tier is resolved by
+        // CareerManager through the directory.
+        Leagues = new LeagueDirectory();
+        var normalizer = new StatsNormalizer(_database, Baseball);
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            var tierSim = new LeagueSimulator(
+                _database, Baseball, normalizer, new RngState(rng.NextUInt64() | 1UL), (LeagueTier)t);
+            tierSim.Initialize();
+            tierSim.Rivalries = _rivalryLedger;
+            tierSim.AttachTo(Events);
+            Leagues.Register(tierSim);
+        }
+
+        // Career driver (Phase 5): micro-sim + avatar wiring. On a save with
+        // an avatar, the attended team is reclaimed from its tier's macro sim
+        // here; otherwise the career lies dormant until the UI creates one.
+        // The career handler is attached AFTER the leagues' so an attended day
+        // is resolved once the rest of the league has played.
+        Micro = new MicroGame(_database, Baseball);
+        Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
         Career = new CareerManager(
-            _database, Players, Baseball, GameState, State, League, Micro, careerRng);
+            _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
         // The real game pauses succession for the heir-reveal/choice UI;
         // headless/harness callers construct their own CareerManager and
         // never touch this flag, so their autopilot pick is unaffected.
@@ -189,6 +207,16 @@ public sealed partial class GameManager : Node
         // preserves per-channel subscriber order). Own batch transaction — Life-sim
         // writes never share the calendar tick's (database_rules.md).
         Events.Subscribe<DayAdvancedEvent>(PersistLifeSimNeeds);
+
+        // 9b daily-clock bridge: keep the Life sim's avatar pointer and the
+        // tier-derived school gate in sync. Creation/succession arrive via the
+        // bus; the boot-time load activated before the career was attached, so
+        // that one syncs directly here.
+        Events.Subscribe<AvatarChangedEvent>(OnAvatarChanged);
+        if (avatarLoaded)
+        {
+            SyncLifeSimAvatar(Career.AvatarPlayerId, Career.AvatarTeamId);
+        }
 
         // Phase 6: relationship graph — hydrate every Relationships row, then
         // attach; AttachTo announces the hydrated rivalries so the baseball
@@ -303,6 +331,29 @@ public sealed partial class GameManager : Node
                 $"No gritty event content batches found under '{GrittyEventContentDir}'.");
         }
         return documents;
+    }
+
+    private void OnAvatarChanged(AvatarChangedEvent e) =>
+        SyncLifeSimAvatar(e.AvatarPlayerId, e.TeamId);
+
+    /// <summary>
+    /// Points the Life sim's daily clock at the (possibly new) avatar and
+    /// projects its team's tier into the 9b school gate. A mid-session avatar
+    /// (fresh creation, or an heir born this session) has no boot-time seed,
+    /// so its Players row is projected in first — Seed is idempotent for ids
+    /// already tracked. Rare path (avatar changes), so the tiny seed array is
+    /// outside the zero-GC mandate's hot loops.
+    /// </summary>
+    private void SyncLifeSimAvatar(string avatarId, int teamId)
+    {
+        if (Players.TryGetById(avatarId, out PlayerRow row))
+        {
+            LifeSim.Seed(new[] { new NpcSeed(avatarId, row.Funds) });
+        }
+        LifeSim.SetAvatar(avatarId);
+        LifeSim.AvatarSchoolAvailable =
+            Baseball.TryGetTeamTier(teamId, out LeagueTier tier)
+            && tier is LeagueTier.HS or LeagueTier.College;
     }
 
     private void PersistLifeSimNeeds(DayAdvancedEvent _)

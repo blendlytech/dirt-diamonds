@@ -283,8 +283,32 @@ CREATE TABLE IF NOT EXISTS Life_Stress (
     stress    REAL NOT NULL DEFAULT 0 CHECK (stress BETWEEN 0 AND 100)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Team_Tiers — schema v7. The career-ladder dimension (Phase 9a): one row per
+-- team naming which league tier it plays in. tier mirrors the C# LeagueTier
+-- enum: 0 = HS, 1 = College, 2 = MinorA, 3 = MinorAA, 4 = MinorAAA, 5 = MLB.
+-- A separate table rather than an ALTER on Teams so the v6→v7 migration stays
+-- purely additive and this script remains the whole migration — ALTER TABLE
+-- ADD COLUMN is not idempotent, the same reasoning as Pitcher_Roles/Life_Stress.
+-- The PK doubles as the hot-path index for the tier-scoped roster join
+-- (Players.team_id → Team_Tiers.team_id probe); the tier filter itself scans
+-- at most 48 rows and needs no index of its own.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Team_Tiers (
+    team_id INTEGER PRIMARY KEY REFERENCES Teams(team_id) ON DELETE CASCADE,
+    tier    INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 5)
+) STRICT;
+
+-- v6→v7 backfill: every pre-v7 team was the one MLB-calibrated league, so
+-- existing teams migrate as tier 5 (MLB). INSERT OR IGNORE keeps this
+-- idempotent on every boot; post-v7 code (LeagueGenerator/EnsureTierLeagues)
+-- writes tier rows explicitly at team creation, so this only ever touches
+-- migrated saves — a fresh world's Teams table is empty when this runs.
+INSERT OR IGNORE INTO Team_Tiers (team_id, tier)
+    SELECT team_id, 5 FROM Teams;
+
 COMMIT;
 
--- Schema version 6 — adds Life_Stress (purely additive, no backfill needed;
--- see comment on the table above). Bump with every migration.
-PRAGMA user_version = 6;
+-- Schema version 7 — adds Team_Tiers (purely additive; existing teams backfill
+-- as MLB, see comment on the table above). Bump with every migration.
+PRAGMA user_version = 7;

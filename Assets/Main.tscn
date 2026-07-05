@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/Main.cs" id="1_main"]
 [ext_resource type="PackedScene" path="res://Assets/UI/NewGameScreen.tscn" id="2_newgame"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://Assets/UI/EventChoiceScreen.tscn" id="4_eventchoice"]
 [ext_resource type="PackedScene" path="res://Assets/UI/SuccessionScreen.tscn" id="5_succession"]
 [ext_resource type="PackedScene" path="res://Assets/UI/BirthNotificationScreen.tscn" id="6_birthnotify"]
+[ext_resource type="PackedScene" path="res://Assets/UI/ScheduleScreen.tscn" id="7_scheduleplan"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -19,3 +20,5 @@ AttendedGameScreenScene = ExtResource("3_attended")
 [node name="SuccessionScreen" parent="." instance=ExtResource("5_succession")]
 
 [node name="BirthNotificationScreen" parent="." instance=ExtResource("6_birthnotify")]
+
+[node name="ScheduleScreen" parent="." instance=ExtResource("7_scheduleplan")]

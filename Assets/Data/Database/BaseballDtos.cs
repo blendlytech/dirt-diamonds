@@ -22,7 +22,26 @@ public enum PitchType : byte
     Offspeed = 2,
 }
 
-/// <summary>Row DTO for the Teams table (schema v3). Mirrors columns one-to-one.</summary>
+/// <summary>
+/// Team_Tiers.tier values (schema v7) — the career-ladder dimension. The
+/// numeric order IS the ladder order (Phase 9c's promotion gates climb it),
+/// and arrays index by (int)tier, so the order is load-bearing.
+/// </summary>
+public enum LeagueTier : byte
+{
+    HS = 0,
+    College = 1,
+    MinorA = 2,
+    MinorAA = 3,
+    MinorAAA = 4,
+    MLB = 5,
+}
+
+/// <summary>
+/// Row DTO for the Teams table (schema v3) plus the team's ladder tier
+/// (schema v7, joined from Team_Tiers; a missing tier row reads as MLB,
+/// matching the v6→v7 backfill).
+/// </summary>
 public struct TeamRow
 {
     public int TeamId;
@@ -31,6 +50,7 @@ public struct TeamRow
     public string Abbreviation;
     public string? League;
     public string? Division;
+    public LeagueTier Tier;
 }
 
 /// <summary>Row DTO for Player_Ratings (schema v3). 0–100 scale, 50 = league average.</summary>

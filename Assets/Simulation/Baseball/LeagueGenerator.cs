@@ -26,6 +26,92 @@ public static class LeagueGenerator
         ("Cascadia", "Wolves", "CAS", "West"),
     };
 
+    // Ladder-tier team seeds (Phase 9a). One 8-team league per tier below MLB;
+    // MLB keeps TeamSeeds above (its ids and generation order are the frozen
+    // M1 prefix). Indexed by (int)LeagueTier for tiers 0–4.
+    private static readonly (string City, string Name, string Abbr, string Division)[][] TierTeamSeeds =
+    {
+        new[] // HS
+        {
+            ("Crestwood", "Cardinals", "CRW", "East"),
+            ("Lakeside", "Longhorns", "LKS", "East"),
+            ("Fairview", "Falcons", "FRV", "East"),
+            ("Oak Ridge", "Owls", "OKR", "East"),
+            ("Pinehurst", "Panthers", "PNH", "West"),
+            ("Westfield", "Warhawks", "WSF", "West"),
+            ("Summit", "Spartans", "SMT", "West"),
+            ("Riverton", "Rams", "RVT", "West"),
+        },
+        new[] // College
+        {
+            ("Ashford State", "Admirals", "ASH", "East"),
+            ("Blue Valley", "Bison", "BLV", "East"),
+            ("Carverton Tech", "Chargers", "CVT", "East"),
+            ("Dunmore", "Dukes", "DNM", "East"),
+            ("Eastlake", "Eagles", "ELU", "West"),
+            ("Fort Garland", "Grizzlies", "FTG", "West"),
+            ("Hollis", "Hawks", "HOL", "West"),
+            ("Midland", "Mavericks", "MAM", "West"),
+        },
+        new[] // MinorA
+        {
+            ("Cedar Rapids", "Colts", "CDR", "East"),
+            ("Twin Forks", "Trout", "TWF", "East"),
+            ("Palmetto", "Pelicans", "PLM", "East"),
+            ("Bozeman", "Bighorns", "BZM", "East"),
+            ("Yuba City", "Yellowjackets", "YBC", "West"),
+            ("Galena", "Gliders", "GLN", "West"),
+            ("Norwood", "Nailers", "NRW", "West"),
+            ("Sablewood", "Stallions", "SBW", "West"),
+        },
+        new[] // MinorAA
+        {
+            ("Hattiesburg", "Hornets", "HTB", "East"),
+            ("Roanoke", "Ridgerunners", "RNK", "East"),
+            ("Laredo", "Lobos", "LRD", "East"),
+            ("Chattahoochee", "Catfish", "CHT", "East"),
+            ("Provo", "Prospectors", "PRV", "West"),
+            ("Sioux Bend", "Storm", "SXB", "West"),
+            ("Kannapolis", "Knights", "KNP", "West"),
+            ("Modesto", "Mustangs", "MDS", "West"),
+        },
+        new[] // MinorAAA
+        {
+            ("Albuquerque", "Aviators", "ABQ", "East"),
+            ("Toledo", "Titans", "TLD", "East"),
+            ("Fresno", "Firebirds", "FRS", "East"),
+            ("Omaha", "Outlaws", "OMA", "East"),
+            ("Scranton", "Steamers", "SCR", "West"),
+            ("Tacoma", "Thunder", "TAC", "West"),
+            ("Charlotte", "Crowns", "CLT", "West"),
+            ("Durham", "Drakes", "DRM", "West"),
+        },
+    };
+
+    /// <summary>Teams.league label per tier (display flavor, not logic).</summary>
+    private static readonly string[] TierLeagueLabels = { "HS", "CBL", "A", "AA", "AAA", "DL" };
+
+    // Tier-appropriate generated ages: Age = min + NextInt(span). MLB keeps the
+    // frozen 21 + NextInt(16); the ladder gets younger as it descends. NPCs do
+    // not yet age OUT of a tier (promotion is 9c) — a disclosed 9a artifact.
+    private static readonly (int Min, int Span)[] TierAgeRolls =
+    {
+        (15, 4),  // HS: 15–18
+        (18, 4),  // College: 18–21
+        (19, 6),  // MinorA: 19–24
+        (20, 7),  // MinorAA: 20–26
+        (21, 8),  // MinorAAA: 21–28
+        (21, 16), // MLB: 21–36 — the frozen v3 roll, never change
+    };
+
+    /// <summary>
+    /// First team_id of a tier's 8-team block minus one: MLB keeps the frozen
+    /// ids 1–8; lower tiers sit in readable hundred-blocks (HS 101–108,
+    /// College 201–208, … MinorAAA 501–508).
+    /// </summary>
+    internal static int TierTeamIdBase(LeagueTier tier) =>
+        tier == LeagueTier.MLB ? 0 : ((int)tier + 1) * 100;
+
     private static readonly string[] FirstNames =
     {
         "Jack", "Marcus", "Tyler", "Andre", "Luis", "Pedro", "Kenji", "Sam",
@@ -84,6 +170,9 @@ public static class LeagueGenerator
                     League = "DL",
                     Division = division,
                 });
+                // Schema v7: this league is the MLB rung. Writing the tier row
+                // draws no rng, so the frozen M1 generation prefix is untouched.
+                baseball.UpsertTeamTier(teamId, LeagueTier.MLB);
 
                 // Frozen v3 prefix: 9 + 5 per team, main-stream draws only.
                 for (int slot = 0; slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize; slot++)
@@ -198,9 +287,107 @@ public static class LeagueGenerator
     /// nobody of the vacated role. A pitcher still needs
     /// <see cref="GenerateArsenal"/> called after.
     /// </summary>
+    /// <summary>
+    /// v6→v7 world top-up (Phase 9a), the same migration-function pattern as
+    /// <see cref="EnsureV4"/>: seeds every ladder tier below MLB that has no
+    /// teams yet — one 8-team league per tier, each team fully staffed
+    /// 9 + 5 + 3 with arsenals, tier-appropriate ages — in one batch. Runs on
+    /// both migrated saves (which have only the backfilled-MLB league) and
+    /// fresh worlds (right after <see cref="GenerateIfEmpty"/>). No-op, and no
+    /// rng draws, once every tier is populated — so existing harness fixtures
+    /// that never call this keep their MLB-only worlds byte-for-byte.
+    ///
+    /// The uniform 9+5+3 roster shape across HS→MLB is a deliberate, disclosed
+    /// 9a simplification: LineupSize/RotationSize/BullpenSize are compile-time
+    /// constants shared by both sims' array shapes.
+    /// </summary>
+    public static bool EnsureTierLeagues(
+        DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
+        int ratingSpread, ref RngState rng)
+    {
+        if (baseball.CountTeams() == 0)
+        {
+            return false; // no world yet — GenerateIfEmpty owns fresh worlds
+        }
+
+        Span<bool> tierMissing = stackalloc bool[LeagueDirectory.TierCount];
+        bool anyMissing = false;
+        for (int t = 0; t < (int)LeagueTier.MLB; t++)
+        {
+            tierMissing[t] = baseball.CountTeamsInTier((LeagueTier)t) == 0;
+            anyMissing |= tierMissing[t];
+        }
+        if (!anyMissing)
+        {
+            return false;
+        }
+
+        db.BeginBatch();
+        try
+        {
+            for (int t = 0; t < (int)LeagueTier.MLB; t++)
+            {
+                if (!tierMissing[t])
+                {
+                    continue;
+                }
+                var tier = (LeagueTier)t;
+                (int minAge, int ageSpan) = TierAgeRolls[t];
+                var pitchers = new List<(string Id, int Stuff)>(
+                    TierTeamSeeds[t].Length * (LeagueSimulator.RotationSize + LeagueSimulator.BullpenSize));
+
+                for (int s = 0; s < TierTeamSeeds[t].Length; s++)
+                {
+                    (string city, string name, string abbr, string division) = TierTeamSeeds[t][s];
+                    int teamId = TierTeamIdBase(tier) + s + 1;
+                    baseball.InsertTeam(new TeamRow
+                    {
+                        TeamId = teamId,
+                        City = city,
+                        Name = name,
+                        Abbreviation = abbr,
+                        League = TierLeagueLabels[t],
+                        Division = division,
+                    });
+                    baseball.UpsertTeamTier(teamId, tier);
+
+                    for (int slot = 0; slot < LeagueSimulator.RosterSizePerTeam; slot++)
+                    {
+                        PitcherRole role =
+                            slot < LeagueSimulator.LineupSize ? PitcherRole.None
+                            : slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize ? PitcherRole.Starter
+                            : PitcherRole.Reliever;
+                        (string id, int stuff) = GeneratePlayer(
+                            players, baseball, teamId, role, ratingSpread, ref rng, minAge, ageSpan);
+                        if (role != PitcherRole.None)
+                        {
+                            pitchers.Add((id, stuff));
+                        }
+                    }
+                }
+                foreach ((string id, int stuff) in pitchers)
+                {
+                    GenerateArsenal(baseball, id, stuff, ratingSpread, ref rng);
+                }
+            }
+            db.CommitBatch();
+        }
+        catch
+        {
+            db.RollbackBatch();
+            throw;
+        }
+        return true;
+    }
+
+    /// <param name="minAge">Low end of the generated-age roll. The defaults are
+    /// the frozen v3 roll (21 + NextInt(16)) — every pre-9a caller keeps them;
+    /// EnsureTierLeagues passes the tier-appropriate window. The roll is one
+    /// NextInt draw either way, so the draw sequence shape never changes.</param>
+    /// <param name="ageSpan">Width of the generated-age roll.</param>
     internal static (string PlayerId, int PitStuff) GeneratePlayer(
         PlayerQueries players, BaseballQueries baseball, int teamId, PitcherRole role,
-        int ratingSpread, ref RngState rng)
+        int ratingSpread, ref RngState rng, int minAge = 21, int ageSpan = 16)
     {
         string playerId = NextGuid(ref rng);
         players.Insert(new PlayerRow
@@ -208,7 +395,7 @@ public static class LeagueGenerator
             PlayerId = playerId,
             FirstName = FirstNames[rng.NextInt(FirstNames.Length)],
             LastName = LastNames[rng.NextInt(LastNames.Length)],
-            Age = 21 + rng.NextInt(16),
+            Age = minAge + rng.NextInt(ageSpan),
             TeamId = teamId,
             Funds = 0,
             HealthCeiling = 100,

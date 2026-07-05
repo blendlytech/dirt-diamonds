@@ -48,6 +48,16 @@ public sealed class LifeSimManager
     // separately so a harness/log trace is reproducible. Doesn't affect any
     // individual NPC's correctness — NPCs never interact with each other.
     private readonly List<string> _order = new();
+
+    // Phase 9b daily clock: which tracked person is the player avatar, and the
+    // one-shot plan for today. With no plan set, the avatar days through the
+    // same TickHour autopilot as every NPC, bit-for-bit — the same
+    // default-autopilot contract CareerManager.AutopilotAttendedGames keeps
+    // for headless callers. A set plan is consumed by the day it runs;
+    // an unplanned tomorrow autopilots again (the pending-game-forfeit mirror).
+    private string? _avatarPlayerId;
+    private DaySchedule _todaySchedule;
+    private bool _hasTodaySchedule;
     private readonly ActionWeights _weights;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
     private readonly Action<StressImpulseEvent> _onStressImpulse;
@@ -62,6 +72,70 @@ public sealed class LifeSimManager
     }
 
     public int NpcCount => _order.Count;
+
+    // ------------------------------------------------------------------
+    // Avatar daily clock (Phase 9b)
+    // ------------------------------------------------------------------
+
+    /// <summary>The tracked person whose day the player can plan, or null (pure-NPC world).</summary>
+    public string? AvatarPlayerId => _avatarPlayerId;
+
+    /// <summary>
+    /// Whether School hours are schedulable — true only in the HS/College
+    /// tiers. The tier itself lives on the Baseball side of the wall; the
+    /// bridge (GameManager) projects it into this bool so this assembly stays
+    /// Baseball-free. Defaults false: no school unless somebody says so.
+    /// </summary>
+    public bool AvatarSchoolAvailable { get; set; }
+
+    /// <summary>
+    /// Points the daily clock at a tracked person (null clears it). Loud on an
+    /// untracked id — the bridge seeds the avatar before pointing at it. Any
+    /// pending plan is dropped: a succession heir starts on autopilot, never
+    /// on the retiree's leftover schedule.
+    /// </summary>
+    public void SetAvatar(string? playerId)
+    {
+        if (playerId is not null && !_npcs.ContainsKey(playerId))
+        {
+            throw new InvalidOperationException(
+                $"'{playerId}' is not a tracked life-sim person — seed it before making it the avatar.");
+        }
+        _avatarPlayerId = playerId;
+        _hasTodaySchedule = false;
+    }
+
+    public bool HasTodaySchedule => _hasTodaySchedule;
+
+    /// <summary>The plan awaiting the next day tick, when <see cref="HasTodaySchedule"/>.</summary>
+    public bool TryGetTodaySchedule(out DaySchedule schedule)
+    {
+        schedule = _todaySchedule;
+        return _hasTodaySchedule;
+    }
+
+    /// <summary>
+    /// Queues the avatar's plan for the next day tick, replacing any earlier
+    /// plan for that day. Throws when no avatar is set, and when the plan
+    /// includes School hours outside the HS/College tiers (the 9b gate).
+    /// </summary>
+    public void SetTodaySchedule(in DaySchedule schedule)
+    {
+        if (_avatarPlayerId is null)
+        {
+            throw new InvalidOperationException("No avatar is set — only the avatar's day can be planned.");
+        }
+        if (schedule.SchoolHours > 0 && !AvatarSchoolAvailable)
+        {
+            throw new InvalidOperationException(
+                "School hours are only schedulable in the HS/College tiers.");
+        }
+        _todaySchedule = schedule;
+        _hasTodaySchedule = true;
+    }
+
+    /// <summary>Drops the pending plan — the avatar's next day runs on autopilot.</summary>
+    public void ClearTodaySchedule() => _hasTodaySchedule = false;
 
     // Persistence bridge surface (design doc §11): GameManager reads this list plus
     // TryGetNeeds to bulk-persist, and calls SetNeeds to hydrate from a save on
@@ -184,10 +258,80 @@ public sealed class LifeSimManager
         for (int i = 0; i < _order.Count; i++)
         {
             NpcRuntime npc = _npcs[_order[i]];
+            // 9b: a planned avatar day runs its blocks instead of the
+            // autopilot; everyone else (and an unplanned avatar) days through
+            // the pre-9b loop unchanged.
+            if (_hasTodaySchedule && string.Equals(_order[i], _avatarPlayerId, StringComparison.Ordinal))
+            {
+                TickScheduledDay(npc, in _todaySchedule);
+                _hasTodaySchedule = false;
+                continue;
+            }
             for (int hour = 0; hour < HoursPerDay; hour++)
             {
                 TickHour(npc);
             }
+        }
+    }
+
+    /// <summary>
+    /// One player-planned day in a fixed canonical day order: the daytime
+    /// blocks (School → Practice → Game → Work), then the unallocated hours
+    /// on the standard autopilot (the evening), then Sleep as the night cap.
+    /// Sleep MUST run last: run first, an avatar sleeping from a full meter
+    /// wastes the whole restore against the 100-clamp and the meter drains
+    /// all day anyway (harness-measured: 8h-sleep day ending at Sleep 33.5).
+    /// Blocks are uninterruptible — the player's stated intent outranks the
+    /// crisis override for the skeleton (the stress-forces-the-avatar's-hand
+    /// rule can layer onto this seam later); free hours keep the full
+    /// TickHour behavior, override included.
+    /// </summary>
+    private void TickScheduledDay(NpcRuntime npc, in DaySchedule schedule)
+    {
+        // The plan preempts whatever autopilot action was mid-flight at
+        // midnight — the same abandon-now rule the crisis override applies.
+        npc.BusyHoursRemaining = 0;
+        npc.CurrentAction = NpcActionId.Idle;
+
+        // School/Practice are inert until 9d's development curves, Game is
+        // life-side inert (CareerManager owns the attended game), Work is
+        // inert until 8a's hustles plug in — each rides Idle's neutral
+        // definition so the future upgrade is a one-line definition swap.
+        TickBlockHours(npc, schedule.SchoolHours, in ActionCatalog.Idle);
+        TickBlockHours(npc, schedule.PracticeHours, in ActionCatalog.Idle);
+        TickBlockHours(npc, schedule.GameHours, in ActionCatalog.Idle);
+        TickBlockHours(npc, schedule.WorkHours, in ActionCatalog.Idle);
+
+        for (int hour = 0; hour < schedule.FreeHours; hour++)
+        {
+            TickHour(npc);
+        }
+
+        // Sleep is the one live block: per-hour restore at the catalog entry's
+        // own rate/environment, so tuning Sleep tunes both paths at once.
+        TickBlockHours(npc, schedule.SleepHours, in ActionCatalog.Sleep);
+    }
+
+    /// <summary>
+    /// Ticks one block's hours under its definition: the restore spreads
+    /// evenly per hour (an 8h Sleep block lands the same +80 the autopilot's
+    /// one-shot Sleep action grants), then the hour decays under the block's
+    /// environment and the live stress scalar, exactly like TickHour's tail.
+    /// </summary>
+    private static void TickBlockHours(NpcRuntime npc, int hours, in NpcActionDefinition def)
+    {
+        float restorePerHour = def.PrimaryNeed is not null && def.TemporalCostHours > 0f
+            ? def.RestoreAmount / def.TemporalCostHours
+            : 0f;
+        for (int hour = 0; hour < hours; hour++)
+        {
+            if (def.PrimaryNeed is NeedType need)
+            {
+                npc.Needs.Restore(need, restorePerHour);
+            }
+            npc.Needs = NeedsEngine.DecayHour(
+                npc.Needs, def.Environment, NeedsEngine.StressModifierFor(npc.Stress));
+            npc.Stress = Math.Max(MinStress, npc.Stress - StressRelaxationPerHour);
         }
     }
 
