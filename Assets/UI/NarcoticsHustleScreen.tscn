@@ -1,0 +1,125 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/NarcoticsHustleScreen.cs" id="1_narcotics"]
+
+[node name="NarcoticsHustleScreen" type="Control"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -220.0
+offset_right = 220.0
+offset_bottom = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+script = ExtResource("1_narcotics")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+text = "Narcotics Run"
+
+[node name="StatusLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="StartPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="BuyInRow" type="HBoxContainer" parent="Panel/Layout/StartPanel"]
+layout_mode = 2
+
+[node name="BuyInLabel" type="Label" parent="Panel/Layout/StartPanel/BuyInRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Buy-in $"
+
+[node name="BuyInSlider" type="HSlider" parent="Panel/Layout/StartPanel/BuyInRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 100
+max_value = 1000
+step = 10
+value = 100
+
+[node name="BuyInValueLabel" type="Label" parent="Panel/Layout/StartPanel/BuyInRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "100"
+
+[node name="CommitButton" type="Button" parent="Panel/Layout/StartPanel"]
+layout_mode = 2
+text = "Commit Buy-In"
+
+[node name="PostDropPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="CutRow" type="HBoxContainer" parent="Panel/Layout/PostDropPanel"]
+layout_mode = 2
+
+[node name="CutLabel" type="Label" parent="Panel/Layout/PostDropPanel/CutRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Cut factor"
+
+[node name="CutSlider" type="HSlider" parent="Panel/Layout/PostDropPanel/CutRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 2.5
+step = 0.1
+value = 1.0
+
+[node name="CutValueLabel" type="Label" parent="Panel/Layout/PostDropPanel/CutRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(40, 0)
+text = "1.0"
+
+[node name="CutButton" type="Button" parent="Panel/Layout/PostDropPanel"]
+layout_mode = 2
+text = "Cut Product"
+
+[node name="BankExitDropButton" type="Button" parent="Panel/Layout/PostDropPanel"]
+layout_mode = 2
+text = "Bank & Exit (sell unsold)"
+
+[node name="PostCutPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="HoldButton" type="Button" parent="Panel/Layout/PostCutPanel"]
+layout_mode = 2
+text = "Hold (safe)"
+
+[node name="EncroachButton" type="Button" parent="Panel/Layout/PostCutPanel"]
+layout_mode = 2
+text = "Encroach"
+
+[node name="TakeOverButton" type="Button" parent="Panel/Layout/PostCutPanel"]
+layout_mode = 2
+text = "Take Over"
+
+[node name="ResultPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="ResultLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="DoneButton" type="Button" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+text = "Done"

@@ -17,6 +17,11 @@ public enum NpcActionId
     // are deliberately NOT added to ActionCatalog.All/UtilityCalculator's scan.
     School = 8,
     LegalWork = 9,
+
+    // Schedule-block-only (Phase 8b) — the Work block's needs-drain definition
+    // when the avatar selected an interactive hustle (Narcotics/Fencing)
+    // instead of Legal Work. Also excluded from All/UtilityCalculator's scan.
+    HustleWork = 10,
 }
 
 // PrimaryNeed is null for actions that don't restore a tracked need directly
@@ -116,9 +121,18 @@ public static class ActionCatalog
         new(NpcActionId.LegalWork, NeedType.Hunger, 16f, 8f, -200.0, 0f, false,
             new EnvironmentalModifiers(hunger: 1f, sleep: 2f, hygiene: 1f, social: 1f, fitness: 1.8f));
 
+    // HustleWork (Phase 8b, hustles_narcotics_fencing.md §2): the SAME
+    // meal-access + needs drain as LegalWork — the Work block still costs the
+    // avatar the same hours/exertion regardless of which activity they picked
+    // — but FinancialCost = 0. The interactive hustle session (Narcotics/
+    // Fencing), not the tick, is where the money and risk move.
+    public static readonly NpcActionDefinition HustleWork =
+        new(NpcActionId.HustleWork, NeedType.Hunger, 16f, 8f, 0.0, 0f, false,
+            new EnvironmentalModifiers(hunger: 1f, sleep: 2f, hygiene: 1f, social: 1f, fitness: 1.8f));
+
     // Idle listed first: SelectAction's strict-greater-than tie-break means Idle
     // — the guaranteed always-affordable fallback — wins any exact utility tie.
-    // School/LegalWork deliberately absent — schedule-block-only (see above).
+    // School/LegalWork/HustleWork deliberately absent — schedule-block-only (see above).
     public static readonly NpcActionDefinition[] All =
     {
         Idle, Eat, Sleep, Shower, SocializeEvening, Workout, DrinkAlone, PickArgument,
@@ -136,6 +150,7 @@ public static class ActionCatalog
         NpcActionId.PickArgument => PickArgument,
         NpcActionId.School => School,
         NpcActionId.LegalWork => LegalWork,
+        NpcActionId.HustleWork => HustleWork,
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 }

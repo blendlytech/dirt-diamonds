@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
@@ -54,6 +55,18 @@ public sealed partial class GameManager : Node
 
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
+
+    /// <summary>Phase 8b Layer 2 orchestration — Narcotics/Fencing context building and resolution application.</summary>
+    public HustleService Hustles { get; private set; } = null!;
+
+    // Phase 8b: the avatar's selected Work activity for the planned day (§2) —
+    // GameManager-owned intent, mirroring the schedule bridge it already owns.
+    // One-shot like DaySchedule itself: reset to LegalWork once the day tick
+    // consumes it (or the plan is cleared before that happens).
+    private WorkActivity _plannedWorkActivity = WorkActivity.LegalWork;
+    private bool _plannedWorkHadHours;
+    private PendingHustleSession _pendingHustleSession;
+    private bool _hasPendingHustleSession;
 
     // Reused every day-tick persist so the handler doesn't allocate a fresh
     // array per calendar day (zero-GC mandate for the hot path).
@@ -236,6 +249,15 @@ public sealed partial class GameManager : Node
         Relationships.AttachTo(Events);
         Events.Subscribe<DayAdvancedEvent>(PersistRelationships);
 
+        // Phase 8b: Hustles Layer 2. Subscribed AFTER LifeSim's own
+        // DayAdvancedEvent handler (LifeSim.AttachTo above) so the day's Work
+        // block has already ticked — arming/forfeiting a session here always
+        // reflects that day's actual schedule, never a stale one.
+        Hustles = new HustleService(
+            _database, Players, GameState, Relationships, Events,
+            unchecked((ulong)System.Environment.TickCount64) ^ 0xD1A5D1A5D1A5D1A5UL);
+        Events.Subscribe<DayAdvancedEvent>(OnHustleDayAdvanced);
+
         // Phase 7: Gritty Events. Content loads from every batch file in the
         // Content folder (a new Sonnet batch is a dropped-in file); the applier
         // subscribes on the main pump; the dispatcher polls from its own
@@ -354,6 +376,69 @@ public sealed partial class GameManager : Node
         LifeSim.AvatarSchoolAvailable =
             Baseball.TryGetTeamTier(teamId, out LeagueTier tier)
             && tier is LeagueTier.HS or LeagueTier.College;
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 8b: Hustles Work-activity selection & pending session
+    // ------------------------------------------------------------------
+
+    public bool HasPendingHustleSession => _hasPendingHustleSession;
+
+    /// <summary>The interactive session waiting on the player, when <see cref="HasPendingHustleSession"/>.</summary>
+    public bool TryGetPendingHustleSession(out PendingHustleSession pending)
+    {
+        pending = _pendingHustleSession;
+        return _hasPendingHustleSession;
+    }
+
+    /// <summary>The Hustle screen calls this once its session resolves (deal/bust/walk/forfeit) to release the slot.</summary>
+    public void ClearPendingHustleSession() => _hasPendingHustleSession = false;
+
+    /// <summary>
+    /// The ScheduleScreen's Confirm path: submits the day's block allocation
+    /// AND which Work activity to run under it in one call, so the two are
+    /// always captured together (§2) — LifeSim only ever learns whether
+    /// today's Work block should use the HustleWork definition, never which
+    /// named hustle, keeping the Life↔Baseball/Economy wall intact.
+    /// </summary>
+    public void SubmitDaySchedule(in DaySchedule schedule, WorkActivity workActivity)
+    {
+        LifeSim.SetTodaySchedule(schedule);
+        LifeSim.AvatarWorkIsHustle = workActivity != WorkActivity.LegalWork;
+        _plannedWorkActivity = workActivity;
+        _plannedWorkHadHours = schedule.WorkHours > 0;
+    }
+
+    /// <summary>The ScheduleScreen's Clear path — drops the plan AND the activity selection together, so a stale selection can never arm a session for a day that ends up autopiloted.</summary>
+    public void ClearDaySchedule()
+    {
+        LifeSim.ClearTodaySchedule();
+        LifeSim.AvatarWorkIsHustle = false;
+        _plannedWorkActivity = WorkActivity.LegalWork;
+        _plannedWorkHadHours = false;
+    }
+
+    /// <summary>
+    /// Subscribed after LifeSim's own DayAdvancedEvent handler, so today's
+    /// Work block (if any) has already ticked. An unplayed pending session
+    /// forfeits to the design's plain "no-deal default" — unlike
+    /// CareerManager's autopilot-played game forfeit, a hustle forfeit needs
+    /// no resolution applied at all (§2: "no buy-in, no sale, zero reward,
+    /// zero added risk"), so this is just dropping the flag. Arms a fresh
+    /// session only when today's Work block actually ran an interactive
+    /// activity with hours committed to it.
+    /// </summary>
+    private void OnHustleDayAdvanced(DayAdvancedEvent e)
+    {
+        _hasPendingHustleSession = false;
+
+        if (_plannedWorkActivity != WorkActivity.LegalWork && _plannedWorkHadHours)
+        {
+            _pendingHustleSession = new PendingHustleSession(_plannedWorkActivity, e.Day);
+            _hasPendingHustleSession = true;
+        }
+        _plannedWorkActivity = WorkActivity.LegalWork;
+        _plannedWorkHadHours = false;
     }
 
     /// <summary>

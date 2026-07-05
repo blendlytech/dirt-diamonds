@@ -109,6 +109,16 @@ public sealed class LifeSimManager
     public bool AvatarSchoolAvailable { get; set; }
 
     /// <summary>
+    /// Phase 8b: whether today's Work block should tick under
+    /// <see cref="ActionCatalog.HustleWork"/> (an interactive Narcotics/
+    /// Fencing session is armed) instead of <see cref="ActionCatalog.LegalWork"/>
+    /// (the passive 8a payout, default false). GameManager owns the selection
+    /// — this assembly never sees the concept of "which hustle," only which
+    /// needs-drain definition to tick, keeping the wall intact.
+    /// </summary>
+    public bool AvatarWorkIsHustle { get; set; }
+
+    /// <summary>
     /// Points the daily clock at a tracked person (null clears it). Loud on an
     /// untracked id — the bridge seeds the avatar before pointing at it. Any
     /// pending plan is dropped: a succession heir starts on autopilot, never
@@ -352,7 +362,8 @@ public sealed class LifeSimManager
         TickBlockHours(npc, schedule.SchoolHours, in ActionCatalog.School);
         TickBlockHours(npc, schedule.PracticeHours, in ActionCatalog.Idle);
         TickBlockHours(npc, schedule.GameHours, in ActionCatalog.Idle);
-        TickBlockHours(npc, schedule.WorkHours, in ActionCatalog.LegalWork);
+        ref readonly NpcActionDefinition workDef = ref (AvatarWorkIsHustle ? ref ActionCatalog.HustleWork : ref ActionCatalog.LegalWork);
+        TickBlockHours(npc, schedule.WorkHours, in workDef);
 
         for (int hour = 0; hour < schedule.FreeHours; hour++)
         {

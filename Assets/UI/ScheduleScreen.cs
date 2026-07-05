@@ -1,5 +1,6 @@
 using System;
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
 using Godot;
@@ -51,6 +52,7 @@ public sealed partial class ScheduleScreen : Control
     private Label _gameValueLabel = null!;
     private HSlider _workSlider = null!;
     private Label _workValueLabel = null!;
+    private OptionButton _workActivityOption = null!;
 
     private Label _planStatusLabel = null!;
     private Label _freeHoursLabel = null!;
@@ -79,6 +81,7 @@ public sealed partial class ScheduleScreen : Control
         _gameValueLabel = GetNode<Label>("Panel/Layout/GameRow/GameValueLabel");
         _workSlider = GetNode<HSlider>("Panel/Layout/WorkRow/WorkSlider");
         _workValueLabel = GetNode<Label>("Panel/Layout/WorkRow/WorkValueLabel");
+        _workActivityOption = GetNode<OptionButton>("Panel/Layout/WorkActivityRow/WorkActivityOption");
 
         _planStatusLabel = GetNode<Label>("Panel/Layout/PlanStatusLabel");
         _freeHoursLabel = GetNode<Label>("Panel/Layout/FreeHoursLabel");
@@ -168,9 +171,10 @@ public sealed partial class ScheduleScreen : Control
         var schedule = new DaySchedule(
             (int)_sleepSlider.Value, (int)_schoolSlider.Value, (int)_practiceSlider.Value,
             (int)_gameSlider.Value, (int)_workSlider.Value);
+        var workActivity = (WorkActivity)_workActivityOption.Selected;
         try
         {
-            GameManager.Instance!.LifeSim.SetTodaySchedule(schedule);
+            GameManager.Instance!.SubmitDaySchedule(schedule, workActivity);
             _errorLabel.Visible = false;
         }
         catch (Exception ex)
@@ -182,7 +186,7 @@ public sealed partial class ScheduleScreen : Control
 
     private void OnClearPressed()
     {
-        GameManager.Instance!.LifeSim.ClearTodaySchedule();
+        GameManager.Instance!.ClearDaySchedule();
         _errorLabel.Visible = false;
     }
 }
