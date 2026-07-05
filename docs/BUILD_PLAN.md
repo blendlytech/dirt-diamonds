@@ -88,7 +88,7 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 ### 9a — Tier Schema + Multi-Tier Macro-Sim
 
-**Owner: Fable 5**
+**Owner:** Fable 5
 
 - Schema v7: add a `tier` dimension to `Teams` (HS, College, MinorA, MinorAA, MinorAAA, MLB).
 - Query-layer tier filters for `BaseballQueries`.
@@ -110,7 +110,7 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 ### 8a — Survival Economy + Legal Work
 
-**Owner: Sonnet 5**
+**Owner:** Sonnet 5
 
 - Recurring rent/food/gear drain on a calendar cadence, through `PlayerQueries.AdjustFunds`.
 - Legal Work becomes the first real Work-block payout (modest funds, energy/fitness drain).
@@ -118,13 +118,13 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 ### 8b — Narcotics (3-tier state machine) + Fencing Negotiation
 
-**Owner: Opus 4.8 designs, Sonnet 5 implements, Fable 5 reviews.**
+**Owner:** Opus 4.8 designs, Sonnet 5 implements, Fable 5 reviews.
 
 - Isolated Hustle scene nodes. Narcotics: Inventory Drop → Profit/Toxicity Cut → Territory Control. Fencing negotiation.
 
 ### 8c — Arrest / Injury / Suspension Risk Triad
 
-**Owner: Fable 5 (engine), Sonnet 5 (event content).**
+**Owner:** Fable 5 (engine), Sonnet 5 (event content).
 
 - Roster/availability mutation type for Gritty Events.
 - Arrest (jail time-skip), Injury (availability/rating hit), Suspension (`detection_risk` benching).
