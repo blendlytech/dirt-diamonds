@@ -1,0 +1,130 @@
+{
+  "//": "Phase 8c content batch (docs/design/roster_availability_triad.md §2), Sonnet 5. Keys the arrest/suspension/injury triad onto the `absence` consequence Fable 5 shipped in the same phase (Player_Absences/AvailabilityLedger) -- `absence` was missing from check_event_graph_integrity's vocabulary list, added in this same pass. Suspension is 3 tiers on detection_risk (60/80/90), each pairs `absence` with a detection_risk drawdown per §2's guidance table so a served tier cools below its own threshold; ordered highest-tier-first in this file (arrest, tier 3, tier 2, tier 1, injury) so the engine's 'one event per subject per day, first satisfied definition in file order wins' rule always escalates to the harshest applicable tier for a subject who clears more than one threshold at once, rather than the mildest. Arrest keys on the Hustle-system-written `narc_watchlist` flag -- documented engine-written, like `ped_active`, nothing in any content batch sets it -- plus a detection_risk floor; it also clears `narc_watchlist` on release (the case resolves) while planting `record_arrest` as a disclosed forward-hook flag for a future record/cascade pass, the same one-batch gap `syndicate_marked` had before syndicate_enforcers closed it. Injury keys on health_ceiling<50 per the doc -- broader than career_arc_events.json's existing narrative-only `injury_scare` at <40; the two are independent and both reachable, at most one fires per subject per day -- and deliberately does NOT add a rating debuff on top of the engine's automatic apply-time rust; its two choices trade absence length against a health_ceiling recovery bump, which pushes the automatic rust formula down as a side effect instead of hand-authoring one. Known cross-file interaction, disclosed not fixed: career_arc_events.json's `caught_juicing` (detection_risk>70) loads before this file alphabetically and can win the same-day one-event-per-subject slot over suspended_ped_test_flag/suspended_repeat_violation when both hold for the same subject -- the suspension just fires a later day, nothing goes unreachable.",
+  "events": [
+    {
+      "id": "narcotics_arrest",
+      "scope": "any",
+      "weight": 0.06,
+      "cooldown_days": 200,
+      "prompt": "The knock this time isn't a rival or a bookie -- it's the police, warrant in hand. The watchlist finally caught up.",
+      "prerequisites": [
+        { "flag_active": "narc_watchlist", "min_days_since": 5 },
+        { "field": "detection_risk", "op": ">=", "value": 80 }
+      ],
+      "choices": [
+        {
+          "id": "face_the_charges",
+          "autopilot_weight": 1,
+          "label": "Face the charges",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 30 },
+            { "type": "detection_risk", "amount": -50 },
+            { "type": "clear_flag", "flag": "narc_watchlist" },
+            { "type": "set_flag", "flag": "record_arrest" },
+            { "type": "stress", "amount": 30 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "suspended_lifetime_watch",
+      "scope": "any",
+      "weight": 0.1,
+      "cooldown_days": 150,
+      "prompt": "The league office doesn't send a letter this time -- they send a person. A third positive test means this one is out of your hands.",
+      "prerequisites": [
+        { "field": "detection_risk", "op": ">=", "value": 90 }
+      ],
+      "choices": [
+        {
+          "id": "serve_lifetime_watch_suspension",
+          "autopilot_weight": 1,
+          "label": "Serve the suspension",
+          "consequences": [
+            { "type": "absence", "reason": "suspension", "days": 14 },
+            { "type": "detection_risk", "amount": -50 },
+            { "type": "set_flag", "flag": "served_suspension" },
+            { "type": "stress", "amount": 20 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "suspended_repeat_violation",
+      "scope": "any",
+      "weight": 0.08,
+      "cooldown_days": 110,
+      "prompt": "A certified letter from the league office: the test came back dirty again, and this time it comes with games attached.",
+      "prerequisites": [
+        { "field": "detection_risk", "op": ">=", "value": 80 }
+      ],
+      "choices": [
+        {
+          "id": "serve_repeat_violation_suspension",
+          "autopilot_weight": 1,
+          "label": "Serve the suspension",
+          "consequences": [
+            { "type": "absence", "reason": "suspension", "days": 10 },
+            { "type": "detection_risk", "amount": -40 },
+            { "type": "set_flag", "flag": "served_suspension" },
+            { "type": "stress", "amount": 15 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "suspended_ped_test_flag",
+      "scope": "any",
+      "weight": 0.05,
+      "cooldown_days": 90,
+      "prompt": "A certified letter from the league office: the test came back dirty. It's your first one on record, so the ban is short -- but it's on the record now.",
+      "prerequisites": [
+        { "field": "detection_risk", "op": ">=", "value": 60 }
+      ],
+      "choices": [
+        {
+          "id": "serve_ped_test_flag_suspension",
+          "autopilot_weight": 1,
+          "label": "Serve the suspension",
+          "consequences": [
+            { "type": "absence", "reason": "suspension", "days": 6 },
+            { "type": "detection_risk", "amount": -30 },
+            { "type": "set_flag", "flag": "served_suspension" },
+            { "type": "stress", "amount": 10 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sidelined_by_injury",
+      "scope": "any",
+      "weight": 0.1,
+      "cooldown_days": 60,
+      "prompt": "The imaging comes back and the trainer doesn't sugarcoat it -- this one needs real time, not a day off and some tape.",
+      "prerequisites": [
+        { "field": "health_ceiling", "op": "<", "value": 50 }
+      ],
+      "choices": [
+        {
+          "id": "get_surgery",
+          "autopilot_weight": 1,
+          "label": "Get the surgery",
+          "consequences": [
+            { "type": "absence", "reason": "injury", "days": 21 },
+            { "type": "health_ceiling", "amount": 20 },
+            { "type": "stress", "amount": 15 }
+          ]
+        },
+        {
+          "id": "play_through_pain",
+          "autopilot_weight": 2,
+          "label": "Try to play through it",
+          "consequences": [
+            { "type": "absence", "reason": "injury", "days": 7 },
+            { "type": "stress", "amount": 25 }
+          ]
+        }
+      ]
+    }
+  ]
+}

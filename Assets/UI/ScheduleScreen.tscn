@@ -34,6 +34,12 @@ layout_mode = 2
 autowrap_mode = 2
 text = "No plan set — today runs on autopilot."
 
+[node name="LockLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+autowrap_mode = 2
+visible = false
+text = ""
+
 [node name="SleepRow" type="HBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
 

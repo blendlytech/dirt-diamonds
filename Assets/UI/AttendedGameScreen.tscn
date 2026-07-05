@@ -35,6 +35,12 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = ""
 
+[node name="AvailabilityLabel" type="Label" parent="Screen"]
+layout_mode = 2
+autowrap_mode = 2
+visible = false
+text = ""
+
 [node name="AtBatView" parent="Screen" instance=ExtResource("2_atbatview")]
 layout_mode = 2
 size_flags_vertical = 3

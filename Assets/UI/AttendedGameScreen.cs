@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
 using Godot;
 
@@ -44,10 +45,29 @@ public sealed partial class AttendedGameScreen : Control
     [Export]
     public string OutcomeNamesCsv { get; set; } = "Out,Strikeout,Walk,Single,Double,Triple,Home run";
 
+    // Phase 8c roster availability — read straight off GameManager.Absences,
+    // independent of the Play/Skip click flow, so a player clicking Skip Day
+    // through a whole absence still sees why there's no at-bat view.
+    [Export]
+    public string AbsentStatusFormat { get; set; } = "{0} — back on day {1}.";
+
+    [Export]
+    public string RustyStatusFormat { get; set; } = "{0}, still rusty (-{1} rating) until day {2}.";
+
+    [Export]
+    public string InjuryReasonText { get; set; } = "Sidelined by injury";
+
+    [Export]
+    public string SuspensionReasonText { get; set; } = "Serving a suspension";
+
+    [Export]
+    public string ArrestReasonText { get; set; } = "In custody";
+
     private Label _dayLabel = null!;
     private Button _playGameButton = null!;
     private Button _skipDayButton = null!;
     private Label _statusLabel = null!;
+    private Label _availabilityLabel = null!;
     private AtBatView _atBatView = null!;
 
     private readonly PlayerIntentBridge _bridge = new();
@@ -55,12 +75,20 @@ public sealed partial class AttendedGameScreen : Control
     private string[] _outcomeNames = Array.Empty<string>();
     private bool _awaitingPendingGame;
 
+    // Dirty-flag identity for the availability label (ui_conventions.md: no
+    // per-frame string formatting).
+    private SlotAvailability _shownAvailability = SlotAvailability.Available;
+    private AbsenceReason _shownAvailabilityReason;
+    private long _shownAvailabilityUntilDay;
+    private long _shownAvailabilityPenaltyUntilDay;
+
     public override void _Ready()
     {
         _dayLabel = GetNode<Label>("Screen/TopBar/DayLabel");
         _playGameButton = GetNode<Button>("Screen/TopBar/PlayGameButton");
         _skipDayButton = GetNode<Button>("Screen/TopBar/SkipDayButton");
         _statusLabel = GetNode<Label>("Screen/TopBar/StatusLabel");
+        _availabilityLabel = GetNode<Label>("Screen/AvailabilityLabel");
         _atBatView = GetNode<AtBatView>("Screen/AtBatView");
 
         _playGameButton.Pressed += OnPlayGamePressed;
@@ -87,6 +115,7 @@ public sealed partial class AttendedGameScreen : Control
     public override void _Process(double delta)
     {
         CareerManager career = GameManager.Instance!.Career;
+        RefreshAvailabilityLabel(career);
 
         // The day tick's events dispatch on GameManager._Process (earlier this
         // frame, autoloads process first), so a requested game shows up here.
@@ -220,6 +249,58 @@ public sealed partial class AttendedGameScreen : Control
         GlobalState state = GameManager.Instance!.State;
         _dayLabel.Text = string.Format(DayFormat, state.CurrentDay, state.SeasonYear);
     }
+
+    /// <summary>
+    /// Phase 8c: an always-on readout of the avatar's current roster
+    /// availability, straight off <see cref="GameManager.Absences"/> — unlike
+    /// the one-shot NoGameText branch (which only fires when the player
+    /// clicks Play), this stays accurate through a whole Skip-Day-only
+    /// playthrough of an absence. TryGet returns expired entries too, so
+    /// StateOn(today) — not the bool — decides visibility.
+    /// </summary>
+    private void RefreshAvailabilityLabel(CareerManager career)
+    {
+        SlotAvailability state = SlotAvailability.Available;
+        AbsenceEntry entry = default;
+        if (career.HasAvatar
+            && GameManager.Instance!.Absences.TryGet(career.AvatarPlayerId, out entry))
+        {
+            state = entry.StateOn(GameManager.Instance!.State.CurrentDay);
+        }
+
+        bool changed = state != _shownAvailability
+            || (state != SlotAvailability.Available
+                && (entry.Reason != _shownAvailabilityReason
+                    || entry.UntilDay != _shownAvailabilityUntilDay
+                    || entry.PenaltyUntilDay != _shownAvailabilityPenaltyUntilDay));
+        if (!changed)
+        {
+            return;
+        }
+
+        _shownAvailability = state;
+        _shownAvailabilityReason = entry.Reason;
+        _shownAvailabilityUntilDay = entry.UntilDay;
+        _shownAvailabilityPenaltyUntilDay = entry.PenaltyUntilDay;
+
+        _availabilityLabel.Visible = state != SlotAvailability.Available;
+        _availabilityLabel.Text = state switch
+        {
+            SlotAvailability.Absent => string.Format(
+                AbsentStatusFormat, AbsenceReasonText(entry.Reason), entry.UntilDay),
+            SlotAvailability.Rusty => string.Format(
+                RustyStatusFormat, AbsenceReasonText(entry.Reason), entry.RatingPenalty, entry.PenaltyUntilDay),
+            _ => string.Empty,
+        };
+    }
+
+    private string AbsenceReasonText(AbsenceReason reason) => reason switch
+    {
+        AbsenceReason.Injury => InjuryReasonText,
+        AbsenceReason.Suspension => SuspensionReasonText,
+        AbsenceReason.Arrest => ArrestReasonText,
+        _ => string.Empty,
+    };
 
     private string OutcomeName(PaOutcome outcome)
     {

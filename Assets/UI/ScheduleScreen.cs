@@ -39,6 +39,10 @@ public sealed partial class ScheduleScreen : Control
     [Export]
     public string OverAllocatedFormat { get; set; } = "Over by {0}h — reduce a block before confirming.";
 
+    [Export]
+    public string JailLockFormat { get; set; } =
+        "In custody — day planning is locked until day {0}. Today runs on autopilot.";
+
     private Control _schoolRow = null!;
     private Control _gameRow = null!;
 
@@ -55,6 +59,7 @@ public sealed partial class ScheduleScreen : Control
     private OptionButton _workActivityOption = null!;
 
     private Label _planStatusLabel = null!;
+    private Label _lockLabel = null!;
     private Label _freeHoursLabel = null!;
     private Label _errorLabel = null!;
     private Button _confirmButton = null!;
@@ -65,6 +70,15 @@ public sealed partial class ScheduleScreen : Control
     // actually differs from what's already on screen.
     private bool _shownHasPlan;
     private DaySchedule _shownPlan;
+
+    // Same dirty-flag discipline for the jail-lock label (8c).
+    private bool _shownLocked;
+    private long _shownLockUntilDay;
+
+    // Set each frame by RefreshHoursLabels; combined with the jail lock to
+    // drive ConfirmButton's disabled state every frame in _Process (the lock
+    // can flip true/false with no slider change involved).
+    private bool _overAllocated;
 
     public override void _Ready()
     {
@@ -84,6 +98,7 @@ public sealed partial class ScheduleScreen : Control
         _workActivityOption = GetNode<OptionButton>("Panel/Layout/WorkActivityRow/WorkActivityOption");
 
         _planStatusLabel = GetNode<Label>("Panel/Layout/PlanStatusLabel");
+        _lockLabel = GetNode<Label>("Panel/Layout/LockLabel");
         _freeHoursLabel = GetNode<Label>("Panel/Layout/FreeHoursLabel");
         _errorLabel = GetNode<Label>("Panel/Layout/ErrorLabel");
         _confirmButton = GetNode<Button>("Panel/Layout/ButtonsRow/ConfirmButton");
@@ -143,6 +158,28 @@ public sealed partial class ScheduleScreen : Control
                     plan.GameHours, plan.WorkHours, plan.FreeHours)
                 : NoPlanText;
         }
+
+        // 8c: an arrest locks the whole day plan (jail autopilots) —
+        // AvatarScheduleLocked is only ever true for AbsenceReason.Arrest, per
+        // GameManager's own contract. SubmitDaySchedule already enforces this
+        // server-side; this is belt-and-suspenders UI feedback so a locked
+        // player isn't left guessing why Confirm won't take.
+        bool locked = GameManager.Instance!.AvatarScheduleLocked;
+        long lockUntilDay = locked
+            && GameManager.Instance!.Absences.TryGet(career.AvatarPlayerId, out AbsenceEntry lockEntry)
+                ? lockEntry.UntilDay
+                : 0;
+        if (locked != _shownLocked || lockUntilDay != _shownLockUntilDay)
+        {
+            _shownLocked = locked;
+            _shownLockUntilDay = lockUntilDay;
+            _lockLabel.Visible = locked;
+            if (locked)
+            {
+                _lockLabel.Text = string.Format(JailLockFormat, lockUntilDay);
+            }
+        }
+        _confirmButton.Disabled = _overAllocated || locked;
     }
 
     private static bool SchedulesEqual(in DaySchedule a, in DaySchedule b) =>
@@ -163,7 +200,7 @@ public sealed partial class ScheduleScreen : Control
         int free = DaySchedule.HoursPerDay - total;
         bool overAllocated = free < 0;
         _freeHoursLabel.Text = string.Format(overAllocated ? OverAllocatedFormat : FreeHoursFormat, Math.Abs(free));
-        _confirmButton.Disabled = overAllocated;
+        _overAllocated = overAllocated;
     }
 
     private void OnConfirmPressed()

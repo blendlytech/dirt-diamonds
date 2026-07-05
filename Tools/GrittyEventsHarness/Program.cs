@@ -139,8 +139,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 3
-            && wholeFolder.Count == 14
+            batchFiles.Length >= 4
+            && wholeFolder.Count == 19
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -151,7 +151,12 @@ internal static class Program
             && wholeFolder.TryGetById("benched_for_video_games", out _)
             && wholeFolder.TryGetById("met_someone", out _)
             && wholeFolder.TryGetById("starting_a_family", out _)
-            && wholeFolder.TryGetById("child_is_born", out _),
+            && wholeFolder.TryGetById("child_is_born", out _)
+            && wholeFolder.TryGetById("narcotics_arrest", out _)
+            && wholeFolder.TryGetById("suspended_lifetime_watch", out _)
+            && wholeFolder.TryGetById("suspended_repeat_violation", out _)
+            && wholeFolder.TryGetById("suspended_ped_test_flag", out _)
+            && wholeFolder.TryGetById("sidelined_by_injury", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
