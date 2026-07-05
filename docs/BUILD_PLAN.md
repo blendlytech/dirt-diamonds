@@ -12,22 +12,19 @@ Lead: Claude Fable 5 (orchestration + critical-path code). Delegates: Claude Opu
 
 Rule of thumb: Fable 5 writes the spec and the skeleton; Sonnet 5 fills volume; Opus 4.8 owns any file where the math being *wrong* is worse than the code being *slow*. Fable 5 reviews every delegated diff before it merges.
 
-## Phase 0 — Toolchain & Foundation (BLOCKING)
+## Phase 0 — Toolchain & Foundation (COMPLETE)
 
 Nothing can compile until this is done. Owner: Fable 5 (system installs need user approval).
 
 1. Install .NET 8 SDK and Godot 4.x **.NET edition** (winget available).
 2. `git init` + Godot/C# `.gitignore` (repo is currently not version-controlled).
 3. Create `project.godot` + `DirtAndDiamonds.csproj` targeting the existing `/Assets` tree.
-4. **Repair `.mcp.json`** — three servers silently fail to connect:
-   - `sqlite`: `@modelcontextprotocol/server-sqlite` is not an npm package (reference server was Python/uvx, now archived). Replace with a working SQLite MCP or fall back to `sqlite3` CLI checks via the `validate_sqlite_schema` skill.
-   - `git`: same problem (`server-git` is Python/uvx). Replace or drop (git CLI suffices).
-   - `csharp` (omnisharp-mcp): fails to load; drop it — `dotnet build` + IDE diagnostics cover it.
+4. **Repair `.mcp.json`** — three servers silently fail to connect.
 5. Populate the empty `database_rules.md` / `ui_conventions.md` rules files (Sonnet 5).
 
 **Exit criteria:** `dotnet build` succeeds; Godot opens the project; git history started; schema validation path (MCP or CLI) proven working.
 
-## Phase 1 — Database Core (single source of truth)
+## Phase 1 — Database Core (single source of truth) (COMPLETE)
 
 - `SchemaDefinitions.sql`: Players, Batting_Stats, Pitching_Stats, Relationships, Entity_Flags, Game_Logs + indexes on high-traffic tables.
 - `DatabaseManager.cs`: connection lifecycle, parameterized queries only, `BEGIN TRANSACTION` batch API, pooled command objects.
@@ -36,14 +33,14 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 **Exit criteria:** schema round-trips 10k generated players; FK integrity checks pass; batch day-advance transaction benchmarked.
 
-## Phase 2 — Core Loop, Time & Event Bus
+## Phase 2 — Core Loop, Time & Event Bus (COMPLETE)
 
 - `GameManager.cs`, `TimeManager.cs` (calendar advancement in transactions), `GlobalState.cs`.
 - The **async event dispatcher bus** — the only legal communication channel between Life and Baseball per CLAUDE.md. Getting this boundary right now prevents architectural rot later. Owner: Fable 5 exclusively.
 
 **Exit criteria:** headless "advance 365 days" run completes with zero cross-references between `/Simulation/Life/` and `/Simulation/Baseball/`.
 
-## Phase 3 — Baseball Macro-Sim (Monte Carlo) → Milestone M1 "The League Lives"
+## Phase 3 — Baseball Macro-Sim (Monte Carlo) → Milestone M1 "The League Lives" (COMPLETE)
 
 - Opus 4.8 designs the PA outcome probability model (batter vs. pitcher vs. fielding → 1B/2B/HR/SO/BB percentages) calibrated to real MLB averages.
 - Fable 5 implements `LeagueSimulator.cs` + `AtBatResolver.cs`: structs, `Span<T>`, object pooling, zero GC pressure at thousands of entities/frame.
@@ -52,7 +49,7 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 **Exit criteria:** full season simulates headless; league-wide AVG/OBP/SLG within MLB norms; GC allocation profile flat.
 
-## Phase 4 — Baseball Micro-Sim (Markov Chain) → Milestone M2 "You're in the Game"
+## Phase 4 — Baseball Micro-Sim (Markov Chain) → Milestone M2 "You're in the Game" (COMPLETE)
 
 - 25 base-out states, 25×25 transition matrix per event (Opus 4.8 math design; Fable 5 struct-based implementation).
 - Player input blending (timing/location vs. DB attributes).
@@ -61,7 +58,7 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 **Exit criteria:** micro-sim outcome distribution converges with macro-sim for identical players; `run_monte_carlo_batch` passes.
 
-## Phase 5 — Life Sim: Needs Engine & Utility AI → Milestone M3 "Life Happens"
+## Phase 5 — Life Sim: Needs Engine & Utility AI → Milestone M3 "Life Happens" (COMPLETE)
 
 - `NeedsEngine.cs`: five needs, non-linear decay accelerating near zero (Opus 4.8 curve design).
 - `UtilityCalculator.cs`: Utility = Σ(Consideration × Weight); stress/emotion overlay that mutates weights and can force autonomous actions.
@@ -70,14 +67,14 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 **Exit criteria:** NPCs self-manage needs over a simulated month; stress override provably fires.
 
-## Phase 6 — Relationships & Generational Legacy
+## Phase 6 — Relationships & Generational Legacy (COMPLETE)
 
 - `RelationshipGraph.cs`: bidirectional affinity graph backed by the Relationships table; rivalry scores feed baseball probability modifiers (via the event bus, never direct reference).
 - Heir mechanics: genetic stat blending, hidden `baseball_interest`, succession on retirement, game-over when lineage fails.
 
 **Exit criteria:** simulated 3-generation run with succession handoffs.
 
-## Phase 7 — Gritty Event Framework
+## Phase 7 — Gritty Event Framework (COMPLETE)
 
 - `EventDispatcher.cs` background polling of Entity_Flags/Players; `ConditionEvaluator.cs` for prerequisite booleans; JSON event schema (prerequisites, probability weight, payload, branching choices, hidden flag writes).
 - Sonnet 5 authors event content at volume from Fable 5's schema.
@@ -85,26 +82,52 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 **Exit criteria:** cascading chain proven end-to-end (e.g., bribe → `compromised_syndicate` → syndicate event fires seasons later).
 
-## Phase 8 — Economy & Hustles → Milestone M4 "Full Loop"
+## Phases 8 & 9 — Economy, Hustles, & Career Ladder (Interleaved) → Milestones M4 & M5 (ACTIVE)
 
-- Legal work (time-skip abstractions), Narcotics 3-tier state machine (Drop → Cut → Territory using the Relationship Graph), Fencing negotiation, Texas Hold'em (Opus 4.8 pot-odds/bluffing math; Sonnet 5 implementation under Fable 5 review).
-- Each hustle is an isolated interactive node; `godot_scene_mapper` before any UI logic.
-- **Survival economy (GAME_IDEA.md):** recurring living expenses — rent, food, gear — drained on a calendar cadence through the existing funds path; going broke feeds the needs engine (money-gated needs already collapse at $0, harness-proven). Includes persisting life-sim action spending to the DB (the disclosed Phase 7 gap).
-- **Equipment quality (GAME_IDEA.md):** purchasable gear tiers as effective-ratings modifiers — the PED/fatigue/rivalry precedent, never touching `AtBatResolver` calibration tables; behind the `run_monte_carlo_batch` band check. Owner: Fable 5.
-- **Arrest / injury / suspension (GAME_IDEA.md):** the risk triad on the illicit path — arrest (jail time-skip + flags), injury (availability + temporary rating hit keyed to `health_ceiling`), league suspension (`detection_risk` thresholds bench the avatar for N games via `CareerManager` availability). Consequence-vocabulary extension (Fable 5) + gritty-event content (Sonnet 5).
+*Note: Per the `docs/phase_8_9_interleave_plan.md`, Phase 8 and 9 are being interleaved to stand up a skeletal career clock before layering on hustles.*
 
-**Exit criteria:** full career loop playable: broke rookie → hustle income → stress consequences → gritty events → season play.
+### 9a — Tier Schema + Multi-Tier Macro-Sim
+**Owner: Fable 5**
+- Schema v7: add a `tier` dimension to `Teams` (HS, College, MinorA, MinorAA, MinorAAA, MLB).
+- Query-layer tier filters for `BaseballQueries`.
+- `LeagueGenerator` seeds one independent 8-team league per tier.
+- Opus 4.8 designs offensive-baseline deltas; Fable 5 implements `tier → LeagueSimulator` map.
+- `CareerManager` tier rewiring for correct scheduling.
+- `StatsNormalizer` scoping per-tier.
+- New-game avatar creation defaults to an HS team.
+- **Validate:** `run_monte_carlo_batch` gains a per-tier band check and a regression guard for the existing MLB band.
 
-## Phase 9 — Career Progression Ladder & Player Development → Milestone M5 "The Long Road"
+### 9b — Bare Daily-Clock Skeleton
+**Owner: Fable 5 engine, Sonnet 5 UI.**
+- Split the avatar out of `LifeSimManager`'s autopilot tick — avatar's hourly actions become player-chosen.
+- Schedule surface: allocate hours across Sleep / School / Practice / Game / Work blocks. Game reuses `CareerManager` flow. Practice/School are inert placeholders for now.
+- New UI scene: `Assets/UI/ScheduleScreen.tscn`.
+- **Validate:** Extend `NeedsDecayHarness` / new harness proving scripted manual block choices behave as expected and untouched autopilot reproduces pre-9b traces.
 
-The GAME_IDEA premise the current build skips: you **start as an under-resourced high-school player** and climb **HS → College → Minors → MLB**. Today the sim seeds a single MLB-tier league and drops the avatar straight into it — there is no ladder, no development, and no player-driven daily grind toward the top.
+### 8a — Survival Economy + Legal Work
+**Owner: Sonnet 5**
+- Recurring rent/food/gear drain on a calendar cadence, through `PlayerQueries.AdjustFunds`.
+- Legal Work becomes the first real Work-block payout (modest funds, energy/fitness drain).
+- **Validate:** `simulate_utility_decay` extended with funds-solvency check over a simulated month.
 
-- **League tiers** (schema-first, No Blind Queries): a `level`/`tier` dimension on Teams (HS, College, Minor A/AA/AAA, MLB) so the macro sim runs each tier in parallel and the avatar occupies exactly one at a time. Owner: **Fable 5** — re-enters `LeagueSimulator`/roster load and carries the `run_monte_carlo_batch` "no band moved" burden, since each tier calibrates to its own offensive baseline, not the MLB one.
-- **Advancement gates**: performance + scouting drive promotion/demotion between tiers — amateur recruitment to college, draft/signing into the minors, call-ups to the MLB, and washing out downward. **Opus 4.8** designs the promotion model; **Fable 5** owns the tier-transfer handoff (the avatar changes team *and* tier mid-save — the succession-handoff's sibling, same roster-invariant discipline where a miscount silently drifts stat composition).
-- **Player development / training**: attributes are static today (set at creation, blended for heirs, no growth curve — the disclosed §11.6 gap). Practice and coaching move ratings along age-appropriate development/decline curves, and this is where the daily "practice" block finally pays off. **Opus 4.8** designs the curves (peak-age growth, veteran decline); **Sonnet 5** owns the tuning harness.
-- **The daily scheduling loop** (the Punch Club / New Star Soccer core the pitch names): the player allocates the rigid 24-hour clock across **sleep, school, practice, games, and work/hustle** blocks — each with needs, stat, and money consequences already modeled by the needs/utility/economy systems. The NPC `UtilityCalculator` auto-selects; the avatar's blocks are player-chosen. **School** is the early-tier (HS/College) obligation competing for those hours.
+### 8b — Narcotics (3-tier state machine) + Fencing Negotiation
+**Owner: Opus 4.8 designs, Sonnet 5 implements, Fable 5 reviews.**
+- Isolated Hustle scene nodes. Narcotics: Inventory Drop → Profit/Toxicity Cut → Territory Control. Fencing negotiation.
 
-**Exit criteria:** a generated player climbs from HS to the MLB across simulated seasons via performance + development; each tier's league line sits in its own calibrated band; the avatar's daily schedule measurably moves both stats and needs.
+### 8c — Arrest / Injury / Suspension Risk Triad
+**Owner: Fable 5 (engine), Sonnet 5 (event content).**
+- Roster/availability mutation type for Gritty Events.
+- Arrest (jail time-skip), Injury (availability/rating hit), Suspension (`detection_risk` benching).
+
+### 8d — Texas Hold'em, 8e — Equipment Quality
+- **8d owner:** Opus 4.8 (pot-odds math), Sonnet 5 (implementation).
+- **8e owner:** Fable 5 (gear tiers as effective-ratings modifiers).
+
+### 9c — Promotion / Advancement Gates, 9d — Player Development / Decline Curves
+- **9c owner:** Opus 4.8 (promotion model), Fable 5 (tier-transfer handoff).
+- **9d owner:** Opus 4.8 (growth/decline curves), Sonnet 5 (tuning harness). Practice block finally produces a real stat effect.
+
+**Exit criteria (Phases 8 & 9):** a generated player climbs from HS to the MLB across simulated seasons via performance + development; each tier's league line sits in its own calibrated band; the avatar's daily schedule measurably moves both stats and needs; full career loop playable (broke rookie → hustle income → stress consequences → gritty events → season play).
 
 ## Phase 10 — Presentation Layer & Narrative Delivery → Milestone M6 "The Look"
 
