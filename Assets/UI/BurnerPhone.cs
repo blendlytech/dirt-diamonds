@@ -5,6 +5,7 @@ using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Life;
+using DirtAndDiamonds.UI.Portraits;
 using Godot;
 
 namespace DirtAndDiamonds.UI;
@@ -73,6 +74,7 @@ public sealed partial class BurnerPhone : PanelContainer
     public string TopTierOwnedText { get; set; } = "Top-tier gear owned.";
 
     private ItemList _contactList = null!;
+    private PortraitView _threadPortrait = null!;
     private Label _threadHeaderLabel = null!;
     private VBoxContainer _threadContainer = null!;
     private VBoxContainer _choicesContainer = null!;
@@ -111,7 +113,8 @@ public sealed partial class BurnerPhone : PanelContainer
     public override void _Ready()
     {
         _contactList = GetNode<ItemList>("PhoneTabs/Messages/MessagesLayout/ContactList");
-        _threadHeaderLabel = GetNode<Label>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderLabel");
+        _threadPortrait = GetNode<PortraitView>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadPortrait");
+        _threadHeaderLabel = GetNode<Label>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadHeaderLabel");
         _threadContainer = GetNode<VBoxContainer>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll/ThreadContainer");
         _choicesContainer = GetNode<VBoxContainer>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ChoicesContainer");
         _contactList.ItemSelected += OnContactSelected;
@@ -260,7 +263,9 @@ public sealed partial class BurnerPhone : PanelContainer
     private void RenderThread(GameManager gm, string contactId, PendingGrittyChoice? pending)
     {
         _activeContactId = contactId;
-        _threadHeaderLabel.Text = gm.Contacts.Resolve(contactId).DisplayName;
+        ContactDefinition contact = gm.Contacts.Resolve(contactId);
+        _threadHeaderLabel.Text = contact.DisplayName;
+        _threadPortrait.SetIdentity(contact.PortraitKey, contact.DisplayName);
 
         foreach (Node child in _threadContainer.GetChildren())
         {

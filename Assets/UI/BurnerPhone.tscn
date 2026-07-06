@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BurnerPhone.cs" id="1_script"]
+[ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="2_portraitview"]
 
 [node name="BurnerPhone" type="PanelContainer"]
 script = ExtResource("1_script")
@@ -33,7 +34,15 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="ThreadHeaderLabel" type="Label" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+[node name="ThreadHeaderRow" type="HBoxContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ThreadPortrait" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow" instance=ExtResource("2_portraitview")]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+
+[node name="ThreadHeaderLabel" type="Label" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Select a contact"

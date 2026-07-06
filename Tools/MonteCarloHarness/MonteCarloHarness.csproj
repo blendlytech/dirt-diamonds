@@ -29,5 +29,15 @@
       new Tools project needed for one fixture suite.
     -->
     <Compile Include="..\..\Assets\UI\Scouting\*.cs" Link="UI\Scouting\%(Filename)%(Extension)" />
+    <!--
+      Phase 10e (presentation_layer_narrative.md §6): the portrait pipeline's
+      procedural-fallback math (PortraitTile) is pure/Godot-free by the same
+      discipline as ScoutingGrade above. PortraitLibrary/PortraitView are
+      Godot-facing (Texture2D/PanelContainer) and stay excluded, same as
+      GameManager.cs above.
+    -->
+    <Compile Include="..\..\Assets\UI\Portraits\*.cs"
+             Exclude="..\..\Assets\UI\Portraits\PortraitLibrary.cs;..\..\Assets\UI\Portraits\PortraitView.cs"
+             Link="UI\Portraits\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

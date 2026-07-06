@@ -2,6 +2,7 @@ using System.Diagnostics;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
+using DirtAndDiamonds.UI.Portraits;
 using DirtAndDiamonds.UI.Scouting;
 
 namespace DirtAndDiamonds.Tools.MonteCarloHarness;
@@ -105,6 +106,7 @@ internal static class Program
             RunPracticeSeamSuite(schemaPath, practiceScratchPath);
             RunDevelopmentEquilibriumSuite(schemaPath, devEquilibriumScratchPath);
             RunScoutingGradeSuite();
+            RunPortraitTileSuite();
         }
         catch (Exception ex)
         {
@@ -4775,6 +4777,44 @@ internal static class Program
         Check("§5.3 OFP is exactly Grade(round(Scouting(roleRatingSum, age, headroom)/2)) — literal formula check",
             ScoutingGrade.OfpRating(150, 27, 0) == expectedOfp
             && ScoutingGrade.OfpGrade(150, 27, 0) == ScoutingGrade.Grade(expectedOfp));
+    }
+
+    /// <summary>
+    /// Phase 10e (presentation_layer_narrative.md §6, "a themed
+    /// initials-on-color tile seeded off player_id, so the same NPC always
+    /// draws the same fallback"). PortraitTile is deliberately Godot-free —
+    /// same discipline as ScoutingGrade above — so this suite fixture-pins
+    /// its FNV-1a palette hash and its initials extraction directly, no db.
+    /// </summary>
+    private static void RunPortraitTileSuite()
+    {
+        Console.WriteLine("--- Phase 10e portrait fallback tile fixtures (doc §6 — pure, no db) ---");
+
+        // Expected values independently computed (FNV-1a-32, offset basis
+        // 2166136261, prime 16777619, mod 8) — pinned exact, not just
+        // range-checked, so a hash-order or arithmetic slip fails loudly.
+        Check("§6 palette index is a stable FNV-1a hash, pinned per known id",
+            PortraitTile.PaletteIndex("unknown") == 1
+            && PortraitTile.PaletteIndex("coach_reyes") == 2
+            && PortraitTile.PaletteIndex("agent_diaz") == 7
+            && PortraitTile.PaletteIndex("girlfriend_jess") == 7
+            && PortraitTile.PaletteIndex("family_mom") == 1
+            && PortraitTile.PaletteIndex("avatar-player-guid-0001") == 0);
+        Check("§6 palette index of the empty string doesn't throw and still lands in [0, 8)",
+            PortraitTile.PaletteIndex(string.Empty) == 5);
+        Check("§6 palette index is repeatable — same id, same bucket, called twice",
+            PortraitTile.PaletteIndex("agent_diaz") == PortraitTile.PaletteIndex("agent_diaz"));
+
+        Check("§6 initials: two-word display name takes the first letter of each word",
+            PortraitTile.Initials("Coach Reyes") == "CR" && PortraitTile.Initials("Miguel Torres") == "MT");
+        Check("§6 initials: a parenthetical third word is ignored (first two words win)",
+            PortraitTile.Initials("Alex Diaz (Agent)") == "AD");
+        Check("§6 initials: single-word name takes its own first two letters",
+            PortraitTile.Initials("Jess") == "JE" && PortraitTile.Initials("Mom") == "MO");
+        Check("§6 initials: single-character name doesn't crash, renders as-is",
+            PortraitTile.Initials("A") == "A");
+        Check("§6 initials: empty/whitespace-only name falls back to \"?\" rather than throwing",
+            PortraitTile.Initials(string.Empty) == "?" && PortraitTile.Initials("   ") == "?");
     }
 
     /// <summary>Nth rostered player of a role in load order (team_id, player_id) — deterministic fixture picks.</summary>

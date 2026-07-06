@@ -1,6 +1,7 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
+using DirtAndDiamonds.UI.Portraits;
 using DirtAndDiamonds.UI.Scouting;
 using Godot;
 
@@ -112,6 +113,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     [Export]
     public string FieldingName { get; set; } = "Fielding";
 
+    private PortraitView _avatarPortrait = null!;
     private Label _dayLabel = null!;
     private Button _playGameButton = null!;
     private Button _skipDayButton = null!;
@@ -155,6 +157,7 @@ public sealed partial class BaseballDashboard : PanelContainer
 
     public override void _Ready()
     {
+        _avatarPortrait = GetNode<PortraitView>("Layout/CalendarStrip/AvatarPortrait");
         _dayLabel = GetNode<Label>("Layout/CalendarStrip/DayLabel");
         _playGameButton = GetNode<Button>("Layout/CalendarStrip/PlayGameButton");
         _skipDayButton = GetNode<Button>("Layout/CalendarStrip/SkipDayButton");
@@ -356,6 +359,7 @@ public sealed partial class BaseballDashboard : PanelContainer
         GameManager gm = GameManager.Instance!;
         CareerManager career = gm.Career;
         bool show = career.HasAvatar;
+        _avatarPortrait.Visible = show;
         _scoutingCard.Visible = show;
         _devCard.Visible = show;
         if (!show)
@@ -370,6 +374,7 @@ public sealed partial class BaseballDashboard : PanelContainer
         {
             return;
         }
+        _avatarPortrait.SetIdentity(avatarId, $"{player.FirstName} {player.LastName}");
 
         bool isPitcher = ratings.IsPitcher;
         var roster = new RosterPlayerRow

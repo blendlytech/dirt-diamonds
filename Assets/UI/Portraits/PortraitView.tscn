@@ -1,0 +1,21 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/Portraits/PortraitView.cs" id="1_script"]
+
+[node name="PortraitView" type="PanelContainer"]
+custom_minimum_size = Vector2(48, 48)
+script = ExtResource("1_script")
+
+[node name="TextureRect" type="TextureRect" parent="."]
+layout_mode = 2
+visible = false
+expand_mode = 1
+stretch_mode = 6
+
+[node name="InitialsCenter" type="CenterContainer" parent="."]
+layout_mode = 2
+
+[node name="InitialsLabel" type="Label" parent="InitialsCenter"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "??"
