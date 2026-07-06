@@ -9,7 +9,7 @@ namespace DirtAndDiamonds.UI;
 /// Main, per Main.tscn) covering the two heir_mechanics.md §5/§6 UI beats:
 /// the heir reveal/choice (<see cref="CareerManager.HasPendingSuccessionChoice"/>)
 /// and a persistent game-over banner (<see cref="CareerManager.IsLineageOver"/>).
-/// Self-driven, dirty-flag polling in _Process (mirrors AttendedGameScreen's
+/// Self-driven, dirty-flag polling in _Process (mirrors BaseballDashboard's
 /// _awaitingPendingGame / EventChoiceScreen's pending-identity pattern) — the
 /// candidate buttons rebuild only when the pending candidate set actually
 /// changes, never every idle frame. UI never touches the database directly: a

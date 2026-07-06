@@ -9,7 +9,7 @@ namespace DirtAndDiamonds.UI;
 /// Main, per Main.tscn) that renders the avatar's paused Gritty Event choice.
 /// Self-driven: polls <see cref="EventConsequenceApplier.HasPendingChoice"/>
 /// every frame and only rebuilds its choice buttons on a change of which fire
-/// is pending (dirty-flag pattern, mirroring AttendedGameScreen's
+/// is pending (dirty-flag pattern, mirroring BaseballDashboard's
 /// _awaitingPendingGame check) — never every frame while the same choice
 /// sits unanswered. UI never touches the database directly: a button press
 /// only calls GameManager.Instance.GrittyEventChoices.ResolveChoice, which

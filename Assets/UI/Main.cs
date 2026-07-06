@@ -5,14 +5,14 @@ namespace DirtAndDiamonds.UI;
 
 /// <summary>
 /// Root of Main.tscn (the project's main scene). Routes boot into either the
-/// new-game avatar creation screen or straight to the attended-game screen,
-/// depending on whether a career already exists. GameManager is an autoload
-/// so it boots (and restores any saved avatar) before this scene's _Ready
-/// runs, making Career.HasAvatar reliable here. Swapping only touches
-/// ScreenContainer's children — EventChoiceScreen/SuccessionScreen are
-/// permanent siblings (declared in Main.tscn, always instantiated, each
-/// self-hiding via its own Visible flag) that must never be freed by a
-/// screen swap.
+/// new-game avatar creation screen or straight to the two-panel shell (the
+/// Phase 10 career home: Baseball Dashboard | Burner Phone), depending on
+/// whether a career already exists. GameManager is an autoload so it boots
+/// (and restores any saved avatar) before this scene's _Ready runs, making
+/// Career.HasAvatar reliable here. Swapping only touches ScreenContainer's
+/// children — EventChoiceScreen/SuccessionScreen are permanent siblings
+/// (declared in Main.tscn, always instantiated, each self-hiding via its own
+/// Visible flag) that must never be freed by a screen swap.
 /// </summary>
 public sealed partial class Main : Node
 {
@@ -20,7 +20,7 @@ public sealed partial class Main : Node
     public PackedScene NewGameScreenScene { get; set; } = null!;
 
     [Export]
-    public PackedScene AttendedGameScreenScene { get; set; } = null!;
+    public PackedScene TwoPanelShellScene { get; set; } = null!;
 
     private Node _screenContainer = null!;
 
@@ -39,7 +39,7 @@ public sealed partial class Main : Node
 
         if (GameManager.Instance!.Career.HasAvatar)
         {
-            _screenContainer.AddChild(AttendedGameScreenScene.Instantiate());
+            _screenContainer.AddChild(TwoPanelShellScene.Instantiate());
         }
         else
         {

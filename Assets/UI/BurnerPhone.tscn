@@ -1,0 +1,26 @@
+[gd_scene format=3]
+
+[node name="BurnerPhone" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="PhoneTabs" type="TabContainer" parent="."]
+layout_mode = 2
+
+[node name="Messages" type="MarginContainer" parent="PhoneTabs"]
+layout_mode = 2
+
+[node name="MessagesPlaceholder" type="Label" parent="PhoneTabs/Messages"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No messages yet."
+
+[node name="Bank" type="MarginContainer" parent="PhoneTabs"]
+visible = false
+layout_mode = 2
+
+[node name="BankPlaceholder" type="Label" parent="PhoneTabs/Bank"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No account activity yet."

@@ -1,0 +1,43 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/BaseballDashboard.cs" id="1_dashboard"]
+[ext_resource type="PackedScene" path="res://Assets/UI/AtBatView.tscn" id="2_atbatview"]
+
+[node name="BaseballDashboard" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_dashboard")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="CalendarStrip" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="DayLabel" type="Label" parent="Layout/CalendarStrip"]
+layout_mode = 2
+text = "Day 1"
+
+[node name="PlayGameButton" type="Button" parent="Layout/CalendarStrip"]
+layout_mode = 2
+text = "Play Today's Game"
+
+[node name="SkipDayButton" type="Button" parent="Layout/CalendarStrip"]
+layout_mode = 2
+text = "Skip Day"
+
+[node name="StatusLabel" type="Label" parent="Layout/CalendarStrip"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
+
+[node name="AvailabilityLabel" type="Label" parent="Layout"]
+layout_mode = 2
+autowrap_mode = 2
+visible = false
+text = ""
+
+[node name="AtBatView" parent="Layout" instance=ExtResource("2_atbatview")]
+layout_mode = 2
+size_flags_vertical = 3

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://Assets/UI/Main.cs" id="1_main"]
 [ext_resource type="PackedScene" path="res://Assets/UI/NewGameScreen.tscn" id="2_newgame"]
-[ext_resource type="PackedScene" path="res://Assets/UI/AttendedGameScreen.tscn" id="3_attended"]
+[ext_resource type="PackedScene" path="res://Assets/UI/TwoPanelShell.tscn" id="3_shell"]
 [ext_resource type="PackedScene" path="res://Assets/UI/EventChoiceScreen.tscn" id="4_eventchoice"]
 [ext_resource type="PackedScene" path="res://Assets/UI/SuccessionScreen.tscn" id="5_succession"]
 [ext_resource type="PackedScene" path="res://Assets/UI/BirthNotificationScreen.tscn" id="6_birthnotify"]
@@ -15,7 +15,7 @@
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
 NewGameScreenScene = ExtResource("2_newgame")
-AttendedGameScreenScene = ExtResource("3_attended")
+TwoPanelShellScene = ExtResource("3_shell")
 
 [node name="ScreenContainer" type="Node" parent="."]
 

@@ -10,7 +10,7 @@ namespace DirtAndDiamonds.UI;
 /// succession overlays) that announces a newborn heir off
 /// <see cref="CareerManager.TryDequeuePendingBirth"/>. Unlike EventChoiceScreen
 /// and SuccessionScreen this is deliberately NOT modal: there is no decision
-/// to forfeit here, so it neither joins AttendedGameScreen's day-advance gate
+/// to forfeit here, so it neither joins BaseballDashboard's day-advance gate
 /// nor blocks input to anything beneath it — the root and every non-button
 /// node are corner-anchored and mouse_filter = Ignore in the .tscn (a
 /// full-rect click-blocker here would silently eat clicks on AtBatView's

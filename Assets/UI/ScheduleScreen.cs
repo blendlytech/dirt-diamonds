@@ -14,13 +14,13 @@ namespace DirtAndDiamonds.UI;
 /// across the five <see cref="DaySchedule"/> blocks and submit it via
 /// <see cref="LifeSimManager.SetTodaySchedule"/>. Not modal like
 /// EventChoiceScreen/SuccessionScreen — a plan is optional (an unset plan
-/// autopilots exactly as before 9b), so this never joins AttendedGameScreen's
+/// autopilots exactly as before 9b), so this never joins BaseballDashboard's
 /// day-advance gate. The School and Game rows are hidden — and their sliders
 /// zeroed — whenever they aren't schedulable
 /// (<see cref="LifeSimManager.AvatarSchoolAvailable"/>,
 /// <see cref="CareerManager.TryGetPendingGame"/>), so a stale hour never
 /// rides along silently after a tier change or an offseason day. Playing an
-/// attended game itself stays AttendedGameScreen's flow — the Game slider
+/// attended game itself stays BaseballDashboard's flow — the Game slider
 /// only reserves the hours, it never launches the at-bat view. Node paths
 /// verified against ScheduleScreen.tscn before this script was written.
 /// </summary>

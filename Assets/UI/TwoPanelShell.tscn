@@ -1,0 +1,24 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://Assets/UI/BaseballDashboard.tscn" id="1_dashboard"]
+[ext_resource type="PackedScene" path="res://Assets/UI/BurnerPhone.tscn" id="2_phone"]
+
+[node name="TwoPanelShell" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Panels" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="BaseballDashboard" parent="Panels" instance=ExtResource("1_dashboard")]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+
+[node name="BurnerPhone" parent="Panels" instance=ExtResource("2_phone")]
+layout_mode = 2
+size_flags_horizontal = 3

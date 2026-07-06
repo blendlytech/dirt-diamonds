@@ -6,22 +6,26 @@ using Godot;
 namespace DirtAndDiamonds.UI;
 
 /// <summary>
-/// Phase 5 thin slice: the screen that owns one attended game day. It bridges
-/// the Godot main thread and the sim task through a
-/// <see cref="PlayerIntentBridge"/> — the game runs on a background task
-/// (never the UI thread), the view renders snapshot DTOs, and the player's
-/// swing/take intent flows back through the bridge. This driver polls cheap
-/// dirty flags in _Process; the labels themselves update only when a snapshot
-/// actually changed (AtBatView.Render is called on change, per ui_conventions).
-/// Node paths verified against AttendedGameScreen.tscn via godot_scene_mapper
-/// before this script was written.
+/// Phase 10a: the left panel of the two-panel shell. Absorbs the retired
+/// AttendedGameScreen's two roles verbatim — the day-advance clock (its
+/// Play/Skip buttons remain the only caller of TimeManager.AdvanceDay) and
+/// the attended at-bat launch through CareerManager.TryGetPendingGame /
+/// PlayPendingGame — reusing the identical seams and the identical
+/// day-advance gates: the day cannot advance while a game is in flight, a
+/// pending attended game is unresolved, a gritty-event choice is pending, or
+/// a succession choice is parked. The bridge/task/dirty-flag driver is the
+/// Phase 5 design unchanged: the game runs on a background task (never the
+/// UI thread), the view renders snapshot DTOs, and the player's swing/take
+/// intent flows back through a <see cref="PlayerIntentBridge"/>. Node paths
+/// verified against BaseballDashboard.tscn via godot_scene_mapper before
+/// this script was written.
 /// </summary>
-public sealed partial class AttendedGameScreen : Control
+public sealed partial class BaseballDashboard : PanelContainer
 {
     // Player-facing text templates live on exported properties so the scene
     // (not compiled code) is the editing surface, per ui_conventions.
     [Export]
-    public string DayFormat { get; set; } = "Day {0} — Season {1}";
+    public string DayFormat { get; set; } = "Day {0} — Season {1} (day {2} of {3})";
 
     [Export]
     public string NoGameText { get; set; } = "No game today.";
@@ -84,12 +88,12 @@ public sealed partial class AttendedGameScreen : Control
 
     public override void _Ready()
     {
-        _dayLabel = GetNode<Label>("Screen/TopBar/DayLabel");
-        _playGameButton = GetNode<Button>("Screen/TopBar/PlayGameButton");
-        _skipDayButton = GetNode<Button>("Screen/TopBar/SkipDayButton");
-        _statusLabel = GetNode<Label>("Screen/TopBar/StatusLabel");
-        _availabilityLabel = GetNode<Label>("Screen/AvailabilityLabel");
-        _atBatView = GetNode<AtBatView>("Screen/AtBatView");
+        _dayLabel = GetNode<Label>("Layout/CalendarStrip/DayLabel");
+        _playGameButton = GetNode<Button>("Layout/CalendarStrip/PlayGameButton");
+        _skipDayButton = GetNode<Button>("Layout/CalendarStrip/SkipDayButton");
+        _statusLabel = GetNode<Label>("Layout/CalendarStrip/StatusLabel");
+        _availabilityLabel = GetNode<Label>("Layout/AvailabilityLabel");
+        _atBatView = GetNode<AtBatView>("Layout/AtBatView");
 
         _playGameButton.Pressed += OnPlayGamePressed;
         _skipDayButton.Pressed += OnSkipDayPressed;
@@ -247,7 +251,8 @@ public sealed partial class AttendedGameScreen : Control
     private void RefreshDayLabel()
     {
         GlobalState state = GameManager.Instance!.State;
-        _dayLabel.Text = string.Format(DayFormat, state.CurrentDay, state.SeasonYear);
+        _dayLabel.Text = string.Format(
+            DayFormat, state.CurrentDay, state.SeasonYear, state.DayOfSeason, GlobalState.DaysPerSeason);
     }
 
     /// <summary>
