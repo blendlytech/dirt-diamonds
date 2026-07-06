@@ -2,6 +2,7 @@ using System.Diagnostics;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
+using DirtAndDiamonds.UI.Scouting;
 
 namespace DirtAndDiamonds.Tools.MonteCarloHarness;
 
@@ -103,6 +104,7 @@ internal static class Program
             RunDevelopmentStreamSuite(schemaPath, devStreamScratchPath);
             RunPracticeSeamSuite(schemaPath, practiceScratchPath);
             RunDevelopmentEquilibriumSuite(schemaPath, devEquilibriumScratchPath);
+            RunScoutingGradeSuite();
         }
         catch (Exception ex)
         {
@@ -4714,6 +4716,65 @@ internal static class Program
         return (avatarRatings.BatPower + avatarRatings.BatContact + avatarRatings.BatDiscipline,
             neverOvershot, creditAccrued, creditCleared,
             development.LastRun.PlayersChanged, development.LastRun.PointsUp, fingerprint.ToString());
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 10c: Scouting grade curve (presentation_layer_narrative.md §5)
+    // ------------------------------------------------------------------
+
+    private static void RunScoutingGradeSuite()
+    {
+        Console.WriteLine("--- Phase 10c scouting grade curve fixtures (doc §5.2/§5.3, acceptance check 4 — pure, no db) ---");
+
+        Check("§5.2 band boundaries: 49→C, 50→C+, 89→A, 90→A+, 0→F, 100→A+",
+            ScoutingGrade.Grade(49) == GradeLetter.C && ScoutingGrade.Grade(50) == GradeLetter.CPlus
+            && ScoutingGrade.Grade(89) == GradeLetter.A && ScoutingGrade.Grade(90) == GradeLetter.APlus
+            && ScoutingGrade.Grade(0) == GradeLetter.F && ScoutingGrade.Grade(100) == GradeLetter.APlus);
+        Check("§5.2 every other boundary (39/40, 59/60, 69/70, 79/80, 29/30)",
+            ScoutingGrade.Grade(39) == GradeLetter.D && ScoutingGrade.Grade(40) == GradeLetter.C
+            && ScoutingGrade.Grade(59) == GradeLetter.CPlus && ScoutingGrade.Grade(60) == GradeLetter.B
+            && ScoutingGrade.Grade(69) == GradeLetter.B && ScoutingGrade.Grade(70) == GradeLetter.BPlus
+            && ScoutingGrade.Grade(79) == GradeLetter.BPlus && ScoutingGrade.Grade(80) == GradeLetter.A
+            && ScoutingGrade.Grade(29) == GradeLetter.F && ScoutingGrade.Grade(30) == GradeLetter.D);
+        Check("§5.2 above/below the scale still saturate (no clamp needed): -10→F, 150→A+",
+            ScoutingGrade.Grade(-10) == GradeLetter.F && ScoutingGrade.Grade(150) == GradeLetter.APlus);
+        Check("§5.2 Label() renders the exact eight strings in band order",
+            ScoutingGrade.Label(GradeLetter.F) == "F" && ScoutingGrade.Label(GradeLetter.D) == "D"
+            && ScoutingGrade.Label(GradeLetter.C) == "C" && ScoutingGrade.Label(GradeLetter.CPlus) == "C+"
+            && ScoutingGrade.Label(GradeLetter.B) == "B" && ScoutingGrade.Label(GradeLetter.BPlus) == "B+"
+            && ScoutingGrade.Label(GradeLetter.A) == "A" && ScoutingGrade.Label(GradeLetter.APlus) == "A+");
+
+        // ---- §5.3 present vs. future: a 17-year-old with a present-C bat and a future-A bat, the headroom story ----
+        Check("§5.3 present/future: current 45 (C) vs potential 82 (A) renders as two different grades",
+            ScoutingGrade.Grade(45) == GradeLetter.C && ScoutingGrade.Grade(82) == GradeLetter.A);
+
+        // ---- §5.3 OFP. DISCLOSED FINDING (not silently patched — flagged for
+        // Fable/Opus, see ScoutingGrade.OfpRating's doc comment): the doc's
+        // literal "Grade(round(Scouting(...)))" over-grades almost everyone,
+        // because PromotionScore.Scouting is 100-centred (Combine's own
+        // ranking convention — an exactly-average peak-age player already
+        // scores 100.0), not Grade's 0-100/50-average domain. Halving
+        // recenters it exactly. ----
+        int peakAvgOfp = ScoutingGrade.OfpRating(roleRatingSum: 150, age: 27, headroom: 0); // 3×50 = exactly league average
+        Check("§5.3 OFP recentering: an exactly-average peak-age player with no headroom projects exactly 50 (C+)",
+            peakAvgOfp == 50 && ScoutingGrade.Grade(peakAvgOfp) == GradeLetter.CPlus, $"OFP {peakAvgOfp}");
+
+        int replacementOfp = ScoutingGrade.OfpRating(roleRatingSum: 120, age: 27, headroom: 0); // 3×40, the 8c call-up floor
+        Check("§5.3 OFP recentering: a peak-age replacement-level player (3×40) projects exactly 40 (C)",
+            replacementOfp == 40 && ScoutingGrade.Grade(replacementOfp) == GradeLetter.C, $"OFP {replacementOfp}");
+
+        int youngProspectOfp = ScoutingGrade.OfpRating(roleRatingSum: 120, age: 15, headroom: 30); // saturated headroom, full age bonus
+        int youngNoHeadroomOfp = ScoutingGrade.OfpRating(roleRatingSum: 120, age: 15, headroom: 0);
+        Check("§5.3 OFP ties to the real sweep math: a 15-year-old with saturated headroom projects above his raw floor; one with none doesn't",
+            youngProspectOfp > replacementOfp && youngNoHeadroomOfp == replacementOfp,
+            $"headroom {youngProspectOfp} vs floor {replacementOfp} vs no-headroom {youngNoHeadroomOfp}");
+
+        // Direct equivalence against the exact (disclosed, recentered) formula.
+        double rawScouting = PromotionScore.Scouting(150, 27, 0);
+        int expectedOfp = (int)Math.Round(rawScouting / 2.0, MidpointRounding.AwayFromZero);
+        Check("§5.3 OFP is exactly Grade(round(Scouting(roleRatingSum, age, headroom)/2)) — literal formula check",
+            ScoutingGrade.OfpRating(150, 27, 0) == expectedOfp
+            && ScoutingGrade.OfpGrade(150, 27, 0) == ScoutingGrade.Grade(expectedOfp));
     }
 
     /// <summary>Nth rostered player of a role in load order (team_id, player_id) — deterministic fixture picks.</summary>

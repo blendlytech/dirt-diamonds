@@ -41,3 +41,121 @@ text = ""
 [node name="AtBatView" parent="Layout" instance=ExtResource("2_atbatview")]
 layout_mode = 2
 size_flags_vertical = 3
+
+[node name="ScoutingCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="ScoutingLayout" type="VBoxContainer" parent="Layout/ScoutingCard"]
+layout_mode = 2
+
+[node name="ScoutingHeading" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Scouting Report"
+
+[node name="OfpLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_type_variation = &"DisplayLabel"
+text = "OFP: —"
+
+[node name="TierLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Tier: —"
+
+[node name="ToolsList" type="VBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+
+[node name="ToolRow0" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— → —"
+
+[node name="ToolRow1" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— → —"
+
+[node name="ToolRow2" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— → —"
+
+[node name="ToolRow3" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— → —"
+
+[node name="DevCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="DevLayout" type="VBoxContainer" parent="Layout/DevCard"]
+layout_mode = 2
+
+[node name="DevHeading" type="Label" parent="Layout/DevCard/DevLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Development"
+
+[node name="DevSummaryLabel" type="Label" parent="Layout/DevCard/DevLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No offseason development yet."

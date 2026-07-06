@@ -21,5 +21,13 @@
     <Compile Include="..\..\Assets\Data\Database\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
+    <!--
+      Phase 10c (presentation_layer_narrative.md §5, acceptance check 4): the
+      scouting grade curve is pure/Godot-free UI math but reads
+      PromotionScore, already compiled above — this is "whichever harness
+      already compiles the DTO layer" the design doc's check 4 asks for, no
+      new Tools project needed for one fixture suite.
+    -->
+    <Compile Include="..\..\Assets\UI\Scouting\*.cs" Link="UI\Scouting\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
