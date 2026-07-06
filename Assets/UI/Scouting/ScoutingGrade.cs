@@ -70,8 +70,15 @@ public static class ScoutingGrade
     /// Scouting = 2·roleAvgRating, so Scouting/2 lands back on Grade's
     /// 50-average domain precisely, with ProjectionBonus still nudging
     /// young/high-headroom prospects up the same way it does for the real
-    /// sweep. Flagged for Fable/Opus review — not silently patched into
-    /// PromotionScore itself.
+    /// sweep. RULED (Fable 5, 2026-07-06): the halving here is the permanent,
+    /// correct recentering — Scouting's 100-centring is load-bearing
+    /// (Combine mixes it against the equally 100-centred Performance scores,
+    /// so re-deriving its /150 divisor would silently re-weight every
+    /// promotion pool: a band move in closed 9c), and Grade's domain is
+    /// fixed by the per-tool present/future reads of raw 0-100 ratings. OFP
+    /// is the one consumer whose input arrives in Combine-units, so the
+    /// unit conversion lives here. The doc's literal formula was the defect;
+    /// §5 now reads Scouting(...)/2.
     /// </summary>
     public static int OfpRating(int roleRatingSum, int age, int headroom) =>
         (int)Math.Round(PromotionScore.Scouting(roleRatingSum, age, headroom) / 2.0, MidpointRounding.AwayFromZero);

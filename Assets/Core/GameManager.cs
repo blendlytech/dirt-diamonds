@@ -4,6 +4,7 @@ using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Platform.Steam;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
 using Godot;
@@ -122,12 +123,24 @@ public sealed partial class GameManager : Node
     /// <summary>Phase 10b: the narrative-message read-model — public like Baseball/Players so the phone UI can read the avatar's thread history.</summary>
     public NarrativeLogQueries NarrativeLog { get; private set; } = null!;
 
+    /// <summary>Phase 11a: the sole Steam SDK owner — public like Career/Hustles so 11b's achievement subscriber and 11d's presence writer route through its guarded wrappers, never Steamworks directly.</summary>
+    public SteamIntegration Steam { get; private set; } = null!;
+
     public override void _Ready()
     {
         Instance = this;
         // The bus must keep pumping while the SceneTree is paused (menus, at-bat
         // freeze) — pausing the sims is the sims' concern, not the dispatcher's.
         ProcessMode = ProcessModeEnum.Always;
+
+        // Phase 11a (steam_publishing_ship_it.md §5.4): Steam comes up before
+        // the save opens — Steam Auto-Cloud has already delivered the freshest
+        // .db to user:// by the time this process runs, so the existing open
+        // path needs no change, and IsAvailable is known before any achievement
+        // subscriber wires (11b). A failed Init degrades to no-op wrappers; it
+        // never blocks the boot.
+        Steam = new SteamIntegration();
+        Steam.Initialize();
 
         string databasePath = ProjectSettings.GlobalizePath(SaveFilePath);
         _database = new DatabaseManager(databasePath);
@@ -392,6 +405,10 @@ public sealed partial class GameManager : Node
     public override void _Process(double delta)
     {
         Events.DispatchPending();
+        // Phase 11a: Facepunch runs with async callbacks off, so its callback
+        // queue is pumped once per frame beside the bus — a bare branch no-op
+        // whenever Steam is down.
+        Steam.RunCallbacks();
     }
 
     public override void _ExitTree()
@@ -418,6 +435,10 @@ public sealed partial class GameManager : Node
         }
         _database?.Dispose();
         _database = null;
+        // Phase 11a: Steam goes down last — after the DB handle releases, so a
+        // Steam-triggered auto-cloud upload sees the finished file (§2.1). 11c
+        // inserts the WAL checkpoint just ahead of the dispose above.
+        Steam?.Shutdown();
     }
 
     /// <summary>

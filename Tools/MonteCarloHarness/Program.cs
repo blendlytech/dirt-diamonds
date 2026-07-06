@@ -4750,13 +4750,13 @@ internal static class Program
         Check("§5.3 present/future: current 45 (C) vs potential 82 (A) renders as two different grades",
             ScoutingGrade.Grade(45) == GradeLetter.C && ScoutingGrade.Grade(82) == GradeLetter.A);
 
-        // ---- §5.3 OFP. DISCLOSED FINDING (not silently patched — flagged for
-        // Fable/Opus, see ScoutingGrade.OfpRating's doc comment): the doc's
-        // literal "Grade(round(Scouting(...)))" over-grades almost everyone,
-        // because PromotionScore.Scouting is 100-centred (Combine's own
-        // ranking convention — an exactly-average peak-age player already
-        // scores 100.0), not Grade's 0-100/50-average domain. Halving
-        // recenters it exactly. ----
+        // ---- §5.3 OFP. DISCLOSED FINDING, RULED (Fable 5, 2026-07-06 —
+        // halving upheld as permanent; see ScoutingGrade.OfpRating's doc
+        // comment): the doc's literal "Grade(round(Scouting(...)))"
+        // over-graded almost everyone, because PromotionScore.Scouting is
+        // 100-centred (Combine's own ranking convention — an exactly-average
+        // peak-age player already scores 100.0), not Grade's 0-100/50-average
+        // domain. Halving recenters it exactly; the doc was corrected. ----
         int peakAvgOfp = ScoutingGrade.OfpRating(roleRatingSum: 150, age: 27, headroom: 0); // 3×50 = exactly league average
         Check("§5.3 OFP recentering: an exactly-average peak-age player with no headroom projects exactly 50 (C+)",
             peakAvgOfp == 50 && ScoutingGrade.Grade(peakAvgOfp) == GradeLetter.CPlus, $"OFP {peakAvgOfp}");

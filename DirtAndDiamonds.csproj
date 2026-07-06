@@ -14,6 +14,25 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Phase 11a: Facepunch.Steamworks 2.5.2 vendored from the GitHub release
+         (commit 5a22fa2) — NuGet.org stalled at 2.3.3 (2020) and has never
+         carried the Posix build, so the release DLLs are the real distribution
+         (steam_publishing_ship_it.md §3.1/§10). One version, both platforms:
+         Godot's per-platform `dotnet publish -r <rid>` picks the reference. -->
+    <Reference Include="Facepunch.Steamworks.Win64" Condition="'$(RuntimeIdentifier)' != 'linux-x64'">
+      <HintPath>Assets\Platform\Steam\lib\Facepunch.Steamworks.Win64.dll</HintPath>
+    </Reference>
+    <Reference Include="Facepunch.Steamworks.Posix" Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+      <HintPath>Assets\Platform\Steam\lib\Facepunch.Steamworks.Posix.dll</HintPath>
+    </Reference>
+    <!-- Steam native redistributables: git-ignored drops (see
+         Assets/Platform/Steam/README.md), Exists-guarded so a fresh clone still
+         builds — the game then boots with Steam unavailable, the normal
+         degraded state. validate_steamworks_native checks these two items. -->
+    <None Include="Assets\Platform\Steam\native\steam_api64.dll" Link="steam_api64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Platform\Steam\native\steam_api64.dll')" />
+    <None Include="Assets\Platform\Steam\native\libsteam_api.so" Link="libsteam_api.so" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Platform\Steam\native\libsteam_api.so')" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Headless tooling builds as its own project; keep it out of the game assembly. -->
     <Compile Remove="Tools/**/*.cs" />
   </ItemGroup>

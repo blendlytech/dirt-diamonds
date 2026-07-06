@@ -271,8 +271,11 @@ Per `BaseballDtos.cs`: `PlayerRatingsRow` — seven **0–100** ratings, **50 = 
 `PlayerPotentialRow` — the per-rating **latent ceiling** (schema v10), with the invariant
 `potential_i ≥ current_i`; `TeamRow.Tier` — ladder standing; and the existing projection functions
 on `PromotionScore`: `Headroom(current, potential, isPitcher)`, `ProjectionBonus(age, headroom)`,
-and `Scouting(roleRatingSum, age, headroom)` (returns a 0–100 overall). The scouting card **reuses
-these verbatim** — it is a read, not a recomputation.
+and `Scouting(roleRatingSum, age, headroom)` (returns a **100-centred** overall on Combine's
+ranking scale — an exactly-average peak-age player scores 100.0, range ~0–200; *not* a 0–100
+value. The first draft of this section misstated it as 0–100 — corrected per the 10c disclosed
+finding, ruled by Fable 5 on 2026-07-06). The scouting card **reuses these verbatim** — it is a
+read, not a recomputation.
 
 ### 5.2 The letter-grade curve (the deliverable)
 
@@ -306,11 +309,19 @@ Player_Potential was built to tell — and it's exactly the headroom the 9d deve
 into. The card renders both (e.g., a bar from present-fill to future-ghost).
 
 **Overall Future Potential (OFP):** one headline grade = `Grade(round(Scouting(roleRatingSum, age,
-headroom)))`, i.e. the same 0–100 projection the promotion sweep scores through, run through the
-same curve. This ties the scouting headline to the *actual* promotion math the avatar is judged by
-— the scout's projection and the game's projection are the same number, by construction. Optionally
-surface a tier label ("projects as a MLB regular") derived from the OFP band; the numeric OFP grade
-is the required piece.
+headroom) / 2))`, i.e. the same projection the promotion sweep scores through, converted from
+Combine's 100-centred units onto `Grade`'s 0–100/50-average domain. The `/2` is exact, not a
+fudge: at peak age with zero headroom `Scouting = 2 × role-average rating`, so the halved value
+is precisely the per-rating role average (plus `ProjectionBonus/3`, the same bonus re-expressed in
+per-rating units). This ties the scouting headline to the *actual* promotion math the avatar is
+judged by — the scout's projection and the game's projection are the same number, by construction.
+*(Ruling, Fable 5, 2026-07-06: this section originally read `Grade(round(Scouting(...)))` — a scale
+mismatch that would over-grade nearly every rostered player. The conversion lives permanently at
+the display consumer, `ScoutingGrade.OfpRating`; `Scouting`'s own `/150` divisor must NOT be
+re-derived, because its 100-centring is load-bearing inside `Combine` against the equally
+100-centred Performance scores — changing it would silently re-weight every promotion pool, a band
+move in closed 9c.)* Optionally surface a tier label ("projects as a MLB regular") derived from the
+OFP band; the numeric OFP grade is the required piece.
 
 ### 5.4 Role split & development card
 
@@ -376,7 +387,7 @@ UI-verification discipline from every prior UI pass applies in full:
    the registry (or defaults to `unknown`)" check.
 4. **The scouting curve gets a deterministic fixture** (10c) — every band boundary pinned
    (49→C / 50→C+ / 89→A / 90→A+ / 0→F / 100→A+), present-vs-future, and OFP ≡
-   `Grade(round(Scouting(...)))`. This is the only new *logic* in the phase; it is tested like
+   `Grade(round(Scouting(...) / 2))` (the §5.3 ruled recentering). This is the only new *logic* in the phase; it is tested like
    logic, not eyeballed. (A tiny harness path, or fold into an existing Data-compiling harness —
    implementer's call, "whichever harness already compiles the DTO layer.")
 5. **No schema change — asserted**, not assumed: `SchemaValidator` re-runs green unchanged;
