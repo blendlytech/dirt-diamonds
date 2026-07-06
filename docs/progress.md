@@ -379,7 +379,6 @@ Follows the `NarcoticsHustleScreen`/`FencingScreen` always-present-overlay conve
 
 ## Immediate Next Steps (model assignments)
 
-- **Commit checkpoint (user-driven):** the tree now holds 8d Layer 3 + 8e + 9c + 9d-1 + 9d-2 + 9d §7 tuning + **the 9d closing review** uncommitted — 9d's close makes this the natural boundary.
 - **Next phase kickoff (Opus 4.8 — design first, per the standing split):** 9d closes the 9x ladder; whatever the interleave plan schedules next starts with an Opus design doc before any Fable/Sonnet implementation.
 - **Still open (disclosed, user-driven):** live playtests — a full Narcotics/Fencing session, a triad absence in real play, a full Poker session, a gear purchase in the shop, a multi-season save watching promotion day land, a multi-season save watching a prospect's ratings move, and a scheduled-Practice season watching the avatar outgrow his cohort (`DevelopmentManager.LastRun` is the read surface a future development UI card renders).
 - Standing rule: anything touching the sim assembly re-runs `run_monte_carlo_batch`; a moved band escalates to Fable 5.
