@@ -21,3 +21,11 @@ GameManager="*res://Assets/Core/GameManager.cs"
 [dotnet]
 
 project/assembly_name="DirtAndDiamonds"
+
+[gui]
+
+theme/custom="res://Assets/UI/Theme/DirtAndDiamonds.tres"
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.071, 0.063, 0.086, 1)
