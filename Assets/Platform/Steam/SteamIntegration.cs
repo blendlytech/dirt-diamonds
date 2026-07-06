@@ -96,6 +96,24 @@ public sealed class SteamIntegration
     }
 
     /// <summary>
+    /// Steam-Stats counter increment (§4.3: counter achievements — Journeyman —
+    /// hold their running total server-side, so the local save persists
+    /// nothing). AddStat only stages the new value in the client; StoreStats
+    /// pushes it and has Steam evaluate the stat-vs-threshold achievement rule.
+    /// StoreStats is rate-limited on the order of minutes — fine for the
+    /// once-per-season rollover cadence of the only caller.
+    /// </summary>
+    public void TryAddStat(string statId, int amount)
+    {
+        if (!IsAvailable)
+        {
+            return;
+        }
+        SteamUserStats.AddStat(statId, amount);
+        SteamUserStats.StoreStats();
+    }
+
+    /// <summary>
     /// Friends-list status string (§6). Event-driven only — never called from a
     /// per-frame path (the ui_conventions no-per-frame-formatting rule
     /// generalizes to presence).

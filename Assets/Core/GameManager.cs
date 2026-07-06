@@ -126,6 +126,10 @@ public sealed partial class GameManager : Node
     /// <summary>Phase 11a: the sole Steam SDK owner — public like Career/Hustles so 11b's achievement subscriber and 11d's presence writer route through its guarded wrappers, never Steamworks directly.</summary>
     public SteamIntegration Steam { get; private set; } = null!;
 
+    // Phase 11b: the achievements bus subscriber — private like _rivalryLedger
+    // (nothing reads it; it exists exactly as long as the bus does).
+    private AchievementManager _achievements = null!;
+
     public override void _Ready()
     {
         Instance = this;
@@ -392,6 +396,20 @@ public sealed partial class GameManager : Node
             GrittyEvents, new NarrativePollQueries(_pollView), Events,
             unchecked((ulong)System.Environment.TickCount64));
         _grittyDispatcher.Start();
+
+        // Phase 11b (steam_publishing_ship_it.md §4): achievements are a
+        // platform read-model over the event stream — another ledger, attached
+        // after every publisher above so its SeasonRolledOverEvent milestone
+        // reads always see that same rollover's succession/game-over writes.
+        // The subscription runs whether Steam is up or not (§2.2); a loaded
+        // avatar gets the boot-time sync the bus never replays, which doubles
+        // as the §4.3 idempotent re-assert for already-earned milestones.
+        _achievements = new AchievementManager(Steam, Baseball, GameState, GrittyEvents);
+        _achievements.AttachTo(Events);
+        if (avatarLoaded)
+        {
+            _achievements.SyncFromBoot(Career.AvatarPlayerId, Career.AvatarTeamId);
+        }
 
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
         GD.Print(
