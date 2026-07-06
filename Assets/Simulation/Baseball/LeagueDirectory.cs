@@ -28,4 +28,17 @@ public sealed class LeagueDirectory
     public LeagueSimulator Get(LeagueTier tier) =>
         _byTier[(int)tier] ?? throw new InvalidOperationException(
             $"No LeagueSimulator is registered for tier {tier} — was the directory wired for this world?");
+
+    /// <summary>
+    /// Sparse-registration-safe lookup (Phase 9c): the promotion pass touches
+    /// every tier's roster in the database, but flushes/re-initializes only
+    /// the sims a world actually registered — harness fixtures exercising a
+    /// subset of the ladder skip the rest instead of throwing.
+    /// </summary>
+    public bool TryGet(LeagueTier tier, out LeagueSimulator league)
+    {
+        LeagueSimulator? registered = _byTier[(int)tier];
+        league = registered!;
+        return registered is not null;
+    }
 }

@@ -51,6 +51,9 @@ public sealed partial class GameManager : Node
     public LeagueDirectory Leagues { get; private set; } = null!;
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
+
+    /// <summary>Phase 9c offseason promotion/relegation — public like Career so a ladder/news UI can read <see cref="PromotionManager.LastRun"/>.</summary>
+    public PromotionManager Promotions { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
     public RelationshipGraph Relationships { get; private set; } = null!;
 
@@ -205,6 +208,19 @@ public sealed partial class GameManager : Node
         Career.AutopilotSuccession = false;
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
+
+        // Phase 9c: the offseason promotion/relegation pass. Attached AFTER
+        // CareerManager so the promotion-doc §4 order holds on every season
+        // rollover (sims flush → world ages + succession → promotion sweep);
+        // its only RNG draws (HS intake generation) come from a dedicated
+        // forked stream so the six sims' and the career's streams are never
+        // perturbed. Career wired in so the avatar rides the same advancement
+        // ranking and moves via the careful ReactivateAvatar path (§6).
+        Promotions = new PromotionManager(
+            _database, Players, Baseball, GameState, Leagues, Micro,
+            new RngState(rng.NextUInt64() | 1UL));
+        Promotions.Career = Career;
+        Promotions.AttachTo(Events);
 
         // Life sim (Phase 5 remainder): needs/utility tracking, seeded once from
         // the same Players rows the baseball sims already loaded.

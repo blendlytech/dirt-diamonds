@@ -69,6 +69,9 @@ internal static class Program
         string tierScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_tier_{Guid.NewGuid():N}.db");
         string availScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_avail_{Guid.NewGuid():N}.db");
         string equipScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_equip_{Guid.NewGuid():N}.db");
+        string promoScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promo_{Guid.NewGuid():N}.db");
+        string promoStreamScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promostream_{Guid.NewGuid():N}.db");
+        string promoAvatarScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promoavatar_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -88,6 +91,9 @@ internal static class Program
             RunTierLadderSuite(schemaPath, tierScratchPath);
             RunAvailabilitySuite(schemaPath, availScratchPath);
             RunEquipmentSuite(schemaPath, equipScratchPath);
+            RunPromotionSweepSuite(schemaPath, promoScratchPath);
+            RunPromotionStreamSuite(schemaPath, promoStreamScratchPath);
+            RunPromotionAvatarSuite(schemaPath, promoAvatarScratchPath);
         }
         catch (Exception ex)
         {
@@ -137,6 +143,17 @@ internal static class Program
             }
             foreach (string variant in new[]
                 { equipScratchPath, equipScratchPath + ".bare", equipScratchPath + ".bat", equipScratchPath + ".pit" })
+            {
+                TryDelete(variant);
+                TryDelete(variant + "-wal");
+                TryDelete(variant + "-shm");
+            }
+            foreach (string variant in new[]
+                {
+                    promoScratchPath, promoScratchPath + ".detA", promoScratchPath + ".detB",
+                    promoStreamScratchPath, promoStreamScratchPath + ".bare", promoStreamScratchPath + ".promo",
+                    promoAvatarScratchPath,
+                })
             {
                 TryDelete(variant);
                 TryDelete(variant + "-wal");
@@ -3124,6 +3141,636 @@ internal static class Program
             $"AVG {bareAvg2:F3}→{pitAvg:F3}, SO {bareBat.So}→{gearedPitBat.So}");
         Check("pitcher-geared season world: integrity ok, no FK violations, no open batch",
             !pitDb.IsBatchActive && pitDb.RunIntegrityCheck() == "ok" && pitDb.RunForeignKeyCheck() == 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 9c: promotion & advancement gates (promotion doc §2/§3/§10)
+    // ------------------------------------------------------------------
+
+    private static void RunPromotionSweepSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 9c promotion gates: score math, conservation sweep, cream rises (doc §2/§3/§10) ---");
+
+        // ---- §2.1 performance shrinkage (acceptance check 5) ----
+        var fluke = new SeasonBattingLine { PlayerId = "fluke", Pa = 3, Ab = 2, H = 2, Doubles = 1, Bb = 1 };
+        var star = new SeasonBattingLine { PlayerId = "star", Pa = 600, Ab = 520, H = 160, Doubles = 30, Hr = 25, Bb = 70 };
+        var solid = new SeasonBattingLine { PlayerId = "solid", Pa = 600, Ab = 540, H = 130, Doubles = 22, Hr = 12, Bb = 55 };
+        const double FixtureLeagueOps = 0.700;
+        double flukeP = PromotionScore.BatterPerformance(in fluke, FixtureLeagueOps);
+        double starP = PromotionScore.BatterPerformance(in star, FixtureLeagueOps);
+        double solidP = PromotionScore.BatterPerformance(in solid, FixtureLeagueOps);
+        Check("§2.1 shrinkage: a 3-PA 2.500-OPS fluke shrinks to ~league-average and never out-ranks a full season",
+            starP > flukeP && flukeP < 105.0 && starP > solidP && starP > 115.0,
+            $"fluke {flukeP:F1} solid {solidP:F1} star {starP:F1}");
+
+        const double FixtureLeagueEra = 4.30;
+        double aceP = PromotionScore.PitcherPerformance(600, 60, FixtureLeagueEra);  // 200 IP, 2.70 ERA
+        double midP = PromotionScore.PitcherPerformance(600, 95, FixtureLeagueEra);  // 200 IP, 4.28 ERA
+        double cupP = PromotionScore.PitcherPerformance(1, 0, FixtureLeagueEra);     // one perfect out
+        Check("§2.1 pitchers: ERA− ordering holds; a 1-out 0.00-ERA cup of coffee is capped + shrunk to ~average",
+            aceP > midP && aceP > 130.0 && Math.Abs(midP - 100.0) < 2.0 && cupP < 103.0,
+            $"ace {aceP:F1} mid {midP:F1} cup {cupP:F1}");
+
+        // ---- §2.2 scouting & age (acceptance check 6) ----
+        double youngEqual = PromotionScore.Scouting(150, 17);
+        double oldEqual = PromotionScore.Scouting(150, 33);
+        double lowCeiling = PromotionScore.Scouting(120, 25);
+        double highCeiling = PromotionScore.Scouting(180, 25);
+        double youthA = PromotionScore.Combine(102.0, PromotionScore.Scouting(200, 17)); // struggling blue-chip teen
+        double vetA = PromotionScore.Combine(112.0, PromotionScore.Scouting(140, 33));   // hot low-ceiling vet
+        Check("§2.2 scouting gate: equal ratings → younger wins; equal age → higher-rated wins; both signals bind",
+            youngEqual > oldEqual && highCeiling > lowCeiling && youthA > vetA
+            && PromotionScore.AgeBonus(PromotionProfile.YoungestProspectAge) == PromotionProfile.AgeBonusMax
+            && PromotionScore.AgeBonus(PromotionProfile.PeakAge) == 0.0
+            && PromotionScore.AgeBonus(40) < 0.0 && PromotionScore.AgeBonus(60) >= -PromotionProfile.AgeBonusMax,
+            $"S(150,17)={youngEqual:F1} S(150,33)={oldEqual:F1} youthA={youthA:F1} vetA={vetA:F1}");
+
+        // ---- multi-rollover sweep world (no games attached: P shrinks to 100
+        // everywhere and ranking is scouting-driven — the sweep MECHANICS are
+        // under test here; real-stat integration is the avatar suite) ----
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed + 90);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
+        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
+
+        // Fixtures (deterministic picks — rosters load ordered by team, player):
+        // an elite young HS bat (cream), a hopeless MLB bat (dreg), and the
+        // §3.1 removal triggers — age, health, amateur age-out.
+        var tierRoster = new List<RosterPlayerRow>();
+        baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
+        string cream = NthOfRole(tierRoster, PitcherRole.None, 0);
+        string agedOut = NthOfRole(tierRoster, PitcherRole.None, 1);
+        baseball.LoadRosterByTier(LeagueTier.MLB, tierRoster);
+        string dreg = NthOfRole(tierRoster, PitcherRole.None, 0);
+        string retiree = NthOfRole(tierRoster, PitcherRole.None, 1);
+        string broken = NthOfRole(tierRoster, PitcherRole.Starter, 0);
+
+        baseball.UpsertRatings(new PlayerRatingsRow
+        {
+            PlayerId = cream, IsPitcher = false,
+            BatPower = 100, BatContact = 100, BatDiscipline = 100,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+        });
+        players.SetAge(cream, 15);
+        baseball.UpsertRatings(new PlayerRatingsRow
+        {
+            PlayerId = dreg, IsPitcher = false,
+            BatPower = 0, BatContact = 0, BatDiscipline = 0,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 0,
+        });
+        players.SetAge(dreg, 25);
+        players.SetAge(retiree, 41); // ages to 42 on the first rollover → forced retirement
+        players.InsertBattingSeason(new BattingStatsRow
+        {
+            PlayerId = retiree, SeasonYear = StartYear - 1,
+            Pa = 620, Ab = 560, H = 150, Doubles = 25, Triples = 3, Hr = 20, Bb = 50, So = 90, Rbi = 80, Sb = 5,
+            Avg = 0.268, Obp = 0.328, Slg = 0.430, Ops = 0.758,
+        });
+        players.AdjustHealthCeiling(broken, -61); // 100 → 39, at/below the retirement floor (40)
+        baseball.UpsertRatings(new PlayerRatingsRow
+        {
+            PlayerId = agedOut, IsPitcher = false,
+            BatPower = 5, BatContact = 5, BatDiscipline = 5,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 5,
+        });
+        players.SetAge(agedOut, 19); // ages to 20 > HS cap, bottom score → washes out unpromoted
+
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+        clock.Initialize(StartYear);
+        // Aging first (CareerManager's job in the live wiring), promotion second,
+        // per-rollover tracking third — per-channel FIFO order.
+        bus.Subscribe<SeasonRolledOverEvent>(_ => players.AgeAllPlayers());
+        var promo = new PromotionManager(
+            db, players, baseball, new GameStateQueries(db),
+            new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9C0001UL));
+        promo.AttachTo(bus);
+
+        const int Years = 12;
+        var conservationFailures = new List<string>();
+        var creamPath = new List<(bool Rostered, LeagueTier Tier)>();
+        var dregPath = new List<(bool Rostered, LeagueTier Tier)>();
+        var scratchSeasons = new List<BattingStatsRow>();
+        bool retireeOk = false, brokenOk = false, agedOutOk = false;
+        int firstRemovals = -1, firstIntake = -1;
+        bus.Subscribe<SeasonRolledOverEvent>(e =>
+        {
+            PromotionSummary run = promo.LastRun;
+            if (run.SeasonYear != e.PreviousSeasonYear)
+            {
+                conservationFailures.Add($"{e.PreviousSeasonYear}: pass did not run");
+            }
+            if (run.Intake != run.Removals)
+            {
+                conservationFailures.Add($"{e.PreviousSeasonYear}: intake {run.Intake} != removals {run.Removals}");
+            }
+            if (!TierLadderInvariantHolds(baseball, out string detail))
+            {
+                conservationFailures.Add($"{e.PreviousSeasonYear}: {detail}");
+            }
+            creamPath.Add(RosteredTierOf(players, baseball, cream));
+            dregPath.Add(RosteredTierOf(players, baseball, dreg));
+            if (e.PreviousSeasonYear == StartYear)
+            {
+                firstRemovals = run.Removals;
+                firstIntake = run.Intake;
+                retireeOk = players.TryGetById(retiree, out PlayerRow r1) && r1.TeamId is null
+                    && players.LoadBattingSeasons(retiree, scratchSeasons) > 0;
+                brokenOk = players.TryGetById(broken, out PlayerRow r2) && r2.TeamId is null;
+                agedOutOk = players.TryGetById(agedOut, out PlayerRow r3) && r3.TeamId is null;
+            }
+        });
+
+        for (int i = 0; i < GlobalState.DaysPerSeason * Years; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+
+        Check("§10.2 conservation law: after every offseason, 48 teams × exactly 9+5+3, 816 rostered, intake ≡ removals",
+            conservationFailures.Count == 0 && creamPath.Count == Years,
+            conservationFailures.Count > 0 ? conservationFailures[0] : $"{Years} rollovers clean");
+        Check("§10.4 removal triad: retiree (42), broken (health ≤ 40) and HS age-out all land in FA, stats intact, exactly matched by HS intake",
+            retireeOk && brokenOk && agedOutOk && firstRemovals == 3 && firstIntake == 3,
+            $"removals {firstRemovals} intake {firstIntake}");
+
+        bool creamOk = true;
+        for (int k = 0; k < creamPath.Count; k++)
+        {
+            creamOk &= creamPath[k].Rostered && (int)creamPath[k].Tier == Math.Min(k + 1, (int)LeagueTier.MLB);
+        }
+        Check("§10.3 cream rises: a max-rated 15-year-old climbs exactly one rung per offseason, HS→MLB in 5, then holds",
+            creamOk,
+            $"path {string.Join("→", creamPath.ConvertAll(p => p.Rostered ? p.Tier.ToString() : "FA"))}");
+
+        bool dregOk = true;
+        for (int k = 0; k < 4; k++)
+        {
+            dregOk &= dregPath[k].Rostered && (int)dregPath[k].Tier == (int)LeagueTier.MLB - (k + 1);
+        }
+        for (int k = 4; k < dregPath.Count; k++)
+        {
+            dregOk &= !dregPath[k].Rostered;
+        }
+        Check("§10.3 symmetric: a zero-rated MLB bat relegates one rung per offseason, then washes out at the College age cap",
+            dregOk,
+            $"path {string.Join("→", dregPath.ConvertAll(p => p.Rostered ? p.Tier.ToString() : "FA"))}");
+
+        // ---- §10.9 talent-stratified equilibrium (pre-9d steady state) ----
+        var meanTalent = new double[LeagueDirectory.TierCount];
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            baseball.LoadRosterByTier((LeagueTier)t, tierRoster);
+            int sum = 0;
+            int batters = 0;
+            foreach (RosterPlayerRow row in tierRoster)
+            {
+                if (row.Role == PitcherRole.None)
+                {
+                    sum += row.BatPower + row.BatContact + row.BatDiscipline;
+                    batters++;
+                }
+            }
+            meanTalent[t] = (double)sum / batters;
+        }
+        Console.WriteLine($"  mean batter talent after {Years} offseasons: " +
+            string.Join("  ", Enumerable.Range(0, LeagueDirectory.TierCount)
+                .Select(t => $"{(LeagueTier)t}={meanTalent[t]:F1}")));
+        // Pre-9d equilibrium shape (doc §1/§10.9): the extremes stratify hard —
+        // HS is the poached-and-refreshed intake pool (strictly lowest), MLB
+        // accumulates every cascade's best (strictly highest, by a wide gap),
+        // and the amateur boundary sorts (College > HS). The MIDDLE minors are
+        // near-sealed until 9d: no age caps and no retirements until their
+        // founding generation ages through, so their means hover at the
+        // generation mean (movement there is only the capped swap churn plus
+        // the MLB-retirement cascade from year ~6) — full strict monotonicity
+        // across the middle rungs is 9d's development-curve handoff, not a
+        // static-ratings property.
+        bool hsLowest = true;
+        bool mlbHighest = true;
+        for (int t = 1; t < LeagueDirectory.TierCount; t++)
+        {
+            hsLowest &= meanTalent[t] > meanTalent[0];
+            mlbHighest &= meanTalent[5] > meanTalent[t - 1];
+        }
+        Check($"§10.9 pre-9d equilibrium: after {Years} offseasons HS is strictly the weakest tier, MLB strictly the strongest (gap ≥ 20), College out-sorts HS",
+            hsLowest && mlbHighest && meanTalent[5] - meanTalent[0] >= 20.0 && meanTalent[1] > meanTalent[0] + 5.0,
+            $"HS {meanTalent[0]:F1} → MLB {meanTalent[5]:F1} (gap {meanTalent[5] - meanTalent[0]:F1})");
+        Check("sweep world: integrity ok, no FK violations, no open batch",
+            !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+
+        // ---- §10.8 determinism: same seed → same promotions, same intake ids ----
+        (string fpA, PromotionSummary lastA) = RunPromotionDeterminismWorld(scratchPath + ".detA", schemaPath);
+        (string fpB, PromotionSummary lastB) = RunPromotionDeterminismWorld(scratchPath + ".detB", schemaPath);
+        Check("§10.8 determinism: two same-seed 3-year worlds produce identical rosters (intake ids included) and summaries",
+            fpA == fpB && fpA.Length > 0
+            && lastA.Removals == lastB.Removals && lastA.Promotions == lastB.Promotions
+            && lastA.Relegations == lastB.Relegations && lastA.Intake == lastB.Intake,
+            $"removals {lastA.Removals}/{lastB.Removals} promotions {lastA.Promotions}/{lastB.Promotions}");
+    }
+
+    private static (string Fingerprint, PromotionSummary Last) RunPromotionDeterminismWorld(string path, string schemaPath)
+    {
+        using var db = new DatabaseManager(path);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var rng = new RngState(LeagueSeed + 91);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+        clock.Initialize(StartYear);
+        bus.Subscribe<SeasonRolledOverEvent>(_ => players.AgeAllPlayers());
+        var promo = new PromotionManager(
+            db, players, baseball, new GameStateQueries(db),
+            new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9C0DE7UL));
+        promo.AttachTo(bus);
+        for (int i = 0; i < GlobalState.DaysPerSeason * 3; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+
+        var rows = new List<PlayerRow>();
+        players.LoadAll(rows);
+        rows.Sort(static (a, b) => string.CompareOrdinal(a.PlayerId, b.PlayerId));
+        var fingerprint = new System.Text.StringBuilder(rows.Count * 44);
+        foreach (PlayerRow row in rows)
+        {
+            fingerprint.Append(row.PlayerId).Append(':')
+                .Append(row.TeamId?.ToString() ?? "-").Append(';');
+        }
+        return (fingerprint.ToString(), promo.LastRun);
+    }
+
+    private static void RunPromotionStreamSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 9c neutrality/stream isolation: an evaluating no-op pass leaves the world bit-identical ---");
+
+        // Two same-seed worlds — one with the promotion pass attached and
+        // firing (but choosing no-op: spread-0 ratings, ages pinned to 25),
+        // one without it — must produce BIT-IDENTICAL season-2 games in all
+        // six tiers. This is §10.1's "inert until movement" clause plus
+        // §10.8's stream isolation: attaching, evaluating and no-op'ing the
+        // pass reads the database only and draws from no one's RNG stream.
+        var batByTier = new LeagueBattingTotals[2][];
+        var pitByTier = new LeaguePitchingTotals[2][];
+        bool noOpRan = false;
+        bool integrityOk = true;
+        for (int variant = 0; variant < 2; variant++)
+        {
+            bool withPromo = variant == 1;
+            string path = scratchPath + (withPromo ? ".promo" : ".bare");
+            using var db = new DatabaseManager(path);
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var rng = new RngState(LeagueSeed + 95);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref rng);
+            LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref rng);
+            // Pin ages inside every tier's window (HS cap 19, College cap 23,
+            // retirement 42) so the pass finds no removals — and spread-0
+            // ratings mean no swaps — leaving it a provable no-op.
+            var tierRows = new List<RosterPlayerRow>();
+            db.RunInBatch(() =>
+            {
+                for (int t = 0; t < LeagueDirectory.TierCount; t++)
+                {
+                    baseball.LoadRosterByTier((LeagueTier)t, tierRows);
+                    int pinnedAge = (LeagueTier)t switch
+                    {
+                        LeagueTier.HS => 16,
+                        LeagueTier.College => 20,
+                        _ => 25,
+                    };
+                    foreach (RosterPlayerRow row in tierRows)
+                    {
+                        players.SetAge(row.PlayerId, pinnedAge);
+                    }
+                }
+            });
+
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+            clock.Initialize(StartYear);
+            PromotionManager? promo = null;
+            if (withPromo)
+            {
+                bus.Subscribe<SeasonRolledOverEvent>(_ => players.AgeAllPlayers());
+                promo = new PromotionManager(
+                    db, players, baseball, new GameStateQueries(db),
+                    new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9C0002UL));
+                promo.AttachTo(bus);
+            }
+            // Season 1 idles gameless; the rollover fires on the last tick.
+            for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            if (withPromo)
+            {
+                PromotionSummary run = promo!.LastRun;
+                noOpRan = run.SeasonYear == StartYear && run.Removals == 0
+                    && run.Promotions == 0 && run.Relegations == 0 && run.Intake == 0;
+            }
+            // Fresh same-seed sims join for season 2 (days 2..365) in BOTH worlds.
+            var normalizer = new StatsNormalizer(db, baseball);
+            for (int t = 0; t < LeagueDirectory.TierCount; t++)
+            {
+                var sim = new LeagueSimulator(
+                    db, baseball, normalizer, new RngState(SeasonSeed + 50 + (ulong)t), (LeagueTier)t);
+                sim.Initialize();
+                sim.AttachTo(bus);
+            }
+            for (int i = 0; i < GlobalState.DaysPerSeason - 1; i++)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            batByTier[variant] = new LeagueBattingTotals[LeagueDirectory.TierCount];
+            pitByTier[variant] = new LeaguePitchingTotals[LeagueDirectory.TierCount];
+            for (int t = 0; t < LeagueDirectory.TierCount; t++)
+            {
+                batByTier[variant][t] = baseball.LoadLeagueBattingTotals(StartYear + 1, (LeagueTier)t);
+                pitByTier[variant][t] = baseball.LoadLeaguePitchingTotals(StartYear + 1, (LeagueTier)t);
+            }
+            integrityOk &= !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0;
+        }
+
+        bool identical = true;
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            identical &= BattingTotalsEqual(in batByTier[0][t], in batByTier[1][t])
+                && PitchingTotalsEqual(in pitByTier[0][t], in pitByTier[1][t]);
+        }
+        Check("§10.1/§10.8: the pass fired, evaluated and chose no-op (no removals, no swaps, no intake)",
+            noOpRan);
+        Check("§10.1/§10.8: season 2 is BIT-IDENTICAL across all six tiers with the no-op pass attached vs absent",
+            identical && integrityOk,
+            $"MLB PA {batByTier[0][5].Pa}/{batByTier[1][5].Pa} H {batByTier[0][5].H}/{batByTier[1][5].H}");
+    }
+
+    private static void RunPromotionAvatarSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Phase 9c avatar tier-transfer handoff (doc §6, acceptance check 7) ---");
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed + 97);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+        LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var gameState = new GameStateQueries(db);
+        var clock = new TimeManager(db, gameState, state, bus);
+        clock.Initialize(StartYear);
+        var normalizer = new StatsNormalizer(db, baseball);
+        var leagues = new LeagueDirectory();
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            var sim = new LeagueSimulator(
+                db, baseball, normalizer, new RngState(SeasonSeed + 70 + (ulong)t), (LeagueTier)t);
+            sim.Initialize();
+            sim.AttachTo(bus);
+            leagues.Register(sim);
+        }
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(
+            db, players, baseball, gameState, state, leagues, micro, new RngState(0x9CA7A7UL));
+        career.AttachTo(bus);
+        var promo = new PromotionManager(
+            db, players, baseball, gameState, leagues, micro, new RngState(0x9C0003UL));
+        promo.Career = career;
+        promo.AttachTo(bus);
+
+        int avatarEvents = 0;
+        int lastAvatarEventTeam = 0;
+        bus.Subscribe<AvatarChangedEvent>(e =>
+        {
+            avatarEvents++;
+            lastAvatarEventTeam = e.TeamId;
+        });
+
+        const int HsTeam = 101;
+        career.CreateAvatar("Ace", "Prospect", HsTeam, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 100, BatContact = 100, BatDiscipline = 100,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+        });
+        string avatarId = career.AvatarPlayerId;
+
+        // Snapshots for the §6 destination proof (the out-ranked incumbent
+        // must relegate into the avatar's vacated slot).
+        var tierRoster = new List<RosterPlayerRow>();
+        baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
+        var oldHsTeamIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (RosterPlayerRow row in tierRoster)
+        {
+            if (row.TeamId == HsTeam)
+            {
+                oldHsTeamIds.Add(row.PlayerId);
+            }
+        }
+        baseball.LoadRosterByTier(LeagueTier.College, tierRoster);
+        var oldCollegeTeamById = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (RosterPlayerRow row in tierRoster)
+        {
+            oldCollegeTeamById.Add(row.PlayerId, row.TeamId);
+        }
+        avatarEvents = 0;
+
+        // Season 1 + the rollover on the last tick: the max-rated avatar
+        // dominates HS (real games via the autopilot micro-sim), ages to 20
+        // (no succession trigger), and the promotion pass runs.
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+
+        PromotionSummary run1 = promo.LastRun;
+        bool inCollege = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier newTier)
+            && newTier == LeagueTier.College;
+        Check("§6 gate: a dominating HS avatar promotes to a real College team+slot on its first offseason",
+            run1.SeasonYear == StartYear && run1.AvatarPromoted
+            && run1.AvatarTeamId == career.AvatarTeamId && inCollege,
+            $"avatar team {career.AvatarTeamId} ({newTier}), promoted={run1.AvatarPromoted}");
+        Check("§6 school gate input: HS→College keeps the destination amateur (the 9b bridge derives the gate from this tier)",
+            newTier == LeagueTier.College, $"tier {newTier}");
+
+        // §6 destination: the avatar took the incumbent's slot on its
+        // destination team, so exactly ONE ex-member of that team must now
+        // occupy the avatar's vacated HS slot. (Other College players may
+        // also relegate onto team 101 via the same boundary's capped NPC
+        // swaps whenever their riser was a 101 teammate — that is ordinary
+        // churn, not the avatar's counterpart.)
+        baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
+        int counterpartCount = 0;
+        foreach (RosterPlayerRow row in tierRoster)
+        {
+            if (row.TeamId == HsTeam && !oldHsTeamIds.Contains(row.PlayerId)
+                && oldCollegeTeamById.TryGetValue(row.PlayerId, out int fromTeam)
+                && fromTeam == run1.AvatarTeamId)
+            {
+                counterpartCount++;
+            }
+        }
+        Check("§6 destination: the out-ranked incumbent from the avatar's destination team relegated into the avatar's vacated HS slot",
+            counterpartCount == 1, $"counterparts {counterpartCount}");
+        Check("§10.2 roster invariant holds across the avatar handoff",
+            TierLadderInvariantHolds(baseball, out string invariantDetail), invariantDetail);
+        Check("AvatarChangedEvent republished with the destination team (the 9b Life-sim bridge's input)",
+            avatarEvents >= 1 && lastAvatarEventTeam == career.AvatarTeamId,
+            $"events {avatarEvents}, team {lastAvatarEventTeam}");
+
+        // Stat continuity + interactive scheduling in the NEW tier's round-robin.
+        var avatarSeasons = new List<BattingStatsRow>();
+        players.LoadBattingSeasons(avatarId, avatarSeasons);
+        bool hasSeason1Line = false;
+        foreach (BattingStatsRow row in avatarSeasons)
+        {
+            hasSeason1Line |= row.SeasonYear == StartYear && row.Pa > 0;
+        }
+        career.AutopilotAttendedGames = false;
+        clock.AdvanceDay();
+        bus.DispatchPending(); // season-2 day 2
+        bool pendingInCollege = career.TryGetPendingGame(out PendingAttendedGame pending)
+            && pending.HomeTeamId is >= 201 and <= 208 && pending.AwayTeamId is >= 201 and <= 208;
+        var neutral = new NeutralBatterPolicy();
+        career.PlayPendingGame(ref neutral);
+        Check("§10.7 continuity + scheduling: season-1 stats persist by player_id; the pending game lands in the College round-robin and plays clean through the re-initialized micro-sim",
+            hasSeason1Line && pendingInCollege && !career.HasPendingGame,
+            $"pending {pending.HomeTeamId}@{pending.AwayTeamId}");
+        career.AutopilotAttendedGames = true;
+
+        // ---- §6 succession precedence: a parked succession skips the avatar's
+        // promotion that offseason; the NPC churn still runs. ----
+        career.AutopilotSuccession = false;
+        string heirId = career.ConceiveChild("Heir", "Prospect", birthAge: 19);
+        players.SetBaseballInterest(heirId, 100);
+        players.SetAge(avatarId, 41); // ages to 42 at the next rollover → retirement trigger
+        int teamBeforeSkip = career.AvatarTeamId;
+        for (int i = 0; i < GlobalState.DaysPerSeason - 2; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+
+        // Origin release, asserted BEFORE the next rollover (its age-out
+        // removals would drop players out of the tier-joined aggregate): the
+        // vacated HS team's games ran under the macro sim all season — a
+        // stale attended-team claim would have skipped one pairing per day.
+        LeaguePitchingTotals hsSeason2 = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
+        Check("origin sim released: the HS tier completes a full season after the avatar leaves (no stale attended-team claim)",
+            hsSeason2.Gs == LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount,
+            $"Gs {hsSeason2.Gs}/{LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount}");
+
+        clock.AdvanceDay(); // the season-3 boundary: rollover 2 fires here
+        bus.DispatchPending();
+
+        PromotionSummary run2 = promo.LastRun;
+        Check("§6 succession precedence: the pending succession parks, the (still-dominant) avatar's promotion is skipped, NPC churn still runs",
+            career.HasPendingSuccessionChoice && career.AvatarTeamId == teamBeforeSkip
+            && !run2.AvatarPromoted && run2.SeasonYear == StartYear + 1
+            && run2.Removals > 0 && run2.Intake == run2.Removals,
+            $"removals {run2.Removals}, avatar team {career.AvatarTeamId}");
+
+        career.ResolvePendingSuccession(heirId);
+        Check("succession resolves cleanly after the skipped offseason: the heir inherits the College franchise",
+            career.AvatarPlayerId == heirId && career.AvatarTeamId == teamBeforeSkip
+            && !career.HasPendingSuccessionChoice,
+            $"avatar team {career.AvatarTeamId}");
+        Check("avatar world: integrity ok, no FK violations, no open batch",
+            !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+    }
+
+    /// <summary>Nth rostered player of a role in load order (team_id, player_id) — deterministic fixture picks.</summary>
+    private static string NthOfRole(List<RosterPlayerRow> roster, PitcherRole role, int index)
+    {
+        int seen = 0;
+        foreach (RosterPlayerRow row in roster)
+        {
+            if (row.Role == role && seen++ == index)
+            {
+                return row.PlayerId;
+            }
+        }
+        throw new InvalidOperationException($"No {role} at index {index} in a {roster.Count}-row roster.");
+    }
+
+    private static (bool Rostered, LeagueTier Tier) RosteredTierOf(
+        PlayerQueries players, BaseballQueries baseball, string playerId)
+    {
+        if (!players.TryGetById(playerId, out PlayerRow row) || !row.TeamId.HasValue)
+        {
+            return (false, default);
+        }
+        baseball.TryGetTeamTier(row.TeamId.Value, out LeagueTier tier);
+        return (true, tier);
+    }
+
+    /// <summary>
+    /// The 9c conservation law (§10.2): 48 teams, every team exactly
+    /// 9 batters + 5 starters + 3 relievers, 816 rostered in total.
+    /// </summary>
+    private static bool TierLadderInvariantHolds(BaseballQueries baseball, out string detail)
+    {
+        var teams = new List<TeamRow>();
+        baseball.LoadAllTeams(teams);
+        if (teams.Count != LeagueDirectory.TierCount * LeagueSimulator.TeamCount)
+        {
+            detail = $"{teams.Count} teams";
+            return false;
+        }
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        var counts = new Dictionary<int, (int Batters, int Starters, int Relievers)>(teams.Count);
+        foreach (TeamRow team in teams)
+        {
+            counts[team.TeamId] = default;
+        }
+        foreach (RosterPlayerRow row in roster)
+        {
+            if (!counts.TryGetValue(row.TeamId, out (int Batters, int Starters, int Relievers) c))
+            {
+                detail = $"player {row.PlayerId} on unknown team {row.TeamId}";
+                return false;
+            }
+            counts[row.TeamId] = row.Role switch
+            {
+                PitcherRole.None => (c.Batters + 1, c.Starters, c.Relievers),
+                PitcherRole.Starter => (c.Batters, c.Starters + 1, c.Relievers),
+                _ => (c.Batters, c.Starters, c.Relievers + 1),
+            };
+        }
+        foreach (KeyValuePair<int, (int Batters, int Starters, int Relievers)> entry in counts)
+        {
+            if (entry.Value != (LeagueSimulator.LineupSize, LeagueSimulator.RotationSize, LeagueSimulator.BullpenSize))
+            {
+                detail = $"team {entry.Key} = {entry.Value.Batters}/{entry.Value.Starters}/{entry.Value.Relievers}";
+                return false;
+            }
+        }
+        if (roster.Count != LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam)
+        {
+            detail = $"{roster.Count} rostered";
+            return false;
+        }
+        detail = $"{roster.Count} rostered across {teams.Count} teams";
+        return true;
     }
 
     private static int SeasonPa(PlayerQueries players, string playerId)

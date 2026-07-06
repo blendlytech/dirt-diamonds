@@ -433,6 +433,32 @@ roster-invariant sign-off** (check 7 — the delicate mutation). The score
 constants are the tuning surface; if a playtest shows the ladder sorting too fast
 or too slow, tune `SwapCap`/`SwapMargin` and the `wP/wS` split first.
 
+## 12a. Implementation record (Fable 5, 2026-07-05) — SHIPPED, all three sign-offs green
+
+9c-1 + 9c-2 landed in one pass: `PromotionManager.cs` (PromotionProfile /
+PromotionScore / PromotionManager), `CareerManager.ReactivateAvatar`,
+`LeagueDirectory.TryGet`, two season-line bulk reads in `BaseballQueries`
+(live-schema-validated; deliberate cold full scans — §7 forbids a new index),
+`GameManager.Promotions` wiring, and three MonteCarloHarness suites
+(181→**203/203**, exit 0). The §12 sign-offs: **neutrality** (no band moved;
+MLB bit-identity exact; plus a two-world proof that a firing-but-no-op pass
+leaves season 2 bit-identical across all six tiers), **conservation** (12
+offseasons, every year 48×9+5+3, 816, intake ≡ removals, cream/dreg
+trajectories exact, same-seed determinism byte-identical), and the
+**avatar-handoff roster invariant** (check 7 in full, including the §6
+counterpart-slot destination, origin-sim release, and succession precedence).
+
+Deviations/additions, all disclosed in progress.md: `GlobalState` dropped from
+the §8 ctor (unused); `CareerManager` as an optional attachment property; a
+3.0 cap on the raw performance ratio (an unbounded 1-out 0.00-ERA ratio
+defeats shrinkage otherwise); background relievers rank ~purely on `S` (the
+macro sim's complete-game shape gives them no line); a swap-relegated College
+player may sit one year over the HS age cap before washing out; §10.9's
+middle-minor rungs hover at the generation mean by construction pre-9d (no
+caps, no retirements until the founding generation ages through) — the
+harness pins HS-strictly-lowest / MLB-strictly-highest / College>HS and
+explicitly leaves strict middle-rung monotonicity to 9d's curves.
+
 ## 13. Handoff to 9d
 
 9c leaves the ladder *sorting* players by their current ratings + season line and

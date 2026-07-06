@@ -796,6 +796,39 @@ public sealed class CareerManager
     }
 
     /// <summary>
+    /// Re-resolves the avatar against CURRENT database state after an external
+    /// roster mutation has re-initialized the sims — the 9c promotion pass's
+    /// re-activation tail (promotion doc §6), the <see cref="Succeed"/> tail
+    /// generalized cross-tier. The caller (PromotionManager) has already
+    /// committed its batch and re-run every tier sim's + the micro-sim's
+    /// Initialize(); this re-reads the avatar's (possibly new) team, clears
+    /// the attended-team claim on every registered tier sim — a cross-tier
+    /// move must not leave the ORIGIN sim skipping its old team's games
+    /// forever — and runs the standard activation: tier-relative
+    /// _avatarTeamIndex against the new tier's teams, _avatarSlot re-found,
+    /// SetAttendedTeam on the new tier's sim, AvatarChangedEvent republished
+    /// (the 9b bridge re-points the Life-sim clock + school gate from it).
+    /// The avatar keeps every prior stat row — they persist by player_id.
+    /// </summary>
+    public void ReactivateAvatar()
+    {
+        string avatarId = AvatarPlayerId; // throws if no avatar exists
+        if (!_players.TryGetById(avatarId, out PlayerRow row) || !row.TeamId.HasValue)
+        {
+            throw new InvalidOperationException(
+                $"Avatar '{avatarId}' is missing or unrostered after a roster mutation — the promotion pass must never bench the avatar.");
+        }
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            if (_leagues.TryGet((LeagueTier)t, out LeagueSimulator sim))
+            {
+                sim.ClearAttendedTeam();
+            }
+        }
+        ActivateAvatar(avatarId, row.TeamId.Value);
+    }
+
+    /// <summary>
     /// Evaluates succession and applies the outcome: a fired trigger either
     /// hands off to the selected heir (<see cref="Succeed"/>) or records the
     /// lineage failure in Game_State (§6 — the key's presence is the game-over

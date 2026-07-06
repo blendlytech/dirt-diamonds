@@ -102,6 +102,32 @@ public struct PitchArsenalRow
     public int UsageWeight;
 }
 
+/// <summary>
+/// One player's Batting_Stats counting line for a single season — the 9c
+/// promotion pass's per-player performance read (OPS is recomputed in C# from
+/// these counts with the exact SqlNormalizeBattingRates formula, so the score
+/// never depends on whether the rate denormalization has run).
+/// </summary>
+public struct SeasonBattingLine
+{
+    public string PlayerId;
+    public int Pa;
+    public int Ab;
+    public int H;
+    public int Doubles;
+    public int Triples;
+    public int Hr;
+    public int Bb;
+}
+
+/// <summary>One player's Pitching_Stats counting line for a single season (9c promotion pass; ERA = 27·ER/outs).</summary>
+public struct SeasonPitchingLine
+{
+    public string PlayerId;
+    public int OutsRecorded;
+    public int Er;
+}
+
 /// <summary>League-wide Batting_Stats sums for one season (run_monte_carlo_batch acceptance math).</summary>
 public struct LeagueBattingTotals
 {

@@ -222,6 +222,21 @@ public sealed class BaseballQueries
         "WHERE season_year = @seasonYear AND player_id IN " +
         "(SELECT p.player_id FROM Players AS p JOIN Team_Tiers AS tt ON tt.team_id = p.team_id WHERE tt.tier = @tier);";
 
+    // Per-player season counting lines (Phase 9c): the promotion pass's one
+    // bulk read of a completed season, consumed into dictionaries up front —
+    // never row-at-a-time mid-sweep. Deliberate full scan: the UNIQUE index
+    // leads on player_id, and §7's no-schema-change contract forbids a new
+    // season_year index — this is a once-per-offseason cold read. Plan
+    // validated via the sqlite MCP (No Blind Queries): SCAN Batting_Stats /
+    // SCAN Pitching_Stats.
+    private const string SqlSelectSeasonBattingLines =
+        "SELECT player_id, pa, ab, h, doubles, triples, hr, bb " +
+        "FROM Batting_Stats WHERE season_year = @seasonYear ORDER BY player_id;";
+
+    private const string SqlSelectSeasonPitchingLines =
+        "SELECT player_id, outs_recorded, er " +
+        "FROM Pitching_Stats WHERE season_year = @seasonYear ORDER BY player_id;";
+
     private const string SqlLeagueBattingTotals =
         "SELECT COALESCE(SUM(pa), 0), COALESCE(SUM(ab), 0), COALESCE(SUM(h), 0), COALESCE(SUM(doubles), 0), " +
         "COALESCE(SUM(triples), 0), COALESCE(SUM(hr), 0), COALESCE(SUM(bb), 0), COALESCE(SUM(so), 0), " +
@@ -282,6 +297,8 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _normalizePitchingRates;
     private readonly SqliteCommand _leagueBattingTotals;
     private readonly SqliteCommand _leaguePitchingTotals;
+    private readonly SqliteCommand _selectSeasonBattingLines;
+    private readonly SqliteCommand _selectSeasonPitchingLines;
 
     public BaseballQueries(DatabaseManager db)
     {
@@ -355,6 +372,9 @@ public sealed class BaseballQueries
 
         _applyPedGameCosts = Acquire(SqlApplyPedGameCosts,
             ("@healthCost", SqliteType.Integer), ("@riskGain", SqliteType.Integer), ("@playerId", SqliteType.Text));
+
+        _selectSeasonBattingLines = Acquire(SqlSelectSeasonBattingLines, ("@seasonYear", SqliteType.Integer));
+        _selectSeasonPitchingLines = Acquire(SqlSelectSeasonPitchingLines, ("@seasonYear", SqliteType.Integer));
 
         _normalizeBattingRates = Acquire(SqlNormalizeBattingRates, ("@seasonYear", SqliteType.Integer));
         _normalizePitchingRates = Acquire(SqlNormalizePitchingRates, ("@seasonYear", SqliteType.Integer));
@@ -777,6 +797,56 @@ public sealed class BaseballQueries
         p["@seasonYear"].Value = seasonYear;
         p["@tier"].Value = (int)tier;
         return _db.ExecuteNonQuery(_normalizePitchingRatesTier);
+    }
+
+    // ------------------------------------------------------------------
+    // Season lines (9c promotion pass)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Every player's batting counting line for one season into
+    /// <paramref name="destination"/> (cleared first) — the promotion pass's
+    /// single bulk read of the completed season (deliberate full scan, once
+    /// per offseason; see the SQL comment).
+    /// </summary>
+    public int LoadSeasonBattingLines(int seasonYear, List<SeasonBattingLine> destination)
+    {
+        destination.Clear();
+        _selectSeasonBattingLines.Parameters["@seasonYear"].Value = seasonYear;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectSeasonBattingLines);
+        while (reader.Read())
+        {
+            destination.Add(new SeasonBattingLine
+            {
+                PlayerId = reader.GetString(0),
+                Pa = reader.GetInt32(1),
+                Ab = reader.GetInt32(2),
+                H = reader.GetInt32(3),
+                Doubles = reader.GetInt32(4),
+                Triples = reader.GetInt32(5),
+                Hr = reader.GetInt32(6),
+                Bb = reader.GetInt32(7),
+            });
+        }
+        return destination.Count;
+    }
+
+    /// <summary>Pitching counterpart of <see cref="LoadSeasonBattingLines"/> (outs + ER are all ERA needs).</summary>
+    public int LoadSeasonPitchingLines(int seasonYear, List<SeasonPitchingLine> destination)
+    {
+        destination.Clear();
+        _selectSeasonPitchingLines.Parameters["@seasonYear"].Value = seasonYear;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectSeasonPitchingLines);
+        while (reader.Read())
+        {
+            destination.Add(new SeasonPitchingLine
+            {
+                PlayerId = reader.GetString(0),
+                OutsRecorded = reader.GetInt32(1),
+                Er = reader.GetInt32(2),
+            });
+        }
+        return destination.Count;
     }
 
     // ------------------------------------------------------------------
