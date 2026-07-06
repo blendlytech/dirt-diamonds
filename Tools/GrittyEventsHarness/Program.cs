@@ -2,6 +2,7 @@ using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Hustles;
+using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Hustles;
@@ -49,6 +50,8 @@ internal static class Program
         try
         {
             RunContentChecks();
+            RunContactRegistryChecks();
+            RunNarrativeLogChecks();
             RunConditionChecks();
             RunDispatcherChecks();
             RunCascadeAndWriterChecks();
@@ -161,6 +164,164 @@ internal static class Program
             && wholeFolder.TryGetById("suspended_ped_test_flag", out _)
             && wholeFolder.TryGetById("sidelined_by_injury", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
+    }
+
+    // ------------------------------------------------------------------
+    // 1b. Contact registry (Phase 10b, presentation_layer_narrative.md §4.2)
+    // ------------------------------------------------------------------
+
+    private static void RunContactRegistryChecks()
+    {
+        Console.WriteLine("--- Contact registry ---");
+
+        string contactsPath = Path.Combine(_repoRoot, "Assets", "Narrative", "Contacts", "contacts.json");
+        ContactRegistry registry = ContactJson.Parse(File.ReadAllText(contactsPath));
+        Check("shipped contacts.json parses and resolves 'unknown' to \"Unknown Number\"",
+            registry.Resolve("unknown").DisplayName == "Unknown Number");
+
+        ContactRegistry noUnknownAuthored = ContactJson.Parse(
+            """{ "contacts": [ { "id": "someone", "display_name": "Someone", "role": "coach" } ] }""");
+        Check("ContactRegistry synthesizes the 'unknown' fallback when a batch never authors it, and never throws on an unrecognized id",
+            noUnknownAuthored.Resolve("unknown").Id == "unknown"
+            && noUnknownAuthored.Resolve("nonexistent_contact_id").Id == "unknown");
+
+        Check("ContactJson rejects an unrecognized role", ThrowsAny(() =>
+            ContactJson.Parse("""{ "contacts": [ { "id": "x", "display_name": "X", "role": "wizard" } ] }""")));
+        Check("ContactJson rejects a duplicate contact id", ThrowsAny(() =>
+            ContactJson.Parse(
+                """{ "contacts": [ { "id": "dup", "display_name": "A", "role": "coach" }, { "id": "dup", "display_name": "B", "role": "agent" } ] }""")));
+
+        GrittyEventLibrary tagged = GrittyEventJson.Parse(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "contact": "coach_reyes", "choices": [ { "id": "a" } ] } ] }""");
+        GrittyEventLibrary untagged = GrittyEventJson.Parse(
+            """{ "events": [ { "id": "y", "scope": "any", "weight": 0.5, "choices": [ { "id": "a" } ] } ] }""");
+        Check("GrittyEventJson: an authored \"contact\" parses verbatim; an omitted one defaults to \"unknown\"",
+            tagged.TryGetById("x", out GrittyEventDefinition x) && x.ContactId == "coach_reyes"
+            && untagged.TryGetById("y", out GrittyEventDefinition y) && y.ContactId == GrittyEventJson.UnknownContactId);
+
+        // check_event_graph_integrity's 10b addendum: every shipped event's
+        // contact resolves in the registry (or is the reserved unknown id) —
+        // load the whole Content folder AND the whole registry together, the
+        // same "load together" discipline as RunContentChecks' cross-batch
+        // id-collision check.
+        string contentDir = Path.Combine(_repoRoot, "Assets", "Narrative", "Events", "Content");
+        string[] batchFiles = Directory.GetFiles(contentDir, "*.json");
+        var batchDocuments = new string[batchFiles.Length];
+        for (int i = 0; i < batchFiles.Length; i++)
+        {
+            batchDocuments[i] = File.ReadAllText(batchFiles[i]);
+        }
+        GrittyEventLibrary allEvents = GrittyEventJson.Parse(batchDocuments);
+        int unresolved = 0;
+        int taggedNonUnknown = 0;
+        foreach (GrittyEventDefinition definition in allEvents.Events)
+        {
+            if (definition.ContactId != ContactRegistry.UnknownContactId && !registry.Contains(definition.ContactId))
+            {
+                unresolved++;
+            }
+            if (definition.ContactId != ContactRegistry.UnknownContactId)
+            {
+                taggedNonUnknown++;
+            }
+        }
+        Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
+            unresolved == 0 && allEvents.Count == 19 && taggedNonUnknown > 0,
+            $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
+    }
+
+    // ------------------------------------------------------------------
+    // 1c. Narrative log write (Phase 10b, presentation_layer_narrative.md §4.3)
+    // ------------------------------------------------------------------
+
+    private static void RunNarrativeLogChecks()
+    {
+        Console.WriteLine("--- Narrative log (Burner Phone read-model) ---");
+
+        // A resolved autopilot fire writes exactly one narrative_msg row,
+        // with the fire's own day/season and the picked choice's label.
+        {
+            using World world = World.Create("narrativeLog", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "tagged", "scope": "any", "weight": 1.0, "contact": "coach_reyes",
+                  "choices": [ { "id": "only", "label": "Take it in stride" } ] } ] }
+                """));
+            world.AddPlayer("p1", age: 27, teamId: 1);
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("p1", rows);
+            Check("resolved fire logs exactly one narrative_msg row with contact/prompt/choice/day/season",
+                rows.Count == 1 && rows[0].ContactId == "coach_reyes" && rows[0].Choice == "Take it in stride"
+                && rows[0].ChoiceIndex == 0 && rows[0].GameDay == 2 && rows[0].SeasonYear == 2026,
+                rows.Count == 1 ? $"contact={rows[0].ContactId} choice={rows[0].Choice} day={rows[0].GameDay} season={rows[0].SeasonYear}" : $"{rows.Count} rows");
+        }
+
+        // An untagged event's fire logs against the reserved "unknown" contact.
+        {
+            using World world = World.Create("narrativeLogUnknown", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "untagged", "scope": "any", "weight": 1.0, "choices": [ { "id": "only" } ] } ] }"""));
+            world.AddPlayer("p1", age: 27, teamId: 1);
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("p1", rows);
+            Check("an untagged event's logged message defaults to the 'unknown' contact",
+                rows.Count == 1 && rows[0].ContactId == "unknown");
+        }
+
+        // A forfeited stale pending choice still logs — with ITS OWN fire day,
+        // not the day it was bumped, so the thread reflects the true timeline.
+        {
+            using World world = World.Create("narrativeLogForfeit", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "choiceA", "scope": "avatar", "weight": 1.0, "cooldown_days": 5, "contact": "agent_diaz",
+                    "choices": [ { "id": "a1", "autopilot_weight": 1 } ] },
+                  { "id": "choiceB", "scope": "avatar", "weight": 1.0, "contact": "girlfriend_jess",
+                    "choices": [ { "id": "b1", "autopilot_weight": 1 } ] }
+                ] }
+                """));
+            world.Applier.AutopilotAvatarChoices = false;
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+
+            // Day 2: choiceA fires and pauses (never resolved by the player).
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            // Day 3: choiceB fires, forfeiting choiceA to autopilot — choiceA
+            // logs with day 2 (its own fire day), not day 3.
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("hero", rows);
+            Check("a forfeited pending choice logs with its ORIGINAL fire day, not the bump day",
+                rows.Count == 1 && rows[0].ContactId == "agent_diaz" && rows[0].GameDay == 2,
+                rows.Count == 1 ? $"contact={rows[0].ContactId} day={rows[0].GameDay}" : $"{rows.Count} rows");
+
+            // The player answers choiceB — a second row lands, ordered after.
+            world.Applier.ResolveChoice(0);
+            world.Bus.DispatchPending();
+            world.NarrativeLog.LoadForPlayer("hero", rows);
+            Check("resolving the still-open choice appends a second row, oldest first",
+                rows.Count == 2 && rows[0].ContactId == "agent_diaz" && rows[1].ContactId == "girlfriend_jess"
+                && rows[1].GameDay == 3);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1276,6 +1437,7 @@ internal static class Program
         public LifeSimManager LifeSim = null!;
         public EventDispatcher Dispatcher = null!;
         public EventConsequenceApplier Applier = null!;
+        public NarrativeLogQueries NarrativeLog = null!;
         public readonly List<GrittyEventFiredEvent> Fired = new();
 
         public static World Create(
@@ -1296,9 +1458,11 @@ internal static class Program
             world.Graph = new RelationshipGraph();
             world.Graph.AttachTo(world.Bus);
             world.LifeSim = new LifeSimManager();
+            world.NarrativeLog = new NarrativeLogQueries(world.Db);
 
             world.Applier = new EventConsequenceApplier(
-                world.Db, world.Players, library, world.Graph, world.Bus, world.GameState, rngSeed: 4242UL);
+                world.Db, world.Players, library, world.Graph, world.Bus, world.GameState,
+                world.State, world.NarrativeLog, rngSeed: 4242UL);
             world.Applier.AttachTo(world.Bus);
             world.View = world.Db.CreateReadOnlyView();
             world.Dispatcher = new EventDispatcher(

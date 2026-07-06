@@ -10,7 +10,7 @@ namespace DirtAndDiamonds.UI;
 /// the heir reveal/choice (<see cref="CareerManager.HasPendingSuccessionChoice"/>)
 /// and a persistent game-over banner (<see cref="CareerManager.IsLineageOver"/>).
 /// Self-driven, dirty-flag polling in _Process (mirrors BaseballDashboard's
-/// _awaitingPendingGame / EventChoiceScreen's pending-identity pattern) — the
+/// _awaitingPendingGame / BurnerPhone's pending-fire identity pattern) — the
 /// candidate buttons rebuild only when the pending candidate set actually
 /// changes, never every idle frame. UI never touches the database directly: a
 /// button press only calls CareerManager.ResolvePendingSuccession, which owns

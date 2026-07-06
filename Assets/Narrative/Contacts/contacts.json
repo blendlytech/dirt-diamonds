@@ -1,0 +1,10 @@
+{
+  "//": "Contact registry (Phase 10b, presentation_layer_narrative.md §4.2). contact_id -> display metadata for the Burner Phone's threaded messages. 'unknown' is the reserved fallback thread for events an authored batch never tags with \"contact\" -- always present (ContactRegistry synthesizes it even if a future edit drops this row). The other four group the ~19 shipped gritty events (Sonnet 5, 10b tagging pass): coach_reyes carries the on-field/clubhouse arc, agent_diaz carries league/legal/health correspondence, girlfriend_jess carries the romance/marriage/family arc, family_mom carries the pre-16 heir-interest beats. The syndicate/arrest arc stays on 'unknown' by design -- those events are deliberately anonymous threats, not named relationships.",
+  "contacts": [
+    { "id": "unknown", "display_name": "Unknown Number", "role": "unknown" },
+    { "id": "coach_reyes", "display_name": "Coach Reyes", "role": "coach" },
+    { "id": "agent_diaz", "display_name": "Alex Diaz (Agent)", "role": "agent" },
+    { "id": "girlfriend_jess", "display_name": "Jess", "role": "girlfriend" },
+    { "id": "family_mom", "display_name": "Mom", "role": "family" }
+  ]
+}

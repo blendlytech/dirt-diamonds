@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Hustles;
+using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
@@ -31,6 +32,8 @@ public sealed partial class GameManager : Node
     // NOTE: like the .sql above, .json is not a Godot resource type — Phase 9
     // export presets must add Content/*.json to the export include filters.
     private const string GrittyEventContentDir = "res://Assets/Narrative/Events/Content";
+    // NOTE: same export-filter caveat as GrittyEventContentDir above.
+    private const string ContactsResourcePath = "res://Assets/Narrative/Contacts/contacts.json";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -112,6 +115,12 @@ public sealed partial class GameManager : Node
 
     /// <summary>The main-thread consequence applier — public like Career/League/Micro so the event-choice UI can read PendingChoice/ResolveChoice directly.</summary>
     public EventConsequenceApplier GrittyEventChoices { get; private set; } = null!;
+
+    /// <summary>Phase 10b: the Burner Phone contact registry — public like GrittyEvents so the phone UI can resolve a message's contact_id to display metadata.</summary>
+    public ContactRegistry Contacts { get; private set; } = null!;
+
+    /// <summary>Phase 10b: the narrative-message read-model — public like Baseball/Players so the phone UI can read the avatar's thread history.</summary>
+    public NarrativeLogQueries NarrativeLog { get; private set; } = null!;
 
     public override void _Ready()
     {
@@ -346,8 +355,19 @@ public sealed partial class GameManager : Node
         // thread against a read-only WAL view. Wall-clock seeds, same
         // determinism contract as the league (the harness seeds its own).
         GrittyEvents = GrittyEventJson.Parse(LoadGrittyEventContent());
+        // Phase 10b: the Burner Phone's contact registry + narrative read-model.
+        // Contacts is pure content (no schema, no sim reference); NarrativeLog
+        // is a typed query class like every other Data-layer surface.
+        string contactsJson = FileAccess.GetFileAsString(ContactsResourcePath);
+        if (string.IsNullOrWhiteSpace(contactsJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{ContactsResourcePath}' ({FileAccess.GetOpenError()}) — the contact registry is missing.");
+        }
+        Contacts = ContactJson.Parse(contactsJson);
+        NarrativeLog = new NarrativeLogQueries(_database);
         GrittyEventChoices = new EventConsequenceApplier(
-            _database, Players, GrittyEvents, Relationships, Events, GameState,
+            _database, Players, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);
         // The real game pauses the avatar's own fires for the choice UI;
         // headless/harness callers construct their own applier and keep the

@@ -16,6 +16,9 @@ namespace DirtAndDiamonds.Narrative.Events;
 /// </summary>
 public static class GrittyEventJson
 {
+    /// <summary>The reserved fallback thread ("Unknown Number") for events an authored batch never tags with "contact" — mirrored by <see cref="Contacts.ContactRegistry"/>'s built-in fallback entry.</summary>
+    public const string UnknownContactId = "unknown";
+
     public static GrittyEventLibrary Parse(string json)
     {
         var events = new List<GrittyEventDefinition>();
@@ -122,7 +125,14 @@ public static class GrittyEventJson
             ? promptElement.GetString() ?? Humanize(id)
             : Humanize(id);
 
-        return new GrittyEventDefinition(id, scope, weight, cooldownDays, prompt, prerequisites, choices);
+        // Additive (presentation_layer_narrative.md §4.2): a batch that omits
+        // "contact" routes to the reserved "unknown" thread, same fallback
+        // discipline as the prompt/label humanization above.
+        string contactId = element.TryGetProperty("contact", out JsonElement contactElement)
+            ? contactElement.GetString() ?? UnknownContactId
+            : UnknownContactId;
+
+        return new GrittyEventDefinition(id, scope, weight, cooldownDays, prompt, contactId, prerequisites, choices);
     }
 
     /// <summary>Player-facing fallback for content that omits "prompt"/"label": snake_case id → Title Case words.</summary>

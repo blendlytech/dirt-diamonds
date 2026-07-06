@@ -1,6 +1,9 @@
-[gd_scene format=3]
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/BurnerPhone.cs" id="1_script"]
 
 [node name="BurnerPhone" type="PanelContainer"]
+script = ExtResource("1_script")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -10,11 +13,44 @@ layout_mode = 2
 
 [node name="Messages" type="MarginContainer" parent="PhoneTabs"]
 layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="MessagesPlaceholder" type="Label" parent="PhoneTabs/Messages"]
+[node name="MessagesLayout" type="HBoxContainer" parent="PhoneTabs/Messages"]
 layout_mode = 2
-autowrap_mode = 2
-text = "No messages yet."
+theme_override_constants/separation = 8
+
+[node name="ContactList" type="ItemList" parent="PhoneTabs/Messages/MessagesLayout"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+allow_reselect = true
+
+[node name="ThreadPanel" type="VBoxContainer" parent="PhoneTabs/Messages/MessagesLayout"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ThreadHeaderLabel" type="Label" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Select a contact"
+
+[node name="ThreadScroll" type="ScrollContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="ThreadContainer" type="VBoxContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ChoicesContainer" type="VBoxContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
 
 [node name="Bank" type="MarginContainer" parent="PhoneTabs"]
 visible = false

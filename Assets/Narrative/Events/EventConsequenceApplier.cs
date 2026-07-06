@@ -63,6 +63,8 @@ public sealed class EventConsequenceApplier
     private readonly RelationshipGraph _relationships;
     private readonly EventBus _bus;
     private readonly GameStateQueries _gameState;
+    private readonly GlobalState _state;
+    private readonly NarrativeLogQueries _narrativeLog;
     private readonly Action<GrittyEventFiredEvent> _onFired;
 
     private RngState _rng;
@@ -95,7 +97,8 @@ public sealed class EventConsequenceApplier
 
     public EventConsequenceApplier(
         DatabaseManager db, PlayerQueries players, GrittyEventLibrary library,
-        RelationshipGraph relationships, EventBus bus, GameStateQueries gameState, ulong rngSeed)
+        RelationshipGraph relationships, EventBus bus, GameStateQueries gameState,
+        GlobalState state, NarrativeLogQueries narrativeLog, ulong rngSeed)
     {
         _db = db;
         _players = players;
@@ -103,6 +106,8 @@ public sealed class EventConsequenceApplier
         _relationships = relationships;
         _bus = bus;
         _gameState = gameState;
+        _state = state;
+        _narrativeLog = narrativeLog;
         _rng = new RngState(rngSeed | 1UL);
         _onFired = OnFired;
     }
@@ -219,6 +224,18 @@ public sealed class EventConsequenceApplier
                         break;
                 }
             }
+
+            // The Burner Phone read-model (presentation_layer_narrative.md
+            // §4.3): one row per resolved choice, atomic with the rest of
+            // this fire's writes. Every path funnels through ApplyChoice —
+            // autopilot, the UI's ResolveChoice, and a forfeited stale
+            // pending choice all land here — so the thread reflects what
+            // actually happened, including choices the player never saw.
+            // fired.Day (not "now") computes the season year: a forfeited
+            // fire carries its ORIGINAL day, which can lag the live calendar.
+            _narrativeLog.Insert(
+                _state.SeasonYearForDay(fired.Day), fired.Day, fired.SubjectPlayerId,
+                definition.ContactId, definition.Prompt, definition.Choices[choiceIndex].Label, choiceIndex);
         });
 
         // In-memory / bus-routed consequences follow the committed batch, so a

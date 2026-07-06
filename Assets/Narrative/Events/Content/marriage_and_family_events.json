@@ -6,6 +6,7 @@
       "scope": "avatar",
       "weight": 0.06,
       "cooldown_days": 90,
+      "contact": "girlfriend_jess",
       "prompt": "Somewhere between the bus rides and the bullpen small talk, one teammate has become the person you look for first. This feels like more than a clubhouse friendship.",
       "prerequisites": [
         { "field": "age", "op": ">", "value": 20 },
@@ -37,6 +38,7 @@
       "scope": "avatar",
       "weight": 0.08,
       "cooldown_days": 120,
+      "contact": "girlfriend_jess",
       "prompt": "The two of you have started talking about what comes next -- a bigger place, a name you both like, a life built around more than road trips. It doesn't feel like just talk anymore.",
       "prerequisites": [
         { "flag_active": "married", "min_days_since": 365 },
@@ -66,6 +68,7 @@
       "id": "child_is_born",
       "scope": "avatar",
       "weight": 0.25,
+      "contact": "girlfriend_jess",
       "prompt": "Nine months of waiting ends in a hospital room in the middle of the night, and suddenly the contract, the stat line, and the grind all feel very far away. A tiny hand wraps around your finger.",
       "prerequisites": [
         { "flag_active": "expecting", "min_days_since": 270 }

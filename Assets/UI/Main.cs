@@ -10,9 +10,11 @@ namespace DirtAndDiamonds.UI;
 /// whether a career already exists. GameManager is an autoload so it boots
 /// (and restores any saved avatar) before this scene's _Ready runs, making
 /// Career.HasAvatar reliable here. Swapping only touches ScreenContainer's
-/// children — EventChoiceScreen/SuccessionScreen are permanent siblings
-/// (declared in Main.tscn, always instantiated, each self-hiding via its own
-/// Visible flag) that must never be freed by a screen swap.
+/// children — SuccessionScreen (and every other overlay) is a permanent
+/// sibling (declared in Main.tscn, always instantiated, self-hiding via its
+/// own Visible flag) that must never be freed by a screen swap.
+/// EventChoiceScreen retired in Phase 10b — the Burner Phone's pending-choice
+/// thread renders it now (presentation_layer_narrative.md §4.4).
 /// </summary>
 public sealed partial class Main : Node
 {

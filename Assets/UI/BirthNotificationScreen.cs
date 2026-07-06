@@ -6,10 +6,10 @@ namespace DirtAndDiamonds.UI;
 
 /// <summary>
 /// Always-present overlay (a permanent sibling of the swappable screen under
-/// Main, per Main.tscn — declared last so it draws above the event-choice and
-/// succession overlays) that announces a newborn heir off
-/// <see cref="CareerManager.TryDequeuePendingBirth"/>. Unlike EventChoiceScreen
-/// and SuccessionScreen this is deliberately NOT modal: there is no decision
+/// Main, per Main.tscn — declared last so it draws above the succession
+/// overlay) that announces a newborn heir off
+/// <see cref="CareerManager.TryDequeuePendingBirth"/>. Unlike SuccessionScreen
+/// (and the Burner Phone's pending-choice thread) this is deliberately NOT modal: there is no decision
 /// to forfeit here, so it neither joins BaseballDashboard's day-advance gate
 /// nor blocks input to anything beneath it — the root and every non-button
 /// node are corner-anchored and mouse_filter = Ignore in the .tscn (a

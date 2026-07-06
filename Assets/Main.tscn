@@ -1,9 +1,8 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/Main.cs" id="1_main"]
 [ext_resource type="PackedScene" path="res://Assets/UI/NewGameScreen.tscn" id="2_newgame"]
 [ext_resource type="PackedScene" path="res://Assets/UI/TwoPanelShell.tscn" id="3_shell"]
-[ext_resource type="PackedScene" path="res://Assets/UI/EventChoiceScreen.tscn" id="4_eventchoice"]
 [ext_resource type="PackedScene" path="res://Assets/UI/SuccessionScreen.tscn" id="5_succession"]
 [ext_resource type="PackedScene" path="res://Assets/UI/BirthNotificationScreen.tscn" id="6_birthnotify"]
 [ext_resource type="PackedScene" path="res://Assets/UI/ScheduleScreen.tscn" id="7_scheduleplan"]
@@ -18,8 +17,6 @@ NewGameScreenScene = ExtResource("2_newgame")
 TwoPanelShellScene = ExtResource("3_shell")
 
 [node name="ScreenContainer" type="Node" parent="."]
-
-[node name="EventChoiceScreen" parent="." instance=ExtResource("4_eventchoice")]
 
 [node name="SuccessionScreen" parent="." instance=ExtResource("5_succession")]
 

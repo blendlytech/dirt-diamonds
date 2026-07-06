@@ -234,11 +234,21 @@ public sealed class GrittyEventDefinition
     /// <summary>Player-facing flavor text for the event-choice UI. Content-authored, or a humanized fallback of <see cref="Id"/> (GrittyEventJson.Humanize) when the batch omits "prompt".</summary>
     public readonly string Prompt;
 
+    /// <summary>
+    /// The Burner Phone thread this event's fires post to (presentation_layer_narrative.md
+    /// §4.2) — additive, content-authored via the JSON "contact" field. A batch that omits
+    /// it resolves to the reserved "unknown" ("Unknown Number") thread, never a crash or a
+    /// silent drop; the id is a Narrative.Contacts.ContactRegistry key, resolved at render
+    /// time, never validated against the registry at load time (the two content files load
+    /// independently — check_event_graph_integrity is the authoring-time check).
+    /// </summary>
+    public readonly string ContactId;
+
     public readonly EventPrerequisite[] Prerequisites;
     public readonly EventChoice[] Choices;
 
     public GrittyEventDefinition(
-        string id, EventScope scope, double weight, int cooldownDays, string prompt,
+        string id, EventScope scope, double weight, int cooldownDays, string prompt, string contactId,
         EventPrerequisite[] prerequisites, EventChoice[] choices)
     {
         Id = id;
@@ -246,6 +256,7 @@ public sealed class GrittyEventDefinition
         Weight = weight;
         CooldownDays = cooldownDays;
         Prompt = prompt;
+        ContactId = contactId;
         Prerequisites = prerequisites;
         Choices = choices;
     }

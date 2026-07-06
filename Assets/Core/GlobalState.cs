@@ -24,10 +24,21 @@ public sealed class GlobalState
 
     public bool IsCalendarLoaded => CurrentDay > 0;
 
-    public int SeasonYear => StartSeasonYear + (int)((CurrentDay - 1) / DaysPerSeason);
+    public int SeasonYear => SeasonYearForDay(CurrentDay);
 
     /// <summary>1..<see cref="DaysPerSeason"/> within <see cref="SeasonYear"/>.</summary>
-    public int DayOfSeason => (int)((CurrentDay - 1) % DaysPerSeason) + 1;
+    public int DayOfSeason => DayOfSeasonForDay(CurrentDay);
+
+    /// <summary>
+    /// The <see cref="SeasonYear"/> formula generalized to an arbitrary absolute day, not just
+    /// <see cref="CurrentDay"/> — a forfeited gritty-event fire's original day (the narrative-log
+    /// write, presentation_layer_narrative.md §4.3) can lag "now" by up to a cooldown window, so
+    /// its season year must be computed from ITS day, never read off the live calendar.
+    /// </summary>
+    public int SeasonYearForDay(long day) => StartSeasonYear + (int)((day - 1) / DaysPerSeason);
+
+    /// <summary>The <see cref="DayOfSeason"/> formula generalized to an arbitrary absolute day. Static — day-within-season never depends on <see cref="StartSeasonYear"/>, unlike <see cref="SeasonYearForDay"/>.</summary>
+    public static int DayOfSeasonForDay(long day) => (int)((day - 1) % DaysPerSeason) + 1;
 
     /// <summary>TimeManager-only. Mirrors what was just committed to Game_State.</summary>
     public void SetCalendar(long currentDay, int startSeasonYear)

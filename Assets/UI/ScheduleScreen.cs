@@ -13,7 +13,7 @@ namespace DirtAndDiamonds.UI;
 /// that is Phase 9b's UI half: lets the player plan the avatar's next day
 /// across the five <see cref="DaySchedule"/> blocks and submit it via
 /// <see cref="LifeSimManager.SetTodaySchedule"/>. Not modal like
-/// EventChoiceScreen/SuccessionScreen — a plan is optional (an unset plan
+/// SuccessionScreen (or the Burner Phone's pending-choice thread) — a plan is optional (an unset plan
 /// autopilots exactly as before 9b), so this never joins BaseballDashboard's
 /// day-advance gate. The School and Game rows are hidden — and their sliders
 /// zeroed — whenever they aren't schedulable

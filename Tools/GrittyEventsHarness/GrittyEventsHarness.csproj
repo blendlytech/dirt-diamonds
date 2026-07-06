@@ -23,6 +23,8 @@
     <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Life\*.cs" Link="Life\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Narrative\Events\*.cs" Link="Narrative\%(Filename)%(Extension)" />
+    <!-- Phase 10b: the contact registry the Burner Phone reads — pure content, no Godot type. -->
+    <Compile Include="..\..\Assets\Narrative\Contacts\*.cs" Link="Narrative\Contacts\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\RngState.cs" Link="Baseball\RngState.cs" />
     <!--
       Phase 8b check 9 (Layer-2/DB integration, hustles_narcotics_fencing.md
