@@ -68,6 +68,27 @@ public struct PlayerRatingsRow
 }
 
 /// <summary>
+/// Row DTO for Player_Potential (schema v10) — the latent per-rating ceiling
+/// the 9d offseason development pass grows each rating toward. Mirrors
+/// <see cref="PlayerRatingsRow"/> minus is_pitcher (potential is a ceiling on
+/// the same seven 0–100 scales, not a role). The invariant potential_i ≥
+/// current_i holds at creation by construction (backfill copies current;
+/// intake discounts current below potential) and is preserved by the
+/// development curve's never-overshoot clamp.
+/// </summary>
+public struct PlayerPotentialRow
+{
+    public string PlayerId;
+    public int BatPower;
+    public int BatContact;
+    public int BatDiscipline;
+    public int PitStuff;
+    public int PitControl;
+    public int PitStamina;
+    public int Fielding;
+}
+
+/// <summary>
 /// One row of the Players ⋈ Player_Ratings ⟕ Pitcher_Roles roster join —
 /// everything the macro-sim needs per baseball-active player, bulk-loaded up
 /// front (never mid-simulation). Role is None for position players (no

@@ -45,6 +45,16 @@ public static class GameStateKeys
 
     /// <summary>player_id (text) of the Fencing "fence" rep — same pattern, filling the gap the design doc's §6 faction list left implicit for fenceStanding (§4.1).</summary>
     public const string HustleFencePlayerId = "hustle_fence_player_id";
+
+    /// <summary>
+    /// The avatar's accumulated Practice hours this season (long) — the 9d-2
+    /// Life→Baseball bridge (development doc §4). GameManager adds each day's
+    /// actually-ticked Practice block hours; DevelopmentManager converts the
+    /// total into an extra growth fraction at the season rollover and clears
+    /// it (and GameManager clears it on AvatarChangedEvent, so a new bloodline
+    /// always starts at zero).
+    /// </summary>
+    public const string AvatarPracticeCredit = "avatar_practice_credit";
 }
 
 /// <summary>
@@ -66,9 +76,18 @@ public sealed class GameStateQueries
     private const string SqlSelect =
         "SELECT value FROM Game_State WHERE key = @key;";
 
+    // Additive counter upsert (9d-2 practice credit): an absent key seeds at
+    // the delta, a present one accumulates — atomic in SQL, the AdjustFunds
+    // discipline, so read-modify-write in C# never races another writer.
+    // Semantics validated on a scratch db (development doc §4 / No Blind Queries).
+    private const string SqlAdjust =
+        "INSERT INTO Game_State (key, value) VALUES (@key, @delta) " +
+        "ON CONFLICT (key) DO UPDATE SET value = value + excluded.value;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _upsert;
     private readonly SqliteCommand _select;
+    private readonly SqliteCommand _adjust;
 
     public GameStateQueries(DatabaseManager db)
     {
@@ -88,9 +107,30 @@ public sealed class GameStateQueries
             _select.Parameters.Add("@key", SqliteType.Text);
             _select.Prepare();
         }
+
+        _adjust = db.GetPooledCommand(SqlAdjust);
+        if (_adjust.Parameters.Count == 0)
+        {
+            _adjust.Parameters.Add("@key", SqliteType.Text);
+            _adjust.Parameters.Add("@delta", SqliteType.Integer);
+            _adjust.Prepare();
+        }
     }
 
     public void SetInt64(string key, long value) => Set(key, value);
+
+    /// <summary>
+    /// Adds <paramref name="delta"/> to an integer counter key, seeding an
+    /// absent key at the delta — atomic in SQL (the AdjustFunds discipline).
+    /// Only meaningful for integer-valued keys; a text key would fail the
+    /// arithmetic loudly, same corruption class as <see cref="TryGetInt64"/>.
+    /// </summary>
+    public void AdjustInt64(string key, long delta)
+    {
+        _adjust.Parameters["@key"].Value = key;
+        _adjust.Parameters["@delta"].Value = delta;
+        _db.ExecuteNonQuery(_adjust);
+    }
 
     public void SetText(string key, string value) => Set(key, value);
 

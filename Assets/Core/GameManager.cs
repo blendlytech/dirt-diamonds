@@ -52,6 +52,9 @@ public sealed partial class GameManager : Node
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
 
+    /// <summary>Phase 9d offseason development pass — public like Promotions so a player-development UI card can read <see cref="DevelopmentManager.LastRun"/>.</summary>
+    public DevelopmentManager Development { get; private set; } = null!;
+
     /// <summary>Phase 9c offseason promotion/relegation — public like Career so a ladder/news UI can read <see cref="PromotionManager.LastRun"/>.</summary>
     public PromotionManager Promotions { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
@@ -80,6 +83,14 @@ public sealed partial class GameManager : Node
     private bool _plannedWorkHadHours;
     private PendingHustleSession _pendingHustleSession;
     private bool _hasPendingHustleSession;
+
+    // Phase 9d-2: the avatar's planned Practice hours for the submitted day —
+    // the accumulate half of the §4 Life→Baseball bridge, captured at submit
+    // exactly like the Work-activity intent above (one-shot, consumed by the
+    // day tick, dropped with the plan). LifeSim ticks the block; this mirror
+    // is what lets the credit accrue without the Baseball side ever seeing
+    // the Life sim.
+    private int _plannedPracticeHours;
 
     // Reused every day-tick persist so the handler doesn't allocate a fresh
     // array per calendar day (zero-GC mandate for the hot path).
@@ -209,6 +220,17 @@ public sealed partial class GameManager : Node
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
 
+        // Phase 9d: the offseason development pass. Attached AFTER CareerManager
+        // (ages are post-aging) and BEFORE PromotionManager (develop-before-sort,
+        // development doc §5: the sweep's scouting reads the just-developed
+        // ratings, so a prospect climbs BECAUSE he developed). Its only RNG is
+        // the §2.4 jitter, from a dedicated forked stream.
+        Development = new DevelopmentManager(
+            _database, Players, Baseball, GameState, Leagues, Micro,
+            new RngState(rng.NextUInt64() | 1UL));
+        Development.Career = Career;
+        Development.AttachTo(Events);
+
         // Phase 9c: the offseason promotion/relegation pass. Attached AFTER
         // CareerManager so the promotion-doc §4 order holds on every season
         // rollover (sims flush → world ages + succession → promotion sweep);
@@ -307,6 +329,11 @@ public sealed partial class GameManager : Node
             _database, Players, GameState, Relationships, Events,
             unchecked((ulong)System.Environment.TickCount64) ^ 0xD1A5D1A5D1A5D1A5UL);
         Events.Subscribe<DayAdvancedEvent>(OnHustleDayAdvanced);
+
+        // Phase 9d-2: the practice-credit accumulate half of the §4 bridge —
+        // subscribed after LifeSim's own handler like the hustle seam above,
+        // so the day it credits is a day whose Practice block actually ticked.
+        Events.Subscribe<DayAdvancedEvent>(OnPracticeDayAdvanced);
 
         // Phase 8e: the gear shop. Pure request/response against the UI — no
         // day-tick subscription; the purchase itself publishes the ledger and
@@ -410,8 +437,20 @@ public sealed partial class GameManager : Node
         return documents;
     }
 
-    private void OnAvatarChanged(AvatarChangedEvent e) =>
+    private void OnAvatarChanged(AvatarChangedEvent e)
+    {
+        // 9d-2 §4: a new bloodline (creation or succession) starts at zero
+        // practice credit — the retiree's unconsumed hours must never leak to
+        // the heir. Belt to the DevelopmentManager succession guard's braces:
+        // that guard is what protects the rollover itself against dispatch
+        // ordering; this clear covers mid-season handoffs and fresh creations.
+        _plannedPracticeHours = 0;
+        if (GameState.TryGetInt64(GameStateKeys.AvatarPracticeCredit, out long credit) && credit != 0)
+        {
+            GameState.SetInt64(GameStateKeys.AvatarPracticeCredit, 0);
+        }
         SyncLifeSimAvatar(e.AvatarPlayerId, e.TeamId);
+    }
 
     /// <summary>
     /// Points the Life sim's daily clock at the (possibly new) avatar and
@@ -488,6 +527,7 @@ public sealed partial class GameManager : Node
         LifeSim.AvatarWorkIsHustle = workActivity != WorkActivity.LegalWork;
         _plannedWorkActivity = workActivity;
         _plannedWorkHadHours = schedule.WorkHours > 0;
+        _plannedPracticeHours = schedule.PracticeHours;
     }
 
     /// <summary>The ScheduleScreen's Clear path — drops the plan AND the activity selection together, so a stale selection can never arm a session for a day that ends up autopiloted.</summary>
@@ -497,6 +537,7 @@ public sealed partial class GameManager : Node
         LifeSim.AvatarWorkIsHustle = false;
         _plannedWorkActivity = WorkActivity.LegalWork;
         _plannedWorkHadHours = false;
+        _plannedPracticeHours = 0;
     }
 
     /// <summary>
@@ -520,6 +561,25 @@ public sealed partial class GameManager : Node
         }
         _plannedWorkActivity = WorkActivity.LegalWork;
         _plannedWorkHadHours = false;
+    }
+
+    /// <summary>
+    /// Phase 9d-2 (development doc §4): banks the day's actually-ticked
+    /// Practice hours into the additive Game_State credit the offseason
+    /// development pass consumes — the one place the Life-sim daily clock
+    /// feeds the Baseball-sim career, and it is a KV write, not a reference.
+    /// Subscribed after LifeSim's handler, so the plan this mirrors has
+    /// already run (LifeSim consumed it this same pump; a plan cleared or
+    /// replaced before the tick updated the mirror with it). Atomic in SQL
+    /// (AdjustInt64), one-shot like the Work-activity intent above.
+    /// </summary>
+    private void OnPracticeDayAdvanced(DayAdvancedEvent _)
+    {
+        if (_plannedPracticeHours > 0)
+        {
+            GameState.AdjustInt64(GameStateKeys.AvatarPracticeCredit, _plannedPracticeHours);
+        }
+        _plannedPracticeHours = 0;
     }
 
     /// <summary>

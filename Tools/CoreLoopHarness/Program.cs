@@ -201,7 +201,7 @@ internal static class Program
         using (var db = new DatabaseManager(scratchPath))
         {
             db.InitializeSchema(schemaPath);
-            Check("scratch schema applies at v9", db.GetSchemaVersion() == 9, $"user_version={db.GetSchemaVersion()}");
+            Check("scratch schema applies at v10", db.GetSchemaVersion() == 10, $"user_version={db.GetSchemaVersion()}");
 
             var gameState = new GameStateQueries(db);
 

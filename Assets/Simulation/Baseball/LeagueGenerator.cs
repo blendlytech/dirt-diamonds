@@ -390,12 +390,18 @@ public static class LeagueGenerator
         int ratingSpread, ref RngState rng, int minAge = 21, int ageSpan = 16)
     {
         string playerId = NextGuid(ref rng);
+        // Locals preserve the frozen pre-v10 draw ORDER exactly (guid, first,
+        // last, age, recklessness, then the seven rating rolls) — the v10
+        // additions below must not permute the main stream's assignments.
+        string firstName = FirstNames[rng.NextInt(FirstNames.Length)];
+        string lastName = LastNames[rng.NextInt(LastNames.Length)];
+        int age = minAge + rng.NextInt(ageSpan);
         players.Insert(new PlayerRow
         {
             PlayerId = playerId,
-            FirstName = FirstNames[rng.NextInt(FirstNames.Length)],
-            LastName = LastNames[rng.NextInt(LastNames.Length)],
-            Age = minAge + rng.NextInt(ageSpan),
+            FirstName = firstName,
+            LastName = lastName,
+            Age = age,
             TeamId = teamId,
             Funds = 0,
             HealthCeiling = 100,
@@ -404,31 +410,65 @@ public static class LeagueGenerator
             DetectionRisk = 0,
         });
 
+        // Schema v10 (development doc §3.3): the rolled vector IS the player's
+        // POTENTIAL — the ceiling he develops toward — deliberately consuming
+        // the exact draws the pre-v10 code spent on current ratings, so the
+        // frozen M1 generation prefix never moves. Current ratings sit a
+        // youth-scaled prospect discount below it (raw now / projectable
+        // later), drawn from a Split() fork (the v4-reliever precedent: the
+        // parent stream is untouched). A 27+-year-old's discount is zero and
+        // spread 0 collapses the whole thing (potential = current = 50), so
+        // calibration rosters stay perfectly uniform.
         bool isPitcher = role != PitcherRole.None;
-        int stuff = 0;
-        var ratings = new PlayerRatingsRow
+        var potential = new PlayerPotentialRow
         {
             PlayerId = playerId,
-            IsPitcher = isPitcher,
             BatPower = RollRating(ratingSpread, ref rng),
             BatContact = RollRating(ratingSpread, ref rng),
             BatDiscipline = RollRating(ratingSpread, ref rng),
-            PitStuff = stuff = RollRating(ratingSpread, ref rng),
+            PitStuff = RollRating(ratingSpread, ref rng),
             PitControl = RollRating(ratingSpread, ref rng),
             PitStamina = RollRating(ratingSpread, ref rng),
             Fielding = RollRating(ratingSpread, ref rng),
         };
         if (role == PitcherRole.Reliever)
         {
-            ratings.PitStamina = Math.Max(0, ratings.PitStamina - RelieverStaminaPenalty);
+            // The bullpen stamina penalty caps the CEILING too — a reliever
+            // must not develop back into starter stamina.
+            potential.PitStamina = Math.Max(0, potential.PitStamina - RelieverStaminaPenalty);
+        }
+
+        var ratings = new PlayerRatingsRow { PlayerId = playerId, IsPitcher = isPitcher };
+        if (ratingSpread == 0)
+        {
+            ratings.BatPower = potential.BatPower;
+            ratings.BatContact = potential.BatContact;
+            ratings.BatDiscipline = potential.BatDiscipline;
+            ratings.PitStuff = potential.PitStuff;
+            ratings.PitControl = potential.PitControl;
+            ratings.PitStamina = potential.PitStamina;
+            ratings.Fielding = potential.Fielding;
+        }
+        else
+        {
+            RngState discountRng = rng.Split();
+            ratings.BatPower = DevelopmentCurve.RawCurrent(potential.BatPower, age, ref discountRng);
+            ratings.BatContact = DevelopmentCurve.RawCurrent(potential.BatContact, age, ref discountRng);
+            ratings.BatDiscipline = DevelopmentCurve.RawCurrent(potential.BatDiscipline, age, ref discountRng);
+            ratings.PitStuff = DevelopmentCurve.RawCurrent(potential.PitStuff, age, ref discountRng);
+            ratings.PitControl = DevelopmentCurve.RawCurrent(potential.PitControl, age, ref discountRng);
+            ratings.PitStamina = DevelopmentCurve.RawCurrent(potential.PitStamina, age, ref discountRng);
+            ratings.Fielding = DevelopmentCurve.RawCurrent(potential.Fielding, age, ref discountRng);
         }
         baseball.UpsertRatings(in ratings);
+        baseball.UpsertPotential(in potential);
 
         if (isPitcher)
         {
             baseball.UpsertPitcherRole(playerId, role);
         }
-        return (playerId, stuff);
+        // Arsenals are shaped by what the pitcher throws NOW, not his ceiling.
+        return (playerId, ratings.PitStuff);
     }
 
     /// <summary>

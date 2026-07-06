@@ -347,8 +347,41 @@ CREATE TABLE IF NOT EXISTS Player_Equipment (
     purchased_day INTEGER NOT NULL CHECK (purchased_day >= 0)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Player_Potential — schema v10. The 9d development ceiling (Phase 9d,
+-- docs/design/development_decline_curves.md §3): one row per baseball-active
+-- player mirroring Player_Ratings' seven rating columns, holding the latent
+-- per-rating ceiling the offseason development pass grows each rating toward.
+-- A separate additive table (never an ALTER on Player_Ratings), the
+-- Pitcher_Roles/Team_Tiers/Player_Absences/Player_Equipment pattern, so this
+-- script remains the whole migration. The PK doubles as the hot-path index
+-- for the once-per-offseason bulk load and the single-row probes.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Potential (
+    player_id      TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    bat_power      INTEGER NOT NULL DEFAULT 50 CHECK (bat_power      BETWEEN 0 AND 100),
+    bat_contact    INTEGER NOT NULL DEFAULT 50 CHECK (bat_contact    BETWEEN 0 AND 100),
+    bat_discipline INTEGER NOT NULL DEFAULT 50 CHECK (bat_discipline BETWEEN 0 AND 100),
+    pit_stuff      INTEGER NOT NULL DEFAULT 50 CHECK (pit_stuff      BETWEEN 0 AND 100),
+    pit_control    INTEGER NOT NULL DEFAULT 50 CHECK (pit_control    BETWEEN 0 AND 100),
+    pit_stamina    INTEGER NOT NULL DEFAULT 50 CHECK (pit_stamina    BETWEEN 0 AND 100),
+    fielding       INTEGER NOT NULL DEFAULT 50 CHECK (fielding       BETWEEN 0 AND 100)
+) STRICT;
+
+-- v9→v10 backfill: every pre-v10 player gets potential = current ratings —
+-- zero headroom, so the founding generation only ever DECLINES (no growth
+-- spurt on the first 9d boot); only post-v10 intake (which writes its own
+-- potential row at creation) gets the full growth arc. INSERT OR IGNORE keeps
+-- this idempotent on every boot AND guarantees it never clobbers a real
+-- potential row in a developed post-v10 world (validated on a scratch db:
+-- copies on first apply, wholesale no-op after).
+INSERT OR IGNORE INTO Player_Potential
+    (player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding)
+    SELECT player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding
+    FROM Player_Ratings;
+
 COMMIT;
 
--- Schema version 9 — adds Player_Equipment (purely additive, no backfill; see
--- comment on the table above). Bump with every migration.
-PRAGMA user_version = 9;
+-- Schema version 10 — adds Player_Potential (purely additive; potential =
+-- current backfill, see comment on the table above). Bump with every migration.
+PRAGMA user_version = 10;

@@ -37,6 +37,15 @@ public static class PromotionProfile
     public const int PeakAge = 27;
     public const int YoungestProspectAge = 15;
 
+    /// <summary>
+    /// 9d-2 (development doc §6): the summed role headroom (Σ potential −
+    /// current over the role's three ratings) at which a young player's
+    /// projection reads the FULL age-scaled bonus — an average raw HS intake
+    /// under the first-pass ProspectDiscount lands near it, a half-developed
+    /// prospect reads a partial bonus, an at-ceiling player reads zero.
+    /// </summary>
+    public const int HeadroomForFullProjection = 30;
+
     /// <summary>§3.2 merit-swap hysteresis: the riser must out-rank the incumbent by more than this many A-points, so a marginal "AAAA" player does not yo-yo every year.</summary>
     public const double SwapMargin = 5.0;
 
@@ -141,7 +150,15 @@ public static class PromotionScore
         return 100.0 * (1.0 + w * (rawP - 1.0));
     }
 
-    /// <summary>§2.2 age projection: a modest, monotonically non-increasing linear taper — up to +max at 15, 0 at peak (27), mildly negative past it. The 9d seam: development curves replace this static projection.</summary>
+    /// <summary>
+    /// §2.2 age projection: a modest, monotonically non-increasing linear
+    /// taper — up to +max at 15, 0 at peak (27), mildly negative past it.
+    /// Since 9d-2 this is the LEGACY fallback for callers with no potential
+    /// in hand: it equals <see cref="ProjectionBonus"/> under an implicit
+    /// full-headroom assumption (the pre-9d fudge — young players were
+    /// presumed projectable because nothing measured their ceiling). The
+    /// sweep itself scores through ProjectionBonus with real headroom.
+    /// </summary>
     public static double AgeBonus(int age)
     {
         double slope = PromotionProfile.AgeBonusMax
@@ -151,13 +168,58 @@ public static class PromotionScore
     }
 
     /// <summary>
+    /// 9d-2 (development doc §6): <see cref="AgeBonus"/> evolved — the
+    /// scouting projection now reflects REAL remaining headroom instead of
+    /// the age-only fudge. The upside is the same age-tapered bonus, scaled
+    /// by how much ceiling actually remains (saturating at
+    /// <see cref="PromotionProfile.HeadroomForFullProjection"/>): a young
+    /// player far below his ceiling projects up in full, one already at his
+    /// ceiling projects flat. Past the peak the age-driven decline projection
+    /// stands untouched — decline is coming regardless of paper headroom.
+    /// ProjectionBonus(age, headroom ≥ saturation) ≡ AgeBonus(age); same
+    /// scale, same clamp, same profile constants.
+    /// </summary>
+    public static double ProjectionBonus(int age, int headroom)
+    {
+        double ageBonus = AgeBonus(age);
+        if (ageBonus <= 0.0)
+        {
+            return ageBonus;
+        }
+        double saturation = Math.Clamp(
+            headroom / (double)PromotionProfile.HeadroomForFullProjection, 0.0, 1.0);
+        return ageBonus * saturation;
+    }
+
+    /// <summary>
+    /// §6 the quantity <see cref="ProjectionBonus"/> consumes: Σ max(0,
+    /// potential − current) over the role's three ratings. current ≤
+    /// potential is the 9d world invariant, so the max() is defensive; a
+    /// missing potential row reads zero headroom at the call sites (the v10
+    /// backfill semantics — potential = current, decline-only).
+    /// </summary>
+    public static int Headroom(in RosterPlayerRow current, in PlayerPotentialRow potential, bool isPitcher) =>
+        isPitcher
+            ? Math.Max(0, potential.PitStuff - current.PitStuff)
+                + Math.Max(0, potential.PitControl - current.PitControl)
+                + Math.Max(0, potential.PitStamina - current.PitStamina)
+            : Math.Max(0, potential.BatPower - current.BatPower)
+                + Math.Max(0, potential.BatContact - current.BatContact)
+                + Math.Max(0, potential.BatDiscipline - current.BatDiscipline);
+
+    /// <summary>
     /// §2.2 scouting on the 100-centred scale: the role-summed raw ratings
     /// (batter Power+Contact+Discipline, pitcher Stuff+Control+Stamina — the
     /// exact metric FindDisplacedPlayer/EvaluateSuccession already rank by,
-    /// 150 = all-average) plus the age projection, over 150.
+    /// 150 = all-average) plus the age projection, over 150. This age-only
+    /// form stays for callers with no potential in hand (≡ full headroom).
     /// </summary>
     public static double Scouting(int roleRatingSum, int age) =>
         100.0 * (roleRatingSum + AgeBonus(age)) / 150.0;
+
+    /// <summary>The 9d-2 headroom-aware form (development doc §6) the sweep scores through: scouting projects the player's actual remaining ceiling.</summary>
+    public static double Scouting(int roleRatingSum, int age, int headroom) =>
+        100.0 * (roleRatingSum + ProjectionBonus(age, headroom)) / 150.0;
 
     /// <summary>§2.3: A = wP·P + wS·S. Ties break on player_id at every call site.</summary>
     public static double Combine(double performance, double scouting) =>
@@ -348,6 +410,12 @@ public sealed class PromotionManager
             LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
         _baseball.LoadRoster(roster);
 
+        // 9d-2 (development doc §6): the sweep's scouting projects real
+        // remaining headroom, so the pass also bulk-loads the stored ceilings
+        // the development pass just moved everyone toward.
+        var potentialById = new Dictionary<string, PlayerPotentialRow>(roster.Count, StringComparer.Ordinal);
+        _baseball.LoadAllPotential(potentialById);
+
         var batLines = new List<SeasonBattingLine>();
         _baseball.LoadSeasonBattingLines(completedSeasonYear, batLines);
         var batById = new Dictionary<string, SeasonBattingLine>(batLines.Count, StringComparer.Ordinal);
@@ -395,7 +463,7 @@ public sealed class PromotionManager
 
         foreach (PitcherRole role in SweepRoles)
         {
-            SweepRole(role, roster, tierByTeam, ageHealthById, batById, pitById,
+            SweepRole(role, roster, tierByTeam, ageHealthById, potentialById, batById, pitById,
                 leagueOps, leagueEra, avatarId, avatarEligible,
                 teamWrites, intake, ref removals, ref promotions, ref relegations,
                 ref avatarPromoted, ref avatarTeamId);
@@ -481,6 +549,7 @@ public sealed class PromotionManager
         PitcherRole role, List<RosterPlayerRow> roster,
         Dictionary<int, LeagueTier> tierByTeam,
         Dictionary<string, (int Age, int Health)> ageHealthById,
+        Dictionary<string, PlayerPotentialRow> potentialById,
         Dictionary<string, SeasonBattingLine> batById,
         Dictionary<string, SeasonPitchingLine> pitById,
         ReadOnlySpan<double> leagueOps, ReadOnlySpan<double> leagueEra,
@@ -529,6 +598,11 @@ public sealed class PromotionManager
             int talent = isPitcher
                 ? row.PitStuff + row.PitControl + row.PitStamina
                 : row.BatPower + row.BatContact + row.BatDiscipline;
+            // 9d-2 §6: a missing ceiling row reads zero headroom — the v10
+            // backfill semantics (potential = current) for any straggler.
+            int headroom = potentialById.TryGetValue(row.PlayerId, out PlayerPotentialRow pot)
+                ? PromotionScore.Headroom(in row, in pot, isPitcher)
+                : 0;
             double p;
             if (isPitcher)
             {
@@ -544,7 +618,7 @@ public sealed class PromotionManager
             {
                 PlayerId = row.PlayerId,
                 TeamId = row.TeamId,
-                Score = PromotionScore.Combine(p, PromotionScore.Scouting(talent, age)),
+                Score = PromotionScore.Combine(p, PromotionScore.Scouting(talent, age, headroom)),
                 AgeOutPending = !isAvatar && age > PromotionProfile.AgeCapFor((LeagueTier)tier),
                 IsAvatar = isAvatar,
             });

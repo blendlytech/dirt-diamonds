@@ -67,6 +67,32 @@ public sealed class BaseballQueries
         "SELECT player_id, is_pitcher, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding " +
         "FROM Player_Ratings WHERE player_id = @playerId;";
 
+    // Player_Potential writes (schema v10): creation paths (world-gen intake,
+    // heir conception, avatar creation) write each player's ceiling once; the
+    // development pass never writes potential, only Player_Ratings.
+    private const string SqlUpsertPotential =
+        "INSERT INTO Player_Potential (player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding) VALUES " +
+        "(@playerId, @batPower, @batContact, @batDiscipline, @pitStuff, @pitControl, @pitStamina, @fielding) " +
+        "ON CONFLICT (player_id) DO UPDATE SET " +
+        "bat_power = excluded.bat_power, bat_contact = excluded.bat_contact, bat_discipline = excluded.bat_discipline, " +
+        "pit_stuff = excluded.pit_stuff, pit_control = excluded.pit_control, pit_stamina = excluded.pit_stamina, " +
+        "fielding = excluded.fielding;";
+
+    // The development pass's one bulk read: every potential row, once per
+    // offseason into a dictionary up front — never row-at-a-time mid-pass. A
+    // deliberate full scan (cold, once per simulated year, the 9c season-line
+    // precedent); plan validated on a v10 scratch db (No Blind Queries):
+    // SCAN Player_Potential USING INDEX sqlite_autoindex_Player_Potential_1.
+    private const string SqlSelectAllPotential =
+        "SELECT player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding " +
+        "FROM Player_Potential ORDER BY player_id;";
+
+    // Single-player potential probe (harness fixtures / a future scouting UI).
+    // Plan validated on a v10 scratch db: PK autoindex SEARCH.
+    private const string SqlSelectPotentialById =
+        "SELECT player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding " +
+        "FROM Player_Potential WHERE player_id = @playerId;";
+
     // The macro-sim's single up-front bulk load. Ordered (team, player) so the
     // simulator's lineup/rotation assignment is deterministic across sessions.
     // Schema v4 adds the Pitcher_Roles LEFT JOIN (COALESCE 0 = None for position
@@ -282,6 +308,9 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _leaguePitchingTotalsTier;
     private readonly SqliteCommand _upsertRatings;
     private readonly SqliteCommand _selectRatingsById;
+    private readonly SqliteCommand _upsertPotential;
+    private readonly SqliteCommand _selectAllPotential;
+    private readonly SqliteCommand _selectPotentialById;
     private readonly SqliteCommand _selectRoster;
     private readonly SqliteCommand _selectFreeAgents;
     private readonly SqliteCommand _upsertPitcherRole;
@@ -332,6 +361,15 @@ public sealed class BaseballQueries
             ("@fielding", SqliteType.Integer));
 
         _selectRatingsById = Acquire(SqlSelectRatingsById, ("@playerId", SqliteType.Text));
+
+        _upsertPotential = Acquire(SqlUpsertPotential,
+            ("@playerId", SqliteType.Text),
+            ("@batPower", SqliteType.Integer), ("@batContact", SqliteType.Integer), ("@batDiscipline", SqliteType.Integer),
+            ("@pitStuff", SqliteType.Integer), ("@pitControl", SqliteType.Integer), ("@pitStamina", SqliteType.Integer),
+            ("@fielding", SqliteType.Integer));
+
+        _selectAllPotential = Acquire(SqlSelectAllPotential);
+        _selectPotentialById = Acquire(SqlSelectPotentialById, ("@playerId", SqliteType.Text));
 
         _selectRoster = Acquire(SqlSelectRoster);
 
@@ -533,6 +571,68 @@ public sealed class BaseballQueries
         };
         return true;
     }
+
+    /// <summary>
+    /// Writes a player's development ceiling (schema v10). Creation paths only
+    /// — the development pass moves Player_Ratings, never the ceiling.
+    /// </summary>
+    public void UpsertPotential(in PlayerPotentialRow potential)
+    {
+        SqliteParameterCollection p = _upsertPotential.Parameters;
+        p["@playerId"].Value = potential.PlayerId;
+        p["@batPower"].Value = potential.BatPower;
+        p["@batContact"].Value = potential.BatContact;
+        p["@batDiscipline"].Value = potential.BatDiscipline;
+        p["@pitStuff"].Value = potential.PitStuff;
+        p["@pitControl"].Value = potential.PitControl;
+        p["@pitStamina"].Value = potential.PitStamina;
+        p["@fielding"].Value = potential.Fielding;
+        _db.ExecuteNonQuery(_upsertPotential);
+    }
+
+    /// <summary>
+    /// Bulk-loads every Player_Potential row into <paramref name="destination"/>
+    /// (cleared first), keyed by player_id — the development pass's single
+    /// up-front read, once per offseason (deliberate full scan; see the SQL
+    /// comment). Mirrors the roster join's load-everything-then-loop shape.
+    /// </summary>
+    public int LoadAllPotential(Dictionary<string, PlayerPotentialRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllPotential);
+        while (reader.Read())
+        {
+            PlayerPotentialRow row = ReadPotentialRow(reader);
+            destination.Add(row.PlayerId, row);
+        }
+        return destination.Count;
+    }
+
+    /// <summary>Single-player ceiling probe — false when the player has no Player_Potential row (pre-backfill or non-baseball people).</summary>
+    public bool TryGetPotential(string playerId, out PlayerPotentialRow potential)
+    {
+        _selectPotentialById.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectPotentialById);
+        if (!reader.Read())
+        {
+            potential = default;
+            return false;
+        }
+        potential = ReadPotentialRow(reader);
+        return true;
+    }
+
+    private static PlayerPotentialRow ReadPotentialRow(SqliteDataReader reader) => new()
+    {
+        PlayerId = reader.GetString(0),
+        BatPower = reader.GetInt32(1),
+        BatContact = reader.GetInt32(2),
+        BatDiscipline = reader.GetInt32(3),
+        PitStuff = reader.GetInt32(4),
+        PitControl = reader.GetInt32(5),
+        PitStamina = reader.GetInt32(6),
+        Fielding = reader.GetInt32(7),
+    };
 
     /// <summary>
     /// Bulk-loads every rostered, baseball-active player (Players ⋈ Player_Ratings,

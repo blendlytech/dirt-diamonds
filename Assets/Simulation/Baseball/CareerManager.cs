@@ -381,6 +381,22 @@ public sealed class CareerManager
             PlayerRatingsRow avatarRatings = ratings;
             avatarRatings.PlayerId = avatarId;
             _baseball.UpsertRatings(in avatarRatings);
+            // Schema v10 (development doc §3.3): the avatar's ceiling is the
+            // chosen build plus a deterministic youth-headroom grant — a
+            // max-built rating clamps at 100 (zero headroom, decline-only), a
+            // modest build leaves room to develop. The disclosed creation
+            // trade: front-load talent vs. leave room to grow.
+            _baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = avatarId,
+                BatPower = DevelopmentCurve.HeadroomPotential(ratings.BatPower, StartingAge),
+                BatContact = DevelopmentCurve.HeadroomPotential(ratings.BatContact, StartingAge),
+                BatDiscipline = DevelopmentCurve.HeadroomPotential(ratings.BatDiscipline, StartingAge),
+                PitStuff = DevelopmentCurve.HeadroomPotential(ratings.PitStuff, StartingAge),
+                PitControl = DevelopmentCurve.HeadroomPotential(ratings.PitControl, StartingAge),
+                PitStamina = DevelopmentCurve.HeadroomPotential(ratings.PitStamina, StartingAge),
+                Fielding = DevelopmentCurve.HeadroomPotential(ratings.Fielding, StartingAge),
+            });
             if (ratings.IsPitcher)
             {
                 _baseball.UpsertPitcherRole(avatarId, pitcherRole);
@@ -470,6 +486,23 @@ public sealed class CareerManager
         int interest = HeirGenetics.RollInterest(HeirGenetics.HeirGeneticsProfile.BirthAffinity, ref _rng);
         string heirId = Guid.NewGuid().ToString();
 
+        // Schema v10 (development doc §3.3): the blended vector is the heir's
+        // POTENTIAL — the genetic ceiling, reached only by developing. His
+        // CURRENT ratings sit the full birth-age prospect discount below it
+        // (deterministic, gap roll 1.0: same-age heirs shift identically, so
+        // the succession best-by-rating ordering is never lottery-scrambled;
+        // the §2.4 development jitter supplies the bust/breakout texture once
+        // he is rostered). Development starts when succession rosters him —
+        // unrostered people never develop (v1, disclosed).
+        PlayerRatingsRow heirCurrent = heirRatings;
+        heirCurrent.BatPower = DevelopmentCurve.RawCurrent(heirRatings.BatPower, birthAge, 1.0);
+        heirCurrent.BatContact = DevelopmentCurve.RawCurrent(heirRatings.BatContact, birthAge, 1.0);
+        heirCurrent.BatDiscipline = DevelopmentCurve.RawCurrent(heirRatings.BatDiscipline, birthAge, 1.0);
+        heirCurrent.PitStuff = DevelopmentCurve.RawCurrent(heirRatings.PitStuff, birthAge, 1.0);
+        heirCurrent.PitControl = DevelopmentCurve.RawCurrent(heirRatings.PitControl, birthAge, 1.0);
+        heirCurrent.PitStamina = DevelopmentCurve.RawCurrent(heirRatings.PitStamina, birthAge, 1.0);
+        heirCurrent.Fielding = DevelopmentCurve.RawCurrent(heirRatings.Fielding, birthAge, 1.0);
+
         _db.BeginBatch();
         try
         {
@@ -486,14 +519,26 @@ public sealed class CareerManager
                 BaseballInterest = interest,
                 DetectionRisk = 0,
             });
-            heirRatings.PlayerId = heirId;
-            _baseball.UpsertRatings(in heirRatings);
+            heirCurrent.PlayerId = heirId;
+            _baseball.UpsertRatings(in heirCurrent);
+            _baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = heirId,
+                BatPower = heirRatings.BatPower,
+                BatContact = heirRatings.BatContact,
+                BatDiscipline = heirRatings.BatDiscipline,
+                PitStuff = heirRatings.PitStuff,
+                PitControl = heirRatings.PitControl,
+                PitStamina = heirRatings.PitStamina,
+                Fielding = heirRatings.Fielding,
+            });
             if (isPitcher)
             {
                 _baseball.UpsertPitcherRole(heirId, role);
                 // Deterministic stuff-derived arsenal (spread 0 = no jitter),
-                // same call CreateAvatar makes for a pitcher avatar.
-                LeagueGenerator.GenerateArsenal(_baseball, heirId, heirRatings.PitStuff, ratingSpread: 0, ref _rng);
+                // same call CreateAvatar makes for a pitcher avatar — shaped
+                // by what the heir throws NOW (the current, discounted stuff).
+                LeagueGenerator.GenerateArsenal(_baseball, heirId, heirCurrent.PitStuff, ratingSpread: 0, ref _rng);
             }
             _players.UpsertRelationship(avatarId, heirId, HeirGenetics.HeirGeneticsProfile.BirthAffinity, RelationshipType.Child);
             if (partnerId is not null)
