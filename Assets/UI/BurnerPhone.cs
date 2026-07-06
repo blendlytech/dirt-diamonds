@@ -1,7 +1,10 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Equipment;
+using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Simulation.Life;
 using Godot;
 
 namespace DirtAndDiamonds.UI;
@@ -25,6 +28,19 @@ namespace DirtAndDiamonds.UI;
 /// </summary>
 public sealed partial class BurnerPhone : PanelContainer
 {
+    /// <summary>
+    /// 10d: emitted when a Bank-tab hustle button is pressed. Carries a
+    /// <see cref="WorkActivity"/> cast to int (Godot signals need Variant-
+    /// friendly params). No bypass of the day-plan gate — the listener just
+    /// pre-selects ScheduleScreen's "Work as" dropdown; the player still has
+    /// to confirm the plan and advance the day, per ui_conventions' rule that
+    /// UI never mutates simulation state directly. Main.cs is the one
+    /// listener, wiring this sibling-to-sibling seam without either screen
+    /// reaching into the other's tree.
+    /// </summary>
+    [Signal]
+    public delegate void HustleLaunchRequestedEventHandler(int workActivity);
+
     [Export]
     public string TimestampFormat { get; set; } = "Season {0}, day {1}";
 
@@ -34,10 +50,45 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string NoContactSelectedText { get; set; } = "Select a contact";
 
+    [Export]
+    public string FundsFormat { get; set; } = "${0:N0}";
+
+    [Export]
+    public string CostOfLivingFormat { get; set; } = "Cost of living: ${0:F0}/wk — next bill in {1}d";
+
+    /// <summary>Tier display names indexed by quality 0–3, mirroring EquipmentShopScreen's own copy.</summary>
+    [Export]
+    public string[] TierNames { get; set; } =
+    {
+        "Standard issue", "Quality gear", "Premium gear", "Custom pro gear",
+    };
+
+    [Export]
+    public string EquipmentTierFormat { get; set; } = "Equipped: {0}";
+
+    [Export]
+    public string EquipmentNextFormat { get; set; } = "Next: {0} — ${1:F0}";
+
+    [Export]
+    public string TopTierOwnedText { get; set; } = "Top-tier gear owned.";
+
     private ItemList _contactList = null!;
     private Label _threadHeaderLabel = null!;
     private VBoxContainer _threadContainer = null!;
     private VBoxContainer _choicesContainer = null!;
+
+    private Label _fundsValueLabel = null!;
+    private Label _costOfLivingLabel = null!;
+    private Label _equipmentTierLabel = null!;
+    private Label _equipmentNextLabel = null!;
+    private ProgressBar _hungerBar = null!;
+    private ProgressBar _sleepBar = null!;
+    private ProgressBar _hygieneBar = null!;
+    private ProgressBar _socialBar = null!;
+    private ProgressBar _fitnessBar = null!;
+    private Button _narcoticsButton = null!;
+    private Button _fencingButton = null!;
+    private Button _pokerButton = null!;
 
     private readonly Dictionary<string, List<NarrativeMessageRow>> _messagesByContact = new();
     private readonly Dictionary<string, int> _lastSeenCount = new();
@@ -48,6 +99,15 @@ public sealed partial class BurnerPhone : PanelContainer
     private string? _shownFireIdentity;
     private bool _initialized;
 
+    // Dirty-flag identity for the Bank tab's polled labels/meters
+    // (ui_conventions.md: no per-frame string formatting) — independent of
+    // the Messages tab's _shownFireIdentity above.
+    private bool _bankInitialized;
+    private double _shownFunds = double.NaN;
+    private long _shownDaysUntilBill = -1;
+    private int _shownEquipmentQuality = -1;
+    private NeedsState _shownNeeds;
+
     public override void _Ready()
     {
         _contactList = GetNode<ItemList>("PhoneTabs/Messages/MessagesLayout/ContactList");
@@ -56,11 +116,30 @@ public sealed partial class BurnerPhone : PanelContainer
         _choicesContainer = GetNode<VBoxContainer>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ChoicesContainer");
         _contactList.ItemSelected += OnContactSelected;
         _threadHeaderLabel.Text = NoContactSelectedText;
+
+        _fundsValueLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout/FundsValueLabel");
+        _costOfLivingLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout/CostOfLivingLabel");
+        _equipmentTierLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/EquipmentTierLabel");
+        _equipmentNextLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/EquipmentNextLabel");
+        _hungerBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow/HungerBar");
+        _sleepBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow/SleepBar");
+        _hygieneBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneBar");
+        _socialBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialBar");
+        _fitnessBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessBar");
+        _narcoticsButton = GetNode<Button>("PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/NarcoticsButton");
+        _fencingButton = GetNode<Button>("PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/FencingButton");
+        _pokerButton = GetNode<Button>("PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/PokerButton");
+        _narcoticsButton.Pressed += OnNarcoticsPressed;
+        _fencingButton.Pressed += OnFencingPressed;
+        _pokerButton.Pressed += OnPokerPressed;
     }
 
     public override void _ExitTree()
     {
         _contactList.ItemSelected -= OnContactSelected;
+        _narcoticsButton.Pressed -= OnNarcoticsPressed;
+        _fencingButton.Pressed -= OnFencingPressed;
+        _pokerButton.Pressed -= OnPokerPressed;
     }
 
     public override void _Process(double delta)
@@ -70,6 +149,8 @@ public sealed partial class BurnerPhone : PanelContainer
         {
             return;
         }
+
+        RefreshBankTab(gm);
 
         bool hasPending = gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending);
         string? identity = hasPending
@@ -263,4 +344,61 @@ public sealed partial class BurnerPhone : PanelContainer
 
     private void MarkRead(string contactId, string? pendingContactId) =>
         _lastSeenCount[contactId] = EffectiveCount(contactId, pendingContactId);
+
+    private void RefreshBankTab(GameManager gm)
+    {
+        string avatarId = gm.Career.AvatarPlayerId;
+
+        if (!gm.LifeSim.TryGetFunds(avatarId, out double funds))
+        {
+            funds = 0.0;
+        }
+        long sinceBill = gm.State.CurrentDay % LifeSimManager.CostOfLivingCadenceDays;
+        long daysUntilBill = sinceBill == 0
+            ? LifeSimManager.CostOfLivingCadenceDays
+            : LifeSimManager.CostOfLivingCadenceDays - sinceBill;
+        if (!_bankInitialized || funds != _shownFunds || daysUntilBill != _shownDaysUntilBill)
+        {
+            _shownFunds = funds;
+            _shownDaysUntilBill = daysUntilBill;
+            _fundsValueLabel.Text = string.Format(FundsFormat, funds);
+            _costOfLivingLabel.Text = string.Format(CostOfLivingFormat, LifeSimManager.WeeklyCostOfLiving, daysUntilBill);
+        }
+
+        int equipmentQuality = gm.Gear.QualityFor(avatarId);
+        if (!_bankInitialized || equipmentQuality != _shownEquipmentQuality)
+        {
+            _shownEquipmentQuality = equipmentQuality;
+            _equipmentTierLabel.Text = string.Format(EquipmentTierFormat, TierNames[equipmentQuality]);
+            _equipmentNextLabel.Text = equipmentQuality >= TierNames.Length - 1
+                ? TopTierOwnedText
+                : string.Format(EquipmentNextFormat, TierNames[equipmentQuality + 1], EquipmentService.PriceForQuality(equipmentQuality + 1));
+        }
+
+        if (!gm.LifeSim.TryGetNeeds(avatarId, out NeedsState needs))
+        {
+            needs = NeedsState.FullySatisfied();
+        }
+        if (!_bankInitialized || !NeedsEqual(needs, _shownNeeds))
+        {
+            _shownNeeds = needs;
+            _hungerBar.Value = needs.Hunger;
+            _sleepBar.Value = needs.Sleep;
+            _hygieneBar.Value = needs.Hygiene;
+            _socialBar.Value = needs.Social;
+            _fitnessBar.Value = needs.Fitness;
+        }
+
+        _bankInitialized = true;
+    }
+
+    private static bool NeedsEqual(in NeedsState a, in NeedsState b) =>
+        a.Hunger == b.Hunger && a.Sleep == b.Sleep && a.Hygiene == b.Hygiene
+        && a.Social == b.Social && a.Fitness == b.Fitness;
+
+    private void OnNarcoticsPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Narcotics);
+
+    private void OnFencingPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Fencing);
+
+    private void OnPokerPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Poker);
 }

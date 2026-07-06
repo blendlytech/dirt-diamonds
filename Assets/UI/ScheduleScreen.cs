@@ -121,6 +121,13 @@ public sealed partial class ScheduleScreen : Control
         _clearButton.Pressed -= OnClearPressed;
     }
 
+    /// <summary>
+    /// 10d Bank-tab seam: pre-fills "Work as" from a phone launch button. Pure
+    /// UI convenience — the player still has to confirm the plan and advance
+    /// the day, same as picking the dropdown by hand.
+    /// </summary>
+    public void SelectWorkActivity(WorkActivity activity) => _workActivityOption.Selected = (int)activity;
+
     public override void _Process(double delta)
     {
         CareerManager career = GameManager.Instance!.Career;

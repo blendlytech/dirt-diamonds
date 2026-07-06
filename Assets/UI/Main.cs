@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Economy.Hustles;
 using Godot;
 
 namespace DirtAndDiamonds.UI;
@@ -15,6 +16,11 @@ namespace DirtAndDiamonds.UI;
 /// own Visible flag) that must never be freed by a screen swap.
 /// EventChoiceScreen retired in Phase 10b — the Burner Phone's pending-choice
 /// thread renders it now (presentation_layer_narrative.md §4.4).
+/// 10d: also bridges BurnerPhone's HustleLaunchRequested signal to
+/// ScheduleScreen.SelectWorkActivity — the two are unrelated siblings
+/// (BurnerPhone nested under the shell, ScheduleScreen a direct child of
+/// Main), so Main is the shared ancestor that wires them without either
+/// reaching into the other's tree.
 /// </summary>
 public sealed partial class Main : Node
 {
@@ -25,10 +31,12 @@ public sealed partial class Main : Node
     public PackedScene TwoPanelShellScene { get; set; } = null!;
 
     private Node _screenContainer = null!;
+    private ScheduleScreen _scheduleScreen = null!;
 
     public override void _Ready()
     {
         _screenContainer = GetNode<Node>("ScreenContainer");
+        _scheduleScreen = GetNode<ScheduleScreen>("ScheduleScreen");
         ShowAppropriateScreen();
     }
 
@@ -41,7 +49,10 @@ public sealed partial class Main : Node
 
         if (GameManager.Instance!.Career.HasAvatar)
         {
-            _screenContainer.AddChild(TwoPanelShellScene.Instantiate());
+            Node shell = TwoPanelShellScene.Instantiate();
+            _screenContainer.AddChild(shell);
+            var phone = shell.GetNode<BurnerPhone>("Panels/BurnerPhone");
+            phone.HustleLaunchRequested += OnHustleLaunchRequested;
         }
         else
         {
@@ -52,4 +63,7 @@ public sealed partial class Main : Node
     }
 
     private void OnAvatarCreated() => ShowAppropriateScreen();
+
+    private void OnHustleLaunchRequested(int workActivity) =>
+        _scheduleScreen.SelectWorkActivity((WorkActivity)workActivity);
 }

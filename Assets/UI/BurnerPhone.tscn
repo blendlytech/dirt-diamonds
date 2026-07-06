@@ -55,8 +55,175 @@ theme_override_constants/separation = 4
 [node name="Bank" type="MarginContainer" parent="PhoneTabs"]
 visible = false
 layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="BankPlaceholder" type="Label" parent="PhoneTabs/Bank"]
+[node name="BankScroll" type="ScrollContainer" parent="PhoneTabs/Bank"]
 layout_mode = 2
+
+[node name="BankLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="FundsCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="FundsCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard"]
+layout_mode = 2
+
+[node name="FundsHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Funds"
+
+[node name="FundsValueLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"DisplayLabel"
+text = "$0"
+
+[node name="CostOfLivingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
-text = "No account activity yet."
+text = ""
+
+[node name="EquipmentCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="EquipmentCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard"]
+layout_mode = 2
+
+[node name="EquipmentHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Gear"
+
+[node name="EquipmentTierLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+layout_mode = 2
+text = ""
+
+[node name="EquipmentNextLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
+
+[node name="NeedsCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="NeedsCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="NeedsHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Needs"
+
+[node name="HungerRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+
+[node name="HungerLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Hunger"
+
+[node name="HungerBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100
+
+[node name="SleepRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+
+[node name="SleepLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Sleep"
+
+[node name="SleepBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100
+
+[node name="HygieneRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+
+[node name="HygieneLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Hygiene"
+
+[node name="HygieneBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100
+
+[node name="SocialRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+
+[node name="SocialLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Social"
+
+[node name="SocialBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100
+
+[node name="FitnessRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+
+[node name="FitnessLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Fitness"
+
+[node name="FitnessBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100
+
+[node name="HustlesCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="HustlesCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard"]
+layout_mode = 2
+
+[node name="HustlesHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Side Work"
+
+[node name="HustlesCaptionLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = "Pre-fills today's \"Work as\" pick on the schedule panel — confirm the plan and advance the day to play it."
+
+[node name="HustleButtonsRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NarcoticsButton" type="Button" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Narcotics"
+
+[node name="FencingButton" type="Button" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Fencing"
+
+[node name="PokerButton" type="Button" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Texas Hold'em"
