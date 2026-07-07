@@ -430,6 +430,12 @@ shippable.
   `-wal`/`-shm` sidecars (sync `dirt_and_diamonds.db` only) — if the pattern is coarser than
   expected, the checkpoint(TRUNCATE) still leaves the sidecars harmless (zero-length wal), but the
   narrower pattern is preferred (§5.3). Verify on the partner site during 11c.
+  **RESOLVED (11c, 2026-07-06):** Auto-Cloud file masks take exact literal filenames — a rule on
+  `dirt_and_diamonds.db` syncs that file and nothing else, so the sidecars are excluded by
+  construction. The full partner-site values (roots, subdirectories, masks, quota) are recorded in
+  `Assets/Platform/Steam/README.md`; they are entered against the real appid at 11e (the Spacewar
+  dev appid's cloud config isn't ours to edit), which is also when the §9.5 round-trip smoke test
+  becomes possible.
 
 ---
 

@@ -130,6 +130,10 @@ public sealed partial class GameManager : Node
     // (nothing reads it; it exists exactly as long as the bus does).
     private AchievementManager _achievements = null!;
 
+    // Phase 11d: the rich-presence bus subscriber — same posture as
+    // _achievements (nothing reads it; it lives exactly as long as the bus).
+    private RichPresenceWriter _presence = null!;
+
     public override void _Ready()
     {
         Instance = this;
@@ -406,9 +410,20 @@ public sealed partial class GameManager : Node
         // as the §4.3 idempotent re-assert for already-earned milestones.
         _achievements = new AchievementManager(Steam, Baseball, GameState, GrittyEvents);
         _achievements.AttachTo(Events);
+        // Phase 11d (§6): rich presence rides the same two channels as one more
+        // guarded read-model — event-driven only, never per-frame. An
+        // avatar-less (or lineage-over) boot publishes the between-careers
+        // token so a friends list never shows a stale career.
+        _presence = new RichPresenceWriter(Steam, Baseball, Players, GameState, State);
+        _presence.AttachTo(Events);
         if (avatarLoaded)
         {
             _achievements.SyncFromBoot(Career.AvatarPlayerId, Career.AvatarTeamId);
+            _presence.SyncFromBoot(Career.AvatarPlayerId, Career.AvatarTeamId);
+        }
+        else
+        {
+            _presence.SetBetweenCareers();
         }
 
         (string journalMode, bool foreignKeys, int schemaVersion) = _database.GetConnectionDiagnostics();
@@ -451,11 +466,20 @@ public sealed partial class GameManager : Node
         {
             PersistRelationships(default);
         }
+        // Phase 11c (steam_publishing_ship_it.md §5.3): fold the WAL into the
+        // single .db before the handle releases, so the one file Steam
+        // Auto-Cloud uploads after exit is the complete save. Runs after the
+        // flushes above committed and after the poll view — the only other
+        // reader — closed; an incomplete checkpoint is loud, not fatal (the
+        // save stays consistent locally, only the cloud copy trails).
+        if (_database is not null && !_database.CheckpointForSync())
+        {
+            GD.Print("[GameManager] WAL checkpoint incomplete on exit — cloud copy may trail the local save.");
+        }
         _database?.Dispose();
         _database = null;
         // Phase 11a: Steam goes down last — after the DB handle releases, so a
-        // Steam-triggered auto-cloud upload sees the finished file (§2.1). 11c
-        // inserts the WAL checkpoint just ahead of the dispose above.
+        // Steam-triggered auto-cloud upload sees the finished file (§2.1).
         Steam?.Shutdown();
     }
 

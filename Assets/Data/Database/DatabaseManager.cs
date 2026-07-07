@@ -156,6 +156,38 @@ public sealed class DatabaseManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Folds the WAL back into the main .db and truncates the sidecar to zero
+    /// bytes (PRAGMA wal_checkpoint(TRUNCATE)), so the single .db file is a
+    /// complete, self-contained snapshot safe for cloud sync — Steam Auto-Cloud
+    /// uploads dirt_and_diamonds.db only, never the -wal/-shm sidecars
+    /// (steam_publishing_ship_it.md §5.3). Called on clean exit after the final
+    /// flushes commit and every reader (the gritty-event poll view) has closed;
+    /// a no-op when the WAL is already empty. Returns false when a lingering
+    /// reader kept the checkpoint from completing — the save is still
+    /// consistent locally (SQLite replays the WAL on next open), but the .db
+    /// alone is not the whole state, so the caller should say so.
+    /// </summary>
+    public bool CheckpointForSync()
+    {
+        lock (_dbLock)
+        {
+            ThrowIfDisposed();
+            if (_activeBatch is not null)
+            {
+                throw new InvalidOperationException(
+                    "CheckpointForSync called while a batch transaction is active — " +
+                    "commit or roll back the batch before checkpointing for sync.");
+            }
+
+            // The pragma reports (busy, log, checkpointed); busy is 0 only when
+            // every WAL frame was folded back and the sidecar truncated.
+            using SqliteCommand command = _connection.CreateCommand();
+            command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            return (long)(command.ExecuteScalar() ?? 1L) == 0L;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Pooled command acquisition & execution
     // ------------------------------------------------------------------
