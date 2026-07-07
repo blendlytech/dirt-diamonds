@@ -45,8 +45,10 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string TimestampFormat { get; set; } = "Season {0}, day {1}";
 
+    // '•' (U+2022) rather than '●': the vendored Barlow faces cover Latin
+    // punctuation but not the geometric-shapes block.
     [Export]
-    public string UnreadMarker { get; set; } = "● ";
+    public string UnreadMarker { get; set; } = "• ";
 
     [Export]
     public string NoContactSelectedText { get; set; } = "Select a contact";
@@ -112,26 +114,26 @@ public sealed partial class BurnerPhone : PanelContainer
 
     public override void _Ready()
     {
-        _contactList = GetNode<ItemList>("PhoneTabs/Messages/MessagesLayout/ContactList");
-        _threadPortrait = GetNode<PortraitView>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadPortrait");
-        _threadHeaderLabel = GetNode<Label>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadHeaderLabel");
-        _threadContainer = GetNode<VBoxContainer>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll/ThreadContainer");
-        _choicesContainer = GetNode<VBoxContainer>("PhoneTabs/Messages/MessagesLayout/ThreadPanel/ChoicesContainer");
+        _contactList = GetNode<ItemList>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ContactList");
+        _threadPortrait = GetNode<PortraitView>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadPortrait");
+        _threadHeaderLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadHeaderLabel");
+        _threadContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll/ThreadContainer");
+        _choicesContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ChoicesContainer");
         _contactList.ItemSelected += OnContactSelected;
         _threadHeaderLabel.Text = NoContactSelectedText;
 
-        _fundsValueLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout/FundsValueLabel");
-        _costOfLivingLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout/CostOfLivingLabel");
-        _equipmentTierLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/EquipmentTierLabel");
-        _equipmentNextLabel = GetNode<Label>("PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/EquipmentNextLabel");
-        _hungerBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow/HungerBar");
-        _sleepBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow/SleepBar");
-        _hygieneBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneBar");
-        _socialBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialBar");
-        _fitnessBar = GetNode<ProgressBar>("PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessBar");
-        _narcoticsButton = GetNode<Button>("PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/NarcoticsButton");
-        _fencingButton = GetNode<Button>("PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/FencingButton");
-        _pokerButton = GetNode<Button>("PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/PokerButton");
+        _fundsValueLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout/FundsValueLabel");
+        _costOfLivingLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout/CostOfLivingLabel");
+        _equipmentTierLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/EquipmentTierLabel");
+        _equipmentNextLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/EquipmentNextLabel");
+        _hungerBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow/HungerBar");
+        _sleepBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow/SleepBar");
+        _hygieneBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneBar");
+        _socialBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialBar");
+        _fitnessBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessBar");
+        _narcoticsButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/NarcoticsButton");
+        _fencingButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/FencingButton");
+        _pokerButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/PokerButton");
         _narcoticsButton.Pressed += OnNarcoticsPressed;
         _fencingButton.Pressed += OnFencingPressed;
         _pokerButton.Pressed += OnPokerPressed;
@@ -293,7 +295,11 @@ public sealed partial class BurnerPhone : PanelContainer
             for (int i = 0; i < eventChoices.Length; i++)
             {
                 int choiceIndex = i; // captured by value, not the loop variable
-                var button = new Button { Text = eventChoices[i].Label };
+                var button = new Button
+                {
+                    Text = eventChoices[i].Label,
+                    ThemeTypeVariation = "ReplyChip",
+                };
                 button.Pressed += () => GameManager.Instance!.GrittyEventChoices.ResolveChoice(choiceIndex);
                 _choicesContainer.AddChild(button);
             }

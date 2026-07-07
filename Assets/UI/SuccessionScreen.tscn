@@ -9,7 +9,15 @@ anchor_bottom = 1.0
 visible = false
 script = ExtResource("1_succession")
 
+[node name="Scrim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.55)
+
 [node name="ChoicePanel" type="PanelContainer" parent="."]
+theme_type_variation = &"Card"
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -27,6 +35,7 @@ grow_vertical = 2
 layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="ChoicePanel/Layout"]
+theme_type_variation = &"HeadingLabel"
 layout_mode = 2
 autowrap_mode = 2
 text = "Your playing days are behind you now. Who carries the family name forward?"
@@ -35,6 +44,7 @@ text = "Your playing days are behind you now. Who carries the family name forwar
 layout_mode = 2
 
 [node name="GameOverPanel" type="PanelContainer" parent="."]
+theme_type_variation = &"Card"
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5

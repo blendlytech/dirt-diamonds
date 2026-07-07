@@ -4,6 +4,7 @@
 
 [node name="PortraitView" type="PanelContainer"]
 custom_minimum_size = Vector2(48, 48)
+theme_type_variation = &"PortraitFrame"
 script = ExtResource("1_script")
 
 [node name="TextureRect" type="TextureRect" parent="."]

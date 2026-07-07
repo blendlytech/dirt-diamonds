@@ -11,29 +11,123 @@ script = ExtResource("1_atbatview")
 [node name="Layout" type="VBoxContainer" parent="."]
 layout_mode = 2
 
-[node name="ScoreLabel" type="Label" parent="Layout"]
+[node name="Scoreboard" type="PanelContainer" parent="Layout"]
 layout_mode = 2
-text = "AWAY 0 — HOME 0"
+theme_type_variation = &"ScoreboardPanel"
 
-[node name="InningLabel" type="Label" parent="Layout"]
+[node name="ScoreboardRow" type="HBoxContainer" parent="Layout/Scoreboard"]
 layout_mode = 2
-text = "Top 1"
+theme_override_constants/separation = 18
 
-[node name="CountLabel" type="Label" parent="Layout"]
+[node name="AwayBox" type="VBoxContainer" parent="Layout/Scoreboard/ScoreboardRow"]
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+
+[node name="AwayCaption" type="Label" parent="Layout/Scoreboard/ScoreboardRow/AwayBox"]
+layout_mode = 2
+theme_type_variation = &"ScoreCaption"
+horizontal_alignment = 1
+text = "AWAY"
+
+[node name="AwayScore" type="Label" parent="Layout/Scoreboard/ScoreboardRow/AwayBox"]
+layout_mode = 2
+theme_type_variation = &"ScoreDigits"
+horizontal_alignment = 1
+text = "0"
+
+[node name="CenterBox" type="VBoxContainer" parent="Layout/Scoreboard/ScoreboardRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="InningLabel" type="Label" parent="Layout/Scoreboard/ScoreboardRow/CenterBox"]
+layout_mode = 2
+theme_type_variation = &"ScoreCaption"
+horizontal_alignment = 1
+text = "TOP 1"
+
+[node name="DiamondCenter" type="CenterContainer" parent="Layout/Scoreboard/ScoreboardRow/CenterBox"]
+layout_mode = 2
+
+[node name="Diamond" type="Control" parent="Layout/Scoreboard/ScoreboardRow/CenterBox/DiamondCenter"]
+layout_mode = 2
+custom_minimum_size = Vector2(76, 48)
+
+[node name="Base2" type="Panel" parent="Layout/Scoreboard/ScoreboardRow/CenterBox/DiamondCenter/Diamond"]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 6.0
+offset_right = 46.0
+offset_bottom = 22.0
+rotation = 0.785398
+pivot_offset = Vector2(8, 8)
+theme_type_variation = &"BaseDim"
+
+[node name="Base3" type="Panel" parent="Layout/Scoreboard/ScoreboardRow/CenterBox/DiamondCenter/Diamond"]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 24.0
+offset_right = 24.0
+offset_bottom = 40.0
+rotation = 0.785398
+pivot_offset = Vector2(8, 8)
+theme_type_variation = &"BaseDim"
+
+[node name="Base1" type="Panel" parent="Layout/Scoreboard/ScoreboardRow/CenterBox/DiamondCenter/Diamond"]
+layout_mode = 0
+offset_left = 52.0
+offset_top = 24.0
+offset_right = 68.0
+offset_bottom = 40.0
+rotation = 0.785398
+pivot_offset = Vector2(8, 8)
+theme_type_variation = &"BaseDim"
+
+[node name="CountRow" type="HBoxContainer" parent="Layout/Scoreboard/ScoreboardRow/CenterBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="CountLabel" type="Label" parent="Layout/Scoreboard/ScoreboardRow/CenterBox/CountRow"]
+layout_mode = 2
+theme_type_variation = &"CountLabel"
 text = "0-0"
 
-[node name="OutsLabel" type="Label" parent="Layout"]
+[node name="OutsLabel" type="Label" parent="Layout/Scoreboard/ScoreboardRow/CenterBox/CountRow"]
 layout_mode = 2
-text = "0 out"
+size_flags_vertical = 4
+theme_type_variation = &"ScoreCaption"
+text = "0 OUT"
 
-[node name="BasesLabel" type="Label" parent="Layout"]
+[node name="HomeBox" type="VBoxContainer" parent="Layout/Scoreboard/ScoreboardRow"]
 layout_mode = 2
-text = "Bases empty"
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
 
-[node name="PitchCueLabel" type="Label" parent="Layout"]
+[node name="HomeCaption" type="Label" parent="Layout/Scoreboard/ScoreboardRow/HomeBox"]
 layout_mode = 2
-text = ""
+theme_type_variation = &"ScoreCaption"
+horizontal_alignment = 1
+text = "HOME"
+
+[node name="HomeScore" type="Label" parent="Layout/Scoreboard/ScoreboardRow/HomeBox"]
+layout_mode = 2
+theme_type_variation = &"ScoreDigits"
+horizontal_alignment = 1
+text = "0"
+
+[node name="PitchCueRow" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="CueChip" type="PanelContainer" parent="Layout/PitchCueRow"]
+layout_mode = 2
+theme_type_variation = &"TierChip"
+
+[node name="PitchCueLabel" type="Label" parent="Layout/PitchCueRow/CueChip"]
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "Waiting for the pitch..."
 
 [node name="PlayLog" type="RichTextLabel" parent="Layout"]
 layout_mode = 2
@@ -43,6 +137,7 @@ text = "Play-by-play"
 
 [node name="Controls" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
 [node name="ZoneReadToggle" type="CheckButton" parent="Layout/Controls"]
 layout_mode = 2
@@ -52,15 +147,19 @@ text = "Read: in zone"
 [node name="TimingSlider" type="HSlider" parent="Layout/Controls"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 min_value = -1.0
 max_value = 1.0
 step = 0.01
 value = 0.0
 
-[node name="SwingButton" type="Button" parent="Layout/Controls"]
-layout_mode = 2
-text = "Swing"
-
 [node name="TakeButton" type="Button" parent="Layout/Controls"]
 layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
 text = "Take"
+
+[node name="SwingButton" type="Button" parent="Layout/Controls"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+theme_type_variation = &"AccentButton"
+text = "Swing"

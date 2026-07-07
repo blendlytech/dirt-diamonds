@@ -8,60 +8,87 @@ script = ExtResource("1_script")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+theme_type_variation = &"PhoneBezel"
 
-[node name="PhoneTabs" type="TabContainer" parent="."]
+[node name="Screen" type="PanelContainer" parent="."]
+layout_mode = 2
+theme_type_variation = &"PhoneScreen"
+
+[node name="ScreenLayout" type="VBoxContainer" parent="Screen"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StatusBar" type="HBoxContainer" parent="Screen/ScreenLayout"]
 layout_mode = 2
 
-[node name="Messages" type="MarginContainer" parent="PhoneTabs"]
+[node name="CarrierLabel" type="Label" parent="Screen/ScreenLayout/StatusBar"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "BURNER"
+
+[node name="StatusSpacer" type="Control" parent="Screen/ScreenLayout/StatusBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusRightLabel" type="Label" parent="Screen/ScreenLayout/StatusBar"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "PREPAID · UNTRACED"
+
+[node name="PhoneTabs" type="TabContainer" parent="Screen/ScreenLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Messages" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 layout_mode = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="MessagesLayout" type="HBoxContainer" parent="PhoneTabs/Messages"]
+[node name="MessagesLayout" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ContactList" type="ItemList" parent="PhoneTabs/Messages/MessagesLayout"]
+[node name="ContactList" type="ItemList" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout"]
 custom_minimum_size = Vector2(170, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 allow_reselect = true
 
-[node name="ThreadPanel" type="VBoxContainer" parent="PhoneTabs/Messages/MessagesLayout"]
+[node name="ThreadPanel" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="ThreadHeaderRow" type="HBoxContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+[node name="ThreadHeaderRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ThreadPortrait" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow" instance=ExtResource("2_portraitview")]
+[node name="ThreadPortrait" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow" instance=ExtResource("2_portraitview")]
 layout_mode = 2
 custom_minimum_size = Vector2(36, 36)
 
-[node name="ThreadHeaderLabel" type="Label" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow"]
+[node name="ThreadHeaderLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Select a contact"
 
-[node name="ThreadScroll" type="ScrollContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+[node name="ThreadScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
 layout_mode = 2
 size_flags_vertical = 3
 follow_focus = true
 
-[node name="ThreadContainer" type="VBoxContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll"]
+[node name="ThreadContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="ChoicesContainer" type="VBoxContainer" parent="PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
+[node name="ChoicesContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 6
 
-[node name="Bank" type="MarginContainer" parent="PhoneTabs"]
+[node name="Bank" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
 layout_mode = 2
 theme_override_constants/margin_left = 8
@@ -69,170 +96,179 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="BankScroll" type="ScrollContainer" parent="PhoneTabs/Bank"]
+[node name="BankScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank"]
 layout_mode = 2
 
-[node name="BankLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll"]
+[node name="BankLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
-[node name="FundsCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+[node name="FundsCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout"]
 layout_mode = 2
 theme_type_variation = &"Card"
 
-[node name="FundsCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard"]
+[node name="FundsCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard"]
 layout_mode = 2
+theme_override_constants/separation = 2
 
-[node name="FundsHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
+[node name="FundsHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Funds"
 
-[node name="FundsValueLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
+[node name="FundsValueLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
 layout_mode = 2
 theme_type_variation = &"DisplayLabel"
 text = "$0"
 
-[node name="CostOfLivingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
+[node name="CostOfLivingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard/FundsCardLayout"]
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
 text = ""
 
-[node name="EquipmentCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+[node name="EquipmentCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout"]
 layout_mode = 2
 theme_type_variation = &"Card"
 
-[node name="EquipmentCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard"]
+[node name="EquipmentCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard"]
 layout_mode = 2
+theme_override_constants/separation = 2
 
-[node name="EquipmentHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+[node name="EquipmentHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Gear"
 
-[node name="EquipmentTierLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+[node name="EquipmentTierLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
 layout_mode = 2
+theme_type_variation = &"StatValueLabel"
 text = ""
 
-[node name="EquipmentNextLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+[node name="EquipmentNextLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
 text = ""
 
-[node name="NeedsCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+[node name="NeedsCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout"]
 layout_mode = 2
 theme_type_variation = &"Card"
 
-[node name="NeedsCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard"]
+[node name="NeedsCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 6
 
-[node name="NeedsHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+[node name="NeedsHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Needs"
 
-[node name="HungerRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+[node name="HungerRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
 
-[node name="HungerLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
+[node name="HungerLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Hunger"
 
-[node name="HungerBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
+[node name="HungerBar" type="ProgressBar" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 100
 
-[node name="SleepRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+[node name="SleepRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
 
-[node name="SleepLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
+[node name="SleepLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Sleep"
 
-[node name="SleepBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
+[node name="SleepBar" type="ProgressBar" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 100
 
-[node name="HygieneRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+[node name="HygieneRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
 
-[node name="HygieneLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
+[node name="HygieneLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Hygiene"
 
-[node name="HygieneBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
+[node name="HygieneBar" type="ProgressBar" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 100
 
-[node name="SocialRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+[node name="SocialRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
 
-[node name="SocialLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
+[node name="SocialLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Social"
 
-[node name="SocialBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
+[node name="SocialBar" type="ProgressBar" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 100
 
-[node name="FitnessRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+[node name="FitnessRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
 
-[node name="FitnessLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
+[node name="FitnessLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Fitness"
 
-[node name="FitnessBar" type="ProgressBar" parent="PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
+[node name="FitnessBar" type="ProgressBar" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 100
 
-[node name="HustlesCard" type="PanelContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout"]
+[node name="HustlesCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout"]
 layout_mode = 2
 theme_type_variation = &"Card"
 
-[node name="HustlesCardLayout" type="VBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard"]
+[node name="HustlesCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard"]
 layout_mode = 2
+theme_override_constants/separation = 6
 
-[node name="HustlesHeadingLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
+[node name="HustlesHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Side Work"
 
-[node name="HustlesCaptionLabel" type="Label" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
+[node name="HustlesCaptionLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
 text = "Pre-fills today's \"Work as\" pick on the schedule panel — confirm the plan and advance the day to play it."
 
-[node name="HustleButtonsRow" type="HBoxContainer" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
+[node name="HustleButtonsRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
-[node name="NarcoticsButton" type="Button" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+[node name="NarcoticsButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Narcotics"
 
-[node name="FencingButton" type="Button" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+[node name="FencingButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Fencing"
 
-[node name="PokerButton" type="Button" parent="PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+[node name="PokerButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Texas Hold'em"

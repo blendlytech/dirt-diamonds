@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/Main.cs" id="1_main"]
 [ext_resource type="PackedScene" path="res://Assets/UI/NewGameScreen.tscn" id="2_newgame"]
@@ -10,11 +10,22 @@
 [ext_resource type="PackedScene" path="res://Assets/UI/FencingScreen.tscn" id="9_fencing"]
 [ext_resource type="PackedScene" path="res://Assets/UI/TexasHoldemTable.tscn" id="10_holdem"]
 [ext_resource type="PackedScene" path="res://Assets/UI/EquipmentShopScreen.tscn" id="11_equipshop"]
+[ext_resource type="Shader" path="res://Assets/UI/Theme/Background.gdshader" id="12_bgshader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_backdrop"]
+shader = ExtResource("12_bgshader")
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
 NewGameScreenScene = ExtResource("2_newgame")
 TwoPanelShellScene = ExtResource("3_shell")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_backdrop")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
 
 [node name="ScreenContainer" type="Node" parent="."]
 

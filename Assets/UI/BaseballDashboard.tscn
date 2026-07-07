@@ -1,166 +1,214 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BaseballDashboard.cs" id="1_dashboard"]
 [ext_resource type="PackedScene" path="res://Assets/UI/AtBatView.tscn" id="2_atbatview"]
 [ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="3_portraitview"]
 
+[sub_resource type="StyleBoxEmpty" id="sbe_root"]
+
 [node name="BaseballDashboard" type="PanelContainer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+theme_override_styles/panel = SubResource("sbe_root")
 script = ExtResource("1_dashboard")
 
 [node name="Layout" type="VBoxContainer" parent="."]
 layout_mode = 2
+theme_override_constants/separation = 12
 
-[node name="CalendarStrip" type="HBoxContainer" parent="Layout"]
+[node name="HeaderBand" type="PanelContainer" parent="Layout"]
 layout_mode = 2
+theme_type_variation = &"Card"
 
-[node name="AvatarPortrait" parent="Layout/CalendarStrip" instance=ExtResource("3_portraitview")]
+[node name="HeaderRow" type="HBoxContainer" parent="Layout/HeaderBand"]
 layout_mode = 2
-custom_minimum_size = Vector2(36, 36)
+theme_override_constants/separation = 12
 
-[node name="DayLabel" type="Label" parent="Layout/CalendarStrip"]
+[node name="AvatarPortrait" parent="Layout/HeaderBand/HeaderRow" instance=ExtResource("3_portraitview")]
 layout_mode = 2
-text = "Day 1"
+custom_minimum_size = Vector2(52, 52)
 
-[node name="PlayGameButton" type="Button" parent="Layout/CalendarStrip"]
-layout_mode = 2
-text = "Play Today's Game"
-
-[node name="SkipDayButton" type="Button" parent="Layout/CalendarStrip"]
-layout_mode = 2
-text = "Skip Day"
-
-[node name="StatusLabel" type="Label" parent="Layout/CalendarStrip"]
+[node name="HeaderText" type="VBoxContainer" parent="Layout/HeaderBand/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 2
+
+[node name="DayLabel" type="Label" parent="Layout/HeaderBand/HeaderRow/HeaderText"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Day 1"
+
+[node name="StatusLabel" type="Label" parent="Layout/HeaderBand/HeaderRow/HeaderText"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
 text = ""
 
-[node name="AvailabilityLabel" type="Label" parent="Layout"]
+[node name="PlayGameButton" type="Button" parent="Layout/HeaderBand/HeaderRow"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"AccentButton"
+text = "Play Today's Game"
+
+[node name="SkipDayButton" type="Button" parent="Layout/HeaderBand/HeaderRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "Skip Day"
+
+[node name="AvailabilityCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+visible = false
+theme_type_variation = &"WarningCard"
+
+[node name="AvailabilityLabel" type="Label" parent="Layout/AvailabilityCard"]
 layout_mode = 2
 autowrap_mode = 2
-visible = false
 text = ""
 
 [node name="AtBatView" parent="Layout" instance=ExtResource("2_atbatview")]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ScoutingCard" type="PanelContainer" parent="Layout"]
+[node name="CardsRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ScoutingCard" type="PanelContainer" parent="Layout/CardsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 3.0
 theme_type_variation = &"Card"
 
-[node name="ScoutingLayout" type="VBoxContainer" parent="Layout/ScoutingCard"]
+[node name="ScoutingLayout" type="VBoxContainer" parent="Layout/CardsRow/ScoutingCard"]
 layout_mode = 2
+theme_override_constants/separation = 6
 
-[node name="ScoutingHeading" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+[node name="ScoutingHeading" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Scouting Report"
 
-[node name="OfpLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+[node name="OfpRow" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout"]
 layout_mode = 2
-theme_type_variation = &"DisplayLabel"
+theme_override_constants/separation = 12
+
+[node name="OfpLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow"]
+layout_mode = 2
+theme_type_variation = &"MarqueeLabel"
 text = "OFP: —"
 
-[node name="TierLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+[node name="TierChip" type="PanelContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow"]
 layout_mode = 2
-theme_type_variation = &"CaptionLabel"
-text = "Tier: —"
+size_flags_vertical = 4
+theme_type_variation = &"TierChip"
 
-[node name="ToolsList" type="VBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout"]
+[node name="TierLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow/TierChip"]
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "—"
+
+[node name="ToolsList" type="VBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ToolRow0" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="ToolRow0" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
-layout_mode = 2
-
-[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
-text = "— → —"
+text = "— › —"
 
-[node name="ToolRow1" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow1" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
-text = "— → —"
+text = "— › —"
 
-[node name="ToolRow2" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow2" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
-text = "— → —"
+text = "— › —"
 
-[node name="ToolRow3" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow3" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
-text = "— → —"
+text = "— › —"
 
-[node name="DevCard" type="PanelContainer" parent="Layout"]
+[node name="DevCard" type="PanelContainer" parent="Layout/CardsRow"]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
 theme_type_variation = &"Card"
 
-[node name="DevLayout" type="VBoxContainer" parent="Layout/DevCard"]
+[node name="DevLayout" type="VBoxContainer" parent="Layout/CardsRow/DevCard"]
 layout_mode = 2
+theme_override_constants/separation = 6
 
-[node name="DevHeading" type="Label" parent="Layout/DevCard/DevLayout"]
+[node name="DevHeading" type="Label" parent="Layout/CardsRow/DevCard/DevLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Development"
 
-[node name="DevSummaryLabel" type="Label" parent="Layout/DevCard/DevLayout"]
+[node name="DevSummaryLabel" type="Label" parent="Layout/CardsRow/DevCard/DevLayout"]
 layout_mode = 2
 autowrap_mode = 2
 text = "No offseason development yet."

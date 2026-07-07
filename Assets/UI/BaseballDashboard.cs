@@ -77,14 +77,17 @@ public sealed partial class BaseballDashboard : PanelContainer
     public string OfpFormat { get; set; } = "OFP: {0} ({1})";
 
     [Export]
-    public string TierFormat { get; set; } = "Tier: {0}";
+    public string TierFormat { get; set; } = "{0}";
 
     /// <summary>Comma-separated player-facing tier names, in LeagueTier enum order (HS…MLB).</summary>
     [Export]
     public string TierNamesCsv { get; set; } = "High School,College,Class A,Double-A,Triple-A,MLB";
 
+    // '›' rather than '→': the vendored Barlow faces cover Latin punctuation
+    // but not the arrows block, and a tofu glyph here would ship on every
+    // scouting row.
     [Export]
-    public string ToolGradeFormat { get; set; } = "{0} {1} → {2} {3}";
+    public string ToolGradeFormat { get; set; } = "{0} {1} › {2} {3}";
 
     [Export]
     public string DevFormat { get; set; } = "Season {0}: {1} players moved, +{2} / -{3} pts";
@@ -118,6 +121,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     private Button _playGameButton = null!;
     private Button _skipDayButton = null!;
     private Label _statusLabel = null!;
+    private PanelContainer _availabilityCard = null!;
     private Label _availabilityLabel = null!;
     private AtBatView _atBatView = null!;
 
@@ -157,27 +161,28 @@ public sealed partial class BaseballDashboard : PanelContainer
 
     public override void _Ready()
     {
-        _avatarPortrait = GetNode<PortraitView>("Layout/CalendarStrip/AvatarPortrait");
-        _dayLabel = GetNode<Label>("Layout/CalendarStrip/DayLabel");
-        _playGameButton = GetNode<Button>("Layout/CalendarStrip/PlayGameButton");
-        _skipDayButton = GetNode<Button>("Layout/CalendarStrip/SkipDayButton");
-        _statusLabel = GetNode<Label>("Layout/CalendarStrip/StatusLabel");
-        _availabilityLabel = GetNode<Label>("Layout/AvailabilityLabel");
+        _avatarPortrait = GetNode<PortraitView>("Layout/HeaderBand/HeaderRow/AvatarPortrait");
+        _dayLabel = GetNode<Label>("Layout/HeaderBand/HeaderRow/HeaderText/DayLabel");
+        _playGameButton = GetNode<Button>("Layout/HeaderBand/HeaderRow/PlayGameButton");
+        _skipDayButton = GetNode<Button>("Layout/HeaderBand/HeaderRow/SkipDayButton");
+        _statusLabel = GetNode<Label>("Layout/HeaderBand/HeaderRow/HeaderText/StatusLabel");
+        _availabilityCard = GetNode<PanelContainer>("Layout/AvailabilityCard");
+        _availabilityLabel = GetNode<Label>("Layout/AvailabilityCard/AvailabilityLabel");
         _atBatView = GetNode<AtBatView>("Layout/AtBatView");
 
-        _scoutingCard = GetNode<PanelContainer>("Layout/ScoutingCard");
-        _ofpLabel = GetNode<Label>("Layout/ScoutingCard/ScoutingLayout/OfpLabel");
-        _tierLabel = GetNode<Label>("Layout/ScoutingCard/ScoutingLayout/TierLabel");
+        _scoutingCard = GetNode<PanelContainer>("Layout/CardsRow/ScoutingCard");
+        _ofpLabel = GetNode<Label>("Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow/OfpLabel");
+        _tierLabel = GetNode<Label>("Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow/TierChip/TierLabel");
         for (int i = 0; i < _toolRows.Length; i++)
         {
-            string rowPath = $"Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow{i}";
+            string rowPath = $"Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow{i}";
             _toolRows[i] = new ToolRowRefs(
                 GetNode<Label>($"{rowPath}/NameLabel"),
                 GetNode<ProgressBar>($"{rowPath}/Bar"),
                 GetNode<Label>($"{rowPath}/GradeLabel"));
         }
-        _devCard = GetNode<PanelContainer>("Layout/DevCard");
-        _devSummaryLabel = GetNode<Label>("Layout/DevCard/DevLayout/DevSummaryLabel");
+        _devCard = GetNode<PanelContainer>("Layout/CardsRow/DevCard");
+        _devSummaryLabel = GetNode<Label>("Layout/CardsRow/DevCard/DevLayout/DevSummaryLabel");
 
         _playGameButton.Pressed += OnPlayGamePressed;
         _skipDayButton.Pressed += OnSkipDayPressed;
@@ -472,7 +477,7 @@ public sealed partial class BaseballDashboard : PanelContainer
         _shownAvailabilityUntilDay = entry.UntilDay;
         _shownAvailabilityPenaltyUntilDay = entry.PenaltyUntilDay;
 
-        _availabilityLabel.Visible = state != SlotAvailability.Available;
+        _availabilityCard.Visible = state != SlotAvailability.Available;
         _availabilityLabel.Text = state switch
         {
             SlotAvailability.Absent => string.Format(

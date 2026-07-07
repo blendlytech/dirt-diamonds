@@ -16,6 +16,7 @@ visible = false
 script = ExtResource("1_equipshop")
 
 [node name="Panel" type="PanelContainer" parent="."]
+theme_type_variation = &"Card"
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -25,6 +26,7 @@ anchor_bottom = 1.0
 layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="Panel/Layout"]
+theme_type_variation = &"HeadingLabel"
 layout_mode = 2
 text = "Pro Shop"
 

@@ -8,17 +8,25 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 
-[node name="Panels" type="HBoxContainer" parent="."]
+[node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
 
-[node name="BaseballDashboard" parent="Panels" instance=ExtResource("1_dashboard")]
+[node name="Panels" type="HBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BaseballDashboard" parent="Margin/Panels" instance=ExtResource("1_dashboard")]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 2.0
 
-[node name="BurnerPhone" parent="Panels" instance=ExtResource("2_phone")]
+[node name="BurnerPhone" parent="Margin/Panels" instance=ExtResource("2_phone")]
 layout_mode = 2
 size_flags_horizontal = 3

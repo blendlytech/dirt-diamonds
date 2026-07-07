@@ -51,7 +51,7 @@ public sealed partial class Main : Node
         {
             Node shell = TwoPanelShellScene.Instantiate();
             _screenContainer.AddChild(shell);
-            var phone = shell.GetNode<BurnerPhone>("Panels/BurnerPhone");
+            var phone = shell.GetNode<BurnerPhone>("Margin/Panels/BurnerPhone");
             phone.HustleLaunchRequested += OnHustleLaunchRequested;
         }
         else
