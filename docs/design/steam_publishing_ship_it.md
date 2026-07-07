@@ -436,6 +436,31 @@ shippable.
   `Assets/Platform/Steam/README.md`; they are entered against the real appid at 11e (the Spacewar
   dev appid's cloud config isn't ours to edit), which is also when the §9.5 round-trip smoke test
   becomes possible.
+- **RESOLVED (11e, 2026-07-06 — phase close; evidence in the 11e progress entry):**
+  - **§3.3 presets exist and are committed** (`export_presets.cfg`, platforms `"Windows Desktop"` +
+    `"Linux"` — the 4.3+ name); the Phase-0 `.gitignore` line hiding the presets file was removed
+    (Godot 4 keeps secrets in `export_credentials.cfg`, which stays ignored).
+  - **Beyond §3.3's include-filter concern, the exports needed an *exclude* filter:** Godot treats
+    `.cs` and `.json` as resource types, so `all_resources` swept the `Tools/**` harness tree and
+    `.mcp.json` into the first `.pck`. `exclude_filter="Tools/*, .mcp.json"` fixed it; game `.cs`
+    path entries remain (scene script resolution) but ship content-stripped via
+    `dotnet/include_scripts_content=false` — byte-verified on both depots.
+  - **§3.1's copy items are now RID-scoped** to mirror the managed References (each native travels
+    exactly with the assembly that P/Invokes it); the unscoped items had been shipping the Linux
+    `.so` inside the Windows depot. `validate_steamworks_native` green at the `.csproj` level and
+    against both real publish outputs — the Linux export was the first live `-r linux-x64` publish,
+    proving the 11a reference switch.
+  - **§9.7 launch proof:** Windows depot boots headless against the real save (pck'd `.sql` DDL →
+    v10, pck'd JSON → 19 events + contacts, clean checkpoint exit, the §9.1 one-line degradation).
+    **Disclosed:** the Linux depot is structurally verified (ELF64 template, Posix+`.so` publish
+    output, same pck checks) but has no local launch — no Linux machine here; it queues on real
+    Linux/Steam Deck hardware at submission.
+  - **§7 compliance recorded in the Steam README** as verbatim partner-site text: the `ACH_*`
+    minting table + `STAT_SEASONS_PLAYED` + the site-only stat-linked `ACH_JOURNEYMAN` (min 10),
+    the AI-content disclosure worded around the truth that **zero raster portraits ship today**
+    (file it only if art lands in the depot), and the mature-content questionnaire answers.
+  - With 11e shipped, **every code-side §9 criterion is green** (1–4, 7); §9.5/§9.6 (live-Steam
+    cloud round-trip + achievement toast) remain the manual, real-appid smoke tests.
 
 ---
 

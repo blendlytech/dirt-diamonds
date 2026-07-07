@@ -111,3 +111,86 @@ Publish cadence: avatar creation / succession / the 9c promotion republish (all 
 no avatar — or a save whose `lineage_over_reason` is set, which still carries the
 parked retiree's avatar pointer — publishes `#Status_BetweenCareers`; a game-over
 rollover flips to it live.
+
+## Achievements & Stats (11b — partner-site definitions minted at 11e)
+
+The API names below are code-side consts in `AchievementManager.cs`; the partner
+site (Steamworks → App Admin → Stats & Achievements) must mint them **verbatim** —
+renaming one there means renaming the const too, the same wire-contract warning as
+the gritty-event content-id families. Display names/descriptions are the site's to
+own (no player-facing achievement strings live in C#, the Phase-10 localization
+posture); the English copy below is the 11e suggestion. "Hidden" = the Steam
+spoiler flag.
+
+| API name | Display name | Description (suggested) | Hidden |
+| :------- | :----------- | :---------------------- | :----- |
+| `ACH_WENT_PRO` | Went Pro | Sign your first professional contract. | no |
+| `ACH_THE_SHOW` | The Show | Reach the major leagues. | no |
+| `ACH_NEXT_OF_KIN` | Next of Kin | Welcome a child into the family. | no |
+| `ACH_DYNASTY` | Dynasty | Carry the bloodline into its third generation. | no |
+| `ACH_END_OF_THE_LINE` | End of the Line | Watch a lineage end. | yes |
+| `ACH_RAP_SHEET` | Rap Sheet | Get arrested. | yes |
+| `ACH_MOONLIGHTING` | Moonlighting | Take your first step into the underworld. | yes |
+| `ACH_JUICED` | Juiced | Face the consequences of performance enhancement. | yes |
+| `ACH_JOURNEYMAN` | Journeyman | Play ten seasons of professional baseball. | no |
+
+**Stat:** `STAT_SEASONS_PLAYED` — INT, default 0, increment only. The game calls
+`AddStat(+1)` on each season rollover while a bloodline holds a career (pre-creation
+and post-game-over seasons don't count) and never reads it back.
+
+**`ACH_JOURNEYMAN` is stat-linked, not code-fired:** set its "Progress Stat" to
+`STAT_SEASONS_PLAYED` with **unlock min value 10**. The game never references the
+`ACH_JOURNEYMAN` id — Steam evaluates the stat-vs-threshold rule server-side — so
+the threshold (and this one id) can be tuned on the site freely with no code
+change. All eight code-fired achievements are idempotent re-asserts; Steam owns
+unlock state (design doc §4.3, why the save schema never changed).
+
+## Store compliance (11e — design doc §7)
+
+Filed with the store submission; recorded here so the partner-site entry is a
+transcription job, not a judgment call.
+
+### AI-generated-content disclosure
+
+Steam's survey distinguishes **pre-generated** AI content (made with AI during
+development, reviewed before shipping) from live-generated. As of 11e the build
+ships **zero raster portraits** — `PortraitTile` renders its procedural
+initials-tile fallback for every character (10e, deliberate). The plan of record
+(Phase 10 §6) is pre-made AI-generated 2D character portraits in the
+gritty-polaroid house style, human-reviewed, with no live generation in the
+shipped build. Disclosure text to file **if and when portrait art lands in the
+depot**:
+
+> Some character portraits are pre-generated 2D images created during development
+> with the assistance of generative-AI tools. All such images were reviewed by the
+> developers before inclusion. The game does not generate content with AI at
+> runtime.
+
+If the launch depot still ships only the procedural fallback, file "no AI-generated
+content" instead — do not carry a disclosure for art that isn't in the build. Either
+way this item closes at submission review against the actual depot contents.
+
+### Mature-content questionnaire
+
+Truthful answers for the current content set (BUILD_PLAN §11: "drug dealing,
+gambling references"):
+
+- **Some Nudity or Sexual Content / Frequent Nudity / Adult-Only Sexual Content:**
+  No (none anywhere).
+- **Frequent Violence or Gore:** No — violence is implied through text-based
+  narrative events (beanball grudges, syndicate intimidation), never depicted.
+- **General Mature Content:** Yes. Mature-content description (the free text shown
+  to users on the store page):
+
+> Dirt & Diamonds contains mature themes presented through text-based narrative
+> events: illegal drug dealing (an abstract narcotics-hustle system), gambling
+> depictions (Texas Hold'em played for in-game currency only — no real-money
+> wagering and nothing purchasable), performance-enhancing-drug use and its
+> health/legal consequences, bribery and organized-crime storylines, arrests,
+> and alcohol use. All of it is fictional, consequence-bearing, and rendered as
+> narrative text and menus rather than graphic depiction.
+
+No loot boxes, no microtransactions, no real-money gambling (relevant to the IARC
+regional rating follow-ups the questionnaire feeds). The export presets that build
+the submitted depots live at the repo root (`export_presets.cfg`, 11e — the
+`.sql`/`.json` include filters there are load-bearing, see the file header).

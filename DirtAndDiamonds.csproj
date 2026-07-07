@@ -28,9 +28,12 @@
     <!-- Steam native redistributables: git-ignored drops (see
          Assets/Platform/Steam/README.md), Exists-guarded so a fresh clone still
          builds — the game then boots with Steam unavailable, the normal
-         degraded state. validate_steamworks_native checks these two items. -->
-    <None Include="Assets\Platform\Steam\native\steam_api64.dll" Link="steam_api64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Platform\Steam\native\steam_api64.dll')" />
-    <None Include="Assets\Platform\Steam\native\libsteam_api.so" Link="libsteam_api.so" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Platform\Steam\native\libsteam_api.so')" />
+         degraded state. validate_steamworks_native checks these two items.
+         RID-scoped like the References above (11e): each exported depot ships
+         only its own platform's native — the un-scoped items were putting the
+         Linux .so into the Windows publish output and vice versa. -->
+    <None Include="Assets\Platform\Steam\native\steam_api64.dll" Link="steam_api64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Platform\Steam\native\steam_api64.dll') And '$(RuntimeIdentifier)' != 'linux-x64'" />
+    <None Include="Assets\Platform\Steam\native\libsteam_api.so" Link="libsteam_api.so" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Platform\Steam\native\libsteam_api.so') And '$(RuntimeIdentifier)' == 'linux-x64'" />
   </ItemGroup>
   <ItemGroup>
     <!-- Headless tooling builds as its own project; keep it out of the game assembly. -->

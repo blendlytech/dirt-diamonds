@@ -3,7 +3,12 @@
 *.import
 export.cfg
 export_credentials.cfg
-export_presets.cfg
+# export_presets.cfg is deliberately COMMITTED (Phase 11e): in Godot 4 the
+# secrets live in export_credentials.cfg above; the presets carry the
+# load-bearing .sql/.json include filters and must travel with the repo.
+
+# Export build output (Phase 11e presets write here)
+Build/
 
 # .NET build artifacts
 .mono/
