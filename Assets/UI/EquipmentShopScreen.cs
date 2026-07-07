@@ -6,13 +6,13 @@ using Godot;
 namespace DirtAndDiamonds.UI;
 
 /// <summary>
-/// Always-present overlay (a permanent sibling of the swappable screen under
-/// Main, per Main.tscn) that is Phase 8e's Layer 3: the gear shop
-/// (docs/design/equipment_quality.md §7). Follows ScheduleScreen's
-/// corner-anchored, non-blocking idiom — bottom-LEFT here, since the schedule
-/// panel owns bottom-right — and its visibility rule (shown whenever an
-/// avatar exists; buying gear is always optional, so this never joins any
-/// day-advance gate).
+/// Phase 8e's Layer 3: the gear shop (docs/design/equipment_quality.md §7).
+/// 12b: an on-demand modal following the hustle screens' scrim + centered
+/// Card idiom (it was a permanently-visible corner palette before, which
+/// floated over the scouting card) — opened via the Burner Phone Bank tab's
+/// Gear card through Main's ShopOpenRequested bridge, closed by its own
+/// Close button. Buying gear is always optional, so this never joins any
+/// day-advance gate.
 ///
 /// Render path is fully in-memory per ui_conventions' read-only rule: funds
 /// from the Life sim's mirror (<c>LifeSim.TryGetFunds</c>), owned tier from
@@ -58,6 +58,7 @@ public sealed partial class EquipmentShopScreen : Control
     private Button _premiumBuyButton = null!;
     private Button _proBuyButton = null!;
     private Label _statusLabel = null!;
+    private Button _closeButton = null!;
 
     // Dirty-flag identity for the polled labels/buttons (ui_conventions.md:
     // no per-frame string formatting) — reformatted only when the mirror
@@ -73,6 +74,7 @@ public sealed partial class EquipmentShopScreen : Control
         _premiumBuyButton = GetNode<Button>("Panel/Layout/PremiumRow/PremiumBuyButton");
         _proBuyButton = GetNode<Button>("Panel/Layout/ProRow/ProBuyButton");
         _statusLabel = GetNode<Label>("Panel/Layout/StatusLabel");
+        _closeButton = GetNode<Button>("Panel/Layout/CloseButton");
 
         // Sticker prices come from the service's one price table — the scene
         // never hardcodes a dollar figure, so a retune is a single data edit.
@@ -83,6 +85,7 @@ public sealed partial class EquipmentShopScreen : Control
         _qualityBuyButton.Pressed += OnBuyQualityPressed;
         _premiumBuyButton.Pressed += OnBuyPremiumPressed;
         _proBuyButton.Pressed += OnBuyProPressed;
+        _closeButton.Pressed += OnClosePressed;
     }
 
     public override void _ExitTree()
@@ -90,17 +93,26 @@ public sealed partial class EquipmentShopScreen : Control
         _qualityBuyButton.Pressed -= OnBuyQualityPressed;
         _premiumBuyButton.Pressed -= OnBuyPremiumPressed;
         _proBuyButton.Pressed -= OnBuyProPressed;
+        _closeButton.Pressed -= OnClosePressed;
     }
+
+    /// <summary>12b: shown on demand (the phone's Gear card via Main's bridge), never force-visible.</summary>
+    public void Open() => Visible = true;
+
+    private void OnClosePressed() => Visible = false;
 
     public override void _Process(double delta)
     {
         GameManager game = GameManager.Instance!;
         if (!game.Career.HasAvatar)
         {
-            Visible = false;
+            Visible = false; // avatar loss (game over) closes the modal too
             return;
         }
-        Visible = true;
+        if (!Visible)
+        {
+            return; // no refresh work while closed; Open() precedes the frame's _Process
+        }
 
         string avatarId = game.Career.AvatarPlayerId;
         int owned = game.Gear.QualityFor(avatarId);

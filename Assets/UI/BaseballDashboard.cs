@@ -264,6 +264,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     {
         GameManager gm = GameManager.Instance!;
         _statusLabel.Text = GameRunningText;
+        _atBatView.Visible = false; // clears the last game's recap; StartInteractiveGame re-shows
         gm.Career.AutopilotAttendedGames = false;
         _awaitingPendingGame = true;
         gm.Clock.AdvanceDay();
@@ -272,6 +273,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     private void OnSkipDayPressed()
     {
         GameManager gm = GameManager.Instance!;
+        _atBatView.Visible = false;
         gm.Career.AutopilotAttendedGames = true;
         gm.Clock.AdvanceDay();
         _statusLabel.Text = string.Empty;
@@ -281,6 +283,10 @@ public sealed partial class BaseballDashboard : PanelContainer
 
     private void StartInteractiveGame(CareerManager career)
     {
+        // 12b: the at-bat view only occupies the dashboard while a game is
+        // actually being played (plus its recap, until the next day-advance
+        // click hides it above) — idle days leave the space to the card row.
+        _atBatView.Visible = true;
         _bridge.Reset();
         career.FeedSink = _bridge; // cleared in FinishInteractiveGame, after the task is observed done
         PlayerIntentBridge bridge = _bridge;

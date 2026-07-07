@@ -8,10 +8,11 @@ using Godot;
 namespace DirtAndDiamonds.UI;
 
 /// <summary>
-/// Always-present overlay (a permanent sibling of the swappable screen under
-/// Main, per Main.tscn — declared last so it draws above every other overlay)
-/// that is Phase 9b's UI half: lets the player plan the avatar's next day
-/// across the five <see cref="DaySchedule"/> blocks and submit it via
+/// The "Plan Today" card in the dashboard's card row (12b — previously a
+/// corner-anchored overlay under Main, which floated over the phone; it now
+/// occupies a real container slot in BaseballDashboard.tscn so nothing ever
+/// overlaps it). Phase 9b's UI half: lets the player plan the avatar's next
+/// day across the five <see cref="DaySchedule"/> blocks and submit it via
 /// <see cref="LifeSimManager.SetTodaySchedule"/>. Not modal like
 /// SuccessionScreen (or the Burner Phone's pending-choice thread) — a plan is optional (an unset plan
 /// autopilots exactly as before 9b), so this never joins BaseballDashboard's
@@ -24,7 +25,7 @@ namespace DirtAndDiamonds.UI;
 /// only reserves the hours, it never launches the at-bat view. Node paths
 /// verified against ScheduleScreen.tscn before this script was written.
 /// </summary>
-public sealed partial class ScheduleScreen : Control
+public sealed partial class ScheduleScreen : PanelContainer
 {
     [Export]
     public string PlanSetFormat { get; set; } =
@@ -82,27 +83,27 @@ public sealed partial class ScheduleScreen : Control
 
     public override void _Ready()
     {
-        _schoolRow = GetNode<Control>("Panel/Layout/SchoolRow");
-        _gameRow = GetNode<Control>("Panel/Layout/GameRow");
+        _schoolRow = GetNode<Control>("Layout/SchoolRow");
+        _gameRow = GetNode<Control>("Layout/GameRow");
 
-        _sleepSlider = GetNode<HSlider>("Panel/Layout/SleepRow/SleepSlider");
-        _sleepValueLabel = GetNode<Label>("Panel/Layout/SleepRow/SleepValueLabel");
-        _schoolSlider = GetNode<HSlider>("Panel/Layout/SchoolRow/SchoolSlider");
-        _schoolValueLabel = GetNode<Label>("Panel/Layout/SchoolRow/SchoolValueLabel");
-        _practiceSlider = GetNode<HSlider>("Panel/Layout/PracticeRow/PracticeSlider");
-        _practiceValueLabel = GetNode<Label>("Panel/Layout/PracticeRow/PracticeValueLabel");
-        _gameSlider = GetNode<HSlider>("Panel/Layout/GameRow/GameSlider");
-        _gameValueLabel = GetNode<Label>("Panel/Layout/GameRow/GameValueLabel");
-        _workSlider = GetNode<HSlider>("Panel/Layout/WorkRow/WorkSlider");
-        _workValueLabel = GetNode<Label>("Panel/Layout/WorkRow/WorkValueLabel");
-        _workActivityOption = GetNode<OptionButton>("Panel/Layout/WorkActivityRow/WorkActivityOption");
+        _sleepSlider = GetNode<HSlider>("Layout/SleepRow/SleepSlider");
+        _sleepValueLabel = GetNode<Label>("Layout/SleepRow/SleepValueLabel");
+        _schoolSlider = GetNode<HSlider>("Layout/SchoolRow/SchoolSlider");
+        _schoolValueLabel = GetNode<Label>("Layout/SchoolRow/SchoolValueLabel");
+        _practiceSlider = GetNode<HSlider>("Layout/PracticeRow/PracticeSlider");
+        _practiceValueLabel = GetNode<Label>("Layout/PracticeRow/PracticeValueLabel");
+        _gameSlider = GetNode<HSlider>("Layout/GameRow/GameSlider");
+        _gameValueLabel = GetNode<Label>("Layout/GameRow/GameValueLabel");
+        _workSlider = GetNode<HSlider>("Layout/WorkRow/WorkSlider");
+        _workValueLabel = GetNode<Label>("Layout/WorkRow/WorkValueLabel");
+        _workActivityOption = GetNode<OptionButton>("Layout/WorkActivityRow/WorkActivityOption");
 
-        _planStatusLabel = GetNode<Label>("Panel/Layout/PlanStatusLabel");
-        _lockLabel = GetNode<Label>("Panel/Layout/LockLabel");
-        _freeHoursLabel = GetNode<Label>("Panel/Layout/FreeHoursLabel");
-        _errorLabel = GetNode<Label>("Panel/Layout/ErrorLabel");
-        _confirmButton = GetNode<Button>("Panel/Layout/ButtonsRow/ConfirmButton");
-        _clearButton = GetNode<Button>("Panel/Layout/ButtonsRow/ClearButton");
+        _planStatusLabel = GetNode<Label>("Layout/PlanStatusLabel");
+        _lockLabel = GetNode<Label>("Layout/LockLabel");
+        _freeHoursLabel = GetNode<Label>("Layout/FreeHoursLabel");
+        _errorLabel = GetNode<Label>("Layout/ErrorLabel");
+        _confirmButton = GetNode<Button>("Layout/ButtonsRow/ConfirmButton");
+        _clearButton = GetNode<Button>("Layout/ButtonsRow/ClearButton");
 
         _sleepSlider.ValueChanged += _ => RefreshHoursLabels();
         _schoolSlider.ValueChanged += _ => RefreshHoursLabels();

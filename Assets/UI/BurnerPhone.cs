@@ -42,6 +42,15 @@ public sealed partial class BurnerPhone : PanelContainer
     [Signal]
     public delegate void HustleLaunchRequestedEventHandler(int workActivity);
 
+    /// <summary>
+    /// 12b: emitted when the Bank tab's Gear-card "Open Pro Shop" button is
+    /// pressed. Main bridges it to the EquipmentShopScreen modal — the same
+    /// shared-ancestor seam as HustleLaunchRequested above, since the shop
+    /// overlay lives outside the phone's subtree.
+    /// </summary>
+    [Signal]
+    public delegate void ShopOpenRequestedEventHandler();
+
     [Export]
     public string TimestampFormat { get; set; } = "Season {0}, day {1}";
 
@@ -93,6 +102,7 @@ public sealed partial class BurnerPhone : PanelContainer
     private Button _narcoticsButton = null!;
     private Button _fencingButton = null!;
     private Button _pokerButton = null!;
+    private Button _proShopButton = null!;
 
     private readonly Dictionary<string, List<NarrativeMessageRow>> _messagesByContact = new();
     private readonly Dictionary<string, int> _lastSeenCount = new();
@@ -134,9 +144,11 @@ public sealed partial class BurnerPhone : PanelContainer
         _narcoticsButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/NarcoticsButton");
         _fencingButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/FencingButton");
         _pokerButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/PokerButton");
+        _proShopButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/ProShopButton");
         _narcoticsButton.Pressed += OnNarcoticsPressed;
         _fencingButton.Pressed += OnFencingPressed;
         _pokerButton.Pressed += OnPokerPressed;
+        _proShopButton.Pressed += OnProShopPressed;
     }
 
     public override void _ExitTree()
@@ -145,6 +157,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _narcoticsButton.Pressed -= OnNarcoticsPressed;
         _fencingButton.Pressed -= OnFencingPressed;
         _pokerButton.Pressed -= OnPokerPressed;
+        _proShopButton.Pressed -= OnProShopPressed;
     }
 
     public override void _Process(double delta)
@@ -412,4 +425,6 @@ public sealed partial class BurnerPhone : PanelContainer
     private void OnFencingPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Fencing);
 
     private void OnPokerPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Poker);
+
+    private void OnProShopPressed() => EmitSignal(SignalName.ShopOpenRequested);
 }

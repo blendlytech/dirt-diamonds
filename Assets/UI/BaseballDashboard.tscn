@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BaseballDashboard.cs" id="1_dashboard"]
 [ext_resource type="PackedScene" path="res://Assets/UI/AtBatView.tscn" id="2_atbatview"]
 [ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="3_portraitview"]
+[ext_resource type="PackedScene" path="res://Assets/UI/ScheduleScreen.tscn" id="4_scheduleplan"]
 
 [sub_resource type="StyleBoxEmpty" id="sbe_root"]
 
@@ -68,6 +69,7 @@ autowrap_mode = 2
 text = ""
 
 [node name="AtBatView" parent="Layout" instance=ExtResource("2_atbatview")]
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
 
@@ -212,3 +214,8 @@ text = "Development"
 layout_mode = 2
 autowrap_mode = 2
 text = "No offseason development yet."
+
+[node name="ScheduleScreen" parent="Layout/CardsRow" instance=ExtResource("4_scheduleplan")]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0

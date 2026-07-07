@@ -152,6 +152,10 @@ theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
 text = ""
 
+[node name="ProShopButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout"]
+layout_mode = 2
+text = "Open Pro Shop"
+
 [node name="NeedsCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout"]
 layout_mode = 2
 theme_type_variation = &"Card"
@@ -252,7 +256,7 @@ text = "Side Work"
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
-text = "Pre-fills today's \"Work as\" pick on the schedule panel — confirm the plan and advance the day to play it."
+text = "Pre-fills today's \"Work as\" pick on the dashboard's Plan Today card — confirm the plan and advance the day to play it."
 
 [node name="HustleButtonsRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
 layout_mode = 2

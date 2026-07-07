@@ -2,55 +2,39 @@
 
 [ext_resource type="Script" path="res://Assets/UI/ScheduleScreen.cs" id="1_scheduleplan"]
 
-[node name="ScheduleScreen" type="Control"]
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -320.0
-offset_top = -420.0
-offset_right = -20.0
-offset_bottom = -20.0
-grow_horizontal = 0
-grow_vertical = 0
+[node name="ScheduleScreen" type="PanelContainer"]
 visible = false
+theme_type_variation = &"Card"
 script = ExtResource("1_scheduleplan")
 
-[node name="Panel" type="PanelContainer" parent="."]
-theme_type_variation = &"Card"
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-
-[node name="Layout" type="VBoxContainer" parent="Panel"]
+[node name="Layout" type="VBoxContainer" parent="."]
 layout_mode = 2
 
-[node name="TitleLabel" type="Label" parent="Panel/Layout"]
+[node name="TitleLabel" type="Label" parent="Layout"]
 theme_type_variation = &"HeadingLabel"
 layout_mode = 2
 text = "Plan Today"
 
-[node name="PlanStatusLabel" type="Label" parent="Panel/Layout"]
+[node name="PlanStatusLabel" type="Label" parent="Layout"]
 layout_mode = 2
 autowrap_mode = 2
 text = "No plan set — today runs on autopilot."
 
-[node name="LockLabel" type="Label" parent="Panel/Layout"]
+[node name="LockLabel" type="Label" parent="Layout"]
 layout_mode = 2
 autowrap_mode = 2
 visible = false
 text = ""
 
-[node name="SleepRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="SleepRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="SleepLabel" type="Label" parent="Panel/Layout/SleepRow"]
+[node name="SleepLabel" type="Label" parent="Layout/SleepRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Sleep"
 
-[node name="SleepSlider" type="HSlider" parent="Panel/Layout/SleepRow"]
+[node name="SleepSlider" type="HSlider" parent="Layout/SleepRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 0
@@ -58,20 +42,20 @@ max_value = 24
 step = 1
 value = 0
 
-[node name="SleepValueLabel" type="Label" parent="Panel/Layout/SleepRow"]
+[node name="SleepValueLabel" type="Label" parent="Layout/SleepRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
 text = "0"
 
-[node name="SchoolRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="SchoolRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="SchoolLabel" type="Label" parent="Panel/Layout/SchoolRow"]
+[node name="SchoolLabel" type="Label" parent="Layout/SchoolRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "School"
 
-[node name="SchoolSlider" type="HSlider" parent="Panel/Layout/SchoolRow"]
+[node name="SchoolSlider" type="HSlider" parent="Layout/SchoolRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 0
@@ -79,20 +63,20 @@ max_value = 24
 step = 1
 value = 0
 
-[node name="SchoolValueLabel" type="Label" parent="Panel/Layout/SchoolRow"]
+[node name="SchoolValueLabel" type="Label" parent="Layout/SchoolRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
 text = "0"
 
-[node name="PracticeRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="PracticeRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="PracticeLabel" type="Label" parent="Panel/Layout/PracticeRow"]
+[node name="PracticeLabel" type="Label" parent="Layout/PracticeRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Practice"
 
-[node name="PracticeSlider" type="HSlider" parent="Panel/Layout/PracticeRow"]
+[node name="PracticeSlider" type="HSlider" parent="Layout/PracticeRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 0
@@ -100,20 +84,20 @@ max_value = 24
 step = 1
 value = 0
 
-[node name="PracticeValueLabel" type="Label" parent="Panel/Layout/PracticeRow"]
+[node name="PracticeValueLabel" type="Label" parent="Layout/PracticeRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
 text = "0"
 
-[node name="GameRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="GameRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="GameLabel" type="Label" parent="Panel/Layout/GameRow"]
+[node name="GameLabel" type="Label" parent="Layout/GameRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Game"
 
-[node name="GameSlider" type="HSlider" parent="Panel/Layout/GameRow"]
+[node name="GameSlider" type="HSlider" parent="Layout/GameRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 0
@@ -121,20 +105,20 @@ max_value = 24
 step = 1
 value = 0
 
-[node name="GameValueLabel" type="Label" parent="Panel/Layout/GameRow"]
+[node name="GameValueLabel" type="Label" parent="Layout/GameRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
 text = "0"
 
-[node name="WorkRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="WorkRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="WorkLabel" type="Label" parent="Panel/Layout/WorkRow"]
+[node name="WorkLabel" type="Label" parent="Layout/WorkRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Work"
 
-[node name="WorkSlider" type="HSlider" parent="Panel/Layout/WorkRow"]
+[node name="WorkSlider" type="HSlider" parent="Layout/WorkRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 0
@@ -142,20 +126,20 @@ max_value = 24
 step = 1
 value = 0
 
-[node name="WorkValueLabel" type="Label" parent="Panel/Layout/WorkRow"]
+[node name="WorkValueLabel" type="Label" parent="Layout/WorkRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
 text = "0"
 
-[node name="WorkActivityRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="WorkActivityRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="WorkActivityLabel" type="Label" parent="Panel/Layout/WorkActivityRow"]
+[node name="WorkActivityLabel" type="Label" parent="Layout/WorkActivityRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(70, 0)
 text = "Work as"
 
-[node name="WorkActivityOption" type="OptionButton" parent="Panel/Layout/WorkActivityRow"]
+[node name="WorkActivityOption" type="OptionButton" parent="Layout/WorkActivityRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 item_count = 4
@@ -169,25 +153,25 @@ popup/item_2/id = 2
 popup/item_3/text = "Poker"
 popup/item_3/id = 3
 
-[node name="FreeHoursLabel" type="Label" parent="Panel/Layout"]
+[node name="FreeHoursLabel" type="Label" parent="Layout"]
 layout_mode = 2
 text = "Free hours: 24"
 
-[node name="ErrorLabel" type="Label" parent="Panel/Layout"]
+[node name="ErrorLabel" type="Label" parent="Layout"]
 layout_mode = 2
 autowrap_mode = 2
 visible = false
 text = ""
 
-[node name="ButtonsRow" type="HBoxContainer" parent="Panel/Layout"]
+[node name="ButtonsRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="ConfirmButton" type="Button" parent="Panel/Layout/ButtonsRow"]
+[node name="ConfirmButton" type="Button" parent="Layout/ButtonsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Confirm Plan"
 
-[node name="ClearButton" type="Button" parent="Panel/Layout/ButtonsRow"]
+[node name="ClearButton" type="Button" parent="Layout/ButtonsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Clear Plan"

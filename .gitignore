@@ -1,6 +1,8 @@
 # Godot 4 generated files
+# *.import metadata IS committed (Godot recommendation, Phase 12a): without it a
+# stale .godot cache silently drops the theme's fonts and the game renders in
+# Godot's default gray theme. The imported binaries stay under .godot/ (ignored).
 .godot/
-*.import
 export.cfg
 export_credentials.cfg
 # export_presets.cfg is deliberately COMMITTED (Phase 11e): in Godot 4 the
