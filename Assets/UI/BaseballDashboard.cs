@@ -83,6 +83,14 @@ public sealed partial class BaseballDashboard : PanelContainer
     [Export]
     public string TierNamesCsv { get; set; } = "High School,College,Class A,Double-A,Triple-A,MLB";
 
+    /// <summary>How the tier chip reads for a High-School avatar: tier name + academic grade (e.g. "High School · Junior").</summary>
+    [Export]
+    public string TierWithGradeFormat { get; set; } = "{0} · {1}";
+
+    /// <summary>Comma-separated player-facing grade names, in SchoolGrade enum order (Freshman…Senior).</summary>
+    [Export]
+    public string SchoolGradeNamesCsv { get; set; } = "Freshman,Sophomore,Junior,Senior";
+
     // '›' rather than '→': the vendored Barlow faces cover Latin punctuation
     // but not the arrows block, and a tofu glyph here would ship on every
     // scouting row.
@@ -206,6 +214,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     private PanelContainer _leadersCard = null!;
     private Label _leadersLabel = null!;
     private string[] _tierNames = Array.Empty<string>();
+    private string[] _gradeNames = Array.Empty<string>();
 
     // Reusable query-result buffers for the 12c-3 league cards — cleared and
     // refilled per call, the LoadRoster "destination" idiom, so the once-per-
@@ -288,6 +297,7 @@ public sealed partial class BaseballDashboard : PanelContainer
 
         _outcomeNames = OutcomeNamesCsv.Split(',');
         _tierNames = TierNamesCsv.Split(',');
+        _gradeNames = SchoolGradeNamesCsv.Split(',');
         RefreshDayLabel();
         RefreshScoutingCard();
         RefreshDayControlsEnabled();
@@ -542,7 +552,14 @@ public sealed partial class BaseballDashboard : PanelContainer
         _ofpLabel.Text = string.Format(OfpFormat, ScoutingGrade.Label(ofp), ofp);
 
         bool tierKnown = gm.Baseball.TryGetTeamTier(player.TeamId ?? 0, out LeagueTier tier);
-        _tierLabel.Text = string.Format(TierFormat, tierKnown ? TierName(tier) : string.Empty);
+        // A High-School avatar's chip carries its academic grade (freshman …
+        // senior), derived from age — the SchoolGrade the promotion gate reads.
+        string tierText = tierKnown
+            ? (tier == LeagueTier.HS
+                ? string.Format(TierWithGradeFormat, TierName(tier), GradeName(SchoolGrades.ForAge(player.Age)))
+                : TierName(tier))
+            : string.Empty;
+        _tierLabel.Text = string.Format(TierFormat, tierText);
 
         if (isPitcher)
         {
@@ -751,6 +768,12 @@ public sealed partial class BaseballDashboard : PanelContainer
     {
         int index = (int)tier;
         return index >= 0 && index < _tierNames.Length ? _tierNames[index] : tier.ToString();
+    }
+
+    private string GradeName(SchoolGrade grade)
+    {
+        int index = (int)grade;
+        return index >= 0 && index < _gradeNames.Length ? _gradeNames[index] : grade.ToString();
     }
 
     /// <summary>

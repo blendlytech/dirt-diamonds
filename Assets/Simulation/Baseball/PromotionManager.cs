@@ -323,6 +323,16 @@ public sealed class PromotionManager
     /// promotion that offseason — the NPC churn still runs. v1: the avatar
     /// promotes, never auto-relegates (a slump costs the promotion, not the
     /// job) — a disclosed player-experience call, one flag from symmetric.
+    ///
+    /// High-school grade gate (<see cref="SchoolGrade"/>): while the avatar is
+    /// a current HS student (age within <see cref="PromotionProfile.HighSchoolAgeCap"/>,
+    /// grades freshman → senior) it is held out of the sweep and cannot promote
+    /// — the four amateur seasons are guaranteed. Once its senior year is done
+    /// (age past the cap) it competes for the HS→College move on MERIT like any
+    /// other riser: earn it and graduate to college baseball, or be HELD BACK
+    /// (stays in HS, protected from the amateur washout NPCs get) and try again
+    /// next offseason as it develops. Not graduating means no college baseball —
+    /// graduation is never forced.
     /// </summary>
     public CareerManager? Career;
 
@@ -584,6 +594,19 @@ public sealed class PromotionManager
                 continue; // §5: the avatar's lifecycle is succession's; skip entirely this offseason
             }
             (int age, int health) = ageHealthById[row.PlayerId];
+            // Grade gate (SchoolGrade): a current HS student — freshman through
+            // senior, age within the amateur cap — is held in high school. The
+            // avatar cannot promote out of HS before its senior year is done;
+            // excluding it from the cohort entirely (the same skip the pending-
+            // succession case above uses, so the §10.2 conservation law still
+            // holds) leaves it on its team this offseason. A senior whose year
+            // is done — age PAST the cap — falls through to be pooled and
+            // competes for the HS→College move on MERIT like everyone else: earn
+            // it and graduate, or be held back another year (see the swap block).
+            if (isAvatar && tier == (int)LeagueTier.HS && age <= PromotionProfile.HighSchoolAgeCap)
+            {
+                continue;
+            }
             if (!isAvatar
                 && (age >= HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge
                     || health <= HeirGenetics.HeirGeneticsProfile.HealthRetirementFloor))
@@ -714,6 +737,15 @@ public sealed class PromotionManager
                     avatarTeamId = incumbent.TeamId;
                 }
             }
+
+            // Graduation is EARNED, never forced: a graduated HS senior (age
+            // past the amateur cap) competes for the HS→College move on merit
+            // through (b)/(c) above exactly like any other riser. If it out-ranks
+            // a College incumbent it graduates; if it does not, it is HELD BACK —
+            // it stays in high school (the avatar's age-out protection in the
+            // cohort build keeps it from washing out like an over-cap NPC) and
+            // tries again next offseason as it develops. Not graduating means no
+            // college baseball, by design. There is no forced-graduation step.
         }
 
         // ---- team assignment: each tier's arrivals take its vacated slots,

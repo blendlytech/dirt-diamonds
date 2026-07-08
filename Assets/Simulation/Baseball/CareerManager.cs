@@ -158,7 +158,17 @@ public sealed class CareerManager
     // New-avatar Players-row defaults: a broke rookie. Ratings come from the
     // caller (the create-a-player UI); these are the life-sim starting facts.
     public const double StartingFunds = 500;
-    public const int StartingAge = 19;
+
+    /// <summary>
+    /// The avatar's starting age: 16, a High-School freshman (the grade system
+    /// anchors <see cref="SchoolGrade"/>'s freshman year here). Every career
+    /// opens on the bottom rung and spends four amateur seasons — freshman →
+    /// senior — in HS before graduating up the ladder (the
+    /// <see cref="PromotionManager"/> grade gate). NOT the same value as
+    /// <see cref="HeirGenetics.HeirGeneticsProfile.MaturityAge"/> (19): an heir
+    /// must be older to succeed than a founding avatar is at creation.
+    /// </summary>
+    public const int StartingAge = 16;
 
     private readonly DatabaseManager _db;
     private readonly PlayerQueries _players;

@@ -53,7 +53,11 @@ public static class HeirGenetics
         /// <summary>Minimum revealed interest to count as a willing successor (§4.2).</summary>
         public const int InterestPlayThreshold = 40;
 
-        /// <summary>Minimum age to be an eligible successor (§5.2) — mirrors CareerManager.StartingAge.</summary>
+        /// <summary>
+        /// Minimum age to be an eligible successor (§5.2). Independent of
+        /// CareerManager.StartingAge (16, the HS-freshman entry age): a founding
+        /// avatar starts younger than an heir must be to take over the bloodline.
+        /// </summary>
         public const int MaturityAge = 19;
 
         /// <summary>Forced-retirement age trigger (§5.1).</summary>

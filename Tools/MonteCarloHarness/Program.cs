@@ -3920,29 +3920,44 @@ internal static class Program
         });
         string avatarId = career.AvatarPlayerId;
 
-        // Snapshots for the §6 destination proof (the out-ranked incumbent
-        // must relegate into the avatar's vacated slot).
         var tierRoster = new List<RosterPlayerRow>();
-        baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
-        var oldHsTeamIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (RosterPlayerRow row in tierRoster)
-        {
-            if (row.TeamId == HsTeam)
-            {
-                oldHsTeamIds.Add(row.PlayerId);
-            }
-        }
-        baseball.LoadRosterByTier(LeagueTier.College, tierRoster);
-        var oldCollegeTeamById = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (RosterPlayerRow row in tierRoster)
-        {
-            oldCollegeTeamById.Add(row.PlayerId, row.TeamId);
-        }
-        avatarEvents = 0;
 
-        // Season 1 + the rollover on the last tick: the max-rated avatar
-        // dominates HS (real games via the autopilot micro-sim), ages to 20
-        // (no succession trigger), and the promotion pass runs.
+        // ---- Grade gate: even a MAX-built HS avatar is held in high school —
+        // it cannot promote out until its senior year is done (the SchoolGrade
+        // gate). Season 1 + the rollover on the last tick: the avatar plays
+        // real HS games via the autopilot micro-sim, ages 16→17 (freshman →
+        // sophomore), and the promotion pass runs but MUST skip it. ----
+        avatarEvents = 0;
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+
+        PromotionSummary gateRun = promo.LastRun;
+        bool gatedInHs = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier gateTier)
+            && gateTier == LeagueTier.HS;
+        players.TryGetById(avatarId, out PlayerRow soph);
+        Check("grade gate: a max-built HS avatar does NOT promote as a freshman — it holds its HS team+slot through its first offseason",
+            gateRun.SeasonYear == StartYear && !gateRun.AvatarPromoted
+            && career.AvatarTeamId == HsTeam && gatedInHs,
+            $"avatar team {career.AvatarTeamId} ({gateTier}), promoted={gateRun.AvatarPromoted}");
+        Check("grade gate: the held avatar advanced exactly one grade (freshman → sophomore at 17)",
+            soph.Age == SchoolGrades.FreshmanAge + 1
+            && SchoolGrades.ForAge(soph.Age) == SchoolGrade.Sophomore,
+            $"age {soph.Age}, grade {SchoolGrades.ForAge(soph.Age)}");
+        Check("§10.2 roster invariant holds while the avatar is gated in HS",
+            TierLadderInvariantHolds(baseball, out string gateInvariant), gateInvariant);
+
+        // ---- Graduation: jump the avatar to its senior year (SeniorAge — the
+        // amateur cap). One more season ages it PAST the cap and the pass lets
+        // it compete for the HS→College move on merit — this MAX-built avatar
+        // out-ranks every College incumbent, so it graduates to a real College
+        // team+slot via the ordinary merit/vacancy path. A weak senior that
+        // out-ranks nobody is instead HELD BACK — proven in the dedicated block
+        // at the end of this suite. ----
+        players.SetAge(avatarId, SchoolGrades.SeniorAge);
+        avatarEvents = 0;
         for (int i = 0; i < GlobalState.DaysPerSeason; i++)
         {
             clock.AdvanceDay();
@@ -3952,38 +3967,36 @@ internal static class Program
         PromotionSummary run1 = promo.LastRun;
         bool inCollege = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier newTier)
             && newTier == LeagueTier.College;
-        Check("§6 gate: a dominating HS avatar promotes to a real College team+slot on its first offseason",
-            run1.SeasonYear == StartYear && run1.AvatarPromoted
-            && run1.AvatarTeamId == career.AvatarTeamId && inCollege,
+        Check("§6 graduation: a senior HS avatar (aged past the amateur cap) graduates to a real College team+slot on its senior-year offseason",
+            run1.SeasonYear == StartYear + 1 && run1.AvatarPromoted
+            && run1.AvatarTeamId == career.AvatarTeamId && inCollege
+            && career.AvatarTeamId is >= 201 and <= 208,
             $"avatar team {career.AvatarTeamId} ({newTier}), promoted={run1.AvatarPromoted}");
         Check("§6 school gate input: HS→College keeps the destination amateur (the 9b bridge derives the gate from this tier)",
             newTier == LeagueTier.College, $"tier {newTier}");
 
-        // §6 destination: the avatar rose via merit swap (rollover 1 has no
-        // College batter vacancies), so his out-ranked BATTER incumbent must
-        // now occupy the avatar's vacated HS slot. Scoped to the avatar's
-        // role cohort and bounded by its swap cap: the boundary's other
-        // batter swap can legally land a second ex-destination player on
-        // team 101 whenever its riser was a 101 teammate (ordinary churn —
-        // more common since the 9d-2 seam removed the College age fudge),
-        // and pitcher-role swaps are definitionally not the counterpart.
+        // §6 destination: the graduated avatar has left team 101 and its HS slot
+        // stays fully staffed — whether an out-ranked College batter relegated
+        // into it (a merit/forced-graduation swap) or an intake filled it
+        // (graduation instead filled a College vacancy), the roster invariant is
+        // the real conservation proof, so assert it plus the clean departure.
         baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
-        int counterpartCount = 0;
+        bool avatarGoneFrom101 = true;
+        int hs101Batters = 0;
         foreach (RosterPlayerRow row in tierRoster)
         {
-            if (row.Role == PitcherRole.None
-                && row.TeamId == HsTeam && !oldHsTeamIds.Contains(row.PlayerId)
-                && oldCollegeTeamById.TryGetValue(row.PlayerId, out int fromTeam)
-                && fromTeam == run1.AvatarTeamId)
+            if (row.TeamId == HsTeam)
             {
-                counterpartCount++;
+                avatarGoneFrom101 &= row.PlayerId != avatarId;
+                if (row.Role == PitcherRole.None)
+                {
+                    hs101Batters++;
+                }
             }
         }
-        Check("§6 destination: an out-ranked batter from the avatar's destination team relegated into the avatar's vacated HS slot (within the batter swap cap)",
-            counterpartCount >= 1 && counterpartCount <= PromotionProfile.SwapCapBatters,
-            $"counterparts {counterpartCount}");
-        Check("§10.2 roster invariant holds across the avatar handoff",
-            TierLadderInvariantHolds(baseball, out string invariantDetail), invariantDetail);
+        Check("§6 destination: the graduated avatar has left team 101, whose HS slot stays fully staffed (roster invariant holds across the handoff)",
+            TierLadderInvariantHolds(baseball, out string invariantDetail)
+            && avatarGoneFrom101 && hs101Batters == LeagueSimulator.LineupSize, invariantDetail);
         Check("AvatarChangedEvent republished with the destination team (the 9b Life-sim bridge's input)",
             avatarEvents >= 1 && lastAvatarEventTeam == career.AvatarTeamId,
             $"events {avatarEvents}, team {lastAvatarEventTeam}");
@@ -4022,13 +4035,24 @@ internal static class Program
         }
 
         // Origin release, asserted BEFORE the next rollover (its age-out
-        // removals would drop players out of the tier-joined aggregate): the
-        // vacated HS team's games ran under the macro sim all season — a
-        // stale attended-team claim would have skipped one pairing per day.
-        LeaguePitchingTotals hsSeason2 = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
-        Check("origin sim released: the HS tier completes a full season after the avatar leaves (no stale attended-team claim)",
-            hsSeason2.Gs == LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount,
-            $"Gs {hsSeason2.Gs}/{LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount}");
+        // removals would drop players out of the tier-joined aggregate). While
+        // the avatar was a senior IN high school, the macro sim skipped its
+        // team's pairing every day (those games ran in the micro-sim and never
+        // reach the macro GS aggregate), so that season's HS GS runs well under
+        // full. After graduation the HS macro reclaims the team and the season
+        // recovers to (near-)full — a stale attended-team claim would instead
+        // keep it stuck at the senior-season shortfall. The residual gap is the
+        // single graduation-boundary day: TimeManager fires DayAdvanced(day 1)
+        // before SeasonRolledOver, so the avatar is still HS on that one day and
+        // that lone game is micro-played — which is exactly why we test
+        // RECOVERY, not an exact count.
+        LeaguePitchingTotals hsSenior = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
+        LeaguePitchingTotals hsSeason2 = baseball.LoadLeaguePitchingTotals(StartYear + 2, LeagueTier.HS);
+        int fullHsGs = LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount;
+        Check("origin sim released: after the avatar graduates, the HS macro reclaims its old team — the post-graduation season recovers to near-full GS, versus the attended senior season that ran short (no stale attended-team claim)",
+            hsSenior.Gs < fullHsGs && hsSeason2.Gs > hsSenior.Gs
+            && hsSeason2.Gs >= fullHsGs - LeagueSimulator.TeamCount,
+            $"senior {hsSenior.Gs}, post-grad {hsSeason2.Gs}/{fullHsGs}");
 
         clock.AdvanceDay(); // the season-3 boundary: rollover 2 fires here
         bus.DispatchPending();
@@ -4036,7 +4060,7 @@ internal static class Program
         PromotionSummary run2 = promo.LastRun;
         Check("§6 succession precedence: the pending succession parks, the (still-dominant) avatar's promotion is skipped, NPC churn still runs",
             career.HasPendingSuccessionChoice && career.AvatarTeamId == teamBeforeSkip
-            && !run2.AvatarPromoted && run2.SeasonYear == StartYear + 1
+            && !run2.AvatarPromoted && run2.SeasonYear == StartYear + 2
             && run2.Removals > 0 && run2.Intake == run2.Removals,
             $"removals {run2.Removals}, avatar team {career.AvatarTeamId}");
 
@@ -4047,6 +4071,108 @@ internal static class Program
             $"avatar team {career.AvatarTeamId}");
         Check("avatar world: integrity ok, no FK violations, no open batch",
             !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+
+        // ---- Held back, not forced up (grade gate): graduation is EARNED, not
+        // automatic. A WEAK senior that out-ranks nobody does NOT graduate — it
+        // is held back in high school and tries again next year (no college
+        // baseball until it earns the move). A spread-0, ages-pinned, gameless
+        // world where the NPC pass is a provable no-op (the RunPromotionSweepSuite
+        // convention), so the avatar is the only thing that could move — and
+        // here, being below the cut, it must NOT. ----
+        {
+            using var gdb = new DatabaseManager(scratchPath + ".gradgate");
+            gdb.InitializeSchema(schemaPath);
+            var gplayers = new PlayerQueries(gdb);
+            var gbaseball = new BaseballQueries(gdb);
+            var grng = new RngState(LeagueSeed + 197);
+            LeagueGenerator.GenerateIfEmpty(gdb, gplayers, gbaseball, ratingSpread: 0, ref grng);
+            LeagueGenerator.EnsureTierLeagues(gdb, gplayers, gbaseball, ratingSpread: 0, ref grng);
+
+            // Pin every age inside its tier window (the no-op-pass recipe): no
+            // removals, and spread-0 ratings mean no NPC swaps.
+            var gpin = new List<RosterPlayerRow>();
+            gdb.RunInBatch(() =>
+            {
+                for (int t = 0; t < LeagueDirectory.TierCount; t++)
+                {
+                    gbaseball.LoadRosterByTier((LeagueTier)t, gpin);
+                    int pinnedAge = (LeagueTier)t switch
+                    {
+                        LeagueTier.HS => 16,
+                        LeagueTier.College => 20,
+                        _ => 25,
+                    };
+                    foreach (RosterPlayerRow row in gpin)
+                    {
+                        gplayers.SetAge(row.PlayerId, pinnedAge);
+                    }
+                }
+            });
+
+            var gstate = new GlobalState();
+            var ggameState = new GameStateQueries(gdb);
+            var gnormalizer = new StatsNormalizer(gdb, gbaseball);
+            var gleagues = new LeagueDirectory();
+            for (int t = 0; t < LeagueDirectory.TierCount; t++)
+            {
+                var sim = new LeagueSimulator(
+                    gdb, gbaseball, gnormalizer, new RngState(SeasonSeed + 197 + (ulong)t), (LeagueTier)t);
+                sim.Initialize();
+                gleagues.Register(sim); // registered for the avatar plumbing, not attached — gameless
+            }
+            var gmicro = new MicroGame(gdb, gbaseball);
+            gmicro.Initialize();
+            var gcareer = new CareerManager(
+                gdb, gplayers, gbaseball, ggameState, gstate, gleagues, gmicro, new RngState(0x9C6EAD11UL));
+            var gpromo = new PromotionManager(
+                gdb, gplayers, gbaseball, ggameState, gleagues, gmicro, new RngState(0x9C6E0003UL));
+            gpromo.Career = gcareer;
+
+            // A sub-replacement-level batter (20/20/20 < every 50/50/50 College
+            // incumbent) — it can never win a merit swap, and the pinned ages
+            // leave no vacancy to slip through, so it can earn nothing and never
+            // reaches college.
+            gcareer.CreateAvatar("Weak", "Senior", 101, new PlayerRatingsRow
+            {
+                IsPitcher = false,
+                BatPower = 20, BatContact = 20, BatDiscipline = 20,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+            string gAvatarId = gcareer.AvatarPlayerId;
+
+            // Control — a JUNIOR (age within the cap) is gated: the pass is a
+            // complete no-op and the avatar keeps its HS team.
+            gplayers.SetAge(gAvatarId, SchoolGrades.SeniorAge - 1);
+            gpromo.RunOffseason(StartYear);
+            PromotionSummary juniorRun = gpromo.LastRun;
+            Check("grade gate: a JUNIOR avatar that out-ranks nobody is held in HS — the pass is a complete no-op",
+                !juniorRun.AvatarPromoted && juniorRun.Removals == 0 && juniorRun.Promotions == 0
+                && juniorRun.Relegations == 0 && juniorRun.Intake == 0
+                && gcareer.AvatarTeamId == 101
+                && SchoolGrades.ForAge(SchoolGrades.SeniorAge - 1) == SchoolGrade.Junior,
+                $"avatar team {gcareer.AvatarTeamId}, promoted {juniorRun.AvatarPromoted}");
+
+            // Held back — one year older (past the cap), so the gate now lets it
+            // compete, but 20/20/20 out-ranks no 50/50/50 College incumbent and
+            // no vacancy exists: it earns nothing, does NOT graduate, and STAYS
+            // in high school (protected from the amateur washout an over-cap NPC
+            // would take). Still a complete no-op — nobody moves.
+            gplayers.SetAge(gAvatarId, SchoolGrades.SeniorAge + 1);
+            gpromo.RunOffseason(StartYear + 1);
+            PromotionSummary heldRun = gpromo.LastRun;
+            bool gStillHs = gbaseball.TryGetTeamTier(gcareer.AvatarTeamId, out LeagueTier gTier)
+                && gTier == LeagueTier.HS;
+            Check("held back: a weak senior that out-ranks no College incumbent does NOT graduate — it stays in HS (no forced graduation, no washout), a complete no-op",
+                !heldRun.AvatarPromoted && gStillHs && gcareer.AvatarTeamId == 101
+                && heldRun.Promotions == 0 && heldRun.Relegations == 0
+                && heldRun.Removals == 0 && heldRun.Intake == 0
+                && SchoolGrades.ForAge(SchoolGrades.SeniorAge + 1) == SchoolGrade.Senior,
+                $"avatar team {gcareer.AvatarTeamId} ({gTier}), promoted {heldRun.AvatarPromoted}");
+            Check("held-back world: roster invariant, integrity, FK, no open batch",
+                TierLadderInvariantHolds(gbaseball, out string gGradDetail)
+                && !gdb.IsBatchActive && gdb.RunIntegrityCheck() == "ok" && gdb.RunForeignKeyCheck() == 0,
+                gGradDetail);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -4135,8 +4261,8 @@ internal static class Program
             && DevelopmentCurve.RawCurrent(60, 27, 1.0) == 60 && DevelopmentCurve.RawCurrent(60, 33, 1.0) == 60
             && DevelopmentCurve.RawCurrent(60, 21, 0.5) == 55
             && DevelopmentCurve.RawCurrent(5, 15, 1.0) == 0);
-        Check("§3.3 avatar headroom: a modest 60 at 19 ceilings at 70; a max-built 100 gets zero headroom (decline-only)",
-            DevelopmentCurve.HeadroomPotential(60, CareerManager.StartingAge) == 70
+        Check("§3.3 avatar headroom: a modest 60 at the 16-year-old freshman start ceilings at 74; a max-built 100 gets zero headroom (decline-only)",
+            DevelopmentCurve.HeadroomPotential(60, CareerManager.StartingAge) == 74
             && DevelopmentCurve.HeadroomPotential(100, CareerManager.StartingAge) == 100
             && DevelopmentCurve.HeadroomPotential(98, CareerManager.StartingAge) == 100);
     }
@@ -4678,12 +4804,12 @@ internal static class Program
         var idle = RunPracticeWorld(scratchPath + ".idle", schemaPath, practiceHoursPerDay: 0);
         Check("§10.5 accumulate path: 10 days × 6h bank exactly 60h in Game_State; the rollover consumes AND clears the credit",
             practiced.CreditAccrued && practiced.CreditCleared);
-        Check("§10.5 the Practice lever: a season of 6h/day (frac 0.2469) moves the peak-pinned avatar +2 per rating; the idle twin moves ZERO; nobody overshoots the ceiling",
-            practiced.BatSum == 186 && idle.BatSum == 180
+        Check("§10.5 the Practice lever: a season of 6h/day (frac 0.2469) moves the peak-pinned 16yo-built avatar +3 per rating (gap 14 to the age-16 ceiling); the idle twin moves ZERO; nobody overshoots the ceiling",
+            practiced.BatSum == 189 && idle.BatSum == 180
             && practiced.NeverOvershot && idle.NeverOvershot,
-            $"practiced {practiced.BatSum} vs idle {idle.BatSum} (start 180, ceiling 210)");
-        Check("§10.5 practice is avatar-only: the practiced pass changed EXACTLY one player (+14 over 7 ratings), the idle pass is a complete no-op, every NPC bit-identical across the pair",
-            practiced.PlayersChanged == 1 && practiced.PointsUp == 14 && idle.PlayersChanged == 0
+            $"practiced {practiced.BatSum} vs idle {idle.BatSum} (start 180, ceiling 222)");
+        Check("§10.5 practice is avatar-only: the practiced pass changed EXACTLY one player (+21 over 7 ratings), the idle pass is a complete no-op, every NPC bit-identical across the pair",
+            practiced.PlayersChanged == 1 && practiced.PointsUp == 21 && idle.PlayersChanged == 0
             && practiced.NpcFingerprint == idle.NpcFingerprint && practiced.NpcFingerprint.Length > 0,
             $"changed {practiced.PlayersChanged}(+{practiced.PointsUp}) vs {idle.PlayersChanged}; fingerprint {practiced.NpcFingerprint.Length} chars");
 
