@@ -133,6 +133,13 @@ public sealed partial class AtBatView : PanelContainer
     [Export]
     public string RevealWalkText { get; set; } = "Ball four — take your base";
 
+    // Fable review (12d-2+12d-3): Class=Ball && BatterSwung is a frequent,
+    // legal DTO state (the model draws the pitch class independent of
+    // intent) — a chase must read as batter-negative, not fall through to
+    // the take-a-ball copy.
+    [Export]
+    public string RevealChaseText { get; set; } = "Chased it — ball";
+
     [Export]
     public string RevealCalledStrikeText { get; set; } = "Strike — caught looking";
 
@@ -205,29 +212,51 @@ public sealed partial class AtBatView : PanelContainer
     private static readonly StringName RevealDiamondVariation = "RevealLabelDiamond";
     private static readonly StringName RevealDirtVariation = "RevealLabelDirt";
 
+    private const string ColorSuffix = "[/color]";
+
     private enum RevealAccent { Positive, Negative, Neutral }
 
     private enum BeatKind : byte { PitchResult, PaOutcome, NpcPa }
 
-    /// <summary>One queued presentation beat — a pitch's truth, or an already-formatted PA/NPC log line (plus the raw outcome for the PaReveal chip / broadcast-log accent), paced in the driver's dequeue order (the causal bound at_bat_presentation.md §3 establishes).</summary>
+    /// <summary>
+    /// One queued presentation beat — a pitch's truth (plus the player's
+    /// committed intent at the moment it was thrown, stamped in at enqueue
+    /// rather than read back off ambient view state at reveal time — a
+    /// Fable-review hardening so the pairing is structural, not just true by
+    /// the current one-pitch-in-flight invariant), or an already-formatted
+    /// PA/NPC log line (plus the raw outcome for the PaReveal chip /
+    /// broadcast-log accent), paced in the driver's dequeue order (the
+    /// causal bound at_bat_presentation.md §3 establishes).
+    /// </summary>
     private readonly struct BeatEvent
     {
         public readonly BeatKind Kind;
         public readonly PitchResult Pitch;
         public readonly PaOutcome Outcome;
         public readonly string LogLine;
+        public readonly bool WasSwing;
+        public readonly double Tau;
+        public readonly bool GuessInZone;
 
-        private BeatEvent(BeatKind kind, in PitchResult pitch, PaOutcome outcome, string logLine)
+        private BeatEvent(
+            BeatKind kind, in PitchResult pitch, PaOutcome outcome, string logLine,
+            bool wasSwing, double tau, bool guessInZone)
         {
             Kind = kind;
             Pitch = pitch;
             Outcome = outcome;
             LogLine = logLine;
+            WasSwing = wasSwing;
+            Tau = tau;
+            GuessInZone = guessInZone;
         }
 
-        public static BeatEvent ForPitch(in PitchResult pitch) => new(BeatKind.PitchResult, in pitch, default, string.Empty);
-        public static BeatEvent ForPaOutcome(PaOutcome outcome, string logLine) => new(BeatKind.PaOutcome, default, outcome, logLine);
-        public static BeatEvent ForNpcPa(PaOutcome outcome, string logLine) => new(BeatKind.NpcPa, default, outcome, logLine);
+        public static BeatEvent ForPitch(in PitchResult pitch, bool wasSwing, double tau, bool guessInZone) =>
+            new(BeatKind.PitchResult, in pitch, default, string.Empty, wasSwing, tau, guessInZone);
+        public static BeatEvent ForPaOutcome(PaOutcome outcome, string logLine) =>
+            new(BeatKind.PaOutcome, default, outcome, logLine, false, 0.0, false);
+        public static BeatEvent ForNpcPa(PaOutcome outcome, string logLine) =>
+            new(BeatKind.NpcPa, default, outcome, logLine, false, 0.0, false);
     }
 
     /// <summary>Idle = between beats (about to pop the next one, or — with an empty queue and a pending snapshot — the moment AwaitingInput is entered and controls re-enable).</summary>
@@ -258,14 +287,21 @@ public sealed partial class AtBatView : PanelContainer
     // 12d-3 broadcast-log colors (§5.5), resolved once from the same
     // RevealLabelDiamond/RevealLabelDirt theme variations the chip already
     // uses — a single source of truth for the two accents rather than a
-    // second hardcoded hex pair drifting out of sync with the theme.
-    private Color _diamondColor;
-    private Color _dirtColor;
+    // second hardcoded hex pair drifting out of sync with the theme. Fable
+    // review: pre-built as full "[color=#…]" prefixes at _Ready rather than
+    // a Color re-formatted via ToHtml on every colored log line.
+    private string _diamondColorPrefix = string.Empty;
+    private string _dirtColorPrefix = string.Empty;
+
+    // Fable review: cached off the FastForwardToggle's Toggled signal rather
+    // than polling ButtonPressed every _Process frame.
+    private bool _fastForwardOn;
 
     // 12d-3 §5.3: the player's own just-submitted intent, captured at the
-    // Swing/Take click so the pitch beat that follows it (at most one pitch
-    // ever in flight, per PlayerIntentBridge.AwaitIntent) can grade it. A
-    // Take carries no τ (the slider is swing-only feedback).
+    // Swing/Take click and stamped onto the pitch beat at enqueue time (see
+    // BeatEvent) so the pairing survives even if a future input scheme lets
+    // more than one pitch queue up. A Take carries no τ (the slider is
+    // swing-only feedback).
     private bool _committedWasSwing;
     private double _committedTau;
     private bool _committedGuessInZone;
@@ -276,8 +312,19 @@ public sealed partial class AtBatView : PanelContainer
     private AtBatViewState _pendingSnapshot;
     private SequencerPhase _phase = SequencerPhase.Idle;
     private double _phaseElapsedMs;
-    private double _currentRevealDurationMs;
     private BeatEvent _currentBeat;
+
+    // Fable review (finding 3): the reveal chip's own live tween, killed
+    // before a new one starts so an interrupted reveal (fast-forward, or a
+    // fresh game's ResetSequencer) can never leave a stale tween fighting the
+    // next one over modulate/scale.
+    private Tween? _revealTween;
+
+    // Fable review (finding 3, secondary symptom): PulseControl fires once
+    // per changed value per snapshot — under fast-forward two snapshots can
+    // land inside one pulse's 200ms window, so the same control's "scale"
+    // tween must be killed before a new pulse starts, same as the reveal chip.
+    private readonly Dictionary<Control, Tween> _pulseTweens = new();
 
     // Dirty-check baselines for the count/base/score "tween, not a silent
     // relabel" pulses (§5.2) — -1 means "no prior state", so the very first
@@ -310,10 +357,14 @@ public sealed partial class AtBatView : PanelContainer
 
         _swingButton.Pressed += OnSwingPressed;
         _takeButton.Pressed += OnTakePressed;
+        _fastForwardToggle.Toggled += OnFastForwardToggled;
         _pitchTypeNames = PitchTypeNamesCsv.Split(',');
         _paRevealNames = PaRevealNamesCsv.Split(',');
-        _diamondColor = _revealLabel.GetThemeColor("font_color", RevealDiamondVariation);
-        _dirtColor = _revealLabel.GetThemeColor("font_color", RevealDirtVariation);
+        Color diamondColor = _revealLabel.GetThemeColor("font_color", RevealDiamondVariation);
+        Color dirtColor = _revealLabel.GetThemeColor("font_color", RevealDirtVariation);
+        _diamondColorPrefix = $"[color=#{diamondColor.ToHtml(false)}]";
+        _dirtColorPrefix = $"[color=#{dirtColor.ToHtml(false)}]";
+        _fastForwardOn = _fastForwardToggle.ButtonPressed;
         _playLog.Clear();
         SetIntentEnabled(false); // AwaitingInput is entered explicitly once the sequencer applies the first snapshot
     }
@@ -322,7 +373,22 @@ public sealed partial class AtBatView : PanelContainer
     {
         _swingButton.Pressed -= OnSwingPressed;
         _takeButton.Pressed -= OnTakePressed;
+        _fastForwardToggle.Toggled -= OnFastForwardToggled;
     }
+
+    private void OnFastForwardToggled(bool pressed) => _fastForwardOn = pressed;
+
+    /// <summary>True once the beat queue has fully drained and the sequencer is idle — the finish-seam gate the game-end truncation fix (Fable review, finding 1) needs: the driver must not tear the view down until every queued beat has actually played, and must keep draining the bridge every frame until this flips true.</summary>
+    public bool SequencerDrained => _phase == SequencerPhase.Idle && _beatQueue.Count == 0;
+
+    private double CurrentSpeed() => _fastForwardOn ? FastForwardSpeedMultiplier : 1.0;
+
+    private double RevealDurationMs(BeatKind kind) => kind switch
+    {
+        BeatKind.PitchResult => PitchRevealDurationMs,
+        BeatKind.PaOutcome => PaOutcomeBeatDurationMs,
+        _ => NpcBeatDurationMs,
+    };
 
     /// <summary>
     /// The sequencer's own light per-frame tick (at_bat_presentation.md §5.7:
@@ -350,22 +416,20 @@ public sealed partial class AtBatView : PanelContainer
         // 12d-3 fast-forward (§5.6): scale the sequencer's own elapsed-time
         // accumulation while held — every beat exit is this same compare, so
         // there is no separate skip path and nothing to desync.
-        double speed = _fastForwardToggle.ButtonPressed ? FastForwardSpeedMultiplier : 1.0;
-        _phaseElapsedMs += delta * 1000.0 * speed;
+        _phaseElapsedMs += delta * 1000.0 * CurrentSpeed();
         if (_phase == SequencerPhase.Windup)
         {
             if (_phaseElapsedMs >= WindupDurationMs)
             {
-                ShowPitchReveal(in _currentBeat.Pitch);
+                ShowPitchReveal(in _currentBeat);
                 _phase = SequencerPhase.Reveal;
                 _phaseElapsedMs = 0.0;
-                _currentRevealDurationMs = PitchRevealDurationMs;
             }
             return;
         }
 
         // Reveal
-        if (_phaseElapsedMs >= _currentRevealDurationMs)
+        if (_phaseElapsedMs >= RevealDurationMs(_currentBeat.Kind))
         {
             // A chip was shown for PitchResult (mid-Windup->Reveal transition,
             // below) and for PaOutcome (at StartBeat, immediately) — NpcPa
@@ -396,13 +460,11 @@ public sealed partial class AtBatView : PanelContainer
                 ShowPaReveal(beat.Outcome);
                 _phase = SequencerPhase.Reveal;
                 _phaseElapsedMs = 0.0;
-                _currentRevealDurationMs = PaOutcomeBeatDurationMs;
                 break;
             default: // NpcPa — ambient background noise, log line only, no chip.
                 AppendPlayLine(beat.LogLine, PaRevealAccent(beat.Outcome));
                 _phase = SequencerPhase.Reveal;
                 _phaseElapsedMs = 0.0;
-                _currentRevealDurationMs = NpcBeatDurationMs;
                 break;
         }
     }
@@ -414,8 +476,9 @@ public sealed partial class AtBatView : PanelContainer
         _hasPendingSnapshot = true;
     }
 
-    /// <summary>Queues one resolved pitch (Phase 12d-1's <see cref="PitchResult"/>) for the sequencer to reveal in order.</summary>
-    public void EnqueuePitchBeat(in PitchResult result) => _beatQueue.Enqueue(BeatEvent.ForPitch(in result));
+    /// <summary>Queues one resolved pitch (Phase 12d-1's <see cref="PitchResult"/>) for the sequencer to reveal in order, stamped with the player's just-committed intent (at most one pitch is ever in flight, per <see cref="PlayerIntentBridge.AwaitIntent"/>).</summary>
+    public void EnqueuePitchBeat(in PitchResult result) =>
+        _beatQueue.Enqueue(BeatEvent.ForPitch(in result, _committedWasSwing, _committedTau, _committedGuessInZone));
 
     /// <summary>Queues one resolved human PA's already-formatted play-log line plus its raw outcome (for the PaReveal chip + broadcast-log accent), paced like every other beat.</summary>
     public void EnqueuePaOutcomeBeat(PaOutcome outcome, string logLine) => _beatQueue.Enqueue(BeatEvent.ForPaOutcome(outcome, logLine));
@@ -431,6 +494,14 @@ public sealed partial class AtBatView : PanelContainer
         _phase = SequencerPhase.Idle;
         _phaseElapsedMs = 0.0;
         HideReveal();
+        foreach (Tween tween in _pulseTweens.Values)
+        {
+            if (GodotObject.IsInstanceValid(tween))
+            {
+                tween.Kill();
+            }
+        }
+        _pulseTweens.Clear();
         _shownBalls = -1;
         _shownStrikes = -1;
         _shownBases = -1;
@@ -490,22 +561,29 @@ public sealed partial class AtBatView : PanelContainer
         }
     }
 
-    /// <summary>A small scale pulse on any Control — the shared motion primitive behind the count tick, a score bump, and a newly-lit base (§5.2).</summary>
+    /// <summary>A small scale pulse on any Control — the shared motion primitive behind the count tick, a score bump, and a newly-lit base (§5.2). Kills any tween already pulsing this same control first (Fable review: two snapshots landing inside one pulse's window under fast-forward would otherwise fight over "scale").</summary>
     private void PulseControl(Control control)
     {
+        if (_pulseTweens.TryGetValue(control, out Tween? existing) && GodotObject.IsInstanceValid(existing))
+        {
+            existing.Kill();
+        }
         control.PivotOffset = control.Size / 2f;
         Tween tween = CreateTween();
         tween.SetParallel(true);
+        tween.SetSpeedScale((float)CurrentSpeed());
         tween.TweenProperty(control, "scale", new Vector2(1.25f, 1.25f), 0.08)
             .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
         tween.Chain().TweenProperty(control, "scale", Vector2.One, 0.12)
             .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.In);
+        _pulseTweens[control] = tween;
     }
 
     /// <summary>The ResultReveal beat (§5.1) — the just-thrown pitch's truth, tween'd in at scale 1.0 and held for <see cref="PitchRevealDurationMs"/>.</summary>
-    private void ShowPitchReveal(in PitchResult result)
+    private void ShowPitchReveal(in BeatEvent beat)
     {
-        (string chipText, string logLine, RevealAccent accent) = BuildRevealCopy(in result);
+        (string chipText, string logLine, RevealAccent accent) =
+            BuildRevealCopy(in beat.Pitch, beat.WasSwing, beat.Tau, beat.GuessInZone);
         ShowRevealChip(chipText, accent, PitchRevealDurationMs, 1f);
         // §5.5: the play-log is "the persistent record behind the transient
         // ResultReveal" — every pitch gets a broadcast line, not just PAs.
@@ -515,14 +593,15 @@ public sealed partial class AtBatView : PanelContainer
     /// <summary>The PaReveal beat (§5.4) — the human's own PA outcome, reusing the ResultReveal chip machinery at <see cref="PaRevealScale"/> ("bigger scale... so a home run feels different from a groundout") held for <see cref="PaOutcomeBeatDurationMs"/>.</summary>
     private void ShowPaReveal(PaOutcome outcome)
     {
-        int index = (int)outcome;
-        string text = index >= 0 && index < _paRevealNames.Length ? _paRevealNames[index] : outcome.ToString();
+        string text = ResolveCsvName((int)outcome, _paRevealNames, outcome.ToString());
         ShowRevealChip(text, PaRevealAccent(outcome), PaOutcomeBeatDurationMs, PaRevealScale);
     }
 
-    /// <summary>Shared reveal-chip presentation: fade+scale in, hold, fade out — the primitive both the per-pitch and per-PA reveals ride, differing only in copy/accent/duration/finishing scale.</summary>
+    /// <summary>Shared reveal-chip presentation: fade+scale in, hold, fade out — the primitive both the per-pitch and per-PA reveals ride, differing only in copy/accent/duration/finishing scale. Kills any tween already running on the chip first, and runs at the sequencer's own current speed (Fable review, finding 3): the two clocks — beat-exit timing and the tween — must be the same clock, or fast-forward desyncs them and orphaned tweens fight the next reveal.</summary>
     private void ShowRevealChip(string text, RevealAccent accent, int durationMs, float finishingScale)
     {
+        _revealTween?.Kill();
+
         _revealLabel.Text = text;
         _revealLabel.ThemeTypeVariation = accent switch
         {
@@ -534,7 +613,10 @@ public sealed partial class AtBatView : PanelContainer
         _revealChip.Visible = true;
         _revealChip.Modulate = new Color(1f, 1f, 1f, 0f);
         _revealChip.Scale = new Vector2(0.85f, 0.85f);
-        _revealChip.PivotOffset = _revealChip.Size / 2f;
+        // Fable review: Size still reflects the PREVIOUS text at this point
+        // (the label hasn't relaid-out yet) — defer the pivot read to after
+        // this frame's layout pass so the scale-in pivots on-center.
+        Callable.From(UpdateRevealChipPivot).CallDeferred();
 
         double fadeSec = System.Math.Min(0.15, durationMs / 3000.0);
         double holdSec = System.Math.Max(0.0, durationMs / 1000.0 - fadeSec * 2.0);
@@ -542,14 +624,23 @@ public sealed partial class AtBatView : PanelContainer
 
         Tween tween = CreateTween();
         tween.SetParallel(true);
+        tween.SetSpeedScale((float)CurrentSpeed());
         tween.TweenProperty(_revealChip, "modulate:a", 1.0, fadeSec);
         tween.TweenProperty(_revealChip, "scale", target, fadeSec)
             .SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
         tween.Chain().TweenInterval(holdSec);
         tween.Chain().TweenProperty(_revealChip, "modulate:a", 0.0, fadeSec);
+        _revealTween = tween;
     }
 
-    private void HideReveal() => _revealChip.Visible = false;
+    private void UpdateRevealChipPivot() => _revealChip.PivotOffset = _revealChip.Size / 2f;
+
+    private void HideReveal()
+    {
+        _revealTween?.Kill();
+        _revealTween = null;
+        _revealChip.Visible = false;
+    }
 
     /// <summary>§5.4's diamond/dirt split: hit/walk/HR = diamond (batter-positive), out/K = dirt (batter-negative).</summary>
     private static RevealAccent PaRevealAccent(PaOutcome outcome) => outcome switch
@@ -558,16 +649,33 @@ public sealed partial class AtBatView : PanelContainer
         _ => RevealAccent.Positive,
     };
 
-    /// <summary>at_bat_presentation.md §5.1's table, narrowed to exactly what the frozen PitchResult DTO reports, plus §5.3's timing tag (swings only) and the two literal read-grade combos. Returns the chip's full multi-line text and a single-line broadcast-log echo (the timing-tagged call, no flavor/read-tag clutter).</summary>
-    private (string ChipText, string LogLine, RevealAccent Accent) BuildRevealCopy(in PitchResult result)
+    /// <summary>at_bat_presentation.md §5.1's table, narrowed to exactly what the frozen PitchResult DTO reports, plus §5.3's timing tag (swings only) and the two literal read-grade combos. Returns the chip's full multi-line text and a single-line broadcast-log echo (the timing-tagged call, no flavor/read-tag clutter). Intent (wasSwing/tau/guessInZone) is passed in off the beat rather than read from ambient view state (Fable review, secondary finding b).</summary>
+    private (string ChipText, string LogLine, RevealAccent Accent) BuildRevealCopy(
+        in PitchResult result, bool wasSwing, double tau, bool guessInZone)
     {
         string call;
         RevealAccent accent;
         switch (result.Class)
         {
             case PitchClass.Ball:
-                call = result.PaEnded ? RevealWalkText : RevealBallText;
-                accent = RevealAccent.Positive;
+                if (result.PaEnded)
+                {
+                    call = RevealWalkText;
+                    accent = RevealAccent.Positive;
+                }
+                else if (result.BatterSwung)
+                {
+                    // §5.1's "Ball, swung (chase)" row — the model draws the
+                    // pitch class independent of intent, so a swung ball is a
+                    // frequent legal state, not an edge case.
+                    call = RevealChaseText;
+                    accent = RevealAccent.Negative;
+                }
+                else
+                {
+                    call = RevealBallText;
+                    accent = RevealAccent.Positive;
+                }
                 break;
             case PitchClass.Strike:
                 call = result.PaEnded
@@ -586,12 +694,12 @@ public sealed partial class AtBatView : PanelContainer
         }
 
         // §5.3: only a swing ever submits a τ (a Take's slider value is
-        // unused/stale) — _committedWasSwing gates it. At most one pitch is
-        // ever in flight (PlayerIntentBridge.AwaitIntent), so the last
-        // committed intent is always THIS pitch's.
-        if (_committedWasSwing)
+        // unused/stale) — wasSwing gates it. At most one pitch is ever in
+        // flight (PlayerIntentBridge.AwaitIntent), so the intent stamped on
+        // this beat is always THIS pitch's.
+        if (wasSwing)
         {
-            call = string.Format(TimingTagFormat, TimingBucketText(_committedTau), call);
+            call = string.Format(TimingTagFormat, TimingBucketText(tau), call);
         }
 
         string logLine = call;
@@ -602,12 +710,12 @@ public sealed partial class AtBatView : PanelContainer
 
         // §5.1's two literal read-grade combos only — not a general take
         // reads well/badly on every pitch, per the doc's own worked table.
-        bool correctRead = _committedGuessInZone == result.InZone;
-        if (!_committedWasSwing && result.Class == PitchClass.Ball && correctRead)
+        bool correctRead = guessInZone == result.InZone;
+        if (!wasSwing && result.Class == PitchClass.Ball && correctRead)
         {
             text += "\n" + ReadGoodEyeText;
         }
-        else if (!_committedWasSwing && result.Class == PitchClass.Strike && !correctRead)
+        else if (!wasSwing && result.Class == PitchClass.Strike && !correctRead)
         {
             text += "\n" + ReadFooledText;
         }
@@ -630,28 +738,29 @@ public sealed partial class AtBatView : PanelContainer
     }
 
     /// <summary>Appends one plain (neutral) play-by-play line — the game-final summary, which has no batter-positive/negative accent.</summary>
-    public void AppendPlayLine(string line) => AppendPlayLineRaw(line);
+    public void AppendPlayLine(string line) => AppendPlayLineRaw(line, string.Empty, string.Empty);
 
     /// <summary>§5.5: "the play-log becomes a broadcast, not a debug print" — colors the line via the same diamond/dirt theme accents the reveal chip uses, through BBCode (PlayLog has bbcode_enabled=true).</summary>
     private void AppendPlayLine(string line, RevealAccent accent)
     {
         if (accent == RevealAccent.Neutral)
         {
-            AppendPlayLineRaw(line);
+            AppendPlayLineRaw(line, string.Empty, string.Empty);
             return;
         }
-        Color color = accent == RevealAccent.Positive ? _diamondColor : _dirtColor;
-        AppendPlayLineRaw($"[color=#{color.ToHtml(false)}]{line.Replace("[", "[lb]")}[/color]");
+        string prefix = accent == RevealAccent.Positive ? _diamondColorPrefix : _dirtColorPrefix;
+        AppendPlayLineRaw(line, prefix, ColorSuffix);
     }
 
-    private void AppendPlayLineRaw(string line)
+    /// <summary>The one place any play-log line reaches the (now-BBCode) RichTextLabel — escaping runs here unconditionally (Fable review, secondary finding a: the neutral path and the public single-arg AppendPlayLine used to reach the log unescaped, only the colored branch escaped).</summary>
+    private void AppendPlayLineRaw(string line, string prefix, string suffix)
     {
         if (_logLines >= MaxLogLines)
         {
             _playLog.Clear();
             _logLines = 0;
         }
-        _playLog.AppendText(line);
+        _playLog.AppendText(prefix + line.Replace("[", "[lb]") + suffix);
         _playLog.AppendText("\n");
         _logLines++;
     }
@@ -682,9 +791,9 @@ public sealed partial class AtBatView : PanelContainer
         _zoneReadToggle.Disabled = !enabled;
     }
 
-    private string PitchTypeName(PitchType type)
-    {
-        int index = (int)type;
-        return index >= 0 && index < _pitchTypeNames.Length ? _pitchTypeNames[index] : type.ToString();
-    }
+    /// <summary>Index-with-fallback lookup shared by every CSV-backed name table on this view (Fable review, secondary finding e: ShowPaReveal used to inline its own copy of this pattern).</summary>
+    private static string ResolveCsvName(int index, string[] names, string fallback) =>
+        index >= 0 && index < names.Length ? names[index] : fallback;
+
+    private string PitchTypeName(PitchType type) => ResolveCsvName((int)type, _pitchTypeNames, type.ToString());
 }

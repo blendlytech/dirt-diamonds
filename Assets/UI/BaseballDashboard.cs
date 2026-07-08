@@ -369,7 +369,13 @@ public sealed partial class BaseballDashboard : PanelContainer
             _atBatView.EnqueueNpcBeat(npcPa.Outcome, string.Format(format, npcPa.BatterName, OutcomeName(npcPa.Outcome)));
         }
 
-        if (_gameTask.IsCompleted)
+        // Fable review (12d-2+12d-3, finding 1): the sim task can complete
+        // microseconds after the player's last intent while the view's beat
+        // queue still holds the terminal pitch reveal, the PA reveal, and any
+        // trailing NPC beats — gating on SequencerDrained too keeps the drain
+        // loops above running every frame until the presentation actually
+        // catches up, instead of tearing the view down mid-reveal.
+        if (_gameTask.IsCompleted && _atBatView.SequencerDrained)
         {
             FinishInteractiveGame();
         }
