@@ -103,11 +103,24 @@ public sealed partial class AtBatView : PanelContainer
     [Export]
     public int PitchRevealDurationMs { get; set; } = 700;
 
+    // 12d-3 bumps the PA-outcome hold to the design's own recommended default
+    // (§5.6: "PA reveal ~1.2 s") now that the beat actually shows a PaReveal
+    // chip (12d-2 only paced the log-line append against this duration).
     [Export]
-    public int PaOutcomeBeatDurationMs { get; set; } = 900;
+    public int PaOutcomeBeatDurationMs { get; set; } = 1200;
 
     [Export]
     public int NpcBeatDurationMs { get; set; } = 250;
+
+    // 12d-3 fast-forward (§5.6, "a persistent pace toggle defaulting to
+    // broadcast"): a simple speed multiplier on the sequencer's own elapsed-
+    // time accumulation while FastForwardToggle is held down, rather than a
+    // hold/click-to-pop input scheme — a disclosed first-pass call per the
+    // doc's own "build-time feel decision" note. Every beat's exit is still
+    // driven by the same elapsed-time compare, so this compresses cleanly:
+    // no separate skip path, no risk of a beat never resolving.
+    [Export]
+    public double FastForwardSpeedMultiplier { get; set; } = 4.0;
 
     // 12d-2 ResultReveal copy (at_bat_presentation.md §5.1) — every branch the
     // frozen PitchResult DTO can actually report. Two contract notes from the
@@ -145,6 +158,46 @@ public sealed partial class AtBatView : PanelContainer
     [Export]
     public string RevealOutOfZoneText { get; set; } = "out of the zone";
 
+    // 12d-3 §5.3 timing feedback — the player's own already-UI-side τ bucketed
+    // and paired with the pitch's Class, no new sim surface. Only ever shown
+    // on a swing (a Take submits no τ). TimingTagFormat = "{0} — {1}" mirrors
+    // the doc's own illustrative phrasing ("you were early — swing and miss").
+    [Export]
+    public double TimingOnTimeToleranceHalfWidth { get; set; } = 0.15;
+
+    [Export]
+    public string TimingEarlyText { get; set; } = "You were early";
+
+    [Export]
+    public string TimingOnTimeText { get; set; } = "Right on time";
+
+    [Export]
+    public string TimingLateText { get; set; } = "You were late";
+
+    [Export]
+    public string TimingTagFormat { get; set; } = "{0} — {1}";
+
+    // 12d-3 §5.1 read-grade tags — the two literal table combos (Ball+took+
+    // correct read, Strike+took+wrong read); appended as a third reveal line.
+    [Export]
+    public string ReadGoodEyeText { get; set; } = "(good eye)";
+
+    [Export]
+    public string ReadFooledText { get; set; } = "(fooled you)";
+
+    // 12d-3 §5.4 PaReveal — bigger/longer emphasis on the human's own PA
+    // outcome, reusing the ResultReveal chip machinery per the doc's own
+    // wording. Comma-separated, PaOutcome enum order (Out,Strikeout,Walk,
+    // Single,Double,Triple,HomeRun) — the OutcomeNamesCsv precedent, but
+    // broadcast-cased/punctuated per §5.4's own examples.
+    [Export]
+    public string PaRevealNamesCsv { get; set; } =
+        "OUT,STRIKEOUT,WALK,SINGLE,DOUBLE,TRIPLE,HOME RUN!";
+
+    /// <summary>Finishing scale of the reveal chip's entry tween — bigger than a pitch reveal's 1.0 (§5.4: "bigger scale... so a home run feels different from a groundout").</summary>
+    [Export]
+    public float PaRevealScale { get; set; } = 1.35f;
+
     // Theme variations the base-diamond panels swap between; theme-owned so
     // occupied/empty colors stay a designer decision, not a code constant.
     private static readonly StringName BaseLitVariation = "BaseLit";
@@ -156,23 +209,25 @@ public sealed partial class AtBatView : PanelContainer
 
     private enum BeatKind : byte { PitchResult, PaOutcome, NpcPa }
 
-    /// <summary>One queued presentation beat — a pitch's truth, or an already-formatted PA/NPC log line, paced in the driver's dequeue order (the causal bound at_bat_presentation.md §3 establishes).</summary>
+    /// <summary>One queued presentation beat — a pitch's truth, or an already-formatted PA/NPC log line (plus the raw outcome for the PaReveal chip / broadcast-log accent), paced in the driver's dequeue order (the causal bound at_bat_presentation.md §3 establishes).</summary>
     private readonly struct BeatEvent
     {
         public readonly BeatKind Kind;
         public readonly PitchResult Pitch;
+        public readonly PaOutcome Outcome;
         public readonly string LogLine;
 
-        private BeatEvent(BeatKind kind, in PitchResult pitch, string logLine)
+        private BeatEvent(BeatKind kind, in PitchResult pitch, PaOutcome outcome, string logLine)
         {
             Kind = kind;
             Pitch = pitch;
+            Outcome = outcome;
             LogLine = logLine;
         }
 
-        public static BeatEvent ForPitch(in PitchResult pitch) => new(BeatKind.PitchResult, in pitch, string.Empty);
-        public static BeatEvent ForPaOutcome(string logLine) => new(BeatKind.PaOutcome, default, logLine);
-        public static BeatEvent ForNpcPa(string logLine) => new(BeatKind.NpcPa, default, logLine);
+        public static BeatEvent ForPitch(in PitchResult pitch) => new(BeatKind.PitchResult, in pitch, default, string.Empty);
+        public static BeatEvent ForPaOutcome(PaOutcome outcome, string logLine) => new(BeatKind.PaOutcome, default, outcome, logLine);
+        public static BeatEvent ForNpcPa(PaOutcome outcome, string logLine) => new(BeatKind.NpcPa, default, outcome, logLine);
     }
 
     /// <summary>Idle = between beats (about to pop the next one, or — with an empty queue and a pending snapshot — the moment AwaitingInput is entered and controls re-enable).</summary>
@@ -194,9 +249,26 @@ public sealed partial class AtBatView : PanelContainer
     private Button _takeButton = null!;
     private PanelContainer _revealChip = null!;
     private Label _revealLabel = null!;
+    private CheckButton _fastForwardToggle = null!;
 
     private string[] _pitchTypeNames = System.Array.Empty<string>();
+    private string[] _paRevealNames = System.Array.Empty<string>();
     private int _logLines;
+
+    // 12d-3 broadcast-log colors (§5.5), resolved once from the same
+    // RevealLabelDiamond/RevealLabelDirt theme variations the chip already
+    // uses — a single source of truth for the two accents rather than a
+    // second hardcoded hex pair drifting out of sync with the theme.
+    private Color _diamondColor;
+    private Color _dirtColor;
+
+    // 12d-3 §5.3: the player's own just-submitted intent, captured at the
+    // Swing/Take click so the pitch beat that follows it (at most one pitch
+    // ever in flight, per PlayerIntentBridge.AwaitIntent) can grade it. A
+    // Take carries no τ (the slider is swing-only feedback).
+    private bool _committedWasSwing;
+    private double _committedTau;
+    private bool _committedGuessInZone;
 
     // The beat sequencer (12d-2).
     private readonly Queue<BeatEvent> _beatQueue = new(16);
@@ -234,10 +306,14 @@ public sealed partial class AtBatView : PanelContainer
         _takeButton = GetNode<Button>("Layout/Controls/TakeButton");
         _revealChip = GetNode<PanelContainer>("RevealOverlay/RevealChip");
         _revealLabel = GetNode<Label>("RevealOverlay/RevealChip/RevealLabel");
+        _fastForwardToggle = GetNode<CheckButton>("Layout/Controls/FastForwardToggle");
 
         _swingButton.Pressed += OnSwingPressed;
         _takeButton.Pressed += OnTakePressed;
         _pitchTypeNames = PitchTypeNamesCsv.Split(',');
+        _paRevealNames = PaRevealNamesCsv.Split(',');
+        _diamondColor = _revealLabel.GetThemeColor("font_color", RevealDiamondVariation);
+        _dirtColor = _revealLabel.GetThemeColor("font_color", RevealDirtVariation);
         _playLog.Clear();
         SetIntentEnabled(false); // AwaitingInput is entered explicitly once the sequencer applies the first snapshot
     }
@@ -271,7 +347,11 @@ public sealed partial class AtBatView : PanelContainer
             return;
         }
 
-        _phaseElapsedMs += delta * 1000.0;
+        // 12d-3 fast-forward (§5.6): scale the sequencer's own elapsed-time
+        // accumulation while held — every beat exit is this same compare, so
+        // there is no separate skip path and nothing to desync.
+        double speed = _fastForwardToggle.ButtonPressed ? FastForwardSpeedMultiplier : 1.0;
+        _phaseElapsedMs += delta * 1000.0 * speed;
         if (_phase == SequencerPhase.Windup)
         {
             if (_phaseElapsedMs >= WindupDurationMs)
@@ -287,7 +367,10 @@ public sealed partial class AtBatView : PanelContainer
         // Reveal
         if (_phaseElapsedMs >= _currentRevealDurationMs)
         {
-            if (_currentBeat.Kind == BeatKind.PitchResult)
+            // A chip was shown for PitchResult (mid-Windup->Reveal transition,
+            // below) and for PaOutcome (at StartBeat, immediately) — NpcPa
+            // never shows one, so nothing to hide.
+            if (_currentBeat.Kind == BeatKind.PitchResult || _currentBeat.Kind == BeatKind.PaOutcome)
             {
                 HideReveal();
             }
@@ -306,13 +389,17 @@ public sealed partial class AtBatView : PanelContainer
                 _phaseElapsedMs = 0.0;
                 break;
             case BeatKind.PaOutcome:
-                AppendPlayLine(beat.LogLine);
+                // §5.4: the human's own PA outcome — a bigger/longer reveal
+                // than a pitch beat, no windup (the terminal pitch's own
+                // Windup/Reveal already played the guess->truth arc).
+                AppendPlayLine(beat.LogLine, PaRevealAccent(beat.Outcome));
+                ShowPaReveal(beat.Outcome);
                 _phase = SequencerPhase.Reveal;
                 _phaseElapsedMs = 0.0;
                 _currentRevealDurationMs = PaOutcomeBeatDurationMs;
                 break;
-            default: // NpcPa
-                AppendPlayLine(beat.LogLine);
+            default: // NpcPa — ambient background noise, log line only, no chip.
+                AppendPlayLine(beat.LogLine, PaRevealAccent(beat.Outcome));
                 _phase = SequencerPhase.Reveal;
                 _phaseElapsedMs = 0.0;
                 _currentRevealDurationMs = NpcBeatDurationMs;
@@ -330,11 +417,11 @@ public sealed partial class AtBatView : PanelContainer
     /// <summary>Queues one resolved pitch (Phase 12d-1's <see cref="PitchResult"/>) for the sequencer to reveal in order.</summary>
     public void EnqueuePitchBeat(in PitchResult result) => _beatQueue.Enqueue(BeatEvent.ForPitch(in result));
 
-    /// <summary>Queues one resolved human PA's already-formatted play-log line, paced like every other beat.</summary>
-    public void EnqueuePaOutcomeBeat(string logLine) => _beatQueue.Enqueue(BeatEvent.ForPaOutcome(logLine));
+    /// <summary>Queues one resolved human PA's already-formatted play-log line plus its raw outcome (for the PaReveal chip + broadcast-log accent), paced like every other beat.</summary>
+    public void EnqueuePaOutcomeBeat(PaOutcome outcome, string logLine) => _beatQueue.Enqueue(BeatEvent.ForPaOutcome(outcome, logLine));
 
-    /// <summary>Queues one NPC play-by-play line, paced like every other beat.</summary>
-    public void EnqueueNpcBeat(string logLine) => _beatQueue.Enqueue(BeatEvent.ForNpcPa(logLine));
+    /// <summary>Queues one NPC play-by-play line plus its outcome (for the broadcast-log accent only — no reveal chip), paced like every other beat.</summary>
+    public void EnqueueNpcBeat(PaOutcome outcome, string logLine) => _beatQueue.Enqueue(BeatEvent.ForNpcPa(outcome, logLine));
 
     /// <summary>Clears all in-flight beat/reveal state for a fresh attended game — the driver's <see cref="PlayerIntentBridge.Reset"/> mirror.</summary>
     public void ResetSequencer()
@@ -415,10 +502,27 @@ public sealed partial class AtBatView : PanelContainer
             .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.In);
     }
 
-    /// <summary>The ResultReveal beat (§5.1) — the just-thrown pitch's truth, tween'd in and held for <see cref="PitchRevealDurationMs"/>, then faded out by the same tween that timed the beat.</summary>
+    /// <summary>The ResultReveal beat (§5.1) — the just-thrown pitch's truth, tween'd in at scale 1.0 and held for <see cref="PitchRevealDurationMs"/>.</summary>
     private void ShowPitchReveal(in PitchResult result)
     {
-        (string text, RevealAccent accent) = BuildRevealCopy(in result);
+        (string chipText, string logLine, RevealAccent accent) = BuildRevealCopy(in result);
+        ShowRevealChip(chipText, accent, PitchRevealDurationMs, 1f);
+        // §5.5: the play-log is "the persistent record behind the transient
+        // ResultReveal" — every pitch gets a broadcast line, not just PAs.
+        AppendPlayLine(logLine, accent);
+    }
+
+    /// <summary>The PaReveal beat (§5.4) — the human's own PA outcome, reusing the ResultReveal chip machinery at <see cref="PaRevealScale"/> ("bigger scale... so a home run feels different from a groundout") held for <see cref="PaOutcomeBeatDurationMs"/>.</summary>
+    private void ShowPaReveal(PaOutcome outcome)
+    {
+        int index = (int)outcome;
+        string text = index >= 0 && index < _paRevealNames.Length ? _paRevealNames[index] : outcome.ToString();
+        ShowRevealChip(text, PaRevealAccent(outcome), PaOutcomeBeatDurationMs, PaRevealScale);
+    }
+
+    /// <summary>Shared reveal-chip presentation: fade+scale in, hold, fade out — the primitive both the per-pitch and per-PA reveals ride, differing only in copy/accent/duration/finishing scale.</summary>
+    private void ShowRevealChip(string text, RevealAccent accent, int durationMs, float finishingScale)
+    {
         _revealLabel.Text = text;
         _revealLabel.ThemeTypeVariation = accent switch
         {
@@ -432,13 +536,14 @@ public sealed partial class AtBatView : PanelContainer
         _revealChip.Scale = new Vector2(0.85f, 0.85f);
         _revealChip.PivotOffset = _revealChip.Size / 2f;
 
-        double fadeSec = System.Math.Min(0.15, PitchRevealDurationMs / 3000.0);
-        double holdSec = System.Math.Max(0.0, PitchRevealDurationMs / 1000.0 - fadeSec * 2.0);
+        double fadeSec = System.Math.Min(0.15, durationMs / 3000.0);
+        double holdSec = System.Math.Max(0.0, durationMs / 1000.0 - fadeSec * 2.0);
+        Vector2 target = new(finishingScale, finishingScale);
 
         Tween tween = CreateTween();
         tween.SetParallel(true);
         tween.TweenProperty(_revealChip, "modulate:a", 1.0, fadeSec);
-        tween.TweenProperty(_revealChip, "scale", Vector2.One, fadeSec)
+        tween.TweenProperty(_revealChip, "scale", target, fadeSec)
             .SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
         tween.Chain().TweenInterval(holdSec);
         tween.Chain().TweenProperty(_revealChip, "modulate:a", 0.0, fadeSec);
@@ -446,8 +551,15 @@ public sealed partial class AtBatView : PanelContainer
 
     private void HideReveal() => _revealChip.Visible = false;
 
-    /// <summary>at_bat_presentation.md §5.1's table, narrowed to exactly what the frozen PitchResult DTO reports (no timing/read grading — that's §5.3, 12d-3's scope).</summary>
-    private (string Text, RevealAccent Accent) BuildRevealCopy(in PitchResult result)
+    /// <summary>§5.4's diamond/dirt split: hit/walk/HR = diamond (batter-positive), out/K = dirt (batter-negative).</summary>
+    private static RevealAccent PaRevealAccent(PaOutcome outcome) => outcome switch
+    {
+        PaOutcome.Out or PaOutcome.Strikeout => RevealAccent.Negative,
+        _ => RevealAccent.Positive,
+    };
+
+    /// <summary>at_bat_presentation.md §5.1's table, narrowed to exactly what the frozen PitchResult DTO reports, plus §5.3's timing tag (swings only) and the two literal read-grade combos. Returns the chip's full multi-line text and a single-line broadcast-log echo (the timing-tagged call, no flavor/read-tag clutter).</summary>
+    private (string ChipText, string LogLine, RevealAccent Accent) BuildRevealCopy(in PitchResult result)
     {
         string call;
         RevealAccent accent;
@@ -472,13 +584,67 @@ public sealed partial class AtBatView : PanelContainer
                 accent = RevealAccent.Neutral;
                 break;
         }
+
+        // §5.3: only a swing ever submits a τ (a Take's slider value is
+        // unused/stale) — _committedWasSwing gates it. At most one pitch is
+        // ever in flight (PlayerIntentBridge.AwaitIntent), so the last
+        // committed intent is always THIS pitch's.
+        if (_committedWasSwing)
+        {
+            call = string.Format(TimingTagFormat, TimingBucketText(_committedTau), call);
+        }
+
+        string logLine = call;
+
         string flavor = string.Format(
             RevealFlavorFormat, PitchTypeName(result.Type), result.InZone ? RevealInZoneText : RevealOutOfZoneText);
-        return (call + "\n" + flavor, accent);
+        string text = call + "\n" + flavor;
+
+        // §5.1's two literal read-grade combos only — not a general take
+        // reads well/badly on every pitch, per the doc's own worked table.
+        bool correctRead = _committedGuessInZone == result.InZone;
+        if (!_committedWasSwing && result.Class == PitchClass.Ball && correctRead)
+        {
+            text += "\n" + ReadGoodEyeText;
+        }
+        else if (!_committedWasSwing && result.Class == PitchClass.Strike && !correctRead)
+        {
+            text += "\n" + ReadFooledText;
+        }
+
+        return (text, logLine, accent);
     }
 
-    /// <summary>Appends one play-by-play line (already-localized text from the driver's feed).</summary>
-    public void AppendPlayLine(string line)
+    /// <summary>Buckets the player's submitted τ ∈ [-1,+1] into Early/On-time/Late (§5.3) — a symmetric tolerance band around 0 sized by <see cref="TimingOnTimeToleranceHalfWidth"/>.</summary>
+    private string TimingBucketText(double tau)
+    {
+        if (tau < -TimingOnTimeToleranceHalfWidth)
+        {
+            return TimingEarlyText;
+        }
+        if (tau > TimingOnTimeToleranceHalfWidth)
+        {
+            return TimingLateText;
+        }
+        return TimingOnTimeText;
+    }
+
+    /// <summary>Appends one plain (neutral) play-by-play line — the game-final summary, which has no batter-positive/negative accent.</summary>
+    public void AppendPlayLine(string line) => AppendPlayLineRaw(line);
+
+    /// <summary>§5.5: "the play-log becomes a broadcast, not a debug print" — colors the line via the same diamond/dirt theme accents the reveal chip uses, through BBCode (PlayLog has bbcode_enabled=true).</summary>
+    private void AppendPlayLine(string line, RevealAccent accent)
+    {
+        if (accent == RevealAccent.Neutral)
+        {
+            AppendPlayLineRaw(line);
+            return;
+        }
+        Color color = accent == RevealAccent.Positive ? _diamondColor : _dirtColor;
+        AppendPlayLineRaw($"[color=#{color.ToHtml(false)}]{line.Replace("[", "[lb]")}[/color]");
+    }
+
+    private void AppendPlayLineRaw(string line)
     {
         if (_logLines >= MaxLogLines)
         {
@@ -493,12 +659,17 @@ public sealed partial class AtBatView : PanelContainer
     private void OnSwingPressed()
     {
         SetIntentEnabled(false);
+        _committedWasSwing = true;
+        _committedTau = _timingSlider.Value;
+        _committedGuessInZone = _zoneReadToggle.ButtonPressed;
         EmitSignal(SignalName.SwingCommitted, _timingSlider.Value, _zoneReadToggle.ButtonPressed);
     }
 
     private void OnTakePressed()
     {
         SetIntentEnabled(false);
+        _committedWasSwing = false;
+        _committedGuessInZone = _zoneReadToggle.ButtonPressed;
         EmitSignal(SignalName.TakeCommitted, _zoneReadToggle.ButtonPressed);
     }
 

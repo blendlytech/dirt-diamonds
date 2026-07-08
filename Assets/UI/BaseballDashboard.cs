@@ -361,12 +361,12 @@ public sealed partial class BaseballDashboard : PanelContainer
         }
         while (_bridge.TryDequeuePaOutcome(out PaOutcome outcome))
         {
-            _atBatView.EnqueuePaOutcomeBeat(string.Format(PaLineFormat, OutcomeName(outcome)));
+            _atBatView.EnqueuePaOutcomeBeat(outcome, string.Format(PaLineFormat, OutcomeName(outcome)));
         }
         while (_bridge.TryDequeueNpcPa(out NpcPaFeedEvent npcPa))
         {
             string format = npcPa.IsRivalryPa ? NpcRivalryPaLineFormat : NpcPaLineFormat;
-            _atBatView.EnqueueNpcBeat(string.Format(format, npcPa.BatterName, OutcomeName(npcPa.Outcome)));
+            _atBatView.EnqueueNpcBeat(npcPa.Outcome, string.Format(format, npcPa.BatterName, OutcomeName(npcPa.Outcome)));
         }
 
         if (_gameTask.IsCompleted)
