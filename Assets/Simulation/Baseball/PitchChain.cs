@@ -269,6 +269,9 @@ public interface IBatterPolicy
 
     BatterIntent NextPitch(in PitchLook look, in CountState count, ref RngState rng);
 
+    /// <summary>Per-pitch observation hook (UI feedback). Consumes no RNG; a no-op off the interactive path.</summary>
+    void OnPitchResolved(in PitchResult result);
+
     /// <summary>Called by the driver after the human PA resolves (play-log / UI feedback hook).</summary>
     void OnPaResolved(PaOutcome outcome);
 }
@@ -282,6 +285,10 @@ public struct NeutralBatterPolicy : IBatterPolicy
 
     public readonly BatterIntent NextPitch(in PitchLook look, in CountState count, ref RngState rng) =>
         BatterIntent.Neutral;
+
+    public readonly void OnPitchResolved(in PitchResult result)
+    {
+    }
 
     public readonly void OnPaResolved(PaOutcome outcome)
     {
@@ -701,10 +708,14 @@ public static class PitchChain
             pitchCount++;
             fatigue.AddPitch();
 
+            bool swung = intent.Kind == BatterIntentKind.Swing;
             double draw = rng.NextDouble();
             if (draw < conditionedBall)
             {
-                if (++balls == BallStates)
+                bool walked = ++balls == BallStates;
+                batter.OnPitchResolved(new PitchResult(
+                    PitchClass.Ball, type, inZone, swung, (byte)balls, (byte)strikes, walked));
+                if (walked)
                 {
                     return PaOutcome.Walk;
                 }
@@ -714,15 +725,26 @@ public static class PitchChain
                 if (strikes < StrikeStates - 1)
                 {
                     strikes++;
+                    batter.OnPitchResolved(new PitchResult(
+                        PitchClass.Strike, type, inZone, swung, (byte)balls, (byte)strikes, paEnded: false));
                 }
                 else if (rng.NextDouble() >= FoulShareOfStrikes)
                 {
+                    batter.OnPitchResolved(new PitchResult(
+                        PitchClass.Strike, type, inZone, swung, (byte)balls, (byte)strikes, paEnded: true));
                     return PaOutcome.Strikeout;
                 }
-                // else: two-strike foul — count unchanged, PA continues.
+                else
+                {
+                    // two-strike foul — count unchanged, PA continues.
+                    batter.OnPitchResolved(new PitchResult(
+                        PitchClass.Foul, type, inZone, swung, (byte)balls, (byte)strikes, paEnded: false));
+                }
             }
             else
             {
+                batter.OnPitchResolved(new PitchResult(
+                    PitchClass.InPlay, type, inZone, swung, (byte)balls, (byte)strikes, paEnded: true));
                 return DrawBallInPlay(anchorProbabilities, input.ContactQuality, ref rng);
             }
         }

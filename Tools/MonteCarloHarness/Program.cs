@@ -988,6 +988,7 @@ internal static class Program
         int snapshots = 0;
         int npcEvents = 0;
         bool sawNonEmptyName = false;
+        var pitchResults = new List<PitchResult>();
         var scriptedUi = new Thread(() =>
         {
             int pitch = 0;
@@ -1013,6 +1014,10 @@ internal static class Program
                     npcEvents++;
                     sawNonEmptyName |= npcPa.BatterName.Length > 0;
                 }
+                while (bridge.TryDequeuePitchResult(out PitchResult pr))
+                {
+                    pitchResults.Add(pr);
+                }
                 Thread.Sleep(0);
             }
         });
@@ -1035,6 +1040,10 @@ internal static class Program
             npcEvents++;
             sawNonEmptyName |= trailing.BatterName.Length > 0;
         }
+        while (bridge.TryDequeuePitchResult(out PitchResult trailingPr))
+        {
+            pitchResults.Add(trailingPr);
+        }
         int outcomes = 0;
         while (bridge.TryDequeuePaOutcome(out _))
         {
@@ -1047,6 +1056,39 @@ internal static class Program
         Check("attended-game NPC feed queues non-human PAs with a display name once a UI attaches FeedSink",
             npcEvents > 0 && sawNonEmptyName,
             $"{npcEvents} NPC PA events over the bridge");
+
+        // Phase 12d-1: OnPitchResolved fires exactly once per pitch, and an
+        // independent harness-side reconstruction of the Balls/Strikes
+        // progression from nothing but each PitchResult's Class (Ball adds a
+        // ball; Strike/Foul adds a strike while under 2; PaEnded resets to
+        // 0-0) must match every reported post-pitch count exactly — proving
+        // the report is internally coherent, not just present.
+        int expectBalls = 0;
+        int expectStrikes = 0;
+        bool pitchProgressionCoherent = true;
+        foreach (PitchResult pr in pitchResults)
+        {
+            if (pr.Class == PitchClass.Ball)
+            {
+                expectBalls++;
+            }
+            else if ((pr.Class == PitchClass.Strike || pr.Class == PitchClass.Foul) && expectStrikes < 2)
+            {
+                expectStrikes++;
+            }
+            if (pr.Balls != (byte)expectBalls || pr.Strikes != (byte)expectStrikes)
+            {
+                pitchProgressionCoherent = false;
+            }
+            if (pr.PaEnded)
+            {
+                expectBalls = 0;
+                expectStrikes = 0;
+            }
+        }
+        Check("OnPitchResolved fires exactly once per pitch and its Balls/Strikes progression reconstructs cleanly",
+            pitchResults.Count == interactive.HumanPitchesSeen && pitchProgressionCoherent,
+            $"{pitchResults.Count} pitch results vs {interactive.HumanPitchesSeen} pitches, coherent={pitchProgressionCoherent}");
 
         // ---- cancel path: the game aborts unflushed and stays pending ----
         clock.AdvanceDay();

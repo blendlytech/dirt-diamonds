@@ -93,7 +93,7 @@ public sealed partial class Main : Node
             // The Plan Today card ships inside the dashboard (12b) but its
             // launch seams stay bridged here, Main being the shared ancestor.
             _scheduleScreen = shell.GetNode<ScheduleScreen>(
-                "Margin/Panels/BaseballDashboard/Layout/CardsRow/ScheduleScreen");
+                "Margin/Panels/BaseballDashboard/Layout/LeagueRow/ScheduleScreen");
             var phone = shell.GetNode<BurnerPhone>("Margin/Panels/BurnerPhone");
             phone.HustleLaunchRequested += OnHustleLaunchRequested;
             phone.ShopOpenRequested += OnShopOpenRequested;

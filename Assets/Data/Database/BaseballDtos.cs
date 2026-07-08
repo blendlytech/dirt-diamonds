@@ -176,3 +176,75 @@ public struct LeaguePitchingTotals
     public long Bb;
     public long So;
 }
+
+/// <summary>
+/// One player's current-season Batting_Stats row, rate columns included
+/// (12c-2 StatLineCard) — unlike <see cref="SeasonBattingLine"/> (the 9c
+/// promotion pass's counting-only read across every player), this is a
+/// single-player probe that also carries the denormalized avg/obp/slg/ops
+/// StatsNormalizer already wrote, so the card never recomputes rates itself.
+/// </summary>
+public struct BattingSeasonLine
+{
+    public int Pa;
+    public int Ab;
+    public int H;
+    public int Doubles;
+    public int Triples;
+    public int Hr;
+    public int Bb;
+    public int So;
+    public int Rbi;
+    public int Sb;
+    public double Avg;
+    public double Obp;
+    public double Slg;
+    public double Ops;
+}
+
+/// <summary>One player's current-season Pitching_Stats row, rates included (12c-2 StatLineCard counterpart of <see cref="BattingSeasonLine"/>).</summary>
+public struct PitchingSeasonLine
+{
+    public int G;
+    public int Gs;
+    public int W;
+    public int L;
+    public int Sv;
+    public double Ip;
+    public double Era;
+    public double Whip;
+    public int So;
+    public int Bb;
+}
+
+/// <summary>
+/// One team's season W/L, tier-scoped (12c-3 StandingsCard) — the read
+/// recovered without a schema change per surface_the_sim.md §2: a team's
+/// record is exactly SUM(w)/SUM(l) over the Pitching_Stats rows of its
+/// CURRENTLY rostered players, since <c>LeagueSimulator</c> credits the
+/// decision to exactly one starter per macro game. Team identity/name
+/// resolves separately via <see cref="TeamRow"/> (<c>LoadTeamsByTier</c>);
+/// win pct and games-behind are UI presentation math, computed in C# after
+/// merging the two, not stored here.
+/// </summary>
+public struct TeamRecordRow
+{
+    public int TeamId;
+    public int Wins;
+    public int Losses;
+}
+
+/// <summary>
+/// One player's rank-row value for a league-leaders category (12c-3
+/// LeadersCard) — shared shape across all six leaderboards (HR/AVG/OPS
+/// batting, ERA/W/SO pitching) since every one is a (name, value) pair; the
+/// category's meaning (count vs. rate, higher-or-lower-is-better) lives in
+/// the query that produced the row, not in this DTO.
+/// </summary>
+public struct LeagueLeaderRow
+{
+    public string PlayerId;
+    public string FirstName;
+    public string LastName;
+    public double Value;
+}

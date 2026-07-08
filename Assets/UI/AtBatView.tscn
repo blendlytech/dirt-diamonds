@@ -163,3 +163,20 @@ layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
 theme_type_variation = &"AccentButton"
 text = "Swing"
+
+[node name="RevealOverlay" type="CenterContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="RevealChip" type="PanelContainer" parent="RevealOverlay"]
+layout_mode = 2
+theme_type_variation = &"TierChip"
+visible = false
+mouse_filter = 2
+
+[node name="RevealLabel" type="Label" parent="RevealOverlay/RevealChip"]
+layout_mode = 2
+theme_type_variation = &"RevealLabelDiamond"
+horizontal_alignment = 1
+mouse_filter = 2
+text = ""

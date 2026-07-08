@@ -30,6 +30,46 @@ public readonly struct AtBatSnapshot
 }
 
 /// <summary>
+/// One pitch's resolved report (Phase 12d) — the presentation hook's payload.
+/// Carries only facts <see cref="PitchChain.SimulatePa{TBatter,TPitcher}"/>
+/// already computed this iteration; nothing re-derived, nothing redrawn. The
+/// terminal in-play pitch's <see cref="PaOutcome"/> still travels the existing
+/// <see cref="IBatterPolicy.OnPaResolved"/> path — this DTO never duplicates it.
+/// </summary>
+public readonly struct PitchResult
+{
+    public readonly PitchClass Class;
+
+    /// <summary>The TRUE thrown type — the pre-pitch cue the batter saw may have been blurred.</summary>
+    public readonly PitchType Type;
+
+    /// <summary>The TRUE drawn location.</summary>
+    public readonly bool InZone;
+
+    public readonly bool BatterSwung;
+
+    /// <summary>Count AFTER this pitch.</summary>
+    public readonly byte Balls;
+    public readonly byte Strikes;
+
+    /// <summary>True on the terminal pitch of the PA (walk / strikeout / in-play).</summary>
+    public readonly bool PaEnded;
+
+    public PitchResult(
+        PitchClass pitchClass, PitchType type, bool inZone, bool batterSwung,
+        byte balls, byte strikes, bool paEnded)
+    {
+        Class = pitchClass;
+        Type = type;
+        InZone = inZone;
+        BatterSwung = batterSwung;
+        Balls = balls;
+        Strikes = strikes;
+        PaEnded = paEnded;
+    }
+}
+
+/// <summary>
 /// One NPC plate appearance for the attended-game play-by-play feed (the
 /// "render NPC PAs between the avatar's at-bats" gap) — a display name, not a
 /// player_id, since the feed is a UI-only convenience and never round-trips
@@ -87,6 +127,7 @@ public sealed class PlayerIntentBridge
     private readonly SemaphoreSlim _intentReady = new(0, 1);
     private readonly Queue<PaOutcome> _resolvedPas = new(8);
     private readonly Queue<NpcPaFeedEvent> _npcFeed = new(32);
+    private readonly Queue<PitchResult> _pitchResults = new(16);
 
     private AtBatSnapshot _snapshot;
     private bool _snapshotDirty;
@@ -147,6 +188,15 @@ public sealed class PlayerIntentBridge
         lock (_gate)
         {
             _npcFeed.Enqueue(evt);
+        }
+    }
+
+    /// <summary>Called by the batting policy's <see cref="IBatterPolicy.OnPitchResolved"/> hook, once per pitch.</summary>
+    internal void PublishPitchResult(in PitchResult result)
+    {
+        lock (_gate)
+        {
+            _pitchResults.Enqueue(result);
         }
     }
 
@@ -221,6 +271,21 @@ public sealed class PlayerIntentBridge
         }
     }
 
+    /// <summary>Dequeues one resolved pitch (the at-bat presentation's per-pitch reveal), if any.</summary>
+    public bool TryDequeuePitchResult(out PitchResult result)
+    {
+        lock (_gate)
+        {
+            if (_pitchResults.Count > 0)
+            {
+                result = _pitchResults.Dequeue();
+                return true;
+            }
+            result = default;
+            return false;
+        }
+    }
+
     /// <summary>Swing with a zone read: guessInZone is the player's in/out call for this pitch.</summary>
     public void SubmitSwing(double timingError, bool guessInZone) =>
         SubmitBatter(isSwing: true, timingError, guessInZone);
@@ -274,6 +339,7 @@ public sealed class PlayerIntentBridge
             _awaiting = AwaitKind.None;
             _resolvedPas.Clear();
             _npcFeed.Clear();
+            _pitchResults.Clear();
             while (_intentReady.CurrentCount > 0)
             {
                 _intentReady.Wait(0);
@@ -330,6 +396,8 @@ public struct InteractiveBatterPolicy : IBatterPolicy
             ? BatterIntent.Swing(timing, guessInZone)
             : BatterIntent.Take(guessInZone);
     }
+
+    public readonly void OnPitchResolved(in PitchResult result) => _bridge.PublishPitchResult(in result);
 
     public readonly void OnPaResolved(PaOutcome outcome) => _bridge.PublishPaResolved(outcome);
 }

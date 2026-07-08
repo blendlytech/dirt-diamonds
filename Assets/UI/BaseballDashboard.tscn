@@ -68,154 +68,241 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
-[node name="AtBatView" parent="Layout" instance=ExtResource("2_atbatview")]
+[node name="CenterSlot" type="VBoxContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="AtBatView" parent="Layout/CenterSlot" instance=ExtResource("2_atbatview")]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="CardsRow" type="HBoxContainer" parent="Layout"]
+[node name="RecapCard" type="PanelContainer" parent="Layout/CenterSlot"]
+layout_mode = 2
+visible = false
+theme_type_variation = &"Card"
+
+[node name="RecapLayout" type="VBoxContainer" parent="Layout/CenterSlot/RecapCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RecapHeading" type="Label" parent="Layout/CenterSlot/RecapCard/RecapLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Last Game"
+
+[node name="RecapLabel" type="Label" parent="Layout/CenterSlot/RecapCard/RecapLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="MeRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="ScoutingCard" type="PanelContainer" parent="Layout/CardsRow"]
+[node name="ScoutingCard" type="PanelContainer" parent="Layout/MeRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 3.0
 theme_type_variation = &"Card"
 
-[node name="ScoutingLayout" type="VBoxContainer" parent="Layout/CardsRow/ScoutingCard"]
+[node name="ScoutingLayout" type="VBoxContainer" parent="Layout/MeRow/ScoutingCard"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="ScoutingHeading" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout"]
+[node name="ScoutingHeading" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Scouting Report"
 
-[node name="OfpRow" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout"]
+[node name="OfpRow" type="HBoxContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="OfpLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow"]
+[node name="OfpLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/OfpRow"]
 layout_mode = 2
 theme_type_variation = &"MarqueeLabel"
 text = "OFP: —"
 
-[node name="TierChip" type="PanelContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow"]
+[node name="TierChip" type="PanelContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/OfpRow"]
 layout_mode = 2
 size_flags_vertical = 4
 theme_type_variation = &"TierChip"
 
-[node name="TierLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/OfpRow/TierChip"]
+[node name="TierLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/OfpRow/TierChip"]
 layout_mode = 2
 theme_type_variation = &"ChipLabel"
 text = "—"
 
-[node name="ToolsList" type="VBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout"]
+[node name="ToolsList" type="VBoxContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="ToolRow0" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow0" type="HBoxContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+[node name="NameLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+[node name="Bar" type="ProgressBar" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+[node name="GradeLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
 text = "— › —"
 
-[node name="ToolRow1" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow1" type="HBoxContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+[node name="NameLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+[node name="Bar" type="ProgressBar" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+[node name="GradeLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
 text = "— › —"
 
-[node name="ToolRow2" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow2" type="HBoxContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+[node name="NameLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+[node name="Bar" type="ProgressBar" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+[node name="GradeLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
 text = "— › —"
 
-[node name="ToolRow3" type="HBoxContainer" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList"]
+[node name="ToolRow3" type="HBoxContainer" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+[node name="NameLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
 text = "Tool"
 
-[node name="Bar" type="ProgressBar" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+[node name="Bar" type="ProgressBar" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 max_value = 100.0
 show_percentage = false
 
-[node name="GradeLabel" type="Label" parent="Layout/CardsRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+[node name="GradeLabel" type="Label" parent="Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
 layout_mode = 2
 custom_minimum_size = Vector2(140, 0)
 text = "— › —"
 
-[node name="DevCard" type="PanelContainer" parent="Layout/CardsRow"]
+[node name="DevCard" type="PanelContainer" parent="Layout/MeRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 2.0
 theme_type_variation = &"Card"
 
-[node name="DevLayout" type="VBoxContainer" parent="Layout/CardsRow/DevCard"]
+[node name="DevLayout" type="VBoxContainer" parent="Layout/MeRow/DevCard"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="DevHeading" type="Label" parent="Layout/CardsRow/DevCard/DevLayout"]
+[node name="DevHeading" type="Label" parent="Layout/MeRow/DevCard/DevLayout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Development"
 
-[node name="DevSummaryLabel" type="Label" parent="Layout/CardsRow/DevCard/DevLayout"]
+[node name="DevSummaryLabel" type="Label" parent="Layout/MeRow/DevCard/DevLayout"]
 layout_mode = 2
 autowrap_mode = 2
 text = "No offseason development yet."
 
-[node name="ScheduleScreen" parent="Layout/CardsRow" instance=ExtResource("4_scheduleplan")]
+[node name="StatLineCard" type="PanelContainer" parent="Layout/MeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+theme_type_variation = &"Card"
+
+[node name="StatLineLayout" type="VBoxContainer" parent="Layout/MeRow/StatLineCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StatLineHeading" type="Label" parent="Layout/MeRow/StatLineCard/StatLineLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Season Stats"
+
+[node name="StatLineLabel" type="Label" parent="Layout/MeRow/StatLineCard/StatLineLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No stats yet this season."
+
+[node name="LeagueRow" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StandingsCard" type="PanelContainer" parent="Layout/LeagueRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+theme_type_variation = &"Card"
+
+[node name="StandingsLayout" type="VBoxContainer" parent="Layout/LeagueRow/StandingsCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StandingsHeading" type="Label" parent="Layout/LeagueRow/StandingsCard/StandingsLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Standings"
+
+[node name="StandingsLabel" type="Label" parent="Layout/LeagueRow/StandingsCard/StandingsLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="LeadersCard" type="PanelContainer" parent="Layout/LeagueRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+theme_type_variation = &"Card"
+
+[node name="LeadersLayout" type="VBoxContainer" parent="Layout/LeagueRow/LeadersCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LeadersHeading" type="Label" parent="Layout/LeagueRow/LeadersCard/LeadersLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "League Leaders"
+
+[node name="LeadersLabel" type="Label" parent="Layout/LeagueRow/LeadersCard/LeadersLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ScheduleScreen" parent="Layout/LeagueRow" instance=ExtResource("4_scheduleplan")]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 2.0

@@ -243,6 +243,9 @@ public sealed partial class GameManager : Node
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
         Career.Availability = Absences;
+        // 12c review: an attended game's flush re-normalizes its tier's rate
+        // columns, so the post-game dashboard refresh never reads them stale.
+        Career.Normalizer = normalizer;
         // The real game pauses succession for the heir-reveal/choice UI;
         // headless/harness callers construct their own CareerManager and
         // never touch this flag, so their autopilot pick is unaffected.

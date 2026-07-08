@@ -219,6 +219,15 @@ public sealed class CareerManager
     public AvailabilityLedger? Availability;
 
     /// <summary>
+    /// Optional rate-denormalization hook (12c review): when set, every
+    /// attended game's flush is followed by a tier-scoped rate recompute, so
+    /// the post-game UI refresh never reads AVG/IP/ERA/WHIP one game stale
+    /// (the macro sim normalizes only on its own cycle flush). Null — every
+    /// harness path — leaves the flush behavior byte-identical.
+    /// </summary>
+    public StatsNormalizer? Normalizer;
+
+    /// <summary>
     /// True (default, headless/harness-safe): a fired retirement trigger
     /// hands off to the single best-rated eligible heir immediately via
     /// <see cref="RunSuccessionCheck"/>. False: a Succeeded outcome instead
@@ -1241,6 +1250,14 @@ public sealed class CareerManager
                 _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot,
                 ref batterPolicy, ref pitcherPolicy, ref _rng);
             _micro.FlushGame(_pending.SeasonYear, checked((int)_pending.AbsoluteDay));
+            // The flush wrote fresh counting stats for this tier; recompute
+            // its rate columns now (own batch, after — never inside — the
+            // flush batch) so the dashboard's post-game read isn't stale.
+            if (Normalizer is not null
+                && _baseball.TryGetTeamTier(_pending.HomeTeamId, out LeagueTier tier))
+            {
+                Normalizer.NormalizeSeason(_pending.SeasonYear, tier);
+            }
             _hasPending = false;
             return result;
         }

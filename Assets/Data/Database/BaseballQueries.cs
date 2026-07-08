@@ -263,6 +263,90 @@ public sealed class BaseballQueries
         "SELECT player_id, outs_recorded, er " +
         "FROM Pitching_Stats WHERE season_year = @seasonYear ORDER BY player_id;";
 
+    // Single-player, single-season stat-line probe (12c-2 StatLineCard). Rides
+    // the UNIQUE(player_id, season_year) index — a PK-shaped SEARCH, plan
+    // validated via the sqlite MCP (No Blind Queries). Rate columns (avg/obp/
+    // slg/ops, ip/era/whip) are whatever StatsNormalizer last wrote; the card
+    // does not recompute them.
+    private const string SqlSelectBattingSeasonLine =
+        "SELECT pa, ab, h, doubles, triples, hr, bb, so, rbi, sb, avg, obp, slg, ops " +
+        "FROM Batting_Stats WHERE player_id = @playerId AND season_year = @seasonYear;";
+
+    private const string SqlSelectPitchingSeasonLine =
+        "SELECT g, gs, w, l, sv, ip, era, whip, so, bb " +
+        "FROM Pitching_Stats WHERE player_id = @playerId AND season_year = @seasonYear;";
+
+    // 12c-3 StandingsCard (surface_the_sim.md §2/§5): a team's record recovered
+    // without new storage — SUM(w)/SUM(l) over the Pitching_Stats rows of its
+    // CURRENTLY rostered players (the NormalizeBattingRatesTier "by current
+    // team" precedent). LEFT JOIN Pitching_Stats so a team with no decisions
+    // yet still reads a 0-0 row rather than vanishing from the tier. Plan
+    // validated via the sqlite MCP against the live save (tier 0): SCAN
+    // Players USING INDEX idx_players_team, Team_Tiers PK probe, Pitching_Stats
+    // UNIQUE-index probe on the LEFT JOIN.
+    private const string SqlSelectTeamRecordsByTier =
+        "SELECT p.team_id, COALESCE(SUM(ps.w),0), COALESCE(SUM(ps.l),0) " +
+        "FROM Players AS p " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "LEFT JOIN Pitching_Stats AS ps ON ps.player_id = p.player_id AND ps.season_year = @seasonYear " +
+        "WHERE tt.tier = @tier GROUP BY p.team_id;";
+
+    // 12c-3 LeadersCard (surface_the_sim.md §4/§5): six tier-scoped top-N
+    // leaderboards, one query per category — the ORDER BY column can't be a
+    // bound parameter, so each stat gets its own compile-time-constant SQL
+    // rather than one query with a dynamic column name (No Blind Queries would
+    // have nothing to validate against a built string). All six widen the join
+    // to first_name/last_name so the card never needs a second round-trip per
+    // row. Rate categories (AVG/OPS/ERA) carry a qualifying floor (min PA / min
+    // outs) so a tiny sample can't "lead the league" — the doc's disclosed
+    // correctness detail. Plans validated via the sqlite MCP against the live
+    // save (tier 0, season 2026): all six full-scan Batting_Stats/
+    // Pitching_Stats (no index on hr/avg/era/w/so — the LoadSeasonBattingLines
+    // "deliberate full scan, once per cold read" precedent; this rides the
+    // same RefreshScoutingCard day-advance cadence, never per-frame) plus the
+    // Players/Team_Tiers PK probes and a temp b-tree for the ORDER BY.
+    private const string SqlSelectBattingHrLeaders =
+        "SELECT bs.player_id, p.first_name, p.last_name, bs.hr " +
+        "FROM Batting_Stats AS bs JOIN Players AS p ON p.player_id = bs.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE bs.season_year = @seasonYear AND tt.tier = @tier " +
+        "ORDER BY bs.hr DESC LIMIT @n;";
+
+    private const string SqlSelectBattingAvgLeaders =
+        "SELECT bs.player_id, p.first_name, p.last_name, bs.avg " +
+        "FROM Batting_Stats AS bs JOIN Players AS p ON p.player_id = bs.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE bs.season_year = @seasonYear AND tt.tier = @tier AND bs.pa >= @minPa " +
+        "ORDER BY bs.avg DESC LIMIT @n;";
+
+    private const string SqlSelectBattingOpsLeaders =
+        "SELECT bs.player_id, p.first_name, p.last_name, bs.ops " +
+        "FROM Batting_Stats AS bs JOIN Players AS p ON p.player_id = bs.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE bs.season_year = @seasonYear AND tt.tier = @tier AND bs.pa >= @minPa " +
+        "ORDER BY bs.ops DESC LIMIT @n;";
+
+    private const string SqlSelectPitchingEraLeaders =
+        "SELECT ps.player_id, p.first_name, p.last_name, ps.era " +
+        "FROM Pitching_Stats AS ps JOIN Players AS p ON p.player_id = ps.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE ps.season_year = @seasonYear AND tt.tier = @tier AND ps.outs_recorded >= @minOuts " +
+        "ORDER BY ps.era ASC LIMIT @n;";
+
+    private const string SqlSelectPitchingWinLeaders =
+        "SELECT ps.player_id, p.first_name, p.last_name, ps.w " +
+        "FROM Pitching_Stats AS ps JOIN Players AS p ON p.player_id = ps.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE ps.season_year = @seasonYear AND tt.tier = @tier " +
+        "ORDER BY ps.w DESC LIMIT @n;";
+
+    private const string SqlSelectPitchingSoLeaders =
+        "SELECT ps.player_id, p.first_name, p.last_name, ps.so " +
+        "FROM Pitching_Stats AS ps JOIN Players AS p ON p.player_id = ps.player_id " +
+        "JOIN Team_Tiers AS tt ON tt.team_id = p.team_id " +
+        "WHERE ps.season_year = @seasonYear AND tt.tier = @tier " +
+        "ORDER BY ps.so DESC LIMIT @n;";
+
     private const string SqlLeagueBattingTotals =
         "SELECT COALESCE(SUM(pa), 0), COALESCE(SUM(ab), 0), COALESCE(SUM(h), 0), COALESCE(SUM(doubles), 0), " +
         "COALESCE(SUM(triples), 0), COALESCE(SUM(hr), 0), COALESCE(SUM(bb), 0), COALESCE(SUM(so), 0), " +
@@ -328,6 +412,15 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _leaguePitchingTotals;
     private readonly SqliteCommand _selectSeasonBattingLines;
     private readonly SqliteCommand _selectSeasonPitchingLines;
+    private readonly SqliteCommand _selectBattingSeasonLine;
+    private readonly SqliteCommand _selectPitchingSeasonLine;
+    private readonly SqliteCommand _selectTeamRecordsByTier;
+    private readonly SqliteCommand _selectBattingHrLeaders;
+    private readonly SqliteCommand _selectBattingAvgLeaders;
+    private readonly SqliteCommand _selectBattingOpsLeaders;
+    private readonly SqliteCommand _selectPitchingEraLeaders;
+    private readonly SqliteCommand _selectPitchingWinLeaders;
+    private readonly SqliteCommand _selectPitchingSoLeaders;
 
     public BaseballQueries(DatabaseManager db)
     {
@@ -413,6 +506,30 @@ public sealed class BaseballQueries
 
         _selectSeasonBattingLines = Acquire(SqlSelectSeasonBattingLines, ("@seasonYear", SqliteType.Integer));
         _selectSeasonPitchingLines = Acquire(SqlSelectSeasonPitchingLines, ("@seasonYear", SqliteType.Integer));
+
+        _selectBattingSeasonLine = Acquire(SqlSelectBattingSeasonLine,
+            ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer));
+        _selectPitchingSeasonLine = Acquire(SqlSelectPitchingSeasonLine,
+            ("@playerId", SqliteType.Text), ("@seasonYear", SqliteType.Integer));
+
+        _selectTeamRecordsByTier = Acquire(SqlSelectTeamRecordsByTier,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer));
+
+        _selectBattingHrLeaders = Acquire(SqlSelectBattingHrLeaders,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer), ("@n", SqliteType.Integer));
+        _selectBattingAvgLeaders = Acquire(SqlSelectBattingAvgLeaders,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer),
+            ("@minPa", SqliteType.Integer), ("@n", SqliteType.Integer));
+        _selectBattingOpsLeaders = Acquire(SqlSelectBattingOpsLeaders,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer),
+            ("@minPa", SqliteType.Integer), ("@n", SqliteType.Integer));
+        _selectPitchingEraLeaders = Acquire(SqlSelectPitchingEraLeaders,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer),
+            ("@minOuts", SqliteType.Integer), ("@n", SqliteType.Integer));
+        _selectPitchingWinLeaders = Acquire(SqlSelectPitchingWinLeaders,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer), ("@n", SqliteType.Integer));
+        _selectPitchingSoLeaders = Acquire(SqlSelectPitchingSoLeaders,
+            ("@seasonYear", SqliteType.Integer), ("@tier", SqliteType.Integer), ("@n", SqliteType.Integer));
 
         _normalizeBattingRates = Acquire(SqlNormalizeBattingRates, ("@seasonYear", SqliteType.Integer));
         _normalizePitchingRates = Acquire(SqlNormalizePitchingRates, ("@seasonYear", SqliteType.Integer));
@@ -947,6 +1064,188 @@ public sealed class BaseballQueries
             });
         }
         return destination.Count;
+    }
+
+    /// <summary>
+    /// One player's current-season Batting_Stats row — false when they have no
+    /// row yet (hasn't played this season). Single-row probe (12c-2
+    /// StatLineCard); unlike <see cref="LoadSeasonBattingLines"/> this is not a
+    /// full-season scan.
+    /// </summary>
+    public bool TryGetBattingSeasonLine(string playerId, int seasonYear, out BattingSeasonLine line)
+    {
+        SqliteParameterCollection p = _selectBattingSeasonLine.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@seasonYear"].Value = seasonYear;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectBattingSeasonLine);
+        if (!reader.Read())
+        {
+            line = default;
+            return false;
+        }
+        line = new BattingSeasonLine
+        {
+            Pa = reader.GetInt32(0),
+            Ab = reader.GetInt32(1),
+            H = reader.GetInt32(2),
+            Doubles = reader.GetInt32(3),
+            Triples = reader.GetInt32(4),
+            Hr = reader.GetInt32(5),
+            Bb = reader.GetInt32(6),
+            So = reader.GetInt32(7),
+            Rbi = reader.GetInt32(8),
+            Sb = reader.GetInt32(9),
+            Avg = reader.GetDouble(10),
+            Obp = reader.GetDouble(11),
+            Slg = reader.GetDouble(12),
+            Ops = reader.GetDouble(13),
+        };
+        return true;
+    }
+
+    /// <summary>Pitching counterpart of <see cref="TryGetBattingSeasonLine"/> (12c-2 StatLineCard).</summary>
+    public bool TryGetPitchingSeasonLine(string playerId, int seasonYear, out PitchingSeasonLine line)
+    {
+        SqliteParameterCollection p = _selectPitchingSeasonLine.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@seasonYear"].Value = seasonYear;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectPitchingSeasonLine);
+        if (!reader.Read())
+        {
+            line = default;
+            return false;
+        }
+        line = new PitchingSeasonLine
+        {
+            G = reader.GetInt32(0),
+            Gs = reader.GetInt32(1),
+            W = reader.GetInt32(2),
+            L = reader.GetInt32(3),
+            Sv = reader.GetInt32(4),
+            Ip = reader.GetDouble(5),
+            Era = reader.GetDouble(6),
+            Whip = reader.GetDouble(7),
+            So = reader.GetInt32(8),
+            Bb = reader.GetInt32(9),
+        };
+        return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Standings & leaders (12c-3 StandingsCard/LeadersCard)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// One ladder tier's team W/L for a season — a team with zero decisions
+    /// still returns a 0-0 row (LEFT JOIN), so a fresh tier never silently
+    /// drops a team from the standings. Team identity resolves separately via
+    /// <see cref="LoadTeamsByTier"/>; the caller merges by TeamId.
+    /// </summary>
+    public int LoadTeamRecords(int seasonYear, LeagueTier tier, List<TeamRecordRow> destination)
+    {
+        destination.Clear();
+        SqliteParameterCollection p = _selectTeamRecordsByTier.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectTeamRecordsByTier);
+        while (reader.Read())
+        {
+            destination.Add(new TeamRecordRow
+            {
+                TeamId = reader.GetInt32(0),
+                Wins = reader.GetInt32(1),
+                Losses = reader.GetInt32(2),
+            });
+        }
+        return destination.Count;
+    }
+
+    private static int ReadLeaderRows(SqliteDataReader reader, List<LeagueLeaderRow> destination)
+    {
+        destination.Clear();
+        while (reader.Read())
+        {
+            destination.Add(new LeagueLeaderRow
+            {
+                PlayerId = reader.GetString(0),
+                FirstName = reader.GetString(1),
+                LastName = reader.GetString(2),
+                // GetDouble coerces the underlying INTEGER columns (hr/w/so)
+                // fine at the SQLite C API level — one reader shape serves
+                // both count and rate categories.
+                Value = reader.GetDouble(3),
+            });
+        }
+        return destination.Count;
+    }
+
+    /// <summary>Top-N home-run leaders, tier-scoped for one season.</summary>
+    public int LoadHrLeaders(int seasonYear, LeagueTier tier, int n, List<LeagueLeaderRow> destination)
+    {
+        SqliteParameterCollection p = _selectBattingHrLeaders.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        p["@n"].Value = n;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectBattingHrLeaders);
+        return ReadLeaderRows(reader, destination);
+    }
+
+    /// <summary>Top-N batting-average leaders (qualified by minPa), tier-scoped for one season.</summary>
+    public int LoadAvgLeaders(int seasonYear, LeagueTier tier, int minPa, int n, List<LeagueLeaderRow> destination)
+    {
+        SqliteParameterCollection p = _selectBattingAvgLeaders.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        p["@minPa"].Value = minPa;
+        p["@n"].Value = n;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectBattingAvgLeaders);
+        return ReadLeaderRows(reader, destination);
+    }
+
+    /// <summary>Top-N OPS leaders (qualified by minPa), tier-scoped for one season.</summary>
+    public int LoadOpsLeaders(int seasonYear, LeagueTier tier, int minPa, int n, List<LeagueLeaderRow> destination)
+    {
+        SqliteParameterCollection p = _selectBattingOpsLeaders.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        p["@minPa"].Value = minPa;
+        p["@n"].Value = n;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectBattingOpsLeaders);
+        return ReadLeaderRows(reader, destination);
+    }
+
+    /// <summary>Top-N ERA leaders (lowest first, qualified by minOuts), tier-scoped for one season.</summary>
+    public int LoadEraLeaders(int seasonYear, LeagueTier tier, int minOuts, int n, List<LeagueLeaderRow> destination)
+    {
+        SqliteParameterCollection p = _selectPitchingEraLeaders.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        p["@minOuts"].Value = minOuts;
+        p["@n"].Value = n;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectPitchingEraLeaders);
+        return ReadLeaderRows(reader, destination);
+    }
+
+    /// <summary>Top-N pitching-win leaders, tier-scoped for one season.</summary>
+    public int LoadWinLeaders(int seasonYear, LeagueTier tier, int n, List<LeagueLeaderRow> destination)
+    {
+        SqliteParameterCollection p = _selectPitchingWinLeaders.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        p["@n"].Value = n;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectPitchingWinLeaders);
+        return ReadLeaderRows(reader, destination);
+    }
+
+    /// <summary>Top-N pitching-strikeout leaders, tier-scoped for one season.</summary>
+    public int LoadStrikeoutLeaders(int seasonYear, LeagueTier tier, int n, List<LeagueLeaderRow> destination)
+    {
+        SqliteParameterCollection p = _selectPitchingSoLeaders.Parameters;
+        p["@seasonYear"].Value = seasonYear;
+        p["@tier"].Value = (int)tier;
+        p["@n"].Value = n;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectPitchingSoLeaders);
+        return ReadLeaderRows(reader, destination);
     }
 
     // ------------------------------------------------------------------
