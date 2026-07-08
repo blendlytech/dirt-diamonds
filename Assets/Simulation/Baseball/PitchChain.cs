@@ -170,37 +170,29 @@ public readonly struct PitchLook
     }
 }
 
-/// <summary>How a batter answers a pitch (v4). Neutral = play the ratings (§6.1 zero input).</summary>
+/// <summary>How a batter answers a pitch. Neutral = play the ratings (§6.1 zero input).</summary>
 public enum BatterIntentKind : byte
 {
     Neutral,
-    Take,
-    Swing,
 
     /// <summary>
     /// The "Read the Pitch" input (at_bat_read_input_model.md): the player submits
     /// a guessed type + a 3×3 zone cell + an approach dial, and the swing itself is
-    /// emergent. Only this branch of <see cref="PitchChain.SimulatePa"/> runs the new
-    /// belief/swing model — Neutral/Take/Swing stay byte-identical (Invariant N).
+    /// emergent. Only this branch of <see cref="PitchChain.SimulatePa"/> runs the
+    /// belief/swing model — Neutral stays byte-identical (Invariant N).
     /// </summary>
     Read,
 }
 
 /// <summary>
-/// One pitch worth of raw batter intent. The chain resolves the zone guess
-/// against the actual drawn location and maps the result through
-/// <see cref="PlayerInputModel"/>; a Neutral intent bypasses the mapping
-/// entirely so the §7 consistency identity holds bit-exactly.
+/// One pitch worth of raw batter intent. The chain resolves the read against the
+/// actual drawn location on the <see cref="BatterIntentKind.Read"/> branch; a
+/// Neutral intent (default) bypasses it entirely so the §7 consistency identity
+/// holds bit-exactly.
 /// </summary>
 public readonly struct BatterIntent
 {
     public readonly BatterIntentKind Kind;
-
-    /// <summary>Signed swing timing error τ ∈ [-1, +1]; meaningful only when Kind == Swing.</summary>
-    public readonly double Timing;
-
-    /// <summary>The zone read: true = "this one's in the zone".</summary>
-    public readonly bool GuessInZone;
 
     // --- Kind == Read fields (at_bat_read_input_model.md §2) --------------
     // All default to zero so `default` stays a Neutral intent (Invariant N).
@@ -225,27 +217,11 @@ public readonly struct BatterIntent
     public readonly bool ScriptedInOutOk;
     public readonly double ScriptedLocAcc;
 
-    private BatterIntent(BatterIntentKind kind, double timing, bool guessInZone)
-    {
-        Kind = kind;
-        Timing = timing;
-        GuessInZone = guessInZone;
-        GuessType = default;
-        GuessCell = default;
-        Approach = default;
-        ReadIsScripted = default;
-        ScriptedTypeOk = default;
-        ScriptedInOutOk = default;
-        ScriptedLocAcc = default;
-    }
-
     private BatterIntent(
         PitchType guessType, byte guessCell, double approach,
         bool readIsScripted, bool scriptedTypeOk, bool scriptedInOutOk, double scriptedLocAcc)
     {
         Kind = BatterIntentKind.Read;
-        Timing = 0.0;
-        GuessInZone = guessCell < ReadInputModel.OutOfZoneCell;
         GuessType = guessType;
         GuessCell = guessCell;
         Approach = approach;
@@ -256,12 +232,6 @@ public readonly struct BatterIntent
     }
 
     public static BatterIntent Neutral => default;
-
-    public static BatterIntent Take(bool guessInZone) =>
-        new(BatterIntentKind.Take, 0.0, guessInZone);
-
-    public static BatterIntent Swing(double timing, bool guessInZone) =>
-        new(BatterIntentKind.Swing, timing, guessInZone);
 
     /// <summary>A "Read the Pitch" intent: guessed type + zone cell (or "expect a ball") + approach dial.</summary>
     public static BatterIntent Read(PitchType guessType, byte guessCell, double approach) =>
@@ -669,15 +639,16 @@ public static class PitchChain
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Plays one contested PA pitch-by-pitch (v4). Per pitch: the pitcher
-    /// policy calls (or the tendency model draws) a type and a zone target;
-    /// an actual in/out-of-zone location is drawn; the batter policy answers a
-    /// blurred type cue with a swing/take + zone guess; the read resolves
-    /// against the actual location and maps through <see cref="PlayerInputModel"/>;
-    /// finally the pitch class is drawn from the LOCATION-CONDITIONED rates —
-    /// an exact mixture of the (input-perturbed) §5 rates, so neutral play
-    /// still reproduces the macro anchor by construction (§7). Charges every
-    /// pitch to the pitcher's fatigue clock. Zero heap allocation.
+    /// Plays one contested PA pitch-by-pitch. Per pitch: the pitcher policy
+    /// calls (or the tendency model draws) a type and a zone target; an actual
+    /// in/out-of-zone location is drawn; the batter policy answers a blurred
+    /// type cue with either a Neutral (§7 anchor) or a Read intent — the
+    /// latter resolves via <see cref="ReadInputModel"/> into an emergent
+    /// swing/take, gating the reachable pitch class; a Neutral intent instead
+    /// draws the pitch class from the LOCATION-CONDITIONED rates — an exact
+    /// mixture of the §5 rates, so neutral play still reproduces the macro
+    /// anchor by construction (§7). Charges every pitch to the pitcher's
+    /// fatigue clock. Zero heap allocation.
     /// </summary>
     /// <param name="anchorProbabilities">p* — the 7-way macro distribution this PA is pinned to.</param>
     public static PaOutcome SimulatePa<TBatter, TPitcher>(
@@ -836,23 +807,9 @@ public static class PitchChain
                 return DrawBallInPlay(anchorProbabilities, q, ref rng);
             }
 
-            BatterPitchInput input;
-            switch (intent.Kind)
-            {
-                case BatterIntentKind.Take:
-                    input = PlayerInputModel.FromTake(intent.GuessInZone == inZone);
-                    break;
-                case BatterIntentKind.Swing:
-                    input = PlayerInputModel.FromSwing(
-                        intent.Timing, intent.GuessInZone == inZone,
-                        PlayerInputModel.PerceivedStuff(
-                            fatigue.EffectiveRatings().Stuff,
-                            matchup.Arsenal.Velocity(type), matchup.Arsenal.Movement(type)));
-                    break;
-                default: // Neutral — the §7 anchor: identically zero input.
-                    input = default;
-                    break;
-            }
+            // Neutral — the only Kind left at this point (Read already returned
+            // above) — the §7 anchor: identically zero input.
+            BatterPitchInput input = default;
 
             // §6 discipline edge shifts per-pitch mass between balls and
             // strikes, renormalized — a zero edge leaves the neutral rates
@@ -898,7 +855,8 @@ public static class PitchChain
             pitchCount++;
             fatigue.AddPitch();
 
-            bool swung = intent.Kind == BatterIntentKind.Swing;
+            // Neutral never swings — the §7 anchor: a called pitch is never batter-initiated.
+            const bool swung = false;
             double draw = rng.NextDouble();
             if (draw < conditionedBall)
             {
@@ -980,75 +938,6 @@ public static class PitchChain
         }
         return PaOutcome.HomeRun;
     }
-}
-
-/// <summary>
-/// §6 mapping from the raw player intent the UI captures (swing timing error
-/// and a zone read) to the two scalars the pitch chain consumes. Lives sim-side
-/// so the UI stays a dumb signal emitter; the neutral policy bypasses this
-/// entirely (its input is identically zero). All constants are feel knobs
-/// (§11 tuning step 4).
-/// </summary>
-public static class PlayerInputModel
-{
-    /// <summary>Base half-width of the barrel window in normalized timing units.</summary>
-    public const double TimingToleranceBase = 0.35;
-
-    /// <summary>How much a 100-stuff pitcher narrows the barrel window (§6: nastier stuff, smaller window).</summary>
-    public const double TimingToleranceStuffNarrowing = 0.40;
-
-    /// <summary>A correct zone read widens the timing tolerance (§6).</summary>
-    public const double CorrectReadToleranceBonus = 1.5;
-
-    /// <summary>Discipline edge granted by a correct zone read.</summary>
-    public const double CorrectReadDisciplineEdge = 0.25;
-
-    /// <summary>Discipline penalty for chasing on a wrong read.</summary>
-    public const double WrongReadDisciplineEdge = -0.25;
-
-    /// <summary>
-    /// Swing: signed timing error τ ∈ [-1, +1] maps to contact quality
-    /// q = 1 − (τ/τ_tol)², clamped — peaked at on-time, negative when badly
-    /// mistimed. τ_tol narrows as effective pitcher stuff rises.
-    /// </summary>
-    public static BatterPitchInput FromSwing(double timingError, bool zoneReadCorrect, byte effectivePitcherStuff)
-    {
-        double tolerance = TimingToleranceBase
-            * (1.0 - TimingToleranceStuffNarrowing * Math.Max(0, effectivePitcherStuff - 50) / 50.0);
-        if (zoneReadCorrect)
-        {
-            tolerance *= CorrectReadToleranceBonus;
-        }
-        double normalized = timingError / tolerance;
-        double quality = Math.Clamp(1.0 - normalized * normalized, -1.0, 1.0);
-        double edge = zoneReadCorrect ? CorrectReadDisciplineEdge : WrongReadDisciplineEdge;
-        return new BatterPitchInput(edge, quality);
-    }
-
-    /// <summary>Take: no contact quality in play; discipline edge from the read.</summary>
-    public static BatterPitchInput FromTake(bool zoneReadCorrect) =>
-        new(zoneReadCorrect ? CorrectReadDisciplineEdge : WrongReadDisciplineEdge, 0.0);
-
-    /// <summary>Weight of pitch-type velocity above 50 in the perceived-stuff blend (v4).</summary>
-    public const double PerceivedStuffVelocityWeight = 0.30;
-
-    /// <summary>Weight of pitch-type movement above 50 in the perceived-stuff blend (v4).</summary>
-    public const double PerceivedStuffMovementWeight = 0.20;
-
-    /// <summary>
-    /// v4: the stuff rating the timing window is judged against, per pitch —
-    /// the pitcher's (fatigue-adjusted) stuff sharpened or dulled by the
-    /// thrown type's velocity and movement. At a 50/50 pitch this is exactly
-    /// the effective stuff, so pre-v4 feel is the league-average case.
-    /// </summary>
-    public static byte PerceivedStuff(byte effectiveStuff, byte velocity, byte movement) =>
-        (byte)Math.Clamp(
-            (int)Math.Round(
-                effectiveStuff
-                + PerceivedStuffVelocityWeight * (velocity - 50)
-                + PerceivedStuffMovementWeight * (movement - 50),
-                MidpointRounding.AwayFromZero),
-            0, 100);
 }
 
 /// <summary>

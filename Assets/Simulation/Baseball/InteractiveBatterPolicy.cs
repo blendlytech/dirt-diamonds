@@ -154,9 +154,9 @@ public sealed class PlayerIntentBridge
     private AtBatSnapshot _snapshot;
     private bool _snapshotDirty;
     private AwaitKind _awaiting;
-    private bool _intentIsSwing;
-    private double _intentTiming;
-    private bool _intentGuessInZone;
+    private PitchType _intentGuessType;
+    private byte _intentGuessCell;
+    private double _intentApproach;
     private PitchType _intentPitchType;
     private bool _intentTargetInZone;
     private bool _cancelled;
@@ -167,19 +167,20 @@ public sealed class PlayerIntentBridge
 
     /// <summary>
     /// Publishes the pre-pitch snapshot and blocks until the UI submits a
-    /// swing/take + zone guess (or <see cref="Cancel"/> fires — surfaced as
-    /// <see cref="OperationCanceledException"/> so the game unwinds unflushed).
+    /// "Read the Pitch" guess (type + zone cell + approach dial), or
+    /// <see cref="Cancel"/> fires — surfaced as
+    /// <see cref="OperationCanceledException"/> so the game unwinds unflushed.
     /// </summary>
-    internal void AwaitIntent(in AtBatSnapshot snapshot, out bool isSwing, out double timing, out bool guessInZone)
+    internal void AwaitIntent(in AtBatSnapshot snapshot, out PitchType guessType, out byte guessCell, out double approach)
     {
         BeginAwait(in snapshot, AwaitKind.BatterIntent);
         _intentReady.Wait();
         lock (_gate)
         {
             ThrowIfCancelled();
-            isSwing = _intentIsSwing;
-            timing = _intentTiming;
-            guessInZone = _intentGuessInZone;
+            guessType = _intentGuessType;
+            guessCell = _intentGuessCell;
+            approach = _intentApproach;
         }
     }
 
@@ -308,11 +309,29 @@ public sealed class PlayerIntentBridge
         }
     }
 
-    /// <summary>Swing with a zone read: guessInZone is the player's in/out call for this pitch.</summary>
-    public void SubmitSwing(double timingError, bool guessInZone) =>
-        SubmitBatter(isSwing: true, timingError, guessInZone);
-
-    public void SubmitTake(bool guessInZone) => SubmitBatter(isSwing: false, 0.0, guessInZone);
+    /// <summary>
+    /// Submits the "Read the Pitch" guess for the pending pitch: a guessed
+    /// type, a guessed 3×3 zone cell (or <see cref="ReadInputModel.OutOfZoneCell"/>
+    /// for "expect a ball"), and the approach dial τ_appr ∈ [-1, +1]. The swing
+    /// itself is emergent — decided sim-side from the read and the avatar's ratings.
+    /// </summary>
+    public void SubmitRead(PitchType guessType, byte guessCell, double approach)
+    {
+        lock (_gate)
+        {
+            if (_awaiting != AwaitKind.BatterIntent || _cancelled)
+            {
+                return; // stale click — no pitch is pending
+            }
+            // Consumed: a second click before the sim wakes must not release
+            // the semaphore twice and pre-answer the NEXT pitch.
+            _awaiting = AwaitKind.None;
+            _intentGuessType = guessType;
+            _intentGuessCell = guessCell;
+            _intentApproach = Math.Clamp(approach, -1.0, 1.0);
+            _intentReady.Release();
+        }
+    }
 
     /// <summary>Pitch call while the human is on the mound: pitch type + aim in/out of the zone.</summary>
     public void SubmitPitchCall(PitchType type, bool targetInZone)
@@ -369,32 +388,15 @@ public sealed class PlayerIntentBridge
         }
     }
 
-    private void SubmitBatter(bool isSwing, double timingError, bool guessInZone)
-    {
-        lock (_gate)
-        {
-            if (_awaiting != AwaitKind.BatterIntent || _cancelled)
-            {
-                return; // stale click — no pitch is pending
-            }
-            // Consumed: a second click before the sim wakes must not release
-            // the semaphore twice and pre-answer the NEXT pitch.
-            _awaiting = AwaitKind.None;
-            _intentIsSwing = isSwing;
-            _intentTiming = Math.Clamp(timingError, -1.0, 1.0);
-            _intentGuessInZone = guessInZone;
-            _intentReady.Release();
-        }
-    }
 }
 
 /// <summary>
-/// The human batting policy: forwards each pending pitch — count plus the v4
+/// The human batting policy: forwards each pending pitch — count plus the
 /// look (blurred type cue + scouting zone probability) — to the UI through a
-/// <see cref="PlayerIntentBridge"/>, blocks for the player's swing/take + zone
-/// guess, and hands the raw intent to the chain, which resolves the guess
-/// against the actual drawn location (the real zone-read minigame; the Phase 5
-/// coin flip is gone).
+/// <see cref="PlayerIntentBridge"/>, blocks for the player's "Read the Pitch"
+/// guess (type + zone cell + approach dial), and hands it to the chain as a
+/// Read intent, which resolves the guess against the actual drawn location and
+/// lets the swing emerge from the read (at_bat_read_input_model.md §2/§3).
 /// </summary>
 public struct InteractiveBatterPolicy : IBatterPolicy
 {
@@ -413,10 +415,8 @@ public struct InteractiveBatterPolicy : IBatterPolicy
     {
         _bridge.AwaitIntent(
             new AtBatSnapshot(in _context, count.Balls, count.Strikes, in look, isPitching: false),
-            out bool isSwing, out double timing, out bool guessInZone);
-        return isSwing
-            ? BatterIntent.Swing(timing, guessInZone)
-            : BatterIntent.Take(guessInZone);
+            out PitchType guessType, out byte guessCell, out double approach);
+        return BatterIntent.Read(guessType, guessCell, approach);
     }
 
     public readonly void OnPitchResolved(in PitchResult result) => _bridge.PublishPitchResult(in result);

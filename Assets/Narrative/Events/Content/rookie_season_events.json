@@ -1,0 +1,373 @@
+{
+  "//": "Rookie-season texture batch, Sonnet 5. Closes the gap Fable 5's Phase-12e review flagged: a fresh avatar (CareerManager.StartingAge 19, StartingFunds exactly 500, recklessness/detection_risk 0, health_ceiling 100, baseball_interest 100) satisfies zero prerequisites in core_events.json/career_arc_events.json/marriage_and_family_events.json for its first two full seasons -- every existing batch is either crime/PED-reactive (needs recklessness>75 or detection_risk thresholds only hustles raise) or age-gated past 20-21. This batch is the low-stakes clubhouse/coach/homesickness/paycheck content that gives that dead stretch a pulse. scope:'avatar' throughout (not 'any') is deliberate: it restricts evaluation to the single played character instead of diluting fire chances across every rostered NPC, the same call marriage_and_family_events.json already made for personal-arc content. rookie_settled (set once, weight 0.3, by clubhouse_welcome) is the entry gate every other event here reads -- nothing else in this batch can fire before it. cashed_first_check -> spent_the_check/frugal_rookie -> splurge_callback/frugal_callback is a two-step paycheck cascade, the same min_days_since-paced pattern as core_events.json's bribe->shakedown and marriage_and_family_events.json's married->expecting, just paced in weeks instead of years. Every set_flag here is read by at least one prerequisite (several self-referentially, the documented once-ever idiom) -- no orphans, no dead-end forward hooks, fully self-contained per check_event_graph_integrity #2/#3. Disclosed limitations: (1) in_a_slump/on_a_heater are flavor-only -- ConditionEvaluator has no read access to recent PA outcomes, so these fire on weight/cooldown, not actual performance; a real hot/cold streak field would need a new poll column. (2) No 'interest' consequences anywhere in this batch -- the avatar's baseball_interest starts at the 100 ceiling (CareerManager avatar creation), so any interest delta on an avatar-scope event clamps to a no-op; that writer stays reserved for the heir-interest content backyard_catch/benched_for_video_games already own.",
+  "events": [
+    {
+      "id": "clubhouse_welcome",
+      "scope": "avatar",
+      "weight": 0.3,
+      "cooldown_days": 400,
+      "contact": "coach_reyes",
+      "prompt": "Coach Reyes walks you to an empty locker stall in the corner of the clubhouse. 'Welcome to the show, kid. Everybody starts here.'",
+      "prerequisites": [
+        { "flag_inactive": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "make_yourself_at_home",
+          "autopilot_weight": 2,
+          "label": "Make yourself at home",
+          "consequences": [
+            { "type": "set_flag", "flag": "rookie_settled" },
+            { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" },
+            { "type": "stress", "amount": -5 }
+          ]
+        },
+        {
+          "id": "keep_your_head_down",
+          "autopilot_weight": 1,
+          "label": "Keep your head down",
+          "consequences": [
+            { "type": "set_flag", "flag": "rookie_settled" },
+            { "type": "stress", "amount": -2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playbook_hazing",
+      "scope": "avatar",
+      "weight": 0.2,
+      "cooldown_days": 400,
+      "contact": "coach_reyes",
+      "prompt": "The veterans corner you after practice with a boombox and a very specific playlist. Rookie karaoke is apparently not optional.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled", "min_days_since": 3 },
+        { "flag_inactive": "survived_hazing" }
+      ],
+      "choices": [
+        {
+          "id": "play_along",
+          "autopilot_weight": 3,
+          "label": "Play along",
+          "consequences": [
+            { "type": "set_flag", "flag": "survived_hazing" },
+            { "type": "funds", "amount": -50 },
+            { "type": "relationship", "kind": "friend", "affinity": 15, "target": "teammate" },
+            { "type": "stress", "amount": -5 }
+          ]
+        },
+        {
+          "id": "tough_it_out",
+          "autopilot_weight": 1,
+          "label": "Refuse and tough it out",
+          "consequences": [
+            { "type": "set_flag", "flag": "survived_hazing" },
+            { "type": "stress", "amount": 10 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "homesick",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 45,
+      "contact": "family_mom",
+      "prompt": "Another motel room, another town you can't quite place on a map. For a second all you want is your own bed and your mom's cooking.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "call_home",
+          "autopilot_weight": 2,
+          "label": "Call home",
+          "consequences": [
+            { "type": "stress", "amount": -15 }
+          ]
+        },
+        {
+          "id": "push_through",
+          "autopilot_weight": 1,
+          "label": "Push through it",
+          "consequences": [
+            { "type": "stress", "amount": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "first_paycheck",
+      "scope": "avatar",
+      "weight": 0.2,
+      "cooldown_days": 400,
+      "contact": "agent_diaz",
+      "prompt": "Direct deposit hits at midnight. It's not much by league standards, but it's the first real paycheck of your life -- and it's yours.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled", "min_days_since": 14 },
+        { "flag_inactive": "cashed_first_check" }
+      ],
+      "choices": [
+        {
+          "id": "save_it",
+          "autopilot_weight": 2,
+          "label": "Save it",
+          "consequences": [
+            { "type": "set_flag", "flag": "cashed_first_check" },
+            { "type": "funds", "amount": 800 },
+            { "type": "set_flag", "flag": "frugal_rookie" },
+            { "type": "stress", "amount": -5 }
+          ]
+        },
+        {
+          "id": "treat_yourself",
+          "autopilot_weight": 2,
+          "label": "Treat yourself",
+          "consequences": [
+            { "type": "set_flag", "flag": "cashed_first_check" },
+            { "type": "funds", "amount": 800 },
+            { "type": "funds", "amount": -300 },
+            { "type": "set_flag", "flag": "spent_the_check" },
+            { "type": "stress", "amount": -15 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "splurge_callback",
+      "scope": "avatar",
+      "weight": 0.1,
+      "cooldown_days": 60,
+      "contact": "agent_diaz",
+      "prompt": "Diaz forwards you a spreadsheet with a raised-eyebrow subject line: 'Where did the signing bonus go?' The balance is thinner than it should be.",
+      "prerequisites": [
+        { "flag_active": "spent_the_check", "min_days_since": 30 },
+        { "flag_inactive": "learned_budgeting" }
+      ],
+      "choices": [
+        {
+          "id": "tighten_up",
+          "autopilot_weight": 2,
+          "label": "Tighten up",
+          "consequences": [
+            { "type": "set_flag", "flag": "learned_budgeting" },
+            { "type": "stress", "amount": -5 }
+          ]
+        },
+        {
+          "id": "do_it_again",
+          "autopilot_weight": 1,
+          "label": "It's fine, do it again",
+          "consequences": [
+            { "type": "funds", "amount": -200 },
+            { "type": "stress", "amount": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "frugal_callback",
+      "scope": "avatar",
+      "weight": 0.1,
+      "cooldown_days": 400,
+      "contact": "agent_diaz",
+      "prompt": "Diaz calls just to say it: your account actually has a cushion in it. 'Most rookies blow through this in a month. Keep doing what you're doing.'",
+      "prerequisites": [
+        { "flag_active": "frugal_rookie", "min_days_since": 30 },
+        { "flag_inactive": "financially_savvy" }
+      ],
+      "choices": [
+        {
+          "id": "keep_saving",
+          "autopilot_weight": 1,
+          "label": "Keep saving",
+          "consequences": [
+            { "type": "set_flag", "flag": "financially_savvy" },
+            { "type": "funds", "amount": 100 },
+            { "type": "stress", "amount": -5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coach_pep_talk",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 21,
+      "contact": "coach_reyes",
+      "prompt": "Reyes catches you by your locker before the game. 'Everybody in this room struggled at your age. Don't let one bad week convince you otherwise.'",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "take_it_to_heart",
+          "autopilot_weight": 2,
+          "label": "Take it to heart",
+          "consequences": [
+            { "type": "stress", "amount": -10 }
+          ]
+        },
+        {
+          "id": "brush_it_off",
+          "autopilot_weight": 1,
+          "label": "Brush it off",
+          "consequences": [
+            { "type": "stress", "amount": -2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "in_a_slump",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 30,
+      "contact": "coach_reyes",
+      "prompt": "Nothing's falling. Every ball finds a glove, every close pitch goes against you. The kind of stretch that gets in your head if you let it.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "grind_alone",
+          "autopilot_weight": 1,
+          "label": "Grind through it alone",
+          "consequences": [
+            { "type": "stress", "amount": 8 }
+          ]
+        },
+        {
+          "id": "lean_on_a_teammate",
+          "autopilot_weight": 2,
+          "label": "Lean on a teammate",
+          "consequences": [
+            { "type": "stress", "amount": -6 },
+            { "type": "relationship", "kind": "friend", "affinity": 8, "target": "teammate" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "on_a_heater",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 30,
+      "contact": "coach_reyes",
+      "prompt": "You can't miss right now. Every read is right, every swing feels a half-second ahead of the game. The whole dugout has noticed.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "ride_the_wave",
+          "autopilot_weight": 2,
+          "label": "Ride the wave",
+          "consequences": [
+            { "type": "stress", "amount": -10 },
+            { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" }
+          ]
+        },
+        {
+          "id": "stay_humble",
+          "autopilot_weight": 1,
+          "label": "Stay humble",
+          "consequences": [
+            { "type": "stress", "amount": -3 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "clubhouse_prank",
+      "scope": "avatar",
+      "weight": 0.04,
+      "cooldown_days": 45,
+      "contact": "coach_reyes",
+      "prompt": "You open your locker to find every piece of gear wrapped in athletic tape. The whole clubhouse is already watching for your reaction.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "laugh_it_off",
+          "autopilot_weight": 2,
+          "label": "Laugh it off",
+          "consequences": [
+            { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" },
+            { "type": "stress", "amount": -5 }
+          ]
+        },
+        {
+          "id": "plan_revenge",
+          "autopilot_weight": 1,
+          "label": "Plan revenge",
+          "consequences": [
+            { "type": "relationship", "kind": "friend", "affinity": 15, "target": "teammate" },
+            { "type": "stress", "amount": -8 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "road_roommate",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 40,
+      "contact": "coach_reyes",
+      "prompt": "The road-trip roommate list goes up, and you're paired with someone new. Ten days on a bus is a long time to share a room with a stranger.",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "get_to_know_them",
+          "autopilot_weight": 2,
+          "label": "Get to know them",
+          "consequences": [
+            { "type": "relationship", "kind": "friend", "affinity": 12, "target": "teammate" },
+            { "type": "stress", "amount": -8 }
+          ]
+        },
+        {
+          "id": "keep_to_yourself",
+          "autopilot_weight": 1,
+          "label": "Keep to yourself",
+          "consequences": [
+            { "type": "stress", "amount": -2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rookie_advice_veteran",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 35,
+      "contact": "coach_reyes",
+      "prompt": "A ten-year veteran pulls up a folding chair next to yours. 'You want to make it in this league? Here's what nobody tells you.'",
+      "prerequisites": [
+        { "flag_active": "rookie_settled" }
+      ],
+      "choices": [
+        {
+          "id": "take_the_advice",
+          "autopilot_weight": 2,
+          "label": "Take the advice",
+          "consequences": [
+            { "type": "stress", "amount": -5 },
+            { "type": "relationship", "kind": "friend", "affinity": 6, "target": "teammate" }
+          ]
+        },
+        {
+          "id": "nod_and_ignore_it",
+          "autopilot_weight": 1,
+          "label": "Nod and ignore it",
+          "consequences": [
+            { "type": "stress", "amount": -1 }
+          ]
+        }
+      ]
+    }
+  ]
+}

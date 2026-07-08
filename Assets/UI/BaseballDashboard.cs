@@ -284,8 +284,7 @@ public sealed partial class BaseballDashboard : PanelContainer
 
         _playGameButton.Pressed += OnPlayGamePressed;
         _skipDayButton.Pressed += OnSkipDayPressed;
-        _atBatView.SwingCommitted += OnSwingCommitted;
-        _atBatView.TakeCommitted += OnTakeCommitted;
+        _atBatView.ReadCommitted += OnReadCommitted;
 
         _outcomeNames = OutcomeNamesCsv.Split(',');
         _tierNames = TierNamesCsv.Split(',');
@@ -301,8 +300,7 @@ public sealed partial class BaseballDashboard : PanelContainer
         _bridge.Cancel();
         _playGameButton.Pressed -= OnPlayGamePressed;
         _skipDayButton.Pressed -= OnSkipDayPressed;
-        _atBatView.SwingCommitted -= OnSwingCommitted;
-        _atBatView.TakeCommitted -= OnTakeCommitted;
+        _atBatView.ReadCommitted -= OnReadCommitted;
     }
 
     public override void _Process(double delta)
@@ -453,10 +451,8 @@ public sealed partial class BaseballDashboard : PanelContainer
         RefreshScoutingCard();
     }
 
-    private void OnSwingCommitted(double timingError, bool guessInZone) =>
-        _bridge.SubmitSwing(timingError, guessInZone);
-
-    private void OnTakeCommitted(bool guessInZone) => _bridge.SubmitTake(guessInZone);
+    private void OnReadCommitted(int guessType, int guessCell, double approach) =>
+        _bridge.SubmitRead((PitchType)guessType, (byte)guessCell, approach);
 
     /// <summary>
     /// Unified per-frame recomputation of the Play/Skip buttons' disabled

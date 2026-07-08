@@ -145,8 +145,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 4
-            && wholeFolder.Count == 19
+            batchFiles.Length >= 5
+            && wholeFolder.Count == 31
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -162,7 +162,11 @@ internal static class Program
             && wholeFolder.TryGetById("suspended_lifetime_watch", out _)
             && wholeFolder.TryGetById("suspended_repeat_violation", out _)
             && wholeFolder.TryGetById("suspended_ped_test_flag", out _)
-            && wholeFolder.TryGetById("sidelined_by_injury", out _),
+            && wholeFolder.TryGetById("sidelined_by_injury", out _)
+            && wholeFolder.TryGetById("clubhouse_welcome", out _)
+            && wholeFolder.TryGetById("first_paycheck", out _)
+            && wholeFolder.TryGetById("splurge_callback", out _)
+            && wholeFolder.TryGetById("frugal_callback", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -226,7 +230,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 19 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 31 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 

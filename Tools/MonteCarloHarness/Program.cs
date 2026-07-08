@@ -1239,11 +1239,11 @@ internal static class Program
                 {
                     if (pitch++ % 2 == 0)
                     {
-                        bridge.SubmitSwing(0.0, guessInZone: true); // on-time swing, sitting zone
+                        bridge.SubmitRead(PitchType.Fastball, guessCell: 4, approach: 0.5); // sits center, leans aggressive
                     }
                     else
                     {
-                        bridge.SubmitTake(guessInZone: false);
+                        bridge.SubmitRead(PitchType.Breaking, ReadInputModel.OutOfZoneCell, approach: -0.5); // expects a ball, leans patient
                     }
                 }
                 while (bridge.TryDequeueNpcPa(out NpcPaFeedEvent npcPa))
@@ -1326,6 +1326,57 @@ internal static class Program
         Check("OnPitchResolved fires exactly once per pitch and its Balls/Strikes progression reconstructs cleanly",
             pitchResults.Count == interactive.HumanPitchesSeen && pitchProgressionCoherent,
             $"{pitchResults.Count} pitch results vs {interactive.HumanPitchesSeen} pitches, coherent={pitchProgressionCoherent}");
+
+        // at_bat_read_input_model.md §6/§7: the same legality + read-grade
+        // reconstruction the A0 sweep proves over PitchChain.SimulatePa
+        // directly, re-checked here over the ACTUAL bridge/thread handshake —
+        // index i lines up with the scripted UI's i-th SubmitRead above (a
+        // take is never Foul/InPlay, a swing is never Ball; the guessed type
+        // was Fastball on even pitches / Breaking on odd; the even guess sits
+        // dead-center (cell 4, distance 0 or 1 from any true in-zone cell —
+        // never LocAccFar) while the odd guess calls "expect a ball").
+        bool humanBranchCoherent = true;
+        for (int i = 0; i < pitchResults.Count; i++)
+        {
+            PitchResult pr = pitchResults[i];
+            if (!pr.BatterSwung && pr.Class is PitchClass.Foul or PitchClass.InPlay)
+            {
+                humanBranchCoherent = false;
+            }
+            if (pr.BatterSwung && pr.Class == PitchClass.Ball)
+            {
+                humanBranchCoherent = false;
+            }
+            PitchType expectedType = i % 2 == 0 ? PitchType.Fastball : PitchType.Breaking;
+            if (pr.TypeOk != (expectedType == pr.Type))
+            {
+                humanBranchCoherent = false;
+            }
+            if (i % 2 == 1) // guessed out-of-zone
+            {
+                if (pr.InZone && pr.LocAcc != 0.0)
+                {
+                    humanBranchCoherent = false;
+                }
+                if (!pr.InZone && pr.LocAcc != 1.0)
+                {
+                    humanBranchCoherent = false;
+                }
+            }
+            else // guessed the center cell (4)
+            {
+                if (!pr.InZone && pr.LocAcc != 0.0)
+                {
+                    humanBranchCoherent = false;
+                }
+                if (pr.InZone && pr.LocAcc != 1.0 && pr.LocAcc != ReadInputModel.LocAccAdjacent)
+                {
+                    humanBranchCoherent = false;
+                }
+            }
+        }
+        Check("bridge-driven reads: take/swing legality holds and TypeOk/LocAcc reconstruct from the scripted guesses",
+            humanBranchCoherent, $"{pitchResults.Count} pitches checked");
 
         // ---- cancel path: the game aborts unflushed and stays pending ----
         clock.AdvanceDay();

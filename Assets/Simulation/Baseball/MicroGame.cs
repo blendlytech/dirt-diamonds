@@ -866,7 +866,7 @@ public sealed class MicroGame
                 // (the human never faces the absent player's real mix).
                 PitcherArsenal arsenal = pitcherShadowed ? ReplacementArsenal : _arsenals[pitcherSlot];
                 var matchup = new PitchMatchup(
-                    in arsenal, effectivePitcher.Control, batter.Discipline);
+                    in arsenal, effectivePitcher.Control, batter.Discipline, batter.Contact);
                 // Runs already scored this half count toward the batting side.
                 var context = new HumanPaContext(
                     awayScore + (isTopHalf ? runs : 0), homeScore + (isTopHalf ? 0 : runs),

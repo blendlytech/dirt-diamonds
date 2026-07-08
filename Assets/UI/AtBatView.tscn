@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/AtBatView.cs" id="1_atbatview"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_type"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_zone"]
 
 [node name="AtBatView" type="PanelContainer"]
 anchors_preset = 15
@@ -136,20 +140,19 @@ bbcode_enabled = true
 scroll_following = true
 text = "Play-by-play"
 
-[node name="Controls" type="HBoxContainer" parent="Layout"]
+[node name="Controls" type="VBoxContainer" parent="Layout"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TopRow" type="HBoxContainer" parent="Layout/Controls"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="FastForwardToggle" type="CheckButton" parent="Layout/Controls"]
+[node name="FastForwardToggle" type="CheckButton" parent="Layout/Controls/TopRow"]
 layout_mode = 2
 text = "Fast forward"
 
-[node name="ZoneReadToggle" type="CheckButton" parent="Layout/Controls"]
-layout_mode = 2
-button_pressed = true
-text = "Read: in zone"
-
-[node name="TimingSlider" type="HSlider" parent="Layout/Controls"]
+[node name="ApproachSlider" type="HSlider" parent="Layout/Controls/TopRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -158,22 +161,118 @@ max_value = 1.0
 step = 0.01
 value = 0.0
 
-[node name="TimingValueLabel" type="Label" parent="Layout/Controls"]
+[node name="ApproachValueLabel" type="Label" parent="Layout/Controls/TopRow"]
 layout_mode = 2
-custom_minimum_size = Vector2(100, 0)
+custom_minimum_size = Vector2(110, 0)
 horizontal_alignment = 1
-text = "Right on time"
+text = "Balanced"
 
-[node name="TakeButton" type="Button" parent="Layout/Controls"]
+[node name="TypeRow" type="HBoxContainer" parent="Layout/Controls"]
 layout_mode = 2
-custom_minimum_size = Vector2(90, 0)
-text = "Take"
+theme_override_constants/separation = 8
 
-[node name="SwingButton" type="Button" parent="Layout/Controls"]
+[node name="FastballButton" type="Button" parent="Layout/Controls/TypeRow"]
 layout_mode = 2
-custom_minimum_size = Vector2(130, 0)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_type")
+text = "Fastball"
+
+[node name="BreakingButton" type="Button" parent="Layout/Controls/TypeRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_type")
+text = "Breaking"
+
+[node name="OffspeedButton" type="Button" parent="Layout/Controls/TypeRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_type")
+text = "Offspeed"
+
+[node name="ZoneRow" type="HBoxContainer" parent="Layout/Controls"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ZoneGrid" type="GridContainer" parent="Layout/Controls/ZoneRow"]
+layout_mode = 2
+columns = 3
+
+[node name="Cell0" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "1"
+
+[node name="Cell1" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "2"
+
+[node name="Cell2" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "3"
+
+[node name="Cell3" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "4"
+
+[node name="Cell4" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "5"
+
+[node name="Cell5" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "6"
+
+[node name="Cell6" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "7"
+
+[node name="Cell7" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "8"
+
+[node name="Cell8" type="Button" parent="Layout/Controls/ZoneRow/ZoneGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(36, 36)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "9"
+
+[node name="OutOfZoneButton" type="Button" parent="Layout/Controls/ZoneRow"]
+layout_mode = 2
+size_flags_vertical = 4
+custom_minimum_size = Vector2(100, 0)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_zone")
+text = "Expect a ball"
+
+[node name="CommitButton" type="Button" parent="Layout/Controls"]
+layout_mode = 2
+disabled = true
 theme_type_variation = &"AccentButton"
-text = "Swing"
+text = "Commit read"
 
 [node name="RevealOverlay" type="CenterContainer" parent="."]
 layout_mode = 2

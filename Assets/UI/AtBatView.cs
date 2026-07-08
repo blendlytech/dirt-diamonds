@@ -60,13 +60,14 @@ public readonly struct AtBatViewState
 /// </summary>
 public sealed partial class AtBatView : PanelContainer
 {
-    /// <summary>Player committed a swing: the slider's τ ∈ [-1, +1] (§6) plus the zone read.</summary>
+    /// <summary>
+    /// Player committed a "Read the Pitch" guess (at_bat_read_input_model.md §2):
+    /// a guessed pitch type, a guessed 3×3 zone cell (or
+    /// <see cref="ReadInputModel.OutOfZoneCell"/> for "expect a ball"), and the
+    /// approach dial. The swing itself is emergent — decided sim-side.
+    /// </summary>
     [Signal]
-    public delegate void SwingCommittedEventHandler(double timingError, bool guessInZone);
-
-    /// <summary>Player took the pitch (with their zone read).</summary>
-    [Signal]
-    public delegate void TakeCommittedEventHandler(bool guessInZone);
+    public delegate void ReadCommittedEventHandler(int guessType, int guessCell, double approach);
 
     /// <summary>Cap on retained play-by-play lines before the oldest are dropped.</summary>
     [Export]
@@ -171,32 +172,39 @@ public sealed partial class AtBatView : PanelContainer
     [Export]
     public string RevealOutOfZoneText { get; set; } = "out of the zone";
 
-    // 12d-3 §5.3 timing feedback — the player's own already-UI-side τ bucketed
-    // and paired with the pitch's Class, no new sim surface. Only ever shown
-    // on a swing (a Take submits no τ). TimingTagFormat = "{0} — {1}" mirrors
-    // the doc's own illustrative phrasing ("you were early — swing and miss").
+    // at_bat_read_input_model.md §3.5 approach dial — the live readout bucket
+    // (Patient/Balanced/Aggressive), mirroring the old timing-slider readout
+    // pattern (playtest feedback 2026-07-07: a bare slider has no on-screen
+    // indication of what it controls until the reveal, itself easy to miss).
     [Export]
-    public double TimingOnTimeToleranceHalfWidth { get; set; } = 0.15;
+    public double ApproachNeutralHalfWidth { get; set; } = 0.15;
 
     [Export]
-    public string TimingEarlyText { get; set; } = "You were early";
+    public string ApproachPatientText { get; set; } = "Patient";
 
     [Export]
-    public string TimingOnTimeText { get; set; } = "Right on time";
+    public string ApproachBalancedText { get; set; } = "Balanced";
 
     [Export]
-    public string TimingLateText { get; set; } = "You were late";
+    public string ApproachAggressiveText { get; set; } = "Aggressive";
+
+    // at_bat_read_input_model.md §4 read-grade tags — bucketed off the frozen
+    // PitchResult.TypeOk/LocAcc fields, appended as a third reveal line so the
+    // player learns WHY a pitch went well or badly, not just what happened.
+    [Export]
+    public string ReadPerfectText { get; set; } = "(read it perfectly)";
 
     [Export]
-    public string TimingTagFormat { get; set; } = "{0} — {1}";
-
-    // 12d-3 §5.1 read-grade tags — the two literal table combos (Ball+took+
-    // correct read, Strike+took+wrong read); appended as a third reveal line.
-    [Export]
-    public string ReadGoodEyeText { get; set; } = "(good eye)";
+    public string ReadCloseText { get; set; } = "(good read)";
 
     [Export]
-    public string ReadFooledText { get; set; } = "(fooled you)";
+    public string ReadWrongTypeText { get; set; } = "(wrong pitch, right read)";
+
+    [Export]
+    public string ReadWrongZoneText { get; set; } = "(fooled on location)";
+
+    [Export]
+    public string ReadFooledText { get; set; } = "(completely fooled)";
 
     // 12d-3 §5.4 PaReveal — bigger/longer emphasis on the human's own PA
     // outcome, reusing the ResultReveal chip machinery per the doc's own
@@ -225,14 +233,12 @@ public sealed partial class AtBatView : PanelContainer
     private enum BeatKind : byte { PitchResult, PaOutcome, NpcPa }
 
     /// <summary>
-    /// One queued presentation beat — a pitch's truth (plus the player's
-    /// committed intent at the moment it was thrown, stamped in at enqueue
-    /// rather than read back off ambient view state at reveal time — a
-    /// Fable-review hardening so the pairing is structural, not just true by
-    /// the current one-pitch-in-flight invariant), or an already-formatted
-    /// PA/NPC log line (plus the raw outcome for the PaReveal chip /
-    /// broadcast-log accent), paced in the driver's dequeue order (the
-    /// causal bound at_bat_presentation.md §3 establishes).
+    /// One queued presentation beat — a pitch's truth (the frozen PitchResult
+    /// DTO already carries BatterSwung/TypeOk/LocAcc, so no player-intent needs
+    /// stamping in separately anymore), or an already-formatted PA/NPC log line
+    /// (plus the raw outcome for the PaReveal chip / broadcast-log accent),
+    /// paced in the driver's dequeue order (the causal bound
+    /// at_bat_presentation.md §3 establishes).
     /// </summary>
     private readonly struct BeatEvent
     {
@@ -240,29 +246,21 @@ public sealed partial class AtBatView : PanelContainer
         public readonly PitchResult Pitch;
         public readonly PaOutcome Outcome;
         public readonly string LogLine;
-        public readonly bool WasSwing;
-        public readonly double Tau;
-        public readonly bool GuessInZone;
 
-        private BeatEvent(
-            BeatKind kind, in PitchResult pitch, PaOutcome outcome, string logLine,
-            bool wasSwing, double tau, bool guessInZone)
+        private BeatEvent(BeatKind kind, in PitchResult pitch, PaOutcome outcome, string logLine)
         {
             Kind = kind;
             Pitch = pitch;
             Outcome = outcome;
             LogLine = logLine;
-            WasSwing = wasSwing;
-            Tau = tau;
-            GuessInZone = guessInZone;
         }
 
-        public static BeatEvent ForPitch(in PitchResult pitch, bool wasSwing, double tau, bool guessInZone) =>
-            new(BeatKind.PitchResult, in pitch, default, string.Empty, wasSwing, tau, guessInZone);
+        public static BeatEvent ForPitch(in PitchResult pitch) =>
+            new(BeatKind.PitchResult, in pitch, default, string.Empty);
         public static BeatEvent ForPaOutcome(PaOutcome outcome, string logLine) =>
-            new(BeatKind.PaOutcome, default, outcome, logLine, false, 0.0, false);
+            new(BeatKind.PaOutcome, default, outcome, logLine);
         public static BeatEvent ForNpcPa(PaOutcome outcome, string logLine) =>
-            new(BeatKind.NpcPa, default, outcome, logLine, false, 0.0, false);
+            new(BeatKind.NpcPa, default, outcome, logLine);
     }
 
     /// <summary>Idle = between beats (about to pop the next one, or — with an empty queue and a pending snapshot — the moment AwaitingInput is entered and controls re-enable).</summary>
@@ -278,11 +276,14 @@ public sealed partial class AtBatView : PanelContainer
     private Panel _base3 = null!;
     private Label _pitchCueLabel = null!;
     private RichTextLabel _playLog = null!;
-    private CheckButton _zoneReadToggle = null!;
-    private HSlider _timingSlider = null!;
-    private Label _timingValueLabel = null!;
-    private Button _swingButton = null!;
-    private Button _takeButton = null!;
+    private Button _fastballButton = null!;
+    private Button _breakingButton = null!;
+    private Button _offspeedButton = null!;
+    private readonly Button[] _zoneCellButtons = new Button[9];
+    private Button _outOfZoneButton = null!;
+    private HSlider _approachSlider = null!;
+    private Label _approachValueLabel = null!;
+    private Button _commitButton = null!;
     private PanelContainer _revealChip = null!;
     private Label _revealLabel = null!;
     private CheckButton _fastForwardToggle = null!;
@@ -304,14 +305,16 @@ public sealed partial class AtBatView : PanelContainer
     // than polling ButtonPressed every _Process frame.
     private bool _fastForwardOn;
 
-    // 12d-3 §5.3: the player's own just-submitted intent, captured at the
-    // Swing/Take click and stamped onto the pitch beat at enqueue time (see
-    // BeatEvent) so the pairing survives even if a future input scheme lets
-    // more than one pitch queue up. A Take carries no τ (the slider is
-    // swing-only feedback).
-    private bool _committedWasSwing;
-    private double _committedTau;
-    private bool _committedGuessInZone;
+    // "Read the Pitch" input state (at_bat_read_input_model.md §5): the
+    // player's in-progress guess before Commit is pressed. Cleared back to
+    // "nothing picked" every time controls re-enable for a fresh pitch (§3
+    // input gating: a stale guess must never silently answer the next pitch).
+    private PitchType _selectedType;
+    private bool _hasTypeSelection;
+    private byte _selectedCell;
+    private bool _hasZoneSelection;
+    private bool _intentEnabled;
+    private readonly BaseButton.ToggledEventHandler[] _zoneCellHandlers = new BaseButton.ToggledEventHandler[9];
 
     // The beat sequencer (12d-2).
     private readonly Queue<BeatEvent> _beatQueue = new(16);
@@ -354,20 +357,36 @@ public sealed partial class AtBatView : PanelContainer
         _base3 = GetNode<Panel>("Layout/Scoreboard/ScoreboardRow/CenterBox/DiamondCenter/Diamond/Base3");
         _pitchCueLabel = GetNode<Label>("Layout/PitchCueRow/CueChip/PitchCueLabel");
         _playLog = GetNode<RichTextLabel>("Layout/PlayLog");
-        _zoneReadToggle = GetNode<CheckButton>("Layout/Controls/ZoneReadToggle");
-        _timingSlider = GetNode<HSlider>("Layout/Controls/TimingSlider");
-        _timingValueLabel = GetNode<Label>("Layout/Controls/TimingValueLabel");
-        _swingButton = GetNode<Button>("Layout/Controls/SwingButton");
-        _takeButton = GetNode<Button>("Layout/Controls/TakeButton");
+        _fastballButton = GetNode<Button>("Layout/Controls/TypeRow/FastballButton");
+        _breakingButton = GetNode<Button>("Layout/Controls/TypeRow/BreakingButton");
+        _offspeedButton = GetNode<Button>("Layout/Controls/TypeRow/OffspeedButton");
+        for (int i = 0; i < _zoneCellButtons.Length; i++)
+        {
+            _zoneCellButtons[i] = GetNode<Button>($"Layout/Controls/ZoneRow/ZoneGrid/Cell{i}");
+        }
+        _outOfZoneButton = GetNode<Button>("Layout/Controls/ZoneRow/OutOfZoneButton");
+        _approachSlider = GetNode<HSlider>("Layout/Controls/TopRow/ApproachSlider");
+        _approachValueLabel = GetNode<Label>("Layout/Controls/TopRow/ApproachValueLabel");
+        _commitButton = GetNode<Button>("Layout/Controls/CommitButton");
         _revealChip = GetNode<PanelContainer>("RevealOverlay/RevealChip");
         _revealLabel = GetNode<Label>("RevealOverlay/RevealChip/RevealLabel");
-        _fastForwardToggle = GetNode<CheckButton>("Layout/Controls/FastForwardToggle");
+        _fastForwardToggle = GetNode<CheckButton>("Layout/Controls/TopRow/FastForwardToggle");
 
-        _swingButton.Pressed += OnSwingPressed;
-        _takeButton.Pressed += OnTakePressed;
+        _fastballButton.Toggled += OnFastballToggled;
+        _breakingButton.Toggled += OnBreakingToggled;
+        _offspeedButton.Toggled += OnOffspeedToggled;
+        for (int i = 0; i < _zoneCellButtons.Length; i++)
+        {
+            byte cell = (byte)i;
+            BaseButton.ToggledEventHandler handler = pressed => OnZoneCellToggled(pressed, cell);
+            _zoneCellHandlers[i] = handler;
+            _zoneCellButtons[i].Toggled += handler;
+        }
+        _outOfZoneButton.Toggled += OnOutOfZoneToggled;
+        _commitButton.Pressed += OnCommitPressed;
         _fastForwardToggle.Toggled += OnFastForwardToggled;
-        _timingSlider.ValueChanged += OnTimingSliderChanged;
-        _timingValueLabel.Text = TimingBucketText(_timingSlider.Value); // live readout — playtest feedback (2026-07-07): the slider had no on-screen indication of what it controlled
+        _approachSlider.ValueChanged += OnApproachSliderChanged;
+        _approachValueLabel.Text = ApproachBucketText(_approachSlider.Value); // live readout — playtest feedback (2026-07-07): a bare slider had no on-screen indication of what it controlled
         _pitchTypeNames = PitchTypeNamesCsv.Split(',');
         _paRevealNames = PaRevealNamesCsv.Split(',');
         Color diamondColor = _revealLabel.GetThemeColor("font_color", RevealDiamondVariation);
@@ -381,16 +400,23 @@ public sealed partial class AtBatView : PanelContainer
 
     public override void _ExitTree()
     {
-        _swingButton.Pressed -= OnSwingPressed;
-        _takeButton.Pressed -= OnTakePressed;
+        _fastballButton.Toggled -= OnFastballToggled;
+        _breakingButton.Toggled -= OnBreakingToggled;
+        _offspeedButton.Toggled -= OnOffspeedToggled;
+        for (int i = 0; i < _zoneCellButtons.Length; i++)
+        {
+            _zoneCellButtons[i].Toggled -= _zoneCellHandlers[i];
+        }
+        _outOfZoneButton.Toggled -= OnOutOfZoneToggled;
+        _commitButton.Pressed -= OnCommitPressed;
         _fastForwardToggle.Toggled -= OnFastForwardToggled;
-        _timingSlider.ValueChanged -= OnTimingSliderChanged;
+        _approachSlider.ValueChanged -= OnApproachSliderChanged;
     }
 
     private void OnFastForwardToggled(bool pressed) => _fastForwardOn = pressed;
 
-    /// <summary>Live readout of the timing slider's bucket (Early/On-time/Late) — playtest feedback (2026-07-07): the slider had no label or value display, so its effect was invisible until a swing's reveal (itself easy to miss at speed). Shows the bucket the NEXT swing would report, before the player commits.</summary>
-    private void OnTimingSliderChanged(double value) => _timingValueLabel.Text = TimingBucketText(value);
+    /// <summary>Live readout of the approach dial's bucket (Patient/Balanced/Aggressive) — mirrors the old timing-slider readout so the dial's effect is never invisible.</summary>
+    private void OnApproachSliderChanged(double value) => _approachValueLabel.Text = ApproachBucketText(value);
 
     /// <summary>True once the beat queue has fully drained and the sequencer is idle — the finish-seam gate the game-end truncation fix (Fable review, finding 1) needs: the driver must not tear the view down until every queued beat has actually played, and must keep draining the bridge every frame until this flips true.</summary>
     public bool SequencerDrained => _phase == SequencerPhase.Idle && _beatQueue.Count == 0;
@@ -490,9 +516,9 @@ public sealed partial class AtBatView : PanelContainer
         _hasPendingSnapshot = true;
     }
 
-    /// <summary>Queues one resolved pitch (Phase 12d-1's <see cref="PitchResult"/>) for the sequencer to reveal in order, stamped with the player's just-committed intent (at most one pitch is ever in flight, per <see cref="PlayerIntentBridge.AwaitIntent"/>).</summary>
+    /// <summary>Queues one resolved pitch (Phase 12d-1's <see cref="PitchResult"/>) for the sequencer to reveal in order.</summary>
     public void EnqueuePitchBeat(in PitchResult result) =>
-        _beatQueue.Enqueue(BeatEvent.ForPitch(in result, _committedWasSwing, _committedTau, _committedGuessInZone));
+        _beatQueue.Enqueue(BeatEvent.ForPitch(in result));
 
     /// <summary>Queues one resolved human PA's already-formatted play-log line plus its raw outcome (for the PaReveal chip + broadcast-log accent), paced like every other beat.</summary>
     public void EnqueuePaOutcomeBeat(PaOutcome outcome, string logLine) => _beatQueue.Enqueue(BeatEvent.ForPaOutcome(outcome, logLine));
@@ -596,8 +622,7 @@ public sealed partial class AtBatView : PanelContainer
     /// <summary>The ResultReveal beat (§5.1) — the just-thrown pitch's truth, tween'd in at scale 1.0 and held for <see cref="PitchRevealDurationMs"/>.</summary>
     private void ShowPitchReveal(in BeatEvent beat)
     {
-        (string chipText, string logLine, RevealAccent accent) =
-            BuildRevealCopy(in beat.Pitch, beat.WasSwing, beat.Tau, beat.GuessInZone);
+        (string chipText, string logLine, RevealAccent accent) = BuildRevealCopy(in beat.Pitch);
         ShowRevealChip(chipText, accent, PitchRevealDurationMs, 1f);
         // §5.5: the play-log is "the persistent record behind the transient
         // ResultReveal" — every pitch gets a broadcast line, not just PAs.
@@ -663,9 +688,8 @@ public sealed partial class AtBatView : PanelContainer
         _ => RevealAccent.Positive,
     };
 
-    /// <summary>at_bat_presentation.md §5.1's table, narrowed to exactly what the frozen PitchResult DTO reports, plus §5.3's timing tag (swings only) and the two literal read-grade combos. Returns the chip's full multi-line text and a single-line broadcast-log echo (the timing-tagged call, no flavor/read-tag clutter). Intent (wasSwing/tau/guessInZone) is passed in off the beat rather than read from ambient view state (Fable review, secondary finding b).</summary>
-    private (string ChipText, string LogLine, RevealAccent Accent) BuildRevealCopy(
-        in PitchResult result, bool wasSwing, double tau, bool guessInZone)
+    /// <summary>at_bat_presentation.md §5.1's table, narrowed to exactly what the frozen PitchResult DTO reports, plus the read-grade tag (at_bat_read_input_model.md §4: TypeOk/LocAcc) on every pitch. Returns the chip's full multi-line text and a single-line broadcast-log echo.</summary>
+    private (string ChipText, string LogLine, RevealAccent Accent) BuildRevealCopy(in PitchResult result)
     {
         string call;
         RevealAccent accent;
@@ -707,48 +731,49 @@ public sealed partial class AtBatView : PanelContainer
                 break;
         }
 
-        // §5.3: only a swing ever submits a τ (a Take's slider value is
-        // unused/stale) — wasSwing gates it. At most one pitch is ever in
-        // flight (PlayerIntentBridge.AwaitIntent), so the intent stamped on
-        // this beat is always THIS pitch's.
-        if (wasSwing)
-        {
-            call = string.Format(TimingTagFormat, TimingBucketText(tau), call);
-        }
-
         string logLine = call;
 
         string flavor = string.Format(
             RevealFlavorFormat, PitchTypeName(result.Type), result.InZone ? RevealInZoneText : RevealOutOfZoneText);
-        string text = call + "\n" + flavor;
-
-        // §5.1's two literal read-grade combos only — not a general take
-        // reads well/badly on every pitch, per the doc's own worked table.
-        bool correctRead = guessInZone == result.InZone;
-        if (!wasSwing && result.Class == PitchClass.Ball && correctRead)
-        {
-            text += "\n" + ReadGoodEyeText;
-        }
-        else if (!wasSwing && result.Class == PitchClass.Strike && !correctRead)
-        {
-            text += "\n" + ReadFooledText;
-        }
+        string text = call + "\n" + flavor + "\n" + ReadGradeTag(result.TypeOk, result.LocAcc);
 
         return (text, logLine, accent);
     }
 
-    /// <summary>Buckets the player's submitted τ ∈ [-1,+1] into Early/On-time/Late (§5.3) — a symmetric tolerance band around 0 sized by <see cref="TimingOnTimeToleranceHalfWidth"/>.</summary>
-    private string TimingBucketText(double tau)
+    /// <summary>Buckets the frozen PitchResult.TypeOk/LocAcc (at_bat_read_input_model.md §3.1) into a short read-grade tag — a perfect read (right type, exact/correct-call location) reads distinctly from a wrong-zone fooling or merely an imprecise-but-right-idea read.</summary>
+    private string ReadGradeTag(bool typeOk, double locAcc)
     {
-        if (tau < -TimingOnTimeToleranceHalfWidth)
+        if (typeOk && locAcc >= 1.0)
         {
-            return TimingEarlyText;
+            return ReadPerfectText;
         }
-        if (tau > TimingOnTimeToleranceHalfWidth)
+        if (!typeOk && locAcc <= 0.0)
         {
-            return TimingLateText;
+            return ReadFooledText;
         }
-        return TimingOnTimeText;
+        if (locAcc <= 0.0)
+        {
+            return ReadWrongZoneText;
+        }
+        if (!typeOk)
+        {
+            return ReadWrongTypeText;
+        }
+        return ReadCloseText;
+    }
+
+    /// <summary>Buckets the approach dial ∈ [-1,+1] into Patient/Balanced/Aggressive — a symmetric tolerance band around 0 sized by <see cref="ApproachNeutralHalfWidth"/>.</summary>
+    private string ApproachBucketText(double approach)
+    {
+        if (approach < -ApproachNeutralHalfWidth)
+        {
+            return ApproachPatientText;
+        }
+        if (approach > ApproachNeutralHalfWidth)
+        {
+            return ApproachAggressiveText;
+        }
+        return ApproachBalancedText;
     }
 
     /// <summary>Appends one plain (neutral) play-by-play line — the game-final summary, which has no batter-positive/negative accent.</summary>
@@ -779,31 +804,92 @@ public sealed partial class AtBatView : PanelContainer
         _logLines++;
     }
 
-    private void OnSwingPressed()
+    private void OnFastballToggled(bool pressed) => OnTypeToggled(pressed, PitchType.Fastball);
+    private void OnBreakingToggled(bool pressed) => OnTypeToggled(pressed, PitchType.Breaking);
+    private void OnOffspeedToggled(bool pressed) => OnTypeToggled(pressed, PitchType.Offspeed);
+
+    private void OnTypeToggled(bool pressed, PitchType type)
     {
-        SetIntentEnabled(false);
-        _committedWasSwing = true;
-        _committedTau = _timingSlider.Value;
-        _committedGuessInZone = _zoneReadToggle.ButtonPressed;
-        EmitSignal(SignalName.SwingCommitted, _timingSlider.Value, _zoneReadToggle.ButtonPressed);
+        if (!pressed)
+        {
+            return; // the group's own unpress of the previous button — nothing to record
+        }
+        _selectedType = type;
+        _hasTypeSelection = true;
+        UpdateCommitEnabled();
     }
 
-    private void OnTakePressed()
+    private void OnZoneCellToggled(bool pressed, byte cell)
     {
-        SetIntentEnabled(false);
-        _committedWasSwing = false;
-        _committedGuessInZone = _zoneReadToggle.ButtonPressed;
-        EmitSignal(SignalName.TakeCommitted, _zoneReadToggle.ButtonPressed);
+        if (!pressed)
+        {
+            return;
+        }
+        _selectedCell = cell;
+        _hasZoneSelection = true;
+        UpdateCommitEnabled();
     }
 
-    /// <summary>Intent controls lock while the sim resolves the pitch off the UI thread.</summary>
+    private void OnOutOfZoneToggled(bool pressed)
+    {
+        if (!pressed)
+        {
+            return;
+        }
+        _selectedCell = ReadInputModel.OutOfZoneCell;
+        _hasZoneSelection = true;
+        UpdateCommitEnabled();
+    }
+
+    private void OnCommitPressed()
+    {
+        if (!_hasTypeSelection || !_hasZoneSelection)
+        {
+            return; // guarded by CommitButton.Disabled — defensive only
+        }
+        PitchType guessType = _selectedType;
+        byte guessCell = _selectedCell;
+        double approach = _approachSlider.Value;
+        SetIntentEnabled(false);
+        EmitSignal(SignalName.ReadCommitted, (int)guessType, (int)guessCell, approach);
+    }
+
+    /// <summary>Read controls lock while the sim resolves the pitch off the UI thread; re-enabling clears the prior guess so a stale type/cell can never silently answer the next pitch (the approach dial is a standing stance, not a per-pitch reset).</summary>
     private void SetIntentEnabled(bool enabled)
     {
-        _swingButton.Disabled = !enabled;
-        _takeButton.Disabled = !enabled;
-        _timingSlider.Editable = enabled;
-        _zoneReadToggle.Disabled = !enabled;
+        _intentEnabled = enabled;
+        _fastballButton.Disabled = !enabled;
+        _breakingButton.Disabled = !enabled;
+        _offspeedButton.Disabled = !enabled;
+        foreach (Button cell in _zoneCellButtons)
+        {
+            cell.Disabled = !enabled;
+        }
+        _outOfZoneButton.Disabled = !enabled;
+        _approachSlider.Editable = enabled;
+        if (enabled)
+        {
+            ClearReadSelections();
+        }
+        UpdateCommitEnabled();
     }
+
+    private void ClearReadSelections()
+    {
+        _fastballButton.SetPressedNoSignal(false);
+        _breakingButton.SetPressedNoSignal(false);
+        _offspeedButton.SetPressedNoSignal(false);
+        foreach (Button cell in _zoneCellButtons)
+        {
+            cell.SetPressedNoSignal(false);
+        }
+        _outOfZoneButton.SetPressedNoSignal(false);
+        _hasTypeSelection = false;
+        _hasZoneSelection = false;
+    }
+
+    private void UpdateCommitEnabled() =>
+        _commitButton.Disabled = !(_intentEnabled && _hasTypeSelection && _hasZoneSelection);
 
     /// <summary>Index-with-fallback lookup shared by every CSV-backed name table on this view (Fable review, secondary finding e: ShowPaReveal used to inline its own copy of this pattern).</summary>
     private static string ResolveCsvName(int index, string[] names, string fallback) =>
