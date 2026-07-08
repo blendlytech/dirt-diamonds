@@ -238,6 +238,17 @@ public sealed class CareerManager
     public StatsNormalizer? Normalizer;
 
     /// <summary>
+    /// Person-layer query surface (HS-2), optional like Availability/Normalizer:
+    /// null — every pre-HS-2 harness path — keeps CreateAvatar byte-identical
+    /// (flat StartingFunds, no household, no person rows). When wired, avatar
+    /// creation rolls a §3 backstory (or takes the UI's) and seeds all the v11
+    /// person-layer tables plus the parent NPC rows inside the same creation
+    /// batch, and <see cref="Succeed"/> writes the heir's inherited household
+    /// context (person-layer doc §10).
+    /// </summary>
+    public PersonQueries? Persons;
+
+    /// <summary>
     /// True (default, headless/harness-safe): a fired retirement trigger
     /// hands off to the single best-rated eligible heir immediately via
     /// <see cref="RunSuccessionCheck"/>. False: a Succeeded outcome instead
@@ -362,6 +373,49 @@ public sealed class CareerManager
         string firstName, string lastName, int teamId, in PlayerRatingsRow ratings,
         PitcherRole pitcherRole = PitcherRole.Starter)
     {
+        if (Persons is null)
+        {
+            // Pre-HS-2 contract, byte-identical: flat funds, no person layer.
+            CreateAvatarCore(firstName, lastName, teamId, in ratings, pitcherRole, backstory: null, personSeed: null);
+            return;
+        }
+        // No caller-chosen backstory (the pre-trait-picker UI path): roll one
+        // here, from a Split() fork — the career stream's own draw order
+        // (conception, succession fillers) never moves, so every seeded
+        // fixture downstream of creation replays exactly.
+        RngState backstoryRng = _rng.Split();
+        Backstory rolled = BackstoryGenerator.Roll(ref backstoryRng);
+        CreateAvatarCore(firstName, lastName, teamId, in ratings, pitcherRole, rolled, personSeed: null);
+    }
+
+    /// <summary>
+    /// HS-2 creation path: same roster mutation as the classic overload, plus
+    /// the caller's revealed (and possibly re-rolled) <paramref name="backstory"/>
+    /// persisted across the v11 person layer — Player_Person (via
+    /// <paramref name="personSeed"/> when the trait picker adjusted it, else
+    /// <see cref="BackstoryGenerator.BuildPersonRow"/>), Family_Background with
+    /// two freshly-inserted unrostered parent NPC Players rows, Child edges
+    /// parent→avatar, a Partner edge between the parents, Phone_State, and the
+    /// §3.1 transport gift — all one batch. Requires <see cref="Persons"/>.
+    /// </summary>
+    /// <param name="personSeed">The trait picker's adjusted person row (PlayerId is overwritten with the new avatar's id); null = the plain backstory seed.</param>
+    public void CreateAvatar(
+        string firstName, string lastName, int teamId, in PlayerRatingsRow ratings,
+        in Backstory backstory, PersonRow? personSeed = null,
+        PitcherRole pitcherRole = PitcherRole.Starter)
+    {
+        if (Persons is null)
+        {
+            throw new InvalidOperationException(
+                "CreateAvatar with a Backstory requires Persons (PersonQueries) to be wired.");
+        }
+        CreateAvatarCore(firstName, lastName, teamId, in ratings, pitcherRole, backstory, personSeed);
+    }
+
+    private void CreateAvatarCore(
+        string firstName, string lastName, int teamId, in PlayerRatingsRow ratings,
+        PitcherRole pitcherRole, Backstory? backstory, PersonRow? personSeed)
+    {
         if (HasAvatar)
         {
             throw new InvalidOperationException($"Avatar {_avatarPlayerId} already exists (one career per save).");
@@ -391,7 +445,9 @@ public sealed class CareerManager
                 LastName = lastName,
                 Age = StartingAge,
                 TeamId = teamId,
-                Funds = StartingFunds,
+                // HS-2 (§3): wealth-tier starting funds; the tier-2 modal
+                // value IS the flat 500, so a "typical" avatar is unchanged.
+                Funds = backstory?.StartingFunds ?? StartingFunds,
                 HealthCeiling = 100,
                 Recklessness = 0,
                 BaseballInterest = 100,
@@ -428,6 +484,10 @@ public sealed class CareerManager
             // Lineage bootstrap (§1.3): the first avatar is the dynasty founder.
             _gameState.SetInt64(GameStateKeys.DynastyGeneration, 1);
             _gameState.SetText(GameStateKeys.DynastyFounderId, avatarId);
+            if (backstory.HasValue)
+            {
+                SeedFoundingHousehold(avatarId, lastName, backstory.Value, personSeed);
+            }
             _db.CommitBatch();
         }
         catch
@@ -440,6 +500,92 @@ public sealed class CareerManager
         league.Initialize();
         _micro.Initialize();
         ActivateAvatar(avatarId, teamId);
+    }
+
+    /// <summary>
+    /// HS-2 household seeding, inside the open creation batch: two unrostered
+    /// parent NPC Players rows (avatar's surname, backstory first names/ages),
+    /// Child edges parent→avatar — the §1.2 age-direction invariant (parents
+    /// 36–48 vs the 16-year-old avatar) is what keeps them out of the heir
+    /// walk forever — a Partner edge between the parents, the avatar's person
+    /// row (trait-picker seed or the plain backstory seed), neutral person
+    /// rows for the parents, Family_Background, Phone_State, and the §3.1
+    /// transport gift when the tier grants one.
+    /// </summary>
+    private void SeedFoundingHousehold(string avatarId, string lastName, in Backstory backstory, PersonRow? personSeed)
+    {
+        PersonQueries persons = Persons!;
+
+        string parent1Id = Guid.NewGuid().ToString();
+        string parent2Id = Guid.NewGuid().ToString();
+        InsertHouseholdParent(parent1Id, backstory.Parent1FirstName, lastName, backstory.Parent1Age);
+        InsertHouseholdParent(parent2Id, backstory.Parent2FirstName, lastName, backstory.Parent2Age);
+
+        _players.UpsertRelationship(parent1Id, avatarId,
+            BackstoryGenerator.BackstoryProfile.ParentChildAffinity, RelationshipType.Child);
+        _players.UpsertRelationship(parent2Id, avatarId,
+            BackstoryGenerator.BackstoryProfile.ParentChildAffinity, RelationshipType.Child);
+        _players.UpsertRelationship(parent1Id, parent2Id,
+            BackstoryGenerator.BackstoryProfile.ParentPartnerAffinity, RelationshipType.Partner);
+
+        PersonRow avatarPerson = personSeed ?? BackstoryGenerator.BuildPersonRow(avatarId, in backstory);
+        avatarPerson.PlayerId = avatarId; // a trait-picker seed is built before the id exists
+        persons.Upsert(in avatarPerson);
+        persons.Upsert(PersonRow.Neutral(parent1Id));
+        persons.Upsert(PersonRow.Neutral(parent2Id));
+
+        persons.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = avatarId,
+            WealthTier = backstory.WealthTier,
+            HouseholdIncome = backstory.HouseholdIncome,
+            Parent1Id = parent1Id,
+            Parent2Id = parent2Id,
+            HomeWifi = backstory.HomeWifi,
+            AllowanceWeekly = backstory.AllowanceWeekly,
+            Strictness = backstory.Strictness,
+        });
+        persons.UpsertPhone(new PhoneStateRow
+        {
+            PlayerId = avatarId,
+            Tier = backstory.PhoneTier,
+            Plan = backstory.PhonePlan,
+            MinutesRemaining = backstory.PhoneMinutes,
+            PurchasedDay = 0, // §3.1: possessions carried into day 1
+        });
+        if (backstory.TransportGiftItemId is not null)
+        {
+            persons.AddItem(new PlayerItemRow
+            {
+                PlayerId = avatarId,
+                ItemId = backstory.TransportGiftItemId,
+                Category = ItemCategory.Transport,
+                AcquiredDay = 0,
+            });
+        }
+    }
+
+    /// <summary>
+    /// One unrostered narrative-NPC parent: invisible to both sims (no team,
+    /// no ratings row — the roster join and the free-agent window both skip
+    /// ratings-less people, so a parent can never be signed or displaced).
+    /// Household money lives on Family_Background, not the parent's funds.
+    /// </summary>
+    private void InsertHouseholdParent(string playerId, string firstName, string lastName, int age)
+    {
+        _players.Insert(new PlayerRow
+        {
+            PlayerId = playerId,
+            FirstName = firstName,
+            LastName = lastName,
+            Age = age,
+            TeamId = null,
+            Funds = 0,
+            HealthCeiling = 100,
+            Recklessness = 0,
+            BaseballInterest = 0,
+            DetectionRisk = 0,
+        });
     }
 
     /// <summary>
@@ -844,6 +990,19 @@ public sealed class CareerManager
             _gameState.SetText(GameStateKeys.AvatarPlayerId, heirId);
             long generation = _gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long stored) ? stored : 1;
             _gameState.SetInt64(GameStateKeys.DynastyGeneration, generation + 1);
+            if (Persons is not null)
+            {
+                // HS-2 (person-layer doc §10): the heir's family is the
+                // avatar's own household — inherited context, never a fresh
+                // backstory roll. The wealth tier reads the retiring avatar's
+                // funds against the §3 starting-funds ladder; the phone
+                // follows the household tier, stamped with the handoff day.
+                int wealthTier = BackstoryGenerator.WealthTierForFunds(retiree.Funds);
+                Persons.UpsertFamily(BackstoryGenerator.InheritedFamily(
+                    heirId, wealthTier, retireeId, FindPartnerId(retireeId)));
+                Persons.UpsertPhone(BackstoryGenerator.InheritedPhone(
+                    heirId, wealthTier, (int)Math.Max(0, _state.CurrentDay)));
+            }
             _db.CommitBatch();
         }
         catch

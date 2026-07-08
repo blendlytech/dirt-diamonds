@@ -44,6 +44,92 @@ text = "Team"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="BackgroundRow" type="VBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="BackgroundTitleLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Your Background"
+
+[node name="WealthTierLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Family: Middle-Class"
+
+[node name="HouseholdIncomeLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Household income: ~$72,000/yr"
+
+[node name="StartingFundsLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Starting funds: $500"
+
+[node name="AllowanceLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Weekly allowance: $25"
+
+[node name="PhoneLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Phone: Mid-Tier Phone, Basic plan"
+
+[node name="WifiLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Home Wi-Fi: yes"
+
+[node name="TransportLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Transport: none"
+
+[node name="StrictnessLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Parental strictness: 50/100"
+
+[node name="ParentsLabel" type="Label" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Parents: —"
+
+[node name="RerollButton" type="Button" parent="Screen/BackgroundRow"]
+layout_mode = 2
+text = "Re-roll Background"
+
+[node name="TraitsRow" type="VBoxContainer" parent="Screen"]
+layout_mode = 2
+
+[node name="TraitsTitleLabel" type="Label" parent="Screen/TraitsRow"]
+layout_mode = 2
+text = "Personality Traits"
+
+[node name="TraitsHintLabel" type="Label" parent="Screen/TraitsRow"]
+layout_mode = 2
+text = "Choose up to 2 traits (0 selected)"
+
+[node name="TraitsGrid" type="GridContainer" parent="Screen/TraitsRow"]
+layout_mode = 2
+columns = 3
+
+[node name="LeadershipCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+layout_mode = 2
+text = "Leadership"
+
+[node name="HumorCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+layout_mode = 2
+text = "Humor"
+
+[node name="GenerosityCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+layout_mode = 2
+text = "Generosity"
+
+[node name="KindnessCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+layout_mode = 2
+text = "Kindness"
+
+[node name="PatienceCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+layout_mode = 2
+text = "Patience"
+
+[node name="HumilityCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+layout_mode = 2
+text = "Humility"
+
 [node name="CareerRow" type="HBoxContainer" parent="Screen"]
 layout_mode = 2
 

@@ -143,7 +143,7 @@ public static class LeagueGenerator
     /// </summary>
     public static bool GenerateIfEmpty(
         DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
-        int ratingSpread, ref RngState rng)
+        int ratingSpread, ref RngState rng, PersonQueries? persons = null)
     {
         if (baseball.CountTeams() > 0)
         {
@@ -180,7 +180,7 @@ public static class LeagueGenerator
                     bool isPitcher = slot >= LeagueSimulator.LineupSize;
                     (string id, int stuff) = GeneratePlayer(
                         players, baseball, teamId, isPitcher ? PitcherRole.Starter : PitcherRole.None,
-                        ratingSpread, ref rng);
+                        ratingSpread, ref rng, persons: persons);
                     if (isPitcher)
                     {
                         pitchers.Add((id, stuff));
@@ -195,7 +195,7 @@ public static class LeagueGenerator
                 for (int slot = 0; slot < LeagueSimulator.BullpenSize; slot++)
                 {
                     (string id, int stuff) = GeneratePlayer(
-                        players, baseball, t + 1, PitcherRole.Reliever, ratingSpread, ref v4Rng);
+                        players, baseball, t + 1, PitcherRole.Reliever, ratingSpread, ref v4Rng, persons: persons);
                     pitchers.Add((id, stuff));
                 }
             }
@@ -223,7 +223,7 @@ public static class LeagueGenerator
     /// </summary>
     public static bool EnsureV4(
         DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
-        int ratingSpread, ref RngState rng)
+        int ratingSpread, ref RngState rng, PersonQueries? persons = null)
     {
         if (baseball.CountTeams() == 0)
         {
@@ -264,7 +264,7 @@ public static class LeagueGenerator
                 for (int i = relievers[teamId]; i < LeagueSimulator.BullpenSize; i++)
                 {
                     (string id, int stuff) = GeneratePlayer(
-                        players, baseball, teamId, PitcherRole.Reliever, ratingSpread, ref rng);
+                        players, baseball, teamId, PitcherRole.Reliever, ratingSpread, ref rng, persons: persons);
                     GenerateArsenal(baseball, id, stuff, ratingSpread, ref rng);
                 }
             }
@@ -303,7 +303,7 @@ public static class LeagueGenerator
     /// </summary>
     public static bool EnsureTierLeagues(
         DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
-        int ratingSpread, ref RngState rng)
+        int ratingSpread, ref RngState rng, PersonQueries? persons = null)
     {
         if (baseball.CountTeams() == 0)
         {
@@ -358,7 +358,7 @@ public static class LeagueGenerator
                             : slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize ? PitcherRole.Starter
                             : PitcherRole.Reliever;
                         (string id, int stuff) = GeneratePlayer(
-                            players, baseball, teamId, role, ratingSpread, ref rng, minAge, ageSpan);
+                            players, baseball, teamId, role, ratingSpread, ref rng, minAge, ageSpan, persons);
                         if (role != PitcherRole.None)
                         {
                             pitchers.Add((id, stuff));
@@ -385,9 +385,17 @@ public static class LeagueGenerator
     /// EnsureTierLeagues passes the tier-appropriate window. The roll is one
     /// NextInt draw either way, so the draw sequence shape never changes.</param>
     /// <param name="ageSpan">Width of the generated-age roll.</param>
+    /// <param name="persons">HS-2 (person-layer doc §2.5): when wired AND the
+    /// world rolls a real spread, the player also gets a modest person-stat
+    /// row drawn from the SAME per-player Split() fork the prospect discount
+    /// uses (after its seven draws) — the main stream never moves. Null (every
+    /// pre-HS-2 caller) or spread 0 (calibration/guard worlds) writes nothing:
+    /// absent rows read as neutral, which is exactly the §2.5 guard-world
+    /// contract.</param>
     internal static (string PlayerId, int PitStuff) GeneratePlayer(
         PlayerQueries players, BaseballQueries baseball, int teamId, PitcherRole role,
-        int ratingSpread, ref RngState rng, int minAge = 21, int ageSpan = 16)
+        int ratingSpread, ref RngState rng, int minAge = 21, int ageSpan = 16,
+        PersonQueries? persons = null)
     {
         string playerId = NextGuid(ref rng);
         // Locals preserve the frozen pre-v10 draw ORDER exactly (guid, first,
@@ -459,6 +467,14 @@ public static class LeagueGenerator
             ratings.PitControl = DevelopmentCurve.RawCurrent(potential.PitControl, age, ref discountRng);
             ratings.PitStamina = DevelopmentCurve.RawCurrent(potential.PitStamina, age, ref discountRng);
             ratings.Fielding = DevelopmentCurve.RawCurrent(potential.Fielding, age, ref discountRng);
+            if (persons is not null)
+            {
+                // §2.5 organic person spread, appended to the already-forked
+                // discount stream AFTER its seven draws: the seven RawCurrent
+                // results above and every main-stream draw stay byte-identical
+                // whether or not persons is wired.
+                persons.Upsert(RollPersonRow(playerId, ref discountRng));
+            }
         }
         baseball.UpsertRatings(in ratings);
         baseball.UpsertPotential(in potential);
@@ -528,6 +544,43 @@ public static class LeagueGenerator
         BitConverter.TryWriteBytes(bytes, rng.NextUInt64());
         BitConverter.TryWriteBytes(bytes[8..], rng.NextUInt64());
         return new Guid(bytes).ToString();
+    }
+
+    /// <summary>
+    /// §2.5 organic-NPC person spread: deliberately narrower than
+    /// <see cref="DefaultRatingSpread"/> (25) — the universe isn't uniformly
+    /// average, but person stats stay near the neutral 50 the HS-6 zero-at-50
+    /// modifier is anchored on. Narratively live, calibration-inert: nothing
+    /// reads these into a rating before HS-6.
+    /// </summary>
+    public const int PersonSpread = 15;
+
+    /// <summary>Bell scale of the generated GPA around the 2.5 neutral, clamped to the schema's [0,4].</summary>
+    public const double GpaSpread = 0.8;
+
+    /// <summary>
+    /// One organic person row: the twelve INTEGER stats in Player_Person
+    /// column order, then the GPA bell — the draw order is part of the
+    /// determinism contract, same as GeneratePlayer's own locals.
+    /// </summary>
+    private static PersonRow RollPersonRow(string playerId, ref RngState rng)
+    {
+        PersonRow row = PersonRow.Neutral(playerId);
+        row.Intelligence = RollRating(PersonSpread, ref rng);
+        row.Maturity = RollRating(PersonSpread, ref rng);
+        row.Happiness = RollRating(PersonSpread, ref rng);
+        row.Charisma = RollRating(PersonSpread, ref rng);
+        row.Confidence = RollRating(PersonSpread, ref rng);
+        row.Reputation = RollRating(PersonSpread, ref rng);
+        row.SocialStatus = RollRating(PersonSpread, ref rng);
+        row.Attractiveness = RollRating(PersonSpread, ref rng);
+        row.Teamwork = RollRating(PersonSpread, ref rng);
+        row.Morality = RollRating(PersonSpread, ref rng);
+        row.Discipline = RollRating(PersonSpread, ref rng);
+        row.WorkEthic = RollRating(PersonSpread, ref rng);
+        double gpaBell = (rng.NextDouble() + rng.NextDouble() + rng.NextDouble() - 1.5) / 1.5;
+        row.Gpa = Math.Clamp(2.5 + GpaSpread * gpaBell, 0.0, 4.0);
+        return row;
     }
 
     /// <summary>Sum-of-three-uniforms bell around 50, clamped to the 0–100 CHECK bounds.</summary>

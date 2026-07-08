@@ -51,6 +51,9 @@ public sealed partial class GameManager : Node
     public NeedsQueries Needs { get; private set; } = null!;
     public BaseballQueries Baseball { get; private set; } = null!;
 
+    /// <summary>HS-2: the schema-v11 person-layer query surface — public like Needs/Baseball so the creation UI (backstory reveal, trait picker) and the HS-3 phone/marketplace screens read through it.</summary>
+    public PersonQueries Persons { get; private set; } = null!;
+
     /// <summary>The tier → macro-sim map (Phase 9a): one LeagueSimulator per ladder tier.</summary>
     public LeagueDirectory Leagues { get; private set; } = null!;
     public MicroGame Micro { get; private set; } = null!;
@@ -167,6 +170,7 @@ public sealed partial class GameManager : Node
         Players = new PlayerQueries(_database);
         Needs = new NeedsQueries(_database);
         Baseball = new BaseballQueries(_database);
+        Persons = new PersonQueries(_database);
         Clock = new TimeManager(_database, GameState, State, Events);
         Clock.Initialize(NewGameStartYear);
 
@@ -174,14 +178,18 @@ public sealed partial class GameManager : Node
         // In-game runs are not required to be replay-deterministic (that is
         // the harness's contract), so a wall-clock seed is fine here.
         var rng = new RngState(unchecked((ulong)System.Environment.TickCount64) | 1UL);
+        // HS-2: Persons wired in so fresh worlds seed the §2.5 organic
+        // person-stat spread at generation (from the per-player fork — the
+        // rating draws are untouched); migrated saves keep their backfilled
+        // neutral rows (INSERT OR IGNORE never clobbers).
         bool newLeague = LeagueGenerator.GenerateIfEmpty(
-            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
         // v3→v4 save top-up: invents the relievers the DDL backfill cannot
         // (roles/arsenals for migrated pitchers come from the schema script).
-        LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
         // v6→v7 world top-up (Phase 9a): seeds the five ladder tiers below MLB
         // on both migrated saves and fresh worlds. No-op once they exist.
-        LeagueGenerator.EnsureTierLeagues(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        LeagueGenerator.EnsureTierLeagues(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
 
         // Split the wall-clock stream before the sims copy it, so no two
         // consumers ever replay each other's draws.
@@ -246,6 +254,9 @@ public sealed partial class GameManager : Node
         // 12c review: an attended game's flush re-normalizes its tier's rate
         // columns, so the post-game dashboard refresh never reads them stale.
         Career.Normalizer = normalizer;
+        // HS-2: avatar creation seeds the v11 person layer (backstory, parents,
+        // phone, transport) and Succeed writes the heir's inherited household.
+        Career.Persons = Persons;
         // The real game pauses succession for the heir-reveal/choice UI;
         // headless/harness callers construct their own CareerManager and
         // never touch this flag, so their autopilot pick is unaffected.

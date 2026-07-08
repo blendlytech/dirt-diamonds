@@ -78,6 +78,7 @@ internal static class Program
         string devStreamScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_devstream_{Guid.NewGuid():N}.db");
         string practiceScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_practice_{Guid.NewGuid():N}.db");
         string devEquilibriumScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_devequilibrium_{Guid.NewGuid():N}.db");
+        string backstoryScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_backstory_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -95,6 +96,7 @@ internal static class Program
             RunLineageFailureSuite(schemaPath, lineageFailScratchPath);
             RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
             RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
+            RunBackstoryPersonSuite(schemaPath, backstoryScratchPath);
             RunTierLadderSuite(schemaPath, tierScratchPath);
             RunAvailabilitySuite(schemaPath, availScratchPath);
             RunEquipmentSuite(schemaPath, equipScratchPath);
@@ -172,6 +174,8 @@ internal static class Program
                     practiceScratchPath + ".seam", practiceScratchPath + ".practiced", practiceScratchPath + ".idle",
                     practiceScratchPath + ".guard",
                     devEquilibriumScratchPath,
+                    backstoryScratchPath, backstoryScratchPath + ".legacy",
+                    backstoryScratchPath + ".spread", backstoryScratchPath + ".spreadbare",
                 })
             {
                 TryDelete(variant);
@@ -2733,6 +2737,400 @@ internal static class Program
     // 13. Phase 9a tier ladder: 6-tier world-gen, per-tier environments
     //     (docs/design/tier_league_environments.md §2/§4/§5)
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // HS-2 backstory & person seeding (high_school_person_layer.md §2.5/§3/§3.1)
+    // ------------------------------------------------------------------
+
+    private static void RunBackstoryPersonSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- HS-2 backstory & person seeding (§3 wealth tiers, creation determinism) ---");
+
+        // ---- pure mapping checks (no DB) ----
+        int[] percentileEdges = { 0, 11, 12, 39, 40, 74, 75, 92, 93, 99 };
+        int[] expectedTiers = { 0, 0, 1, 1, 2, 2, 3, 3, 4, 4 };
+        bool bandsOk = true;
+        for (int i = 0; i < percentileEdges.Length; i++)
+        {
+            bandsOk &= BackstoryGenerator.RollWealthTier(percentileEdges[i]) == expectedTiers[i];
+        }
+        Check("wealth-tier percentile mapping honors the §3 cumulative bands (12/28/35/18/7)", bandsOk);
+
+        double[] fundsTable = { 50, 200, 500, 1_500, 5_000 };
+        double[] allowanceTable = { 0, 10, 25, 60, 150 };
+        int[] phoneTierTable = { 1, 1, 2, 2, 3 };
+        int[] phonePlanTable = { 0, 0, 1, 1, 2 };
+        bool tableOk = true;
+        for (int tier = 0; tier <= 4; tier++)
+        {
+            tableOk &= BackstoryGenerator.StartingFundsFor(tier) == fundsTable[tier]
+                && BackstoryGenerator.AllowanceFor(tier) == allowanceTable[tier]
+                && BackstoryGenerator.PhoneTierFor(tier) == phoneTierTable[tier]
+                && BackstoryGenerator.PhonePlanFor(tier) == phonePlanTable[tier]
+                && BackstoryGenerator.HasHomeWifi(tier) == (tier >= 2)
+                && (BackstoryGenerator.TransportGiftFor(tier) is not null) == (tier >= 2)
+                && BackstoryGenerator.SocialStatusSeedFor(tier) == 30 + 10 * tier;
+        }
+        tableOk &= BackstoryGenerator.StartingFundsFor(2) == CareerManager.StartingFunds; // the §3 continuity anchor
+        tableOk &= BackstoryGenerator.TransportGiftFor(2) != BackstoryGenerator.TransportGiftFor(3)
+            && BackstoryGenerator.TransportGiftFor(3) != BackstoryGenerator.TransportGiftFor(4);
+        Check("§3 wealth table verbatim: funds/allowance/phone/plan/Wi-Fi/transport/social seed per tier "
+            + "(tier-2 funds = the shipped flat $500)", tableOk);
+
+        bool ladderOk =
+            BackstoryGenerator.WealthTierForFunds(0) == 0
+            && BackstoryGenerator.WealthTierForFunds(199) == 0
+            && BackstoryGenerator.WealthTierForFunds(200) == 1
+            && BackstoryGenerator.WealthTierForFunds(499) == 1
+            && BackstoryGenerator.WealthTierForFunds(500) == 2
+            && BackstoryGenerator.WealthTierForFunds(1_499) == 2
+            && BackstoryGenerator.WealthTierForFunds(1_500) == 3
+            && BackstoryGenerator.WealthTierForFunds(4_999) == 3
+            && BackstoryGenerator.WealthTierForFunds(1_000_000) == 4;
+        for (int tier = 0; tier <= 4; tier++)
+        {
+            ladderOk &= BackstoryGenerator.WealthTierForFunds(BackstoryGenerator.StartingFundsFor(tier)) == tier;
+        }
+        Check("WealthTierForFunds inverts the §3 funds ladder (incl. round-trip per tier)", ladderOk);
+
+        bool deterministic = true;
+        for (ulong seed = 1; seed <= 10; seed++)
+        {
+            var rngA = new RngState(seed * 977UL);
+            var rngB = new RngState(seed * 977UL);
+            deterministic &= BackstoriesEqual(BackstoryGenerator.Roll(ref rngA), BackstoryGenerator.Roll(ref rngB));
+        }
+        Check("Roll determinism: identical seeds produce field-identical backstories (10 seeds)", deterministic);
+
+        const int rollCount = 20_000;
+        var freqRng = new RngState(MicroSeed + 101);
+        Span<int> tierCounts = stackalloc int[5];
+        bool rollsConsistent = true;
+        string inconsistency = "";
+        for (int i = 0; i < rollCount; i++)
+        {
+            Backstory b = BackstoryGenerator.Roll(ref freqRng);
+            tierCounts[b.WealthTier]++;
+            bool ok = b.StartingFunds == BackstoryGenerator.StartingFundsFor(b.WealthTier)
+                && b.AllowanceWeekly == BackstoryGenerator.AllowanceFor(b.WealthTier)
+                && b.PhoneTier == BackstoryGenerator.PhoneTierFor(b.WealthTier)
+                && b.PhonePlan == BackstoryGenerator.PhonePlanFor(b.WealthTier)
+                && b.PhoneMinutes == BackstoryGenerator.StartingMinutesFor(b.PhonePlan)
+                && b.HomeWifi == BackstoryGenerator.HasHomeWifi(b.WealthTier)
+                && b.TransportGiftItemId == BackstoryGenerator.TransportGiftFor(b.WealthTier)
+                && b.SocialStatus == BackstoryGenerator.SocialStatusSeedFor(b.WealthTier)
+                && b.Strictness is >= 0 and <= 100
+                && b.Attractiveness is >= 0 and <= 100
+                && b.HouseholdIncome > 0
+                && b.Parent1Age is >= 36 and <= 48
+                && b.Parent2Age is >= 36 and <= 48
+                && b.Parent1Age > CareerManager.StartingAge
+                && b.Parent2Age > CareerManager.StartingAge
+                && b.Parent1FirstName.Length > 0
+                && b.Parent2FirstName.Length > 0;
+            if (!ok && rollsConsistent)
+            {
+                rollsConsistent = false;
+                inconsistency = $"roll {i} tier {b.WealthTier}";
+            }
+        }
+        Check($"{rollCount} rolls: every roll internally consistent with its tier tables + bounds",
+            rollsConsistent, inconsistency);
+
+        double[] expectedPct = { 12, 28, 35, 18, 7 };
+        bool freqOk = true;
+        var freqDetail = new System.Text.StringBuilder();
+        for (int tier = 0; tier <= 4; tier++)
+        {
+            double pct = 100.0 * tierCounts[tier] / rollCount;
+            freqOk &= Math.Abs(pct - expectedPct[tier]) <= 2.0;
+            freqDetail.Append($"{(tier > 0 ? " / " : "")}{pct:F1}");
+        }
+        Check("wealth-tier frequencies inside ±2% of 12/28/35/18/7 over 20k rolls", freqOk, freqDetail.ToString());
+
+        bool inheritedOk;
+        {
+            FamilyBackgroundRow fam = BackstoryGenerator.InheritedFamily("h", 3, "p1", "p2");
+            PhoneStateRow phone = BackstoryGenerator.InheritedPhone("h", 3, day: 42);
+            inheritedOk = fam.PlayerId == "h" && fam.WealthTier == 3 && fam.HomeWifi
+                && fam.HouseholdIncome == BackstoryGenerator.HouseholdIncomeAnchorFor(3)
+                && fam.AllowanceWeekly == 0 && fam.Strictness == 50
+                && fam.Parent1Id == "p1" && fam.Parent2Id == "p2"
+                && phone.Tier == 2 && phone.Plan == 1
+                && phone.MinutesRemaining == BackstoryGenerator.StartingMinutesFor(1)
+                && phone.PurchasedDay == 42;
+        }
+        Check("inherited household composition (§10): anchor income, adult allowance 0, neutral strictness, day-stamped phone",
+            inheritedOk);
+
+        // ---- legacy path: Persons null end-to-end stays pre-HS-2 byte-compatible ----
+        string legacyPath = scratchPath + ".legacy";
+        using (var db = new DatabaseManager(legacyPath))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var persons = new PersonQueries(db);
+            var personRows = new Dictionary<string, PersonRow>();
+            Check("legacy world-gen (no Persons wired) writes zero person rows", persons.LoadAll(personRows) == 0);
+
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+            league.Initialize();
+            var micro = new MicroGame(db, baseball);
+            micro.Initialize();
+            var career = new CareerManager(
+                db, players, baseball, new GameStateQueries(db), new GlobalState(), Solo(league), micro,
+                new RngState(MicroSeed + 102));
+            career.CreateAvatar("You", "Legacy", 3, Ratings60Batter());
+            players.TryGetById(career.AvatarPlayerId, out PlayerRow legacyAvatar);
+            Check("Persons-null CreateAvatar keeps the flat $500 and writes no person-layer rows",
+                legacyAvatar.Funds == CareerManager.StartingFunds
+                && !persons.TryGet(career.AvatarPlayerId, out _)
+                && !persons.TryGetFamily(career.AvatarPlayerId, out _)
+                && !persons.TryGetPhone(career.AvatarPlayerId, out _),
+                $"funds {legacyAvatar.Funds}");
+        }
+
+        // ---- seeded path: spread-0 guard world + full household creation ----
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var persons = new PersonQueries(db);
+            var genRng = new RngState(LeagueSeed);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng, persons);
+            var personRows = new Dictionary<string, PersonRow>();
+            Check("spread-0 world-gen with Persons wired stays all-neutral by omission (§2.5 guard-world contract)",
+                persons.LoadAll(personRows) == 0);
+
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+            league.Initialize();
+            var micro = new MicroGame(db, baseball);
+            micro.Initialize();
+            var career = new CareerManager(
+                db, players, baseball, new GameStateQueries(db), new GlobalState(), Solo(league), micro,
+                new RngState(MicroSeed + 103));
+            career.Persons = persons;
+
+            // A deterministic gifted-tier (≥2) backstory so the transport,
+            // Wi-Fi and phone-plan branches all have live coverage.
+            var rollRng = new RngState(MicroSeed + 104);
+            Backstory bs = BackstoryGenerator.Roll(ref rollRng);
+            int rerolls = 0;
+            while (bs.TransportGiftItemId is null && ++rerolls < 500)
+            {
+                bs = BackstoryGenerator.Roll(ref rollRng);
+            }
+
+            var preRoster = new List<RosterPlayerRow>();
+            baseball.LoadRoster(preRoster);
+            career.CreateAvatar("You", "Dynasty", 3, Ratings60Batter(), in bs);
+            var postRoster = new List<RosterPlayerRow>();
+            baseball.LoadRoster(postRoster);
+            string avatarId = career.AvatarPlayerId;
+
+            players.TryGetById(avatarId, out PlayerRow avatarRow);
+            Check("backstory starting funds land on the avatar (tier table, not the flat $500)",
+                avatarRow.Funds == bs.StartingFunds, $"tier {bs.WealthTier}, funds {avatarRow.Funds}");
+
+            Check("avatar person row: backstory attractiveness + tier social seed, all else neutral",
+                persons.TryGet(avatarId, out PersonRow avatarPerson)
+                && avatarPerson.Attractiveness == bs.Attractiveness
+                && avatarPerson.SocialStatus == bs.SocialStatus
+                && avatarPerson.Gpa == 2.5 && avatarPerson.Intelligence == 50 && avatarPerson.Maturity == 50
+                && avatarPerson.Happiness == 50 && avatarPerson.Charisma == 50 && avatarPerson.Confidence == 50
+                && avatarPerson.Reputation == 50 && avatarPerson.Teamwork == 50 && avatarPerson.Morality == 50
+                && avatarPerson.Discipline == 50 && avatarPerson.WorkEthic == 50);
+
+            persons.TryGetFamily(avatarId, out FamilyBackgroundRow family);
+            bool familyOk = family.WealthTier == bs.WealthTier
+                && family.HouseholdIncome == bs.HouseholdIncome
+                && family.HomeWifi == bs.HomeWifi
+                && family.AllowanceWeekly == bs.AllowanceWeekly
+                && family.Strictness == bs.Strictness
+                && family.Parent1Id is not null && family.Parent2Id is not null;
+            players.TryGetById(family.Parent1Id!, out PlayerRow parent1);
+            players.TryGetById(family.Parent2Id!, out PlayerRow parent2);
+            bool parentsOk = parent1.LastName == "Dynasty" && parent2.LastName == "Dynasty"
+                && parent1.FirstName == bs.Parent1FirstName && parent2.FirstName == bs.Parent2FirstName
+                && parent1.Age == bs.Parent1Age && parent2.Age == bs.Parent2Age
+                && !parent1.TeamId.HasValue && !parent2.TeamId.HasValue
+                && persons.TryGet(family.Parent1Id!, out PersonRow parent1Person) && IsNeutralPerson(in parent1Person)
+                && persons.TryGet(family.Parent2Id!, out PersonRow parent2Person) && IsNeutralPerson(in parent2Person);
+            Check("family background row matches the roll; both parents are real, unrostered, neutral-person NPCs",
+                familyOk && parentsOk);
+
+            Check("phone state row per tier (purchased day 0)",
+                persons.TryGetPhone(avatarId, out PhoneStateRow phoneRow)
+                && phoneRow.Tier == bs.PhoneTier && phoneRow.Plan == bs.PhonePlan
+                && phoneRow.MinutesRemaining == bs.PhoneMinutes && phoneRow.PurchasedDay == 0);
+
+            var items = new List<PlayerItemRow>();
+            persons.LoadItemsFor(avatarId, items);
+            Check("transport gift is a real Player_Items row (category Transport, acquired day 0)",
+                items.Count == 1 && items[0].ItemId == bs.TransportGiftItemId
+                && items[0].Category == ItemCategory.Transport && items[0].AcquiredDay == 0,
+                $"item {(items.Count > 0 ? items[0].ItemId : "none")}");
+
+            var avatarRels = new List<RelationshipRow>();
+            players.LoadRelationshipsFor(avatarId, avatarRels);
+            int childEdges = 0;
+            foreach (RelationshipRow rel in avatarRels)
+            {
+                if (rel.Type == RelationshipType.Child
+                    && rel.AffinityScore == BackstoryGenerator.BackstoryProfile.ParentChildAffinity)
+                {
+                    childEdges++;
+                }
+            }
+            var parent1Rels = new List<RelationshipRow>();
+            players.LoadRelationshipsFor(family.Parent1Id!, parent1Rels);
+            bool partnerEdge = false;
+            foreach (RelationshipRow rel in parent1Rels)
+            {
+                partnerEdge |= rel.Type == RelationshipType.Partner
+                    && (rel.Player1Id == family.Parent2Id || rel.Player2Id == family.Parent2Id);
+            }
+            Check("household edges: two parent→avatar Child edges + a Partner edge between the parents",
+                childEdges == 2 && partnerEdge, $"child edges {childEdges}, partner {partnerEdge}");
+
+            Check("roster invariant holds through household seeding (one displaced, size unchanged)",
+                postRoster.Count == preRoster.Count);
+            Check("household-seeded database integrity ok / no FK violations",
+                db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+
+            // §1.2 held: retire the avatar with the WHOLE bloodline aged
+            // consistently (parents stay older) — the parents' Child edges
+            // must never surface them as heirs.
+            players.SetAge(avatarId, HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge);
+            players.SetAge(family.Parent1Id!, 70);
+            players.SetAge(family.Parent2Id!, 70);
+            SuccessionOutcome childless = career.EvaluateSuccession();
+            Check("§1.2 held at retirement: household Child edges never surface the parents as heirs (NoHeirs)",
+                childless.Kind == SuccessionOutcomeKind.GameOver && childless.Reason == LineageFailure.NoHeirs);
+
+            // Succession inherits the household (§10): the heir's family is
+            // the retiring avatar's own, wealth tier read off the funds ladder.
+            string heirId = career.ConceiveChild("Heir", "Dynasty", birthAge: HeirGenetics.HeirGeneticsProfile.MaturityAge);
+            players.SetBaseballInterest(heirId, 100);
+            SuccessionOutcome handoff = career.RunSuccessionCheck();
+            persons.TryGetFamily(heirId, out FamilyBackgroundRow heirFamily);
+            persons.TryGetPhone(heirId, out PhoneStateRow heirPhone);
+            int expectedHeirTier = BackstoryGenerator.WealthTierForFunds(bs.StartingFunds);
+            Check("Succeed writes the heir's INHERITED household: parents = avatar (+no partner), tier from the funds ladder, phone per tier",
+                handoff.Kind == SuccessionOutcomeKind.Succeeded && handoff.HeirId == heirId
+                && career.AvatarPlayerId == heirId
+                && heirFamily.Parent1Id == avatarId && heirFamily.Parent2Id is null
+                && heirFamily.WealthTier == expectedHeirTier && heirFamily.AllowanceWeekly == 0
+                && heirPhone.Tier == BackstoryGenerator.PhoneTierFor(expectedHeirTier)
+                && heirPhone.Plan == BackstoryGenerator.PhonePlanFor(expectedHeirTier),
+                $"heir tier {heirFamily.WealthTier} (expected {expectedHeirTier})");
+        }
+
+        // ---- §2.5 spread pair: person spread live, generation stream untouched ----
+        string spreadPath = scratchPath + ".spread";
+        string spreadBarePath = scratchPath + ".spreadbare";
+        using (var spreadDb = new DatabaseManager(spreadPath))
+        using (var bareDb = new DatabaseManager(spreadBarePath))
+        {
+            spreadDb.InitializeSchema(schemaPath);
+            bareDb.InitializeSchema(schemaPath);
+            var spreadPlayers = new PlayerQueries(spreadDb);
+            var spreadBaseball = new BaseballQueries(spreadDb);
+            var spreadPersons = new PersonQueries(spreadDb);
+            var barePlayers = new PlayerQueries(bareDb);
+            var bareBaseball = new BaseballQueries(bareDb);
+
+            var spreadRng = new RngState(LeagueSeed + 7);
+            var bareRng = new RngState(LeagueSeed + 7);
+            LeagueGenerator.GenerateIfEmpty(
+                spreadDb, spreadPlayers, spreadBaseball, LeagueGenerator.DefaultRatingSpread, ref spreadRng, spreadPersons);
+            LeagueGenerator.GenerateIfEmpty(
+                bareDb, barePlayers, bareBaseball, LeagueGenerator.DefaultRatingSpread, ref bareRng);
+
+            var spreadRoster = new List<RosterPlayerRow>();
+            spreadBaseball.LoadRoster(spreadRoster);
+            var personRows = new Dictionary<string, PersonRow>();
+            int personCount = spreadPersons.LoadAll(personRows);
+
+            bool coverage = personCount == spreadRoster.Count && personCount > 0;
+            bool inBounds = true;
+            bool anyOff50 = false;
+            bool anyGpaOffNeutral = false;
+            double teamworkSum = 0;
+            foreach (PersonRow row in personRows.Values)
+            {
+                inBounds &= row.Intelligence is >= 0 and <= 100 && row.Teamwork is >= 0 and <= 100
+                    && row.Morality is >= 0 and <= 100 && row.Gpa is >= 0.0 and <= 4.0;
+                anyOff50 |= row.Teamwork != 50 || row.Charisma != 50 || row.Morality != 50;
+                anyGpaOffNeutral |= row.Gpa != 2.5;
+                teamworkSum += row.Teamwork;
+            }
+            double teamworkMean = teamworkSum / Math.Max(1, personCount);
+            Check("§2.5 spread world-gen: every generated player has a person row, spread live but centred on 50",
+                coverage && inBounds && anyOff50 && anyGpaOffNeutral && Math.Abs(teamworkMean - 50) <= 3,
+                $"{personCount} rows, teamwork mean {teamworkMean:F1}");
+
+            var bareRoster = new List<RosterPlayerRow>();
+            bareBaseball.LoadRoster(bareRoster);
+            bool identical = spreadRoster.Count == bareRoster.Count;
+            if (identical)
+            {
+                var bareById = new Dictionary<string, RosterPlayerRow>(bareRoster.Count);
+                foreach (RosterPlayerRow row in bareRoster)
+                {
+                    bareById[row.PlayerId] = row;
+                }
+                foreach (RosterPlayerRow row in spreadRoster)
+                {
+                    if (!bareById.TryGetValue(row.PlayerId, out RosterPlayerRow twin)
+                        || twin.FirstName != row.FirstName || twin.LastName != row.LastName
+                        || twin.TeamId != row.TeamId || twin.IsPitcher != row.IsPitcher || twin.Role != row.Role
+                        || twin.BatPower != row.BatPower || twin.BatContact != row.BatContact
+                        || twin.BatDiscipline != row.BatDiscipline || twin.PitStuff != row.PitStuff
+                        || twin.PitControl != row.PitControl || twin.PitStamina != row.PitStamina
+                        || twin.Fielding != row.Fielding)
+                    {
+                        identical = false;
+                        break;
+                    }
+                }
+            }
+            Check("§2.5 stream isolation: same-seed worlds with/without Persons are bit-identical on ids, names and ratings",
+                identical, $"{spreadRoster.Count} vs {bareRoster.Count} rostered");
+        }
+    }
+
+    private static PlayerRatingsRow Ratings60Batter() => new()
+    {
+        IsPitcher = false,
+        BatPower = 60,
+        BatContact = 60,
+        BatDiscipline = 60,
+        PitStuff = 50,
+        PitControl = 50,
+        PitStamina = 50,
+        Fielding = 50,
+    };
+
+    private static bool BackstoriesEqual(in Backstory a, in Backstory b) =>
+        a.WealthTier == b.WealthTier && a.HouseholdIncome == b.HouseholdIncome
+        && a.StartingFunds == b.StartingFunds && a.AllowanceWeekly == b.AllowanceWeekly
+        && a.HomeWifi == b.HomeWifi && a.PhoneTier == b.PhoneTier && a.PhonePlan == b.PhonePlan
+        && a.PhoneMinutes == b.PhoneMinutes && a.TransportGiftItemId == b.TransportGiftItemId
+        && a.Strictness == b.Strictness && a.Attractiveness == b.Attractiveness
+        && a.SocialStatus == b.SocialStatus
+        && a.Parent1FirstName == b.Parent1FirstName && a.Parent1Age == b.Parent1Age
+        && a.Parent2FirstName == b.Parent2FirstName && a.Parent2Age == b.Parent2Age;
+
+    private static bool IsNeutralPerson(in PersonRow row) =>
+        row.Gpa == 2.5 && row.Intelligence == 50 && row.Maturity == 50 && row.Happiness == 50
+        && row.Charisma == 50 && row.Confidence == 50 && row.Reputation == 50 && row.SocialStatus == 50
+        && row.Attractiveness == 50 && row.Teamwork == 50 && row.Morality == 50
+        && row.Discipline == 50 && row.WorkEthic == 50;
 
     /// <summary>One tier's §4 acceptance band (design doc tier_league_environments.md).</summary>
     private readonly record struct TierBand(
