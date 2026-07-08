@@ -20,5 +20,6 @@
     <Compile Include="..\..\Assets\Data\Database\DatabaseManager.cs" Link="Data\DatabaseManager.cs" />
     <Compile Include="..\..\Assets\Data\Database\PlayerDtos.cs" Link="Data\PlayerDtos.cs" />
     <Compile Include="..\..\Assets\Data\Database\PlayerQueries.cs" Link="Data\PlayerQueries.cs" />
+    <Compile Include="..\..\Assets\Data\Database\PersonQueries.cs" Link="Data\PersonQueries.cs" />
   </ItemGroup>
 </Project>

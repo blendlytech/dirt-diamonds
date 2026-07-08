@@ -27,6 +27,7 @@ internal static class Program
         "Players", "Batting_Stats", "Pitching_Stats", "Relationships", "Entity_Flags", "Game_Logs", "Game_State",
         "Teams", "Player_Ratings", "Pitcher_Roles", "Pitch_Arsenals", "Life_Needs", "Life_Stress", "Team_Tiers",
         "Player_Absences", "Player_Equipment", "Player_Potential",
+        "Player_Person", "Family_Background", "Phone_State", "Player_Items", "Child_Development",
     };
 
     private static int Main(string[] args)
@@ -102,7 +103,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 10", db.GetSchemaVersion() == 10, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 11", db.GetSchemaVersion() == 11, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);
@@ -170,6 +171,11 @@ internal static class Program
             // --- Schema v4: role/arsenal backfill migration ------------------
             // Runs after the benchmark: the cascade check deletes players[3].
             RunV4MigrationChecks(db, queries, schemaPath, players[3].PlayerId, players[4].PlayerId);
+
+            // --- Schema v11: High School person layer ------------------------
+            // The cascade check deletes players[5]; players[6..8] survive.
+            RunV11PersonLayerChecks(db, queries, schemaPath,
+                players[5].PlayerId, players[6].PlayerId, players[7].PlayerId, players[8].PlayerId);
 
             // --- FK integrity ------------------------------------------------
             bool orphanRejected = false;
@@ -292,6 +298,105 @@ internal static class Program
             ScalarLong(db, "SELECT COUNT(*) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 0);
     }
 
+    /// <summary>
+    /// Proves the schema-v11 High School person layer: the Player_Person
+    /// neutral-row backfill (applies to every Players row, never clobbers a
+    /// developed row), full DTO round-trips through PersonQueries for all five
+    /// tables, the Family_Background parent SET NULL rule, the Player_Items
+    /// INSERT OR IGNORE ownership rule, a CHECK rejection, and the
+    /// delete-cascade across every satellite.
+    /// </summary>
+    private static void RunV11PersonLayerChecks(
+        DatabaseManager db, PlayerQueries queries, string schemaPath,
+        string subjectId, string parent1Id, string parent2Id, string survivorId)
+    {
+        var person = new PersonQueries(db);
+
+        // Backfill: the 10k bulk insert ran after the initial schema apply, so
+        // this re-apply is the boot that must heal every playerless row in.
+        db.InitializeSchema(schemaPath);
+        Check("v11 backfill: every player has a Player_Person row",
+            ScalarLong(db, "SELECT COUNT(*) FROM Players WHERE player_id NOT IN (SELECT player_id FROM Player_Person);", subjectId) == 0);
+        Check("v11 backfill row is neutral (gpa 2.5, stats 50)",
+            person.TryGet(subjectId, out PersonRow neutral) &&
+            Math.Abs(neutral.Gpa - 2.5) < 1e-9 && neutral.Intelligence == 50 && neutral.WorkEthic == 50);
+
+        // Develop the row, re-apply, prove OR IGNORE left it alone.
+        PersonRow developed = PersonRow.Neutral(subjectId);
+        developed.Gpa = 3.7;
+        developed.Morality = 82;
+        developed.SocialStatus = 31;
+        person.Upsert(in developed);
+        db.InitializeSchema(schemaPath);
+        Check("v11 backfill is OR IGNORE (re-apply never clobbers a developed row)",
+            person.TryGet(subjectId, out PersonRow after) &&
+            Math.Abs(after.Gpa - 3.7) < 1e-9 && after.Morality == 82 && after.SocialStatus == 31);
+
+        // Family_Background round-trip + parent SET NULL.
+        person.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = subjectId, WealthTier = 1, HouseholdIncome = 28_500, Parent1Id = parent1Id,
+            Parent2Id = parent2Id, HomeWifi = false, AllowanceWeekly = 10, Strictness = 65,
+        });
+        Check("v11 family round-trip",
+            person.TryGetFamily(subjectId, out FamilyBackgroundRow family) &&
+            family.WealthTier == 1 && family.Parent1Id == parent1Id && family.Parent2Id == parent2Id &&
+            !family.HomeWifi && Math.Abs(family.AllowanceWeekly - 10) < 1e-9 && family.Strictness == 65);
+
+        queries.Delete(parent1Id);
+        Check("v11 parent delete SET NULLs the family pointer (row survives)",
+            person.TryGetFamily(subjectId, out family) &&
+            family.Parent1Id is null && family.Parent2Id == parent2Id && family.WealthTier == 1);
+
+        // Phone_State round-trip; absent row stays absent (no backfill).
+        Check("v11 phone: no row until one is written", !person.TryGetPhone(subjectId, out _));
+        person.UpsertPhone(new PhoneStateRow
+        {
+            PlayerId = subjectId, Tier = 1, Plan = 0, MinutesRemaining = 120, PurchasedDay = 3,
+        });
+        Check("v11 phone round-trip",
+            person.TryGetPhone(subjectId, out PhoneStateRow phone) &&
+            phone.Tier == 1 && phone.Plan == 0 && phone.MinutesRemaining == 120 && phone.PurchasedDay == 3);
+
+        // Player_Items: OR IGNORE ownership, load, remove.
+        var items = new List<PlayerItemRow>();
+        person.AddItem(new PlayerItemRow { PlayerId = subjectId, ItemId = "bmx_bike", Category = ItemCategory.Transport, AcquiredDay = 4 });
+        person.AddItem(new PlayerItemRow { PlayerId = subjectId, ItemId = "bmx_bike", Category = ItemCategory.Transport, AcquiredDay = 9 }); // duplicate → no-op
+        person.AddItem(new PlayerItemRow { PlayerId = subjectId, ItemId = "thrift_fit", Category = ItemCategory.Clothing, AcquiredDay = 5 });
+        person.LoadItemsFor(subjectId, items);
+        Check("v11 items: duplicate ownership is a no-op",
+            items.Count == 2 && items.Exists(i => i.ItemId == "bmx_bike" && i.AcquiredDay == 4 && i.Category == ItemCategory.Transport));
+        person.RemoveItem(subjectId, "thrift_fit");
+        person.LoadItemsFor(subjectId, items);
+        Check("v11 items: remove (parental revoke path)", items.Count == 1 && items[0].ItemId == "bmx_bike");
+
+        // Child_Development round-trip.
+        person.UpsertChild(new ChildDevelopmentRow
+        {
+            ChildId = subjectId, Care = 60, Coaching = 40, Funding = 30, Neglect = 10, LastTickDay = 12,
+        });
+        Check("v11 child-development round-trip",
+            person.TryGetChild(subjectId, out ChildDevelopmentRow child) &&
+            child.Care == 60 && child.Coaching == 40 && child.Funding == 30 && child.Neglect == 10 && child.LastTickDay == 12);
+
+        // CHECK coverage on the new tables.
+        bool badTierRejected = false;
+        try
+        {
+            person.UpsertFamily(new FamilyBackgroundRow { PlayerId = survivorId, WealthTier = 5 });
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            badTierRejected = true;
+        }
+        Check("v11 CHECK rejects out-of-range wealth_tier", badTierRejected);
+
+        // Cascade: deleting the player clears every v11 satellite.
+        queries.Delete(subjectId);
+        Check("v11 delete cascades across all five person-layer tables",
+            ScalarLong(db, "SELECT (SELECT COUNT(*) FROM Player_Person WHERE player_id = @id) + (SELECT COUNT(*) FROM Family_Background WHERE player_id = @id) + (SELECT COUNT(*) FROM Phone_State WHERE player_id = @id) + (SELECT COUNT(*) FROM Player_Items WHERE player_id = @id) + (SELECT COUNT(*) FROM Child_Development WHERE child_id = @id);", subjectId) == 0);
+    }
+
     private static long ScalarLong(DatabaseManager db, string sql, string playerId)
     {
         SqliteCommand cmd = db.GetPooledCommand(sql);
@@ -350,6 +455,9 @@ internal static class Program
         // Schema v4: roster join + arsenal bulk load ride the PKs.
         Check("index: Pitcher_Roles(player_id)", HasIndexPrefix(db, "Pitcher_Roles", "player_id"));
         Check("index: Pitch_Arsenals(player_id, pitch_type)", HasIndexPrefix(db, "Pitch_Arsenals", "player_id", "pitch_type"));
+        // Schema v11: person-layer probes + the player-scoped item load ride the PKs.
+        Check("index: Player_Person(player_id)", HasIndexPrefix(db, "Player_Person", "player_id"));
+        Check("index: Player_Items(player_id, item_id)", HasIndexPrefix(db, "Player_Items", "player_id", "item_id"));
 
         // Data-type consistency spot check on the hottest table.
         Check("Players column types", VerifyColumnTypes(db, "Players", new Dictionary<string, string>
@@ -384,6 +492,31 @@ internal static class Program
             ["velocity"] = "INTEGER",
             ["movement"] = "INTEGER",
             ["usage_weight"] = "INTEGER",
+        }));
+
+        // Schema v11: the person layer's hottest surfaces.
+        Check("Player_Person column types", VerifyColumnTypes(db, "Player_Person", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT",
+            ["gpa"] = "REAL",
+            ["intelligence"] = "INTEGER",
+            ["social_status"] = "INTEGER",
+            ["work_ethic"] = "INTEGER",
+        }));
+        Check("Family_Background column types", VerifyColumnTypes(db, "Family_Background", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT",
+            ["wealth_tier"] = "INTEGER",
+            ["household_income"] = "REAL",
+            ["parent1_id"] = "TEXT",
+            ["home_wifi"] = "INTEGER",
+        }));
+        Check("Player_Items column types", VerifyColumnTypes(db, "Player_Items", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT",
+            ["item_id"] = "TEXT",
+            ["category"] = "INTEGER",
+            ["acquired_day"] = "INTEGER",
         }));
     }
 

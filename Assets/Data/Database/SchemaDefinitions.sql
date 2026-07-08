@@ -380,8 +380,127 @@ INSERT OR IGNORE INTO Player_Potential
     SELECT player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding
     FROM Player_Ratings;
 
+-- ----------------------------------------------------------------------------
+-- Player_Person — schema v11. The High School phase's person-stat layer
+-- (docs/game-idas/HIGH_SCHOOL.md §3.2, curated core): academic, social and
+-- moral scalars for every person in the universe, NPCs included. 50 = neutral
+-- on every 0–100 scale (the Player_Ratings convention); gpa rides the real
+-- 0.0–4.0 academic scale (2.5 = the same neutral midpoint in spirit).
+-- Alignment (Good/Neutral/Troubled) is DERIVED from morality at thresholds,
+-- never stored; rarer traits (humility, generosity, ...) live as Entity_Flags,
+-- not columns. A separate additive table (never an ALTER on Players), the
+-- Player_Ratings/Team_Tiers/Player_Potential pattern.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Person (
+    player_id     TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    gpa           REAL    NOT NULL DEFAULT 2.5 CHECK (gpa           BETWEEN 0 AND 4),
+    intelligence  INTEGER NOT NULL DEFAULT 50  CHECK (intelligence  BETWEEN 0 AND 100),
+    maturity      INTEGER NOT NULL DEFAULT 50  CHECK (maturity      BETWEEN 0 AND 100),
+    happiness     INTEGER NOT NULL DEFAULT 50  CHECK (happiness     BETWEEN 0 AND 100),
+    charisma      INTEGER NOT NULL DEFAULT 50  CHECK (charisma      BETWEEN 0 AND 100),
+    confidence    INTEGER NOT NULL DEFAULT 50  CHECK (confidence    BETWEEN 0 AND 100),
+    reputation    INTEGER NOT NULL DEFAULT 50  CHECK (reputation    BETWEEN 0 AND 100),
+    social_status INTEGER NOT NULL DEFAULT 50  CHECK (social_status BETWEEN 0 AND 100),
+    attractiveness INTEGER NOT NULL DEFAULT 50 CHECK (attractiveness BETWEEN 0 AND 100),
+    teamwork      INTEGER NOT NULL DEFAULT 50  CHECK (teamwork      BETWEEN 0 AND 100),
+    morality      INTEGER NOT NULL DEFAULT 50  CHECK (morality      BETWEEN 0 AND 100),
+    discipline    INTEGER NOT NULL DEFAULT 50  CHECK (discipline    BETWEEN 0 AND 100),
+    work_ethic    INTEGER NOT NULL DEFAULT 50  CHECK (work_ethic    BETWEEN 0 AND 100)
+) STRICT;
+
+-- v10→v11 backfill AND standing heal: every person gets a neutral row.
+-- Unlike the Life_Needs no-backfill pattern, person stats are READ by systems
+-- that never write them (event prerequisites, dating, the sim's HS-6 modifier
+-- layer), so absent-row fallbacks would have to be duplicated in every reader.
+-- INSERT OR IGNORE over Players is idempotent, never clobbers a developed row,
+-- and also heals any player generated mid-session by a path that predates the
+-- person layer (post-v11 intake writes its own row at creation).
+INSERT OR IGNORE INTO Player_Person (player_id)
+    SELECT player_id FROM Players;
+
+-- ----------------------------------------------------------------------------
+-- Family_Background — schema v11. The backstory roll (HIGH_SCHOOL.md §3.1):
+-- one row per person whose family was ever generated — the avatar (HS-2's
+-- BackstoryGenerator) and, later, heirs (whose family is the avatar's own).
+-- wealth_tier 0 = destitute … 4 = wealthy; it gates starting funds, phone
+-- tier, transport, home_wifi and parental auto-purchases. parent ids point at
+-- unrostered NPC Players rows (the heir precedent inverted — Child edges run
+-- parent→child, and EvaluateSuccession's younger-endpoint filter already
+-- excludes parents). SET NULL, not CASCADE: losing a parent row must not
+-- erase the family's economic reality. No row = pre-v11 person (no family
+-- features) — the Life_Needs absent-row fallback pattern.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Family_Background (
+    player_id        TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    wealth_tier      INTEGER NOT NULL CHECK (wealth_tier BETWEEN 0 AND 4),
+    household_income REAL    NOT NULL DEFAULT 0  CHECK (household_income >= 0),
+    parent1_id       TEXT    REFERENCES Players(player_id) ON DELETE SET NULL,
+    parent2_id       TEXT    REFERENCES Players(player_id) ON DELETE SET NULL,
+    home_wifi        INTEGER NOT NULL DEFAULT 0  CHECK (home_wifi IN (0, 1)),
+    allowance_weekly REAL    NOT NULL DEFAULT 0  CHECK (allowance_weekly >= 0),
+    strictness       INTEGER NOT NULL DEFAULT 50 CHECK (strictness BETWEEN 0 AND 100)
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Phone_State — schema v11. The smartphone economy (HIGH_SCHOOL.md §4.2):
+-- avatar-only rows naming the hardware tier (1 = burner … 3 = flagship), the
+-- plan (0 = prepaid pay-per-minute, 1 = basic bundle, 2 = unlimited) and the
+-- prepaid minute balance. No row = the pre-v11 phone — every feature
+-- unlocked, no minutes accounting — so migrated saves keep the phone they
+-- already had (the Life_Needs absent-row fallback pattern; HS-2 writes a real
+-- row at avatar creation and the fallback goes dormant for new careers).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Phone_State (
+    player_id         TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    tier              INTEGER NOT NULL DEFAULT 1 CHECK (tier BETWEEN 1 AND 3),
+    plan              INTEGER NOT NULL DEFAULT 0 CHECK (plan BETWEEN 0 AND 2),
+    minutes_remaining INTEGER NOT NULL DEFAULT 0 CHECK (minutes_remaining >= 0),
+    purchased_day     INTEGER NOT NULL DEFAULT 0 CHECK (purchased_day >= 0)
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Player_Items — schema v11. Marketplace ownership (HIGH_SCHOOL.md §4.6):
+-- one row per (player, catalog item). item_id names an entry in the item
+-- catalog JSON (Assets/Data/Items/items.json, HS-3) — validated loudly at
+-- catalog load, not an FK, because the catalog is content, not schema.
+-- category mirrors the C# ItemCategory enum: 1 = Transport, 2 = Clothing,
+-- 3 = Jewelry, 4 = Food, 5 = Gear — denormalized here so hot questions like
+-- "does this player own transport" stay SQL-answerable without the catalog.
+-- Passive stat bonuses from owned items are COMPUTED at read time, never
+-- written back, so losing an item reverts cleanly. The composite PK's
+-- leftmost prefix is the mandated player_id hot-path index. No backfill:
+-- nothing produced items before v11 (Player_Equipment keeps baseball gear).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Items (
+    player_id    TEXT    NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    item_id      TEXT    NOT NULL,
+    category     INTEGER NOT NULL CHECK (category BETWEEN 1 AND 5),
+    acquired_day INTEGER NOT NULL CHECK (acquired_day >= 0),
+    PRIMARY KEY (player_id, item_id)
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Child_Development — schema v11. The nurture half of heir development
+-- (HIGH_SCHOOL.md §4.7, full child-rearing): accumulating 0–100 axes written
+-- by rearing events and the weekly family tick (HS-5). At heir maturity or
+-- takeover, final Potential + baseball_interest blend the HeirGenetics nature
+-- roll with these axes. 50/50/50 neutral start, neglect accrues from 0. No
+-- row = pure-nature heir (the exact pre-v11 behavior), so existing heirs and
+-- NPC children are untouched — the Life_Needs absent-row fallback pattern.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Child_Development (
+    child_id      TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    care          INTEGER NOT NULL DEFAULT 50 CHECK (care     BETWEEN 0 AND 100),
+    coaching      INTEGER NOT NULL DEFAULT 50 CHECK (coaching BETWEEN 0 AND 100),
+    funding       INTEGER NOT NULL DEFAULT 50 CHECK (funding  BETWEEN 0 AND 100),
+    neglect       INTEGER NOT NULL DEFAULT 0  CHECK (neglect  BETWEEN 0 AND 100),
+    last_tick_day INTEGER NOT NULL DEFAULT 0  CHECK (last_tick_day >= 0)
+) STRICT;
+
 COMMIT;
 
--- Schema version 10 — adds Player_Potential (purely additive; potential =
--- current backfill, see comment on the table above). Bump with every migration.
-PRAGMA user_version = 10;
+-- Schema version 11 — adds the High School person layer: Player_Person
+-- (neutral-row backfill over Players), Family_Background, Phone_State,
+-- Player_Items, Child_Development (all purely additive; see the per-table
+-- comments above). Bump with every migration.
+PRAGMA user_version = 11;
