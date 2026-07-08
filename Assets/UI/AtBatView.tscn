@@ -158,6 +158,12 @@ max_value = 1.0
 step = 0.01
 value = 0.0
 
+[node name="TimingValueLabel" type="Label" parent="Layout/Controls"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+horizontal_alignment = 1
+text = "Right on time"
+
 [node name="TakeButton" type="Button" parent="Layout/Controls"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)

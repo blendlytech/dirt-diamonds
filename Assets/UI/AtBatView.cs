@@ -98,19 +98,25 @@ public sealed partial class AtBatView : PanelContainer
     // teleport from click to result); PA/NPC beats get a shorter, simpler
     // pace since their own bigger presentation is 12d-3's scope.
     [Export]
-    public int WindupDurationMs { get; set; } = 300;
+    public int WindupDurationMs { get; set; } = 400;
 
+    // Playtest feedback (2026-07-07, user): at the original 700ms default the
+    // 3-line reveal (call, flavor, read-tag) was unreadable — bumped so a
+    // first-time player has time to actually read what happened, not just
+    // see it flash. Still tunable; revisit after the next playtest.
     [Export]
-    public int PitchRevealDurationMs { get; set; } = 700;
+    public int PitchRevealDurationMs { get; set; } = 2200;
 
     // 12d-3 bumps the PA-outcome hold to the design's own recommended default
     // (§5.6: "PA reveal ~1.2 s") now that the beat actually shows a PaReveal
     // chip (12d-2 only paced the log-line append against this duration).
+    // Playtest feedback (2026-07-07): bumped further past that floor for the
+    // same readability reason as PitchRevealDurationMs.
     [Export]
-    public int PaOutcomeBeatDurationMs { get; set; } = 1200;
+    public int PaOutcomeBeatDurationMs { get; set; } = 2400;
 
     [Export]
-    public int NpcBeatDurationMs { get; set; } = 250;
+    public int NpcBeatDurationMs { get; set; } = 700;
 
     // 12d-3 fast-forward (§5.6, "a persistent pace toggle defaulting to
     // broadcast"): a simple speed multiplier on the sequencer's own elapsed-
@@ -274,6 +280,7 @@ public sealed partial class AtBatView : PanelContainer
     private RichTextLabel _playLog = null!;
     private CheckButton _zoneReadToggle = null!;
     private HSlider _timingSlider = null!;
+    private Label _timingValueLabel = null!;
     private Button _swingButton = null!;
     private Button _takeButton = null!;
     private PanelContainer _revealChip = null!;
@@ -349,6 +356,7 @@ public sealed partial class AtBatView : PanelContainer
         _playLog = GetNode<RichTextLabel>("Layout/PlayLog");
         _zoneReadToggle = GetNode<CheckButton>("Layout/Controls/ZoneReadToggle");
         _timingSlider = GetNode<HSlider>("Layout/Controls/TimingSlider");
+        _timingValueLabel = GetNode<Label>("Layout/Controls/TimingValueLabel");
         _swingButton = GetNode<Button>("Layout/Controls/SwingButton");
         _takeButton = GetNode<Button>("Layout/Controls/TakeButton");
         _revealChip = GetNode<PanelContainer>("RevealOverlay/RevealChip");
@@ -358,6 +366,8 @@ public sealed partial class AtBatView : PanelContainer
         _swingButton.Pressed += OnSwingPressed;
         _takeButton.Pressed += OnTakePressed;
         _fastForwardToggle.Toggled += OnFastForwardToggled;
+        _timingSlider.ValueChanged += OnTimingSliderChanged;
+        _timingValueLabel.Text = TimingBucketText(_timingSlider.Value); // live readout — playtest feedback (2026-07-07): the slider had no on-screen indication of what it controlled
         _pitchTypeNames = PitchTypeNamesCsv.Split(',');
         _paRevealNames = PaRevealNamesCsv.Split(',');
         Color diamondColor = _revealLabel.GetThemeColor("font_color", RevealDiamondVariation);
@@ -374,9 +384,13 @@ public sealed partial class AtBatView : PanelContainer
         _swingButton.Pressed -= OnSwingPressed;
         _takeButton.Pressed -= OnTakePressed;
         _fastForwardToggle.Toggled -= OnFastForwardToggled;
+        _timingSlider.ValueChanged -= OnTimingSliderChanged;
     }
 
     private void OnFastForwardToggled(bool pressed) => _fastForwardOn = pressed;
+
+    /// <summary>Live readout of the timing slider's bucket (Early/On-time/Late) — playtest feedback (2026-07-07): the slider had no label or value display, so its effect was invisible until a swing's reveal (itself easy to miss at speed). Shows the bucket the NEXT swing would report, before the player commits.</summary>
+    private void OnTimingSliderChanged(double value) => _timingValueLabel.Text = TimingBucketText(value);
 
     /// <summary>True once the beat queue has fully drained and the sequencer is idle — the finish-seam gate the game-end truncation fix (Fable review, finding 1) needs: the driver must not tear the view down until every queued beat has actually played, and must keep draining the bridge every frame until this flips true.</summary>
     public bool SequencerDrained => _phase == SequencerPhase.Idle && _beatQueue.Count == 0;

@@ -86,6 +86,7 @@ internal static class Program
             RunSeasonPipeline(schemaPath, scratchPath);
             RunMicroAnalyticSuite();
             RunMicroGameSuite(schemaPath, microScratchPath);
+            RunReadModelA0Sweep();
             RunCareerWiringSuite(schemaPath, careerScratchPath);
             RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
             RunRivalrySuite(schemaPath, rivalryScratchPath);
@@ -843,6 +844,242 @@ internal static class Program
         long gameAllocated = GC.GetAllocatedBytesForCurrentThread() - beforeGame;
         Check("§11.6 warm attended game allocates zero bytes (10 games, human PAs incl.)",
             gameAllocated == 0, $"{gameAllocated} B");
+    }
+
+    // ------------------------------------------------------------------
+    // 5b. Read-model A0 sweep (at_bat_read_input_model.md §6): a scripted
+    //     perfect / random / fooled reader over the SAME average matchup, on
+    //     the new Kind == Read human branch, proving the "reads decisive"
+    //     spread is dramatic but not degenerate BEFORE the UI is built. This
+    //     grades the human branch only — the neutral calibration (suites above)
+    //     is what proves Invariant N held while the branch was added.
+    // ------------------------------------------------------------------
+
+    private enum ReaderArchetype : byte { Perfect, Random, Fooled }
+
+    /// <summary>
+    /// Headless read policies for the A0 sweep. Perfect/Fooled submit an oracle
+    /// grade (a perfect read cannot be a blind guess — the batter never sees the
+    /// true location); Random submits a genuinely blind guess graded against the
+    /// truth inside the chain. Counters accumulate across PAs (struct held by ref).
+    /// </summary>
+    private struct ScriptedReaderPolicy : IBatterPolicy
+    {
+        private readonly ReaderArchetype _kind;
+        private readonly double _approach;
+        public long Pitches;
+        public long Swings;
+        public long InPlays;
+
+        // Human-branch coherence counters (design §6/§7): a take must never be
+        // Foul/InPlay, a swing must never be Ball, and for a SCRIPTED reader the
+        // grade the chain reports back must reconstruct the grade it submitted.
+        public long TakeIllegalClass;
+        public long SwingIllegalClass;
+        public long GradeMismatch;
+
+        public ScriptedReaderPolicy(ReaderArchetype kind, double approach)
+        {
+            _kind = kind;
+            _approach = approach;
+            Pitches = 0;
+            Swings = 0;
+            InPlays = 0;
+            TakeIllegalClass = 0;
+            SwingIllegalClass = 0;
+            GradeMismatch = 0;
+        }
+
+        public readonly void BeginPa(in HumanPaContext context)
+        {
+        }
+
+        public readonly BatterIntent NextPitch(in PitchLook look, in CountState count, ref RngState rng)
+        {
+            switch (_kind)
+            {
+                case ReaderArchetype.Perfect:
+                    return BatterIntent.ScriptedRead(typeOk: true, inOutOk: true, locAcc: 1.0, _approach);
+                case ReaderArchetype.Fooled:
+                    return BatterIntent.ScriptedRead(typeOk: false, inOutOk: false, locAcc: 0.0, _approach);
+                default:
+                    // A blind guesser: random type, coin-flip in/out, random cell.
+                    var guessType = (PitchType)rng.NextInt(3);
+                    byte guessCell = rng.NextDouble() < 0.5
+                        ? (byte)rng.NextInt(9)
+                        : ReadInputModel.OutOfZoneCell;
+                    return BatterIntent.Read(guessType, guessCell, _approach);
+            }
+        }
+
+        public void OnPitchResolved(in PitchResult result)
+        {
+            Pitches++;
+            if (result.BatterSwung)
+            {
+                Swings++;
+                if (result.Class == PitchClass.Ball)
+                {
+                    SwingIllegalClass++; // a swing can never be a Ball
+                }
+            }
+            else if (result.Class is PitchClass.Foul or PitchClass.InPlay)
+            {
+                TakeIllegalClass++; // a take can only be a Ball or a called Strike
+            }
+            // In-play per swing is unambiguous; a swung Class==Strike conflates true
+            // whiffs with sub-two-strike foul-strikes under the frozen 12d-1 DTO.
+            if (result.Class == PitchClass.InPlay)
+            {
+                InPlays++;
+            }
+            // Grade reconstruction: the scripted archetypes submit a fixed grade,
+            // so the chain must report it back unchanged (§7 read-grade check).
+            switch (_kind)
+            {
+                case ReaderArchetype.Perfect when !result.TypeOk || result.LocAcc != 1.0:
+                case ReaderArchetype.Fooled when result.TypeOk || result.LocAcc != 0.0:
+                    GradeMismatch++;
+                    break;
+            }
+        }
+
+        public readonly void OnPaResolved(PaOutcome outcome)
+        {
+        }
+    }
+
+    private readonly struct ArchetypeStats
+    {
+        public readonly InningLine Line;
+        public readonly long Pitches;
+        public readonly long Swings;
+        public readonly long InPlays;
+        public readonly long TakeIllegalClass;
+        public readonly long SwingIllegalClass;
+        public readonly long GradeMismatch;
+
+        public ArchetypeStats(
+            in InningLine line, long pitches, long swings, long inPlays,
+            long takeIllegal, long swingIllegal, long gradeMismatch)
+        {
+            Line = line;
+            Pitches = pitches;
+            Swings = swings;
+            InPlays = inPlays;
+            TakeIllegalClass = takeIllegal;
+            SwingIllegalClass = swingIllegal;
+            GradeMismatch = gradeMismatch;
+        }
+
+        public double Avg => (double)Line.H / Line.Ab;
+        public double KRate => (double)Line.So / Line.Pa;
+        public double BbRate => (double)Line.Bb / Line.Pa;
+        public double SwingRate => (double)Swings / Pitches;
+        public double BipPerSwing => Swings > 0 ? (double)InPlays / Swings : 0.0;
+        public double PitchesPerPa => (double)Pitches / Line.Pa;
+    }
+
+    private static ArchetypeStats RunReaderArchetype(
+        ReaderArchetype kind, double approach, int paCount,
+        ReadOnlySpan<double> anchor, in PitchClassRates rates, in PitchMatchup matchup, ulong seed)
+    {
+        var pitcher = new NeutralPitcherPolicy();
+        var averagePitcher = new PitcherRatings(50, 50, 50);
+        var fatigue = new PitcherFatigue(in averagePitcher, pedActive: false, enabled: false);
+        var rng = new RngState(seed);
+        var policy = new ScriptedReaderPolicy(kind, approach);
+        InningLine line = default;
+        for (int i = 0; i < paCount; i++)
+        {
+            PaOutcome outcome = PitchChain.SimulatePa(
+                anchor, in rates, in matchup, ref policy, ref pitcher, ref fatigue, ref rng, out _);
+            line.Pa++;
+            switch (outcome)
+            {
+                case PaOutcome.Walk: line.Bb++; break;
+                case PaOutcome.Strikeout: line.Ab++; line.So++; break;
+                case PaOutcome.Out: line.Ab++; break;
+                case PaOutcome.Single: line.Ab++; line.H++; break;
+                case PaOutcome.Double: line.Ab++; line.H++; line.Doubles++; break;
+                case PaOutcome.Triple: line.Ab++; line.H++; line.Triples++; break;
+                case PaOutcome.HomeRun: line.Ab++; line.H++; line.Hr++; break;
+            }
+        }
+        return new ArchetypeStats(
+            in line, policy.Pitches, policy.Swings, policy.InPlays,
+            policy.TakeIllegalClass, policy.SwingIllegalClass, policy.GradeMismatch);
+    }
+
+    private static void RunReadModelA0Sweep()
+    {
+        Console.WriteLine("--- Read-model A0 sweep (at_bat_read_input_model.md §6) ---");
+
+        var averageBatter = new BatterRatings(50, 50, 50, pedActive: false);
+        var averagePitcher = new PitcherRatings(50, 50, 50);
+        Span<double> anchor = stackalloc double[AtBatResolver.OutcomeCount];
+        AtBatResolver.ComputeProbabilities(in averageBatter, in averagePitcher, 50, anchor);
+        PitchClassRates rates = PitchChain.SolveNeutral(
+            anchor[(int)PaOutcome.Walk], anchor[(int)PaOutcome.Strikeout]);
+        // Average ratings across the board, so the ARCHETYPE'S READ is the only
+        // lever moving the line (discipline/contact terms vanish at 50).
+        var matchup = new PitchMatchup(PitcherArsenal.LeagueAverage, pitcherControl: 50, batterDiscipline: 50, batterContact: 50);
+        const int paCount = 20_000;
+
+        ArchetypeStats perfect = RunReaderArchetype(ReaderArchetype.Perfect, 0.0, paCount, anchor, in rates, in matchup, MicroSeed + 20);
+        ArchetypeStats random = RunReaderArchetype(ReaderArchetype.Random, 0.0, paCount, anchor, in rates, in matchup, MicroSeed + 21);
+        ArchetypeStats fooled = RunReaderArchetype(ReaderArchetype.Fooled, 0.0, paCount, anchor, in rates, in matchup, MicroSeed + 22);
+
+        foreach ((string label, ArchetypeStats s) in new[]
+            { ("Perfect", perfect), ("Random ", random), ("Fooled ", fooled) })
+        {
+            (double avg, double obp, double slg, double ops) = SlashLine(in s.Line);
+            Console.WriteLine(
+                $"  {label} reader: {avg:.000}/{obp:.000}/{slg:.000} OPS {ops:.000}  " +
+                $"K% {s.KRate:P1}  BB% {s.BbRate:P1}  Swing% {s.SwingRate:P1}  " +
+                $"BIP/Sw {s.BipPerSwing:P1}  P/PA {s.PitchesPerPa:F2}");
+        }
+
+        // §6: dramatic but not degenerate.
+        Check("A0 perfect reader hits well but not 1.000 (read is not an auto-win)",
+            perfect.Avg is > 0.300 and < 0.950, $"{perfect.Avg:.000}");
+        Check("A0 fooled reader hits above .000 but far below the perfect reader (read is not an auto-out)",
+            fooled.Avg is > 0.010 and < 0.220 && fooled.Avg < perfect.Avg - 0.150,
+            $"fooled {fooled.Avg:.000} vs perfect {perfect.Avg:.000}");
+        Check("A0 read quality is decisive: AVG strictly ordered perfect > random > fooled",
+            perfect.Avg > random.Avg && random.Avg > fooled.Avg,
+            $"{perfect.Avg:.000} > {random.Avg:.000} > {fooled.Avg:.000}");
+        Check("A0 discipline of the read shows in plate outcomes: perfect walks more, whiffs/Ks less",
+            perfect.BbRate > fooled.BbRate + 0.05 && fooled.KRate > perfect.KRate + 0.10,
+            $"BB% {perfect.BbRate:P1} vs {fooled.BbRate:P1}; K% {perfect.KRate:P1} vs {fooled.KRate:P1}");
+
+        // §3.5 approach dial: swing rate rises monotonically patient → aggressive.
+        ArchetypeStats patient = RunReaderArchetype(ReaderArchetype.Random, -1.0, paCount, anchor, in rates, in matchup, MicroSeed + 23);
+        ArchetypeStats aggressive = RunReaderArchetype(ReaderArchetype.Random, +1.0, paCount, anchor, in rates, in matchup, MicroSeed + 24);
+        Console.WriteLine(
+            $"  Approach dial (random reader) Swing%: patient {patient.SwingRate:P1}  " +
+            $"neutral {random.SwingRate:P1}  aggressive {aggressive.SwingRate:P1}");
+        Check("A0 approach dial moves swing rate monotonically (patient < neutral < aggressive)",
+            patient.SwingRate < random.SwingRate && random.SwingRate < aggressive.SwingRate,
+            $"{patient.SwingRate:P1} < {random.SwingRate:P1} < {aggressive.SwingRate:P1}");
+
+        Check("A0 every archetype keeps pitches/PA in a live 2.0–6.0 band",
+            perfect.PitchesPerPa is >= 2.0 and <= 6.0
+            && random.PitchesPerPa is >= 2.0 and <= 6.0
+            && fooled.PitchesPerPa is >= 2.0 and <= 6.0,
+            $"{perfect.PitchesPerPa:F2}/{random.PitchesPerPa:F2}/{fooled.PitchesPerPa:F2}");
+
+        // §6/§7 human-branch coherence — the structural guarantees of the
+        // swing-gated class, over every pitch of all three 20k-PA runs.
+        long takeIllegal = perfect.TakeIllegalClass + random.TakeIllegalClass + fooled.TakeIllegalClass;
+        long swingIllegal = perfect.SwingIllegalClass + random.SwingIllegalClass + fooled.SwingIllegalClass;
+        Check("A0/§7 coherence: a take is only Ball/called-Strike (never Foul/InPlay) across all reads",
+            takeIllegal == 0, $"{takeIllegal} illegal take classes");
+        Check("A0/§7 coherence: a swing is only whiff-Strike/Foul/InPlay (never Ball) across all reads",
+            swingIllegal == 0, $"{swingIllegal} illegal swing classes");
+        Check("A0/§7 coherence: the PitchResult read-grade reconstructs the scripted read (perfect + fooled)",
+            perfect.GradeMismatch == 0 && fooled.GradeMismatch == 0,
+            $"perfect {perfect.GradeMismatch}, fooled {fooled.GradeMismatch} grade mismatches");
     }
 
     // ------------------------------------------------------------------

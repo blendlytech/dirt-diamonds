@@ -125,11 +125,26 @@ public readonly struct PitchMatchup
     public readonly byte PitcherControl;
     public readonly byte BatterDiscipline;
 
+    /// <summary>
+    /// Batter contact rating — consumed only by the Kind == Read (human) branch,
+    /// where it sets the contact/whiff floor and ceiling on emergent swings
+    /// (at_bat_read_input_model.md §3.4). Neutral/Take/Swing ignore it. The
+    /// three-arg ctor defaults it to the league-average 50, so existing call
+    /// sites are unaffected.
+    /// </summary>
+    public readonly byte BatterContact;
+
     public PitchMatchup(in PitcherArsenal arsenal, byte pitcherControl, byte batterDiscipline)
+        : this(in arsenal, pitcherControl, batterDiscipline, batterContact: 50)
+    {
+    }
+
+    public PitchMatchup(in PitcherArsenal arsenal, byte pitcherControl, byte batterDiscipline, byte batterContact)
     {
         Arsenal = arsenal;
         PitcherControl = pitcherControl;
         BatterDiscipline = batterDiscipline;
+        BatterContact = batterContact;
     }
 }
 
@@ -161,6 +176,14 @@ public enum BatterIntentKind : byte
     Neutral,
     Take,
     Swing,
+
+    /// <summary>
+    /// The "Read the Pitch" input (at_bat_read_input_model.md): the player submits
+    /// a guessed type + a 3×3 zone cell + an approach dial, and the swing itself is
+    /// emergent. Only this branch of <see cref="PitchChain.SimulatePa"/> runs the new
+    /// belief/swing model — Neutral/Take/Swing stay byte-identical (Invariant N).
+    /// </summary>
+    Read,
 }
 
 /// <summary>
@@ -179,11 +202,57 @@ public readonly struct BatterIntent
     /// <summary>The zone read: true = "this one's in the zone".</summary>
     public readonly bool GuessInZone;
 
+    // --- Kind == Read fields (at_bat_read_input_model.md §2) --------------
+    // All default to zero so `default` stays a Neutral intent (Invariant N).
+
+    /// <summary>Read only: the player's guessed pitch type.</summary>
+    public readonly PitchType GuessType;
+
+    /// <summary>Read only: the guessed 3×3 zone cell (0..8), or <see cref="ReadInputModel.OutOfZoneCell"/> for "expect a ball".</summary>
+    public readonly byte GuessCell;
+
+    /// <summary>Read only: approach dial τ_appr ∈ [-1, +1] (patient ↔ aggressive), default 0.</summary>
+    public readonly double Approach;
+
+    /// <summary>
+    /// Read only: when true, the read is graded from the <c>Scripted*</c> fields
+    /// directly instead of <see cref="GuessType"/>/<see cref="GuessCell"/> vs. the
+    /// true draw. The oracle/harness seam — a "perfect reader" cannot be expressed
+    /// as a blind guess because the batter never sees the true location.
+    /// </summary>
+    public readonly bool ReadIsScripted;
+    public readonly bool ScriptedTypeOk;
+    public readonly bool ScriptedInOutOk;
+    public readonly double ScriptedLocAcc;
+
     private BatterIntent(BatterIntentKind kind, double timing, bool guessInZone)
     {
         Kind = kind;
         Timing = timing;
         GuessInZone = guessInZone;
+        GuessType = default;
+        GuessCell = default;
+        Approach = default;
+        ReadIsScripted = default;
+        ScriptedTypeOk = default;
+        ScriptedInOutOk = default;
+        ScriptedLocAcc = default;
+    }
+
+    private BatterIntent(
+        PitchType guessType, byte guessCell, double approach,
+        bool readIsScripted, bool scriptedTypeOk, bool scriptedInOutOk, double scriptedLocAcc)
+    {
+        Kind = BatterIntentKind.Read;
+        Timing = 0.0;
+        GuessInZone = guessCell < ReadInputModel.OutOfZoneCell;
+        GuessType = guessType;
+        GuessCell = guessCell;
+        Approach = approach;
+        ReadIsScripted = readIsScripted;
+        ScriptedTypeOk = scriptedTypeOk;
+        ScriptedInOutOk = scriptedInOutOk;
+        ScriptedLocAcc = scriptedLocAcc;
     }
 
     public static BatterIntent Neutral => default;
@@ -193,6 +262,18 @@ public readonly struct BatterIntent
 
     public static BatterIntent Swing(double timing, bool guessInZone) =>
         new(BatterIntentKind.Swing, timing, guessInZone);
+
+    /// <summary>A "Read the Pitch" intent: guessed type + zone cell (or "expect a ball") + approach dial.</summary>
+    public static BatterIntent Read(PitchType guessType, byte guessCell, double approach) =>
+        new(guessType, guessCell, approach, readIsScripted: false, false, false, 0.0);
+
+    /// <summary>
+    /// Oracle/harness seam: a Read intent whose grade is supplied directly (a scripted
+    /// perfect/fooled reader), bypassing the guess-vs-truth grading in <see cref="PitchChain.SimulatePa"/>.
+    /// </summary>
+    public static BatterIntent ScriptedRead(bool typeOk, bool inOutOk, double locAcc, double approach) =>
+        new(default, ReadInputModel.OutOfZoneCell, approach,
+            readIsScripted: true, typeOk, inOutOk, Math.Clamp(locAcc, 0.0, 1.0));
 }
 
 /// <summary>
@@ -646,6 +727,115 @@ public static class PitchChain
 
             // --- the batter's answer, resolved against the actual location -
             BatterIntent intent = batter.NextPitch(in look, in count, ref rng);
+
+            // ============================================================
+            // Kind == Read (human) branch — at_bat_read_input_model.md §3.
+            // Fully self-contained: it draws a location sub-cell, forms a
+            // strike-belief, decides the swing emergently, and GATES the pitch
+            // class on that swing (a take is only Ball/called-Strike; a swing
+            // is only whiff/Foul/InPlay). It never touches the Neutral/Take/
+            // Swing path below, so Invariant N holds by construction — the
+            // calibrated branch keeps today's exact code and RNG sequence.
+            // ============================================================
+            if (intent.Kind == BatterIntentKind.Read)
+            {
+                // §3.1 sub-cell for the true location — human branch only, so
+                // the neutral branch's RNG sequence is untouched.
+                byte trueCell = inZone ? (byte)rng.NextInt(9) : ReadInputModel.OutOfZoneCell;
+
+                bool typeOk, inOutOk;
+                double locAcc;
+                if (intent.ReadIsScripted)
+                {
+                    typeOk = intent.ScriptedTypeOk;
+                    inOutOk = intent.ScriptedInOutOk;
+                    locAcc = intent.ScriptedLocAcc;
+                }
+                else
+                {
+                    ReadInputModel.GradeRead(
+                        intent.GuessType, intent.GuessCell, type, inZone, trueCell,
+                        out typeOk, out inOutOk, out locAcc);
+                }
+
+                double believedStrike = ReadInputModel.BelievedStrike(
+                    inZone, look.ZoneProbability, inOutOk, locAcc, matchup.BatterDiscipline);
+                double pSwing = ReadInputModel.SwingProbability(
+                    in count, believedStrike, intent.Approach, matchup.BatterDiscipline);
+                bool swings = rng.NextDouble() < pSwing;
+
+                pitchCount++;
+                fatigue.AddPitch();
+
+                if (!swings)
+                {
+                    // Take: called strike in the zone, ball out of it. Never Foul/InPlay.
+                    if (inZone)
+                    {
+                        if (strikes < StrikeStates - 1)
+                        {
+                            strikes++;
+                            batter.OnPitchResolved(new PitchResult(
+                                PitchClass.Strike, type, inZone, false, (byte)balls, (byte)strikes, paEnded: false, typeOk, locAcc));
+                            continue;
+                        }
+                        batter.OnPitchResolved(new PitchResult(
+                            PitchClass.Strike, type, inZone, false, (byte)balls, (byte)strikes, paEnded: true, typeOk, locAcc));
+                        return PaOutcome.Strikeout; // called third strike
+                    }
+                    bool walkedOnTake = ++balls == BallStates;
+                    batter.OnPitchResolved(new PitchResult(
+                        PitchClass.Ball, type, inZone, false, (byte)balls, (byte)strikes, walkedOnTake, typeOk, locAcc));
+                    if (walkedOnTake)
+                    {
+                        return PaOutcome.Walk;
+                    }
+                    continue;
+                }
+
+                // Swing: whiff, Foul, or InPlay — never Ball.
+                double readQuality = ReadInputModel.ReadQuality(typeOk, locAcc);
+                bool madeContact = rng.NextDouble()
+                    < ReadInputModel.ContactProbability(readQuality, matchup.BatterContact);
+                if (!madeContact)
+                {
+                    if (strikes < StrikeStates - 1)
+                    {
+                        strikes++;
+                        batter.OnPitchResolved(new PitchResult(
+                            PitchClass.Strike, type, inZone, true, (byte)balls, (byte)strikes, paEnded: false, typeOk, locAcc));
+                        continue;
+                    }
+                    batter.OnPitchResolved(new PitchResult(
+                        PitchClass.Strike, type, inZone, true, (byte)balls, (byte)strikes, paEnded: true, typeOk, locAcc));
+                    return PaOutcome.Strikeout; // swinging third strike
+                }
+
+                bool atTwoStrikes = strikes == StrikeStates - 1;
+                double foulShare = atTwoStrikes ? FoulShareOfStrikes : ReadInputModel.EarlyFoulShare;
+                if (rng.NextDouble() < foulShare)
+                {
+                    if (atTwoStrikes)
+                    {
+                        // Two-strike foul: count unchanged, PA continues (§5.1 self-loop).
+                        batter.OnPitchResolved(new PitchResult(
+                            PitchClass.Foul, type, inZone, true, (byte)balls, (byte)strikes, paEnded: false, typeOk, locAcc));
+                        continue;
+                    }
+                    // Sub-two-strike foul advances the count — surfaces as a Strike (12d-1 frozen contract).
+                    strikes++;
+                    batter.OnPitchResolved(new PitchResult(
+                        PitchClass.Strike, type, inZone, true, (byte)balls, (byte)strikes, paEnded: false, typeOk, locAcc));
+                    continue;
+                }
+
+                // In play — the read-derived contact quality feeds the UNCHANGED §5.3 BIP split.
+                double q = ReadInputModel.ContactQuality(readQuality, matchup.BatterContact);
+                batter.OnPitchResolved(new PitchResult(
+                    PitchClass.InPlay, type, inZone, true, (byte)balls, (byte)strikes, paEnded: true, typeOk, locAcc));
+                return DrawBallInPlay(anchorProbabilities, q, ref rng);
+            }
+
             BatterPitchInput input;
             switch (intent.Kind)
             {
@@ -859,4 +1049,163 @@ public static class PlayerInputModel
                 + PerceivedStuffMovementWeight * (movement - 50),
                 MidpointRounding.AwayFromZero),
             0, 100);
+}
+
+/// <summary>
+/// The "Read the Pitch" model (at_bat_read_input_model.md §3), consumed ONLY by
+/// the Kind == Read branch of <see cref="PitchChain.SimulatePa"/>. Pure struct
+/// math, no allocation. The pipeline is:
+///
+///   grade      — the guessed type + 3×3 cell vs. the true draw → (typeOk, inOutOk, locAcc)
+///   belief     — the location call sets the SIGN of the strike-belief move, its
+///                magnitude (conviction) grows with cell precision and discipline;
+///                a wrong in/out call INVERTS belief (reads are decisive: you're fooled)
+///   swing      — pSwing = base(count) + approach·gain + read·gain·(belief − threshold)
+///   contact    — a blended read-quality R sets the whiff floor and the in-play
+///                contact quality q (fed to the unchanged §5.3 BIP split)
+///
+/// Every constant is a first-pass feel knob; the A0 sweep (perfect / random /
+/// fooled reader) is what proves the spread is dramatic but not degenerate before
+/// the UI is built on top. None of this touches the calibrated neutral path.
+/// </summary>
+public static class ReadInputModel
+{
+    /// <summary>Sentinel <see cref="BatterIntent.GuessCell"/> value: "expect a ball" (out of the zone). Cells 0..8 are the 3×3 grid.</summary>
+    public const byte OutOfZoneCell = 9;
+
+    // --- §3.1 read grading -------------------------------------------------
+
+    /// <summary>Location accuracy for a correct in-zone call one cell (Chebyshev) off the true cell.</summary>
+    public const double LocAccAdjacent = 0.6;
+
+    /// <summary>Location accuracy for a correct in-zone call two cells off the true cell.</summary>
+    public const double LocAccFar = 0.3;
+
+    // --- §3.2.1 read quality (drives contact, §3.4) ------------------------
+
+    public const double ReadTypeWeight = 0.40;
+    public const double ReadLocWeight = 0.60;
+
+    // --- §3.2.2 belief conviction ------------------------------------------
+
+    /// <summary>Base fraction of the way belief moves from the scouting prior toward its (correct or inverted) target.</summary>
+    public const double ConvictionBase = 0.70;
+
+    /// <summary>Extra conviction per unit of location accuracy (a precise cell read is more decisive).</summary>
+    public const double ConvictionLocGain = 0.30;
+
+    /// <summary>
+    /// Discipline's effect on conviction, SIGNED by whether the in/out call was right:
+    /// a disciplined hitter commits harder to a correct read and is fooled less by a
+    /// wrong one (§3.2.1 "punished less by a marginal one").
+    /// </summary>
+    public const double ConvictionDisciplineGain = 0.30;
+
+    // --- §3.2.3 swing decision ---------------------------------------------
+
+    public const double SwingBaseInit = 0.45;
+    public const double SwingBasePerStrike = 0.10;   // protect with two strikes
+    public const double SwingBasePerBall = -0.05;    // take when ahead in the count
+    public const double SwingBaseMin = 0.15;
+    public const double SwingBaseMax = 0.85;
+
+    /// <summary>How far the approach dial (±1) shifts the swing probability.</summary>
+    public const double SwingApproachGain = 0.25;
+
+    /// <summary>How hard believed-strike drives the swing — the "reads decisive" knob.</summary>
+    public const double SwingReadGain = 0.90;
+
+    /// <summary>Believed-strike level at which a league-average hitter is 50/50 to offer.</summary>
+    public const double SwingThresholdBase = 0.50;
+
+    /// <summary>Discipline raises the threshold (only swing when quite sure it's a strike).</summary>
+    public const double SwingThresholdDisciplineGain = 0.10;
+
+    // --- §3.3 / §3.4 contact -----------------------------------------------
+
+    public const double ContactProbBase = 0.60;
+    public const double ContactProbReadGain = 0.25;
+    public const double ContactProbRatingGain = 0.15;
+    public const double ContactProbMin = 0.15;
+    public const double ContactProbMax = 0.92;
+
+    public const double ContactQualityReadGain = 0.90;
+    public const double ContactQualityRatingGain = 0.30;
+
+    /// <summary>Share of sub-two-strike swing contact that fouls off (surfaces as a count-advancing Strike, per the 12d-1 contract).</summary>
+    public const double EarlyFoulShare = 0.30;
+
+    /// <summary>3×3 Chebyshev distance between two cells 0..8 (row = c/3, col = c%3).</summary>
+    public static int CellDistance(byte a, byte b) =>
+        Math.Max(Math.Abs(a / 3 - b / 3), Math.Abs(a % 3 - b % 3));
+
+    /// <summary>§3.1: grade a live guess against the true draw.</summary>
+    public static void GradeRead(
+        PitchType guessType, byte guessCell, PitchType trueType, bool inZone, byte trueCell,
+        out bool typeOk, out bool inOutOk, out double locAcc)
+    {
+        typeOk = guessType == trueType;
+        bool guessInZone = guessCell < OutOfZoneCell;
+        inOutOk = guessInZone == inZone;
+        if (!inOutOk)
+        {
+            locAcc = 0.0; // wrong in/out call — the worst read
+        }
+        else if (!inZone)
+        {
+            locAcc = 1.0; // correctly called a ball (coarse OUT, v1: no sub-direction)
+        }
+        else
+        {
+            locAcc = CellDistance(guessCell, trueCell) switch { 0 => 1.0, 1 => LocAccAdjacent, _ => LocAccFar };
+        }
+    }
+
+    /// <summary>§3.2.1 blended read quality R ∈ [0,1] — the contact driver.</summary>
+    public static double ReadQuality(bool typeOk, double locAcc) =>
+        ReadTypeWeight * (typeOk ? 1.0 : 0.0) + ReadLocWeight * locAcc;
+
+    /// <summary>§3.2.2 believed-strike ∈ [0,1]: the location call signs the move, conviction sizes it, a wrong call inverts.</summary>
+    public static double BelievedStrike(bool inZone, double zonePrior, bool inOutOk, double locAcc, byte discipline)
+    {
+        double truth = inZone ? 1.0 : 0.0;
+        double d = Math.Clamp((discipline - 50) / 50.0, -1.0, 1.0);
+        double commit = Math.Clamp(
+            ConvictionBase + ConvictionLocGain * locAcc + ConvictionDisciplineGain * d * (inOutOk ? 1.0 : -1.0),
+            0.0, 1.0);
+        double target = inOutOk ? truth : 1.0 - truth;
+        return Math.Clamp(zonePrior + commit * (target - zonePrior), 0.0, 1.0);
+    }
+
+    /// <summary>§3.2.3 swing probability ∈ [0,1].</summary>
+    public static double SwingProbability(in CountState count, double believedStrike, double approach, byte discipline)
+    {
+        double d = Math.Clamp((discipline - 50) / 50.0, -1.0, 1.0);
+        double baseSwing = Math.Clamp(
+            SwingBaseInit + SwingBasePerStrike * count.Strikes + SwingBasePerBall * count.Balls,
+            SwingBaseMin, SwingBaseMax);
+        double threshold = SwingThresholdBase + SwingThresholdDisciplineGain * d;
+        double p = baseSwing
+            + SwingApproachGain * Math.Clamp(approach, -1.0, 1.0)
+            + SwingReadGain * (believedStrike - threshold);
+        return Math.Clamp(p, 0.0, 1.0);
+    }
+
+    /// <summary>§3.4 P(contact | swing): read quality sets the floor, contact rating the ceiling.</summary>
+    public static double ContactProbability(double readQuality, byte contactRating)
+    {
+        double c = Math.Clamp((contactRating - 50) / 50.0, -1.0, 1.0);
+        return Math.Clamp(
+            ContactProbBase + ContactProbReadGain * (2.0 * readQuality - 1.0) + ContactProbRatingGain * c,
+            ContactProbMin, ContactProbMax);
+    }
+
+    /// <summary>§3.4 contact quality q ∈ [-1,+1] fed to the unchanged §5.3 BIP split.</summary>
+    public static double ContactQuality(double readQuality, byte contactRating)
+    {
+        double c = Math.Clamp((contactRating - 50) / 50.0, -1.0, 1.0);
+        return Math.Clamp(
+            ContactQualityReadGain * (2.0 * readQuality - 1.0) + ContactQualityRatingGain * c,
+            -1.0, 1.0);
+    }
 }

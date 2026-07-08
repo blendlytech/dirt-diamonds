@@ -55,9 +55,29 @@ public readonly struct PitchResult
     /// <summary>True on the terminal pitch of the PA (walk / strikeout / in-play).</summary>
     public readonly bool PaEnded;
 
+    // --- "Read the Pitch" grade (at_bat_read_input_model.md §4) -----------
+    // Additive over the frozen 12d-1 DTO: populated ONLY on the Kind == Read
+    // human branch (via the 9-arg ctor); the Neutral/Take/Swing path uses the
+    // original 7-arg ctor and leaves these at their neutral defaults, so its
+    // meaning is unchanged. Lets the reveal narrate WHY a read went well/badly
+    // and lets the harness reconstruct the grade from the scripted reads.
+
+    /// <summary>Read only: the player's guessed pitch type matched the true thrown type.</summary>
+    public readonly bool TypeOk;
+
+    /// <summary>Read only: location-read accuracy ∈ [0,1] — 0 = wrong in/out call, 1 = exact cell (or a correctly-read ball).</summary>
+    public readonly double LocAcc;
+
     public PitchResult(
         PitchClass pitchClass, PitchType type, bool inZone, bool batterSwung,
         byte balls, byte strikes, bool paEnded)
+        : this(pitchClass, type, inZone, batterSwung, balls, strikes, paEnded, typeOk: false, locAcc: 0.0)
+    {
+    }
+
+    public PitchResult(
+        PitchClass pitchClass, PitchType type, bool inZone, bool batterSwung,
+        byte balls, byte strikes, bool paEnded, bool typeOk, double locAcc)
     {
         Class = pitchClass;
         Type = type;
@@ -66,6 +86,8 @@ public readonly struct PitchResult
         Balls = balls;
         Strikes = strikes;
         PaEnded = paEnded;
+        TypeOk = typeOk;
+        LocAcc = locAcc;
     }
 }
 
