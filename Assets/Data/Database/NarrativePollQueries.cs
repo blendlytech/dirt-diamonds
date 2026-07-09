@@ -5,7 +5,10 @@ namespace DirtAndDiamonds.Data;
 /// <summary>
 /// One player's prerequisite-relevant fields, as the Gritty Event dispatcher
 /// polls them (gritty_event_framework.md §1). Lean by design — no names, no
-/// team join — the poll snapshots 100+ players once per game day.
+/// team join — the poll snapshots 100+ players once per game day. The one
+/// join is HS-5's Family_Background.strictness (a PK LEFT JOIN, COALESCEd to
+/// the neutral 50 for the no-row majority), so parental-approval content can
+/// gate on how strict the household actually is.
 /// </summary>
 public struct PollPlayerRow
 {
@@ -17,6 +20,7 @@ public struct PollPlayerRow
     public int Recklessness;
     public int BaseballInterest;
     public int DetectionRisk;
+    public int Strictness;
 }
 
 /// <summary>
@@ -33,8 +37,13 @@ public sealed class NarrativePollQueries
     private const string SqlSelectStateValue =
         "SELECT value FROM Game_State WHERE key = @key;";
 
+    // Schema MCP-validated 2026-07-09 (No Blind Queries): Family_Background
+    // is PK player_id with strictness INTEGER NOT NULL DEFAULT 50 — the
+    // LEFT JOIN rides the primary key, and COALESCE keeps row shape total.
     private const string SqlSelectPollPlayers =
-        "SELECT player_id, age, team_id, funds, health_ceiling, recklessness, baseball_interest, detection_risk FROM Players;";
+        "SELECT p.player_id, p.age, p.team_id, p.funds, p.health_ceiling, p.recklessness, " +
+        "p.baseball_interest, p.detection_risk, COALESCE(f.strictness, 50) " +
+        "FROM Players p LEFT JOIN Family_Background f ON f.player_id = p.player_id;";
 
     // Rides idx_entity_flags_active_name (the v1 partial index built for the
     // event-dispatcher poll; plan re-verified via the sqlite MCP this session).
@@ -112,6 +121,7 @@ public sealed class NarrativePollQueries
                 Recklessness = reader.GetInt32(5),
                 BaseballInterest = reader.GetInt32(6),
                 DetectionRisk = reader.GetInt32(7),
+                Strictness = reader.GetInt32(8),
             });
         }
         return destination.Count;

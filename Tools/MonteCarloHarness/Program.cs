@@ -68,6 +68,7 @@ internal static class Program
         string lineageScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineage_{Guid.NewGuid():N}.db");
         string lineageFailScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineagefail_{Guid.NewGuid():N}.db");
         string lineageEdgeScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_lineageedge_{Guid.NewGuid():N}.db");
+        string nurtureScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_nurture_{Guid.NewGuid():N}.db");
         string conceptionScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_conception_{Guid.NewGuid():N}.db");
         string tierScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_tier_{Guid.NewGuid():N}.db");
         string availScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_avail_{Guid.NewGuid():N}.db");
@@ -96,6 +97,7 @@ internal static class Program
             RunLineageSuccessionSuite(schemaPath, lineageScratchPath);
             RunLineageFailureSuite(schemaPath, lineageFailScratchPath);
             RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
+            RunNurtureBlendSuite(schemaPath, nurtureScratchPath);
             RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
             RunBackstoryPersonSuite(schemaPath, backstoryScratchPath);
             RunTierLadderSuite(schemaPath, tierScratchPath);
@@ -139,7 +141,7 @@ internal static class Program
             TryDelete(heirScratchPath);
             TryDelete(heirScratchPath + "-wal");
             TryDelete(heirScratchPath + "-shm");
-            foreach (string lineage in new[] { lineageScratchPath, lineageFailScratchPath, lineageEdgeScratchPath, conceptionScratchPath })
+            foreach (string lineage in new[] { lineageScratchPath, lineageFailScratchPath, lineageEdgeScratchPath, nurtureScratchPath, conceptionScratchPath })
             {
                 TryDelete(lineage);
                 TryDelete(lineage + "-wal");
@@ -2572,6 +2574,157 @@ internal static class Program
             && rosterAfter.Any(r => r.PlayerId == heir2Id && r.Role == PitcherRole.Reliever && r.TeamId == 1)
             && !retiree2.TeamId.HasValue,
             fillerInvariant);
+    }
+
+    // ------------------------------------------------------------------
+    // 10b. Nurture blend (HS-5, high_school_person_layer.md §7): the §7.2
+    // arithmetic pinned, the §7.3 identity contract (no row ≡ neutral row ≡
+    // pure nature — what keeps every pre-HS-5 succession fixture valid), and
+    // the EvaluateSuccession reveal / Succeed fold end to end.
+    // ------------------------------------------------------------------
+
+    private static void RunNurtureBlendSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- Nurture blend (person-layer doc §7) ---");
+
+        // §7.3 identity: neutral axes produce exactly zero on both channels.
+        var neutralDev = NurtureBlend.NeutralRow("x", day: 0);
+        Check("§7.3 identity: neutral axes (50/50/50/0) ⇒ both deltas exactly 0",
+            NurtureBlend.PotentialDelta(in neutralDev) == 0 && NurtureBlend.InterestDelta(in neutralDev) == 0);
+
+        // §7.2 arithmetic, both rails and the away-from-zero rounding mode.
+        Check("§7.2 potential: full coaching+funding, zero neglect ⇒ round(8·0.8) = +6 (inside the ±8 cap)",
+            NurtureBlend.PotentialDelta(coaching: 100, funding: 100, neglect: 0) == 6);
+        Check("§7.2 potential: zero coaching/funding, full neglect ⇒ raw −10.4 clamps to the −8 cap",
+            NurtureBlend.PotentialDelta(coaching: 0, funding: 0, neglect: 100) == -8);
+        Check("§7.2 potential rounding is away-from-zero on both signs (±0.8 ⇒ ±1)",
+            NurtureBlend.PotentialDelta(coaching: 60, funding: 50, neglect: 0) == 1
+            && NurtureBlend.PotentialDelta(coaching: 40, funding: 50, neglect: 0) == -1);
+        Check("§7.2 interest: full care ⇒ +20 exactly at the cap; full neglect from zero care ⇒ raw −40 clamps to −20",
+            NurtureBlend.InterestDelta(care: 100, neglect: 0) == 20
+            && NurtureBlend.InterestDelta(care: 0, neglect: 100) == -20);
+        Check("§7.2 interest: care 75 / neglect 10 ⇒ 20·(0.5−0.1) = +8",
+            NurtureBlend.InterestDelta(care: 75, neglect: 10) == 8);
+        ChildDevelopmentRow doted = DotedRow();
+        ChildDevelopmentRow neglected = NeglectedRow();
+        Check("FinalInterest clamps into [0,100] at both rails",
+            NurtureBlend.FinalInterest(90, in doted) == 100
+            && NurtureBlend.FinalInterest(10, in neglected) == 0);
+        var highNature = new PlayerPotentialRow
+        {
+            PlayerId = "p", BatPower = 97, BatContact = 50, BatDiscipline = 2,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+        };
+        PlayerPotentialRow up = NurtureBlend.ApplyToPotential(in highNature, 6);
+        PlayerPotentialRow down = NurtureBlend.ApplyToPotential(in highNature, -8);
+        Check("ApplyToPotential shifts every rating by the one delta, clamped [0,100], id preserved",
+            up.PlayerId == "p" && up.BatPower == 100 && up.BatContact == 56 && up.BatDiscipline == 8
+            && down.BatPower == 89 && down.BatContact == 42 && down.BatDiscipline == 0);
+
+        // ---- end to end: the reveal and the fold on a real world ----
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var persons = new PersonQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        var state = new GlobalState();
+        var gameState = new GameStateQueries(db);
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Initialize();
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(db, players, baseball, gameState, state, Solo(league), micro, new RngState(MicroSeed + 81));
+
+        career.CreateAvatar("Nur", "Ture", teamId: 1, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = 60, BatContact = 60, BatDiscipline = 60,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+        });
+        string founderId = career.AvatarPlayerId;
+        // Wired AFTER creation so this suite isolates the succession hook
+        // (the backstory/household creation path has its own suite).
+        career.Persons = persons;
+
+        string childA = career.ConceiveChild("Pure", "Nature", birthAge: 19);
+        string childB = career.ConceiveChild("Doted", "On", birthAge: 19);
+        string childC = career.ConceiveChild("Left", "Behind", birthAge: 19);
+        players.SetBaseballInterest(childA, 100); // willing on nature alone; neutral row must not move him
+        players.SetBaseballInterest(childB, 39);  // one under the threshold — nurture must carry him over
+        players.SetBaseballInterest(childC, 55);  // willing on nature — neglect must burn him out
+        persons.UpsertChild(NurtureBlend.NeutralRow(childA, day: 0));
+        persons.UpsertChild(new ChildDevelopmentRow // Δinterest = 20·(0.5−0.1) = +8; Δpotential = 8·(0.4+0.18−0.05) = 4.24 → +4
+        {
+            ChildId = childB, Care = 75, Coaching = 90, Funding = 80, Neglect = 10, LastTickDay = 0,
+        });
+        persons.UpsertChild(new ChildDevelopmentRow // Δinterest = 20·(0−1) = −40 → clamp −20 ⇒ 55 − 20 = 35 < 40
+        {
+            ChildId = childC, Care = 0, Coaching = 50, Funding = 50, Neglect = 100, LastTickDay = 0,
+        });
+        players.SetAge(founderId, 65); // whole-bloodline aging: founder 65, children 19 (§1.2 preserved)
+
+        var candidates = new List<HeirCandidate>();
+        SuccessionOutcome outcome = career.EvaluateSuccession(candidates);
+        bool aRevealed = candidates.Any(c => c.HeirId == childA && c.BaseballInterest == 100);
+        bool bRevealed = candidates.Any(c => c.HeirId == childB && c.BaseballInterest == 47);
+        bool cExcluded = candidates.All(c => c.HeirId != childC);
+        Check("the reveal blends nurture: a doted-on 39 shows (and gates) as 47, a neglected 55 walks away at 35, a neutral row moves nothing",
+            outcome.Kind == SuccessionOutcomeKind.Succeeded && candidates.Count == 2
+            && aRevealed && bRevealed && cExcluded,
+            $"{candidates.Count} candidates, aRevealed={aRevealed} bRevealed={bRevealed} cExcluded={cExcluded}");
+
+        // The real fold: hand off to the doted child (pre-HS-5 this Succeed
+        // would THROW unwilling at raw 39 — the blended gate is the fix),
+        // then verify the persisted interest, the shifted potential, and the
+        // fold-once neutral reset.
+        baseball.TryGetPotential(childB, out PlayerPotentialRow bPotentialBefore);
+        career.Succeed(childB);
+        players.TryGetById(childB, out PlayerRow bAfter);
+        baseball.TryGetPotential(childB, out PlayerPotentialRow bPotentialAfter);
+        persons.TryGetChild(childB, out ChildDevelopmentRow bDevAfter);
+        Check("Succeed folds nurture permanently: interest 39→47 persisted, every potential rating +4 (clamped), axes reset neutral",
+            bAfter.BaseballInterest == 47
+            && bPotentialAfter.BatPower == Math.Clamp(bPotentialBefore.BatPower + 4, 0, 100)
+            && bPotentialAfter.BatContact == Math.Clamp(bPotentialBefore.BatContact + 4, 0, 100)
+            && bPotentialAfter.BatDiscipline == Math.Clamp(bPotentialBefore.BatDiscipline + 4, 0, 100)
+            && bPotentialAfter.PitStuff == Math.Clamp(bPotentialBefore.PitStuff + 4, 0, 100)
+            && bPotentialAfter.Fielding == Math.Clamp(bPotentialBefore.Fielding + 4, 0, 100)
+            && bDevAfter.Care == 50 && bDevAfter.Coaching == 50 && bDevAfter.Funding == 50 && bDevAfter.Neglect == 0,
+            $"interest={bAfter.BaseballInterest}, batPower {bPotentialBefore.BatPower}→{bPotentialAfter.BatPower}, axes=({bDevAfter.Care}/{bDevAfter.Coaching}/{bDevAfter.Funding}/{bDevAfter.Neglect})");
+
+        // §7.3 identity through the FOLD, next generation: a neutral-row heir
+        // succeeds with neither interest nor potential written — the database
+        // stays byte-identical to the no-row world every pre-HS-5 fixture ran
+        // in. (childA can't be reused here: he's the FOUNDER's child, and the
+        // avatar is childB now — heirs must be children of the current avatar.)
+        players.SetAge(childB, 45); // whole-bloodline aging before conceiving gen 3
+        string childD = career.ConceiveChild("Neutral", "Line", birthAge: 19);
+        players.SetBaseballInterest(childD, 100);
+        persons.UpsertChild(NurtureBlend.NeutralRow(childD, day: 0));
+        baseball.TryGetPotential(childD, out PlayerPotentialRow dPotentialBefore);
+        career.Succeed(childD);
+        players.TryGetById(childD, out PlayerRow dAfter);
+        baseball.TryGetPotential(childD, out PlayerPotentialRow dPotentialAfter);
+        persons.TryGetChild(childD, out ChildDevelopmentRow dDevAfter);
+        Check("§7.3 identity through Succeed: a neutral row folds to zero — interest, potential, and the axes all unchanged",
+            dAfter.BaseballInterest == 100
+            && dPotentialAfter.BatPower == dPotentialBefore.BatPower
+            && dPotentialAfter.BatContact == dPotentialBefore.BatContact
+            && dPotentialAfter.BatDiscipline == dPotentialBefore.BatDiscipline
+            && dPotentialAfter.Fielding == dPotentialBefore.Fielding
+            && dDevAfter.Care == 50 && dDevAfter.Coaching == 50 && dDevAfter.Funding == 50 && dDevAfter.Neglect == 0);
+
+        static ChildDevelopmentRow DotedRow() => new()
+        {
+            ChildId = "x", Care = 100, Coaching = 50, Funding = 50, Neglect = 0, LastTickDay = 0,
+        };
+        static ChildDevelopmentRow NeglectedRow() => new()
+        {
+            ChildId = "x", Care = 0, Coaching = 50, Funding = 50, Neglect = 100, LastTickDay = 0,
+        };
     }
 
     // ------------------------------------------------------------------

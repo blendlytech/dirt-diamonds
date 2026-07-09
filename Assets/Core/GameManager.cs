@@ -7,6 +7,7 @@ using DirtAndDiamonds.Economy.Items;
 using DirtAndDiamonds.Economy.Phone;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Narrative.Social;
 using DirtAndDiamonds.Platform.Steam;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Life;
@@ -73,6 +74,9 @@ public sealed partial class GameManager : Node
     public LifeSimManager LifeSim { get; private set; } = null!;
     public RelationshipGraph Relationships { get; private set; } = null!;
 
+    /// <summary>HS-5 (person-layer doc §8): the weekly NPC social-autonomy tick — public like Relationships so a future news/feed UI can read its per-tick counters.</summary>
+    public NpcAutonomyService Autonomy { get; private set; } = null!;
+
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
 
@@ -129,6 +133,12 @@ public sealed partial class GameManager : Node
     // the items list backs the §5.3 transport re-projection reads.
     private readonly List<(string PlayerId, PersonStats Applied)> _personSettleScratch = new();
     private readonly List<PlayerItemRow> _avatarItemsScratch = new();
+
+    // HS-5 §8: the weekly autonomy projection's pooled buffers — a full
+    // Players + Player_Person read once per tick week, never per day.
+    private readonly List<PlayerRow> _autonomyPlayersScratch = new(900);
+    private readonly Dictionary<string, PersonRow> _autonomyPersonsScratch = new(900);
+    private readonly List<SocialSeed> _autonomySeedsScratch = new(900);
 
     // Phase 6 rivalry transport: subscribes to RivalryChangedEvent and feeds
     // both baseball sims. Owned here because it exists exactly as long as the
@@ -388,6 +398,13 @@ public sealed partial class GameManager : Node
         Relationships = new RelationshipGraph();
         Relationships.Seed(relationshipSeeds);
         Relationships.AttachTo(Events);
+        // HS-5 (person-layer doc §8): the weekly NPC autonomy tick, on its own
+        // rng fork (Split never advances the parent stream — the schema-v4
+        // precedent, so world-gen draws above stay untouched). Subscribed
+        // BEFORE PersistRelationships: per-channel subscriber order then
+        // flushes a tick day's edge writes in that same day's upsert.
+        Autonomy = new NpcAutonomyService(Relationships, rng.Split());
+        Events.Subscribe<DayAdvancedEvent>(OnAutonomyDayAdvanced);
         Events.Subscribe<DayAdvancedEvent>(PersistRelationships);
 
         // Phase 8b: Hustles Layer 2. Subscribed AFTER LifeSim's own
@@ -812,6 +829,39 @@ public sealed partial class GameManager : Node
         {
             Family.ProcessDay(Career.AvatarPlayerId, e.Day);
         }
+    }
+
+    /// <summary>
+    /// HS-5 §8: the weekly NPC-autonomy projection + tick. The cadence gate
+    /// is checked here FIRST (via the service's own IsTickDay) so the full
+    /// Players/Player_Person projection cost is paid once a week, not daily;
+    /// ProcessDay re-checks it regardless. Charisma/teamwork default to the
+    /// neutral 50 for any player missing a person row (impossible after the
+    /// v11 backfill, but the projection stays total). The avatar passes
+    /// through as the exclusion id — the service never touches their edges.
+    /// </summary>
+    private void OnAutonomyDayAdvanced(DayAdvancedEvent e)
+    {
+        if (!NpcAutonomyService.IsTickDay(e.Day))
+        {
+            return;
+        }
+        Players.LoadAll(_autonomyPlayersScratch);
+        Persons.LoadAll(_autonomyPersonsScratch);
+        _autonomySeedsScratch.Clear();
+        for (int i = 0; i < _autonomyPlayersScratch.Count; i++)
+        {
+            PlayerRow player = _autonomyPlayersScratch[i];
+            int charisma = 50;
+            int teamwork = 50;
+            if (_autonomyPersonsScratch.TryGetValue(player.PlayerId, out PersonRow person))
+            {
+                charisma = person.Charisma;
+                teamwork = person.Teamwork;
+            }
+            _autonomySeedsScratch.Add(new SocialSeed(player.PlayerId, player.TeamId, charisma, teamwork));
+        }
+        Autonomy.ProcessDay(e.Day, Career.HasAvatar ? Career.AvatarPlayerId : null, _autonomySeedsScratch);
     }
 
     /// <summary>

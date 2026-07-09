@@ -871,7 +871,13 @@ public sealed class CareerManager
                 continue; // the avatar's own parent, not a child
             }
             anyChild = true;
-            if (other.BaseballInterest < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold)
+            // HS-5 (person-layer doc §7.2): the reveal blends nature with any
+            // accumulated nurture — a doted-on kid can cross the willing
+            // threshold a cold roll missed, and a neglected one can walk. No
+            // Child_Development row (or a neutral one) is the exact pre-HS-5
+            // number by the §7.3 identity, so legacy fixtures never move.
+            int revealedInterest = RevealedInterest(otherId, other.BaseballInterest);
+            if (revealedInterest < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold)
             {
                 continue; // unwilling — walks away from baseball (§4.2)
             }
@@ -881,7 +887,7 @@ public sealed class CareerManager
             {
                 continue; // not of age (or unplayable: no ratings row)
             }
-            eligibleHeirs.Add(new HeirCandidate(otherId, other.FirstName, other.LastName, other.Age, other.BaseballInterest, in ratings));
+            eligibleHeirs.Add(new HeirCandidate(otherId, other.FirstName, other.LastName, other.Age, revealedInterest, in ratings));
             int sum = ratings.IsPitcher
                 ? ratings.PitStuff + ratings.PitControl + ratings.PitStamina
                 : ratings.BatPower + ratings.BatContact + ratings.BatDiscipline;
@@ -901,6 +907,18 @@ public sealed class CareerManager
             : !anyWilling ? LineageFailure.NoWillingHeir
             : LineageFailure.NoPlayableHeir);
     }
+
+    /// <summary>
+    /// HS-5 (person-layer doc §7.2): a child's interest as the reveal shows it
+    /// — the stored nature roll blended with any accumulated Child_Development
+    /// nurture. Read-only (the fold that makes it permanent is
+    /// <see cref="Succeed"/>'s); null <see cref="Persons"/> or no row is the
+    /// raw nature value, the exact pre-HS-5 behavior (§7.3 identity).
+    /// </summary>
+    private int RevealedInterest(string childId, int natureInterest) =>
+        Persons is not null && Persons.TryGetChild(childId, out ChildDevelopmentRow dev)
+            ? NurtureBlend.FinalInterest(natureInterest, in dev)
+            : natureInterest;
 
     /// <summary>
     /// The §5.3 handoff — the one dangerous mutation that swaps the avatar.
@@ -936,11 +954,21 @@ public sealed class CareerManager
         {
             throw new ArgumentException($"'{heirId}' is not a child of the avatar — only heirs can succeed.", nameof(heirId));
         }
+        // HS-5 §7.2: the nurture fold resolves BEFORE the batch (the applier's
+        // pre-resolution discipline) so the willing gate, the persisted
+        // interest, and the potential shift all read the same axes snapshot.
+        ChildDevelopmentRow heirDev = default;
+        bool hasDev = Persons is not null && Persons.TryGetChild(heirId, out heirDev);
+        int revealedInterest = hasDev
+            ? NurtureBlend.FinalInterest(heir.BaseballInterest, in heirDev)
+            : heir.BaseballInterest;
+
         // Fail loudly on an ineligible heir rather than silently rostering an
         // unwilling child — the reveal gate (§5.2) is a real rule, not UI polish.
-        if (heir.BaseballInterest < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold)
+        // Evaluated on the BLENDED interest, matching EvaluateSuccession's reveal.
+        if (revealedInterest < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold)
         {
-            throw new InvalidOperationException($"Heir '{heirId}' is unwilling (interest {heir.BaseballInterest}).");
+            throw new InvalidOperationException($"Heir '{heirId}' is unwilling (interest {revealedInterest}).");
         }
         if (heir.Age < HeirGenetics.HeirGeneticsProfile.MaturityAge)
         {
@@ -1012,6 +1040,30 @@ public sealed class CareerManager
                     heirId, wealthTier, retireeId, FindPartnerId(retireeId)));
                 Persons.UpsertPhone(BackstoryGenerator.InheritedPhone(
                     heirId, wealthTier, (int)Math.Max(0, _state.CurrentDay)));
+            }
+            if (hasDev)
+            {
+                // HS-5 §7.2, the fold made permanent: nurture's interest shift
+                // is written to the heir's row and the one zero-centred
+                // potential delta shifts every Potential rating (nature still
+                // dominates — both capped). The axes then reset to neutral in
+                // the same batch, so any hypothetical re-fold is a §7.3
+                // identity no-op — fold-once without a delete path. A neutral
+                // row writes NOTHING (both deltas 0), keeping "neutral row"
+                // and "no row" byte-identical in the database too.
+                int potentialDelta = NurtureBlend.PotentialDelta(in heirDev);
+                if (revealedInterest != heir.BaseballInterest)
+                {
+                    _players.SetBaseballInterest(heirId, revealedInterest);
+                }
+                if (potentialDelta != 0 && _baseball.TryGetPotential(heirId, out PlayerPotentialRow naturePotential))
+                {
+                    _baseball.UpsertPotential(NurtureBlend.ApplyToPotential(in naturePotential, potentialDelta));
+                }
+                if (revealedInterest != heir.BaseballInterest || potentialDelta != 0)
+                {
+                    Persons!.UpsertChild(NurtureBlend.NeutralRow(heirId, (int)Math.Max(0, _state.CurrentDay)));
+                }
             }
             _db.CommitBatch();
         }

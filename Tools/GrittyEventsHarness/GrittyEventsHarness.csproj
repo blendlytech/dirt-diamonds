@@ -25,6 +25,13 @@
     <Compile Include="..\..\Assets\Narrative\Events\*.cs" Link="Narrative\%(Filename)%(Extension)" />
     <!-- Phase 10b: the contact registry the Burner Phone reads — pure content, no Godot type. -->
     <Compile Include="..\..\Assets\Narrative\Contacts\*.cs" Link="Narrative\Contacts\%(Filename)%(Extension)" />
+    <!--
+      HS-5 (high_school_person_layer.md §8): the NPC autonomy tick — Narrative
+      orchestration over RelationshipGraph + RngState, no Godot type. Its §9.1
+      conservation checks (budget honored, avatar untouched, RNG-split proven)
+      live in this harness per the design doc's acceptance-hook table.
+    -->
+    <Compile Include="..\..\Assets\Narrative\Social\*.cs" Link="Narrative\Social\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\RngState.cs" Link="Baseball\RngState.cs" />
     <!--
       Phase 8b check 9 (Layer-2/DB integration, hustles_narcotics_fencing.md

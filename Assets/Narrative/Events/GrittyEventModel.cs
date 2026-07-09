@@ -22,7 +22,13 @@ public enum PrerequisiteKind : byte
     FlagInactive,
 }
 
-/// <summary>Players-row fields a prerequisite may compare (gritty_event_framework.md §3).</summary>
+/// <summary>
+/// Subject fields a prerequisite may compare (gritty_event_framework.md §3).
+/// Players-row columns, plus — since HS-5 — Family_Background.strictness,
+/// which the poll snapshot LEFT JOINs in (COALESCEd to the neutral 50 for the
+/// no-row majority, so a strictness gate simply never fires for people
+/// without a generated family).
+/// </summary>
 public enum SubjectField : byte
 {
     Funds,
@@ -31,6 +37,7 @@ public enum SubjectField : byte
     HealthCeiling,
     DetectionRisk,
     BaseballInterest,
+    Strictness,
 }
 
 public enum FieldComparison : byte
@@ -155,6 +162,21 @@ public enum ConsequenceKind : byte
     /// the subject.
     /// </summary>
     RekindlePartnership,
+
+    /// <summary>
+    /// Atomic clamped delta on one Child_Development axis, applied to EVERY
+    /// child of the subject — the younger endpoint of each Child edge, per
+    /// the §1.2 age invariant — so rearing content feeds the §7 nurture
+    /// blend (high_school_person_layer.md §7.1: care/coaching/funding accrue
+    /// from rearing events, neglect from missed obligations). Valid only on
+    /// scope-avatar events (load-time gate, the ConceiveChild precedent):
+    /// only the avatar rears through events. A childless subject is a
+    /// skip-by-design no-op (the empty-pool precedent). Children resolve
+    /// from the DATABASE (Child edges are DB-authored in ConceiveChild's
+    /// batch, never written through the live graph — the inverse polarity
+    /// of the Partner lookups).
+    /// </summary>
+    ChildDevelopment,
 }
 
 /// <summary>Who a relationship consequence pairs the subject with (§4), resolved at apply time.</summary>
@@ -163,6 +185,20 @@ public enum RelationshipTargetSelector : byte
     Teammate,
     Opponent,
     League,
+}
+
+/// <summary>
+/// One Child_Development axis (high_school_person_layer.md §7.1). CONTRACT:
+/// the ordinal IS the index into PersonQueries.ChildAxisColumns' fixed column
+/// table — mirrored across the layer wall, never referenced (the PersonStatId
+/// precedent); the harness round-trip-pins each ordinal to its column.
+/// </summary>
+public enum ChildAxis : byte
+{
+    Care,
+    Coaching,
+    Funding,
+    Neglect,
 }
 
 public readonly struct EventConsequence
@@ -184,11 +220,15 @@ public readonly struct EventConsequence
     // PersonStat form (Amount carries the signed integer delta):
     public readonly PersonStatId PersonStat;
 
+    // ChildDevelopment form (Amount carries the signed integer delta):
+    public readonly ChildAxis ChildAxis;
+
     private EventConsequence(
         ConsequenceKind kind, double amount, string? flagName,
         RelationshipKind relationshipKind, RelationshipTargetSelector target,
         AbsenceReason absenceReason = AbsenceReason.None,
-        PersonStatId personStat = default)
+        PersonStatId personStat = default,
+        ChildAxis childAxis = default)
     {
         Kind = kind;
         Amount = amount;
@@ -197,6 +237,7 @@ public readonly struct EventConsequence
         Target = target;
         AbsenceReason = absenceReason;
         PersonStat = personStat;
+        ChildAxis = childAxis;
     }
 
     public static EventConsequence ForAmount(ConsequenceKind kind, double amount)
@@ -268,6 +309,15 @@ public readonly struct EventConsequence
     /// </summary>
     public static EventConsequence ForRekindlePartnership(double affinity) =>
         new(ConsequenceKind.RekindlePartnership, affinity, null, RelationshipKind.Partner, default);
+
+    /// <summary>
+    /// Signed integer delta on one Child_Development axis, applied to every
+    /// child of the subject (§7.1, HS-5 rearing content). Targets resolve at
+    /// apply time from the subject's Child edges — no selector.
+    /// </summary>
+    public static EventConsequence ForChildDevelopment(ChildAxis axis, double amount) =>
+        new(ConsequenceKind.ChildDevelopment, amount, null, default, default,
+            AbsenceReason.None, default, axis);
 }
 
 public sealed class EventChoice

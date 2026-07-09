@@ -204,6 +204,30 @@ public sealed class PersonQueries
         "ON CONFLICT (child_id) DO UPDATE SET care = excluded.care, coaching = excluded.coaching, " +
         "funding = excluded.funding, neglect = excluded.neglect, last_tick_day = excluded.last_tick_day;";
 
+    // HS-5 incremental nurture writer (the AdjustStat discipline): one atomic
+    // clamped delta per axis, seeding a missing row from the axis's own
+    // schema default so "first rearing event" and "hundredth" are the same
+    // call. CONTRACT: the array index IS the Narrative ChildAxis ordinal
+    // (mirrored, not referenced — the PersonStatId precedent); column names
+    // and neutral seeds come from this fixed table, never caller input, so
+    // the SQL concatenation is injection-safe by construction.
+    private static readonly (string Column, int NeutralSeed)[] ChildAxisColumns =
+    {
+        ("care", 50),     // 0 = ChildAxis.Care
+        ("coaching", 50), // 1 = ChildAxis.Coaching
+        ("funding", 50),  // 2 = ChildAxis.Funding
+        ("neglect", 0),   // 3 = ChildAxis.Neglect
+    };
+
+    /// <summary>The number of adjustable Child_Development axes.</summary>
+    public const int ChildAxisCount = 4;
+
+    private static string AdjustChildAxisSql(string column, int neutralSeed) =>
+        $"INSERT INTO Child_Development (child_id, {column}, last_tick_day) " +
+        $"VALUES (@childId, MAX(0, MIN(100, {neutralSeed} + @delta)), @day) " +
+        $"ON CONFLICT (child_id) DO UPDATE SET {column} = MAX(0, MIN(100, {column} + @delta)), " +
+        "last_tick_day = @day;";
+
     private const string SqlSelectChild =
         "SELECT child_id, care, coaching, funding, neglect, last_tick_day FROM Child_Development " +
         "WHERE child_id = @childId;";
@@ -224,6 +248,7 @@ public sealed class PersonQueries
     private readonly SqliteCommand _selectAllItems;
     private readonly SqliteCommand _upsertChild;
     private readonly SqliteCommand _selectChild;
+    private readonly SqliteCommand[] _adjustChildAxis;
 
     public PersonQueries(DatabaseManager db)
     {
@@ -362,6 +387,21 @@ public sealed class PersonQueries
         {
             _selectChild.Parameters.Add("@childId", SqliteType.Text);
             _selectChild.Prepare();
+        }
+
+        _adjustChildAxis = new SqliteCommand[ChildAxisColumns.Length];
+        for (int i = 0; i < ChildAxisColumns.Length; i++)
+        {
+            SqliteCommand command = db.GetPooledCommand(
+                AdjustChildAxisSql(ChildAxisColumns[i].Column, ChildAxisColumns[i].NeutralSeed));
+            if (command.Parameters.Count == 0)
+            {
+                command.Parameters.Add("@childId", SqliteType.Text);
+                command.Parameters.Add("@delta", SqliteType.Integer);
+                command.Parameters.Add("@day", SqliteType.Integer);
+                command.Prepare();
+            }
+            _adjustChildAxis[i] = command;
         }
     }
 
@@ -620,6 +660,28 @@ public sealed class PersonQueries
         p["@neglect"].Value = row.Neglect;
         p["@lastTickDay"].Value = row.LastTickDay;
         _db.ExecuteNonQuery(_upsertChild);
+    }
+
+    /// <summary>
+    /// Atomically nudges one Child_Development axis, clamped into [0,100] in
+    /// SQL, stamping last_tick_day. A child with no row gets one seeded from
+    /// the axis's neutral default plus the delta (the other axes take their
+    /// schema defaults), so accumulation never needs a separate ensure-row
+    /// step. <paramref name="axisIndex"/> is the Narrative ChildAxis ordinal
+    /// (see ChildAxisColumns' contract comment); out-of-range throws loudly.
+    /// </summary>
+    public void AdjustChildAxis(string childId, int axisIndex, int delta, long day)
+    {
+        if (axisIndex < 0 || axisIndex >= ChildAxisColumns.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(axisIndex),
+                $"Child axis index {axisIndex} is outside the 0–{ChildAxisColumns.Length - 1} ChildAxis range.");
+        }
+        SqliteCommand command = _adjustChildAxis[axisIndex];
+        command.Parameters["@childId"].Value = childId;
+        command.Parameters["@delta"].Value = delta;
+        command.Parameters["@day"].Value = day;
+        _db.ExecuteNonQuery(command);
     }
 
     public bool TryGetChild(string childId, out ChildDevelopmentRow row)

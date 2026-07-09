@@ -223,6 +223,24 @@ public sealed class RelationshipGraph
     }
 
     /// <summary>
+    /// Read-only snapshot of every edge into <paramref name="destination"/>
+    /// (cleared first) — the NPC-autonomy tick's weekly candidate read
+    /// (person-layer doc §8.1 tier 2). Dictionary order: callers needing a
+    /// deterministic ordering sort the result themselves. Never dirties,
+    /// never publishes.
+    /// </summary>
+    public int CollectEdges(List<RelationshipSeed> destination)
+    {
+        destination.Clear();
+        foreach (KeyValuePair<(string, string), EdgeData> entry in _edges)
+        {
+            destination.Add(new RelationshipSeed(
+                entry.Key.Item1, entry.Key.Item2, entry.Value.Affinity, entry.Value.Kind));
+        }
+        return destination.Count;
+    }
+
+    /// <summary>
     /// Persistence bridge: fills <paramref name="destination"/> (cleared
     /// first) with every edge mutated since the previous call, then resets the
     /// dirty set. GameManager upserts these through PlayerQueries on the same

@@ -7,6 +7,7 @@ using DirtAndDiamonds.Economy.Items;
 using DirtAndDiamonds.Economy.Phone;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Narrative.Social;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Hustles;
 using DirtAndDiamonds.Simulation.Life;
@@ -64,6 +65,9 @@ internal static class Program
             RunHsDatingArcChecks();
             RunEndPartnershipChecks();
             RunRekindleChecks();
+            RunStrictnessChecks();
+            RunChildDevelopmentChecks();
+            RunNpcAutonomyChecks();
             RunStressChecks();
             RunHustleIntegrationChecks();
             RunEquipmentIntegrationChecks();
@@ -1351,6 +1355,363 @@ internal static class Program
             Check("a non-avatar end_partnership still reclassifies its edge but records no ex (avatar-only history)",
                 world.Fired.Count == 1 && world.Fired[0].SubjectPlayerId == "npc" && reclassified && nothingRecorded,
                 $"{world.Fired.Count} fires, reclassified={reclassified}, nothingRecorded={nothingRecorded}");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h. SubjectField.Strictness (HS-5, person-layer doc §3 gate extension)
+    // ------------------------------------------------------------------
+
+    private static void RunStrictnessChecks()
+    {
+        Console.WriteLine("--- SubjectField.Strictness (Family_Background gate) ---");
+
+        Check("loader accepts a strictness field prerequisite", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "prerequisites": [ { "field": "strictness", "op": ">=", "value": 55 } ], "choices": [ { "id": "a" } ] } ] }"""));
+        Check("loader still rejects an unknown prerequisite field (closed vocabulary)", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "prerequisites": [ { "field": "allowance", "op": ">=", "value": 1 } ], "choices": [ { "id": "a" } ] } ] }"""));
+
+        var strictSubject = new PollPlayerRow { PlayerId = "s", Strictness = 80 };
+        var neutralSubject = new PollPlayerRow { PlayerId = "n", Strictness = 50 };
+        var noFlags = new Dictionary<(string, string), long>();
+        Check("ConditionEvaluator compares the strictness field",
+            ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Strictness, FieldComparison.GreaterOrEqual, 55), in strictSubject, noFlags, 1)
+            && !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Strictness, FieldComparison.GreaterOrEqual, 55), in neutralSubject, noFlags, 1));
+
+        // The shipped content actually uses the extension: hs_parental_approval
+        // carries the strictness gate (lenient households never get the beat;
+        // safe to gate because the event sets no flags — nothing downstream
+        // can orphan).
+        string shipped = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "hs_dating_events.json"));
+        GrittyEventLibrary shippedLibrary = GrittyEventJson.Parse(shipped);
+        bool gateAuthored = shippedLibrary.TryGetById("hs_parental_approval", out GrittyEventDefinition approval)
+            && approval.Prerequisites.Any(p =>
+                p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.Strictness
+                && p.Comparison == FieldComparison.GreaterOrEqual && p.Value == 55);
+        Check("hs_parental_approval ships with the strictness >= 55 gate", gateAuthored);
+
+        // End to end through the REAL poll join: a strict household fires the
+        // gate, a family-less save COALESCEs to the neutral 50 and never does.
+        {
+            using World world = World.Create("strictGate", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "strict_dad", "scope": "avatar", "weight": 1.0, "prerequisites": [ { "field": "strictness", "op": ">=", "value": 55 } ], "choices": [ { "id": "a" } ] } ] }"""));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Persons.UpsertFamily(new FamilyBackgroundRow
+            {
+                PlayerId = "hero",
+                WealthTier = 2,
+                HouseholdIncome = 60000,
+                Parent1Id = null,
+                Parent2Id = null,
+                HomeWifi = true,
+                AllowanceWeekly = 20,
+                Strictness = 80,
+            });
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("a strictness-gated event fires through the real Family_Background poll join",
+                world.Fired.Count == 1, $"{world.Fired.Count} fires");
+        }
+        {
+            using World world = World.Create("strictNoRow", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "strict_dad", "scope": "avatar", "weight": 1.0, "prerequisites": [ { "field": "strictness", "op": ">=", "value": 55 } ], "choices": [ { "id": "a" } ] } ] }"""));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("no Family_Background row COALESCEs to the neutral 50 — the gate never fires for a family-less save",
+                world.Fired.Count == 0, $"{world.Fired.Count} fires");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4i. ChildDevelopment consequence + incremental writer (HS-5, §7.1)
+    // ------------------------------------------------------------------
+
+    private static void RunChildDevelopmentChecks()
+    {
+        Console.WriteLine("--- Child_Development writer + consequence (§7.1) ---");
+
+        Check("loader accepts child_development on a scope-avatar event", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "child_development", "axis": "care", "amount": 5 } ] } ] } ] }"""));
+        Check("loader rejects child_development on a scope-any event (only the avatar rears through events)", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "child_development", "axis": "care", "amount": 5 } ] } ] } ] }"""));
+        Check("loader rejects an unknown child_development axis", Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "child_development", "axis": "tutoring", "amount": 5 } ] } ] } ] }"""));
+        Check("loader rejects child_development without an amount", Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "child_development", "axis": "care" } ] } ] } ] }"""));
+
+        // The mirrored ordinal contract: each ChildAxis ordinal drives exactly
+        // its own column, a missing row seeds from that axis's schema default
+        // (50/50/50/0) plus the delta, and the SQL clamps at both rails.
+        {
+            using World world = World.Create("childWriter", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "unused", "scope": "any", "weight": 0.0, "choices": [ { "id": "a" } ] } ] }"""));
+            world.AddPlayer("kid", age: 1, teamId: null);
+
+            world.Persons.AdjustChildAxis("kid", (int)ChildAxis.Care, 7, day: 5);
+            bool seeded = world.Persons.TryGetChild("kid", out ChildDevelopmentRow row);
+            Check("a first axis write seeds the row from the schema defaults plus the delta",
+                seeded && row.Care == 57 && row.Coaching == 50 && row.Funding == 50 && row.Neglect == 0 && row.LastTickDay == 5,
+                $"care={row.Care} coaching={row.Coaching} funding={row.Funding} neglect={row.Neglect} day={row.LastTickDay}");
+
+            world.Persons.AdjustChildAxis("kid", (int)ChildAxis.Coaching, -60, day: 6);
+            world.Persons.AdjustChildAxis("kid", (int)ChildAxis.Funding, 100, day: 7);
+            world.Persons.AdjustChildAxis("kid", (int)ChildAxis.Neglect, 5, day: 8);
+            world.Persons.TryGetChild("kid", out row);
+            Check("each ChildAxis ordinal drives exactly its own column, clamped in SQL at both rails",
+                row.Care == 57 && row.Coaching == 0 && row.Funding == 100 && row.Neglect == 5 && row.LastTickDay == 8,
+                $"care={row.Care} coaching={row.Coaching} funding={row.Funding} neglect={row.Neglect} day={row.LastTickDay}");
+
+            Check("an out-of-range axis ordinal throws loudly", ThrowsAny(() =>
+                world.Persons.AdjustChildAxis("kid", 4, 1, day: 9)));
+        }
+
+        // End to end: the consequence reaches every CHILD of the subject (the
+        // younger Child-edge endpoint, resolved from the DATABASE — the same
+        // rows ConceiveChild's batch writes) and never the subject's own
+        // parent, whose Child edge points the other way (§1.2).
+        {
+            using World world = World.Create("childApply", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "backyard_catch_hs5", "scope": "avatar", "weight": 1.0,
+                  "choices": [ { "id": "play", "consequences": [
+                    { "type": "child_development", "axis": "coaching", "amount": 6 },
+                    { "type": "child_development", "axis": "care", "amount": 2 } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 30, teamId: 1);
+            world.AddPlayer("kid_a", age: 3, teamId: null);
+            world.AddPlayer("kid_b", age: 1, teamId: null);
+            world.AddPlayer("grandma", age: 61, teamId: null);
+            world.Players.UpsertRelationship("hero", "kid_a", 30, RelationshipType.Child);
+            world.Players.UpsertRelationship("hero", "kid_b", 30, RelationshipType.Child);
+            world.Players.UpsertRelationship("hero", "grandma", 40, RelationshipType.Child);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool aWritten = world.Persons.TryGetChild("kid_a", out ChildDevelopmentRow rowA);
+            bool bWritten = world.Persons.TryGetChild("kid_b", out ChildDevelopmentRow rowB);
+            bool grandmaClean = !world.Persons.TryGetChild("grandma", out _);
+            bool heroClean = !world.Persons.TryGetChild("hero", out _);
+            Check("a rearing fire feeds every child's axes (both kids, DB-resolved) and skips the older Child-edge endpoint",
+                world.Fired.Count == 1
+                && aWritten && rowA.Coaching == 56 && rowA.Care == 52 && rowA.LastTickDay == 2
+                && bWritten && rowB.Coaching == 56 && rowB.Care == 52
+                && grandmaClean && heroClean,
+                $"fires={world.Fired.Count} a=({(aWritten ? $"{rowA.Coaching}/{rowA.Care}" : "none")}) b=({(bWritten ? $"{rowB.Coaching}/{rowB.Care}" : "none")}) grandmaClean={grandmaClean}");
+        }
+
+        // A childless subject is a clean skip — fires, writes no row.
+        {
+            using World world = World.Create("childless", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "no_kids_yet", "scope": "avatar", "weight": 1.0, "choices": [ { "id": "a", "consequences": [ { "type": "child_development", "axis": "care", "amount": 5 } ] } ] } ] }"""));
+            world.AddPlayer("hero", age: 30, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("a childless subject's child_development fire is a clean no-op",
+                world.Fired.Count == 1 && !world.Persons.TryGetChild("hero", out _),
+                $"{world.Fired.Count} fires");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4j. NPC autonomy tick (HS-5, person-layer doc §8 conservation)
+    // ------------------------------------------------------------------
+
+    private static List<SocialSeed> BuildAutonomyPopulation(int count, int teamSize)
+    {
+        var population = new List<SocialSeed>(count);
+        for (int i = 0; i < count; i++)
+        {
+            // First 2/3 rostered in teamSize blocks, the rest unrostered —
+            // stats spread deterministically so compatibility varies.
+            int? teamId = i < count * 2 / 3 ? 100 + i / teamSize : null;
+            population.Add(new SocialSeed($"npc{i:D3}", teamId, (i * 7) % 101, (i * 13) % 101));
+        }
+        return population;
+    }
+
+    private static void RunNpcAutonomyChecks()
+    {
+        Console.WriteLine("--- NPC autonomy tick (§8) ---");
+
+        // Cadence: the gate lives inside ProcessDay (and is exposed static
+        // for the caller's projection skip).
+        {
+            var graph = new RelationshipGraph();
+            var service = new NpcAutonomyService(graph, new RngState(11UL).Split());
+            List<SocialSeed> population = BuildAutonomyPopulation(60, 17);
+            service.ProcessDay(3, null, population);
+            bool offDay = service.LastTickInteractions == 0 && graph.EdgeCount == 0;
+            service.ProcessDay(7, null, population);
+            Check("weekly cadence: day 3 is a no-op, day 7 ticks (IsTickDay agrees)",
+                offDay && !NpcAutonomyService.IsTickDay(3) && NpcAutonomyService.IsTickDay(7)
+                && service.LastTickInteractions > 0,
+                $"offDay={offDay}, tickInteractions={service.LastTickInteractions}");
+        }
+
+        // §8.1 hard budget: interactions never exceed the cap, at any
+        // population size — and with all three tiers populated the tick
+        // spends exactly the cap.
+        {
+            var graph = new RelationshipGraph();
+            graph.SetRelationship("npc000", "npc001", 20, RelationshipKind.Friend);
+            var service = new NpcAutonomyService(graph, new RngState(12UL).Split());
+            List<SocialSeed> big = BuildAutonomyPopulation(800, 17);
+            service.RunWeek(null, big);
+            int first = service.LastTickInteractions;
+            bool capped = first == NpcAutonomyService.NpcAutonomyProfile.MaxPairInteractionsPerWeek;
+            List<SocialSeed> tiny = BuildAutonomyPopulation(3, 17);
+            var tinyGraph = new RelationshipGraph();
+            var tinyService = new NpcAutonomyService(tinyGraph, new RngState(13UL).Split());
+            tinyService.RunWeek(null, tiny);
+            Check("the 256-pair budget is exact with all tiers live and never exceeded at any population",
+                capped && tinyService.LastTickInteractions <= NpcAutonomyService.NpcAutonomyProfile.MaxPairInteractionsPerWeek,
+                $"big={first}, tiny={tinyService.LastTickInteractions}");
+        }
+
+        // §8.2 conservation: the avatar's edges are untouched across many
+        // weeks — no nudge, no reclassify, no new edge — and Child edges are
+        // lineage state everywhere.
+        {
+            var graph = new RelationshipGraph();
+            graph.SetRelationship("avatar", "npc001", 55, RelationshipKind.Partner);
+            graph.SetRelationship("avatar", "npc002", 30, RelationshipKind.Friend);
+            graph.SetRelationship("avatar", "npc003", -40, RelationshipKind.Rival);
+            graph.SetRelationship("npc004", "npc005", 30, RelationshipKind.Child);
+            var service = new NpcAutonomyService(graph, new RngState(14UL).Split());
+            List<SocialSeed> population = BuildAutonomyPopulation(120, 17);
+            population.Add(new SocialSeed("avatar", 100, 90, 90));
+            for (int week = 0; week < 30; week++)
+            {
+                service.RunWeek("avatar", population);
+            }
+            var avatarEdges = new List<RelationshipEdge>();
+            graph.GetEdgesFor("avatar", avatarEdges);
+            bool partnerKept = avatarEdges.Any(e => e.OtherId == "npc001" && e.Kind == RelationshipKind.Partner && e.Affinity == 55);
+            bool friendKept = avatarEdges.Any(e => e.OtherId == "npc002" && e.Kind == RelationshipKind.Friend && e.Affinity == 30);
+            bool rivalKept = avatarEdges.Any(e => e.OtherId == "npc003" && e.Kind == RelationshipKind.Rival && e.Affinity == -40);
+            bool childKept = graph.TryGetRelationship("npc004", "npc005", out int childAffinity, out RelationshipKind childKind)
+                && childKind == RelationshipKind.Child && childAffinity == 30;
+            Check("30 weeks never touch the avatar's edges (§8.2) — kind, affinity, and count all preserved",
+                avatarEdges.Count == 3 && partnerKept && friendKept && rivalKept,
+                $"{avatarEdges.Count} avatar edges, partner={partnerKept} friend={friendKept} rival={rivalKept}");
+            Check("30 weeks never touch a Child edge (lineage state)",
+                childKept, $"kind={childKind}, affinity={childAffinity}");
+        }
+
+        // RNG-split proof: the service owns its fork BY VALUE — running it
+        // leaves the caller's stream exactly where Split() (which never
+        // advances the parent) left it.
+        {
+            var parent = new RngState(99UL);
+            RngState control = parent; // struct copy — the never-forked twin
+            var graph = new RelationshipGraph();
+            var service = new NpcAutonomyService(graph, parent.Split());
+            List<SocialSeed> population = BuildAutonomyPopulation(200, 17);
+            service.RunWeek(null, population);
+            Check("RNG-split isolation: the caller's stream is bit-identical after fork + a full tick",
+                parent.NextUInt64() == control.NextUInt64() && graph.EdgeCount > 0,
+                $"edges={graph.EdgeCount}");
+        }
+
+        // Determinism: identical fork seed + population + starting graph ⇒
+        // identical edge sets, week after week.
+        {
+            static List<RelationshipSeed> RunFiveWeeks()
+            {
+                var graph = new RelationshipGraph();
+                graph.SetRelationship("npc010", "npc011", 40, RelationshipKind.Friend);
+                var service = new NpcAutonomyService(graph, new RngState(4242UL).Split());
+                List<SocialSeed> population = BuildAutonomyPopulation(150, 17);
+                for (int week = 0; week < 5; week++)
+                {
+                    service.RunWeek(null, population);
+                }
+                var edges = new List<RelationshipSeed>();
+                graph.CollectEdges(edges);
+                edges.Sort((a, b) =>
+                {
+                    int first = string.CompareOrdinal(a.PlayerAId, b.PlayerAId);
+                    return first != 0 ? first : string.CompareOrdinal(a.PlayerBId, b.PlayerBId);
+                });
+                return edges;
+            }
+            List<RelationshipSeed> runA = RunFiveWeeks();
+            List<RelationshipSeed> runB = RunFiveWeeks();
+            bool identical = runA.Count == runB.Count;
+            for (int i = 0; identical && i < runA.Count; i++)
+            {
+                identical = runA[i] == runB[i];
+            }
+            Check("same fork seed + same inputs ⇒ bit-identical edge evolution (5 weeks)",
+                identical && runA.Count > 0, $"{runA.Count} vs {runB.Count} edges");
+        }
+
+        // The tick actually LIVES: over a season's worth of weeks it mints
+        // friendships and rivalries, promotes at least one NPC romance
+        // (single-partner exclusivity never violated), and eventually breaks
+        // one up — the organic exes §8 exists to create.
+        {
+            var graph = new RelationshipGraph();
+            var service = new NpcAutonomyService(graph, new RngState(20260709UL).Split());
+            List<SocialSeed> population = BuildAutonomyPopulation(200, 17);
+            var everPartnered = new HashSet<(string, string)>();
+            var edges = new List<RelationshipSeed>();
+            int weeks = 0;
+            for (; weeks < 120; weeks++)
+            {
+                service.RunWeek(null, population);
+                graph.CollectEdges(edges);
+                foreach (RelationshipSeed edge in edges)
+                {
+                    if (edge.Kind == RelationshipKind.Partner)
+                    {
+                        everPartnered.Add((edge.PlayerAId, edge.PlayerBId));
+                    }
+                }
+            }
+            graph.CollectEdges(edges);
+            int friends = edges.Count(e => e.Kind == RelationshipKind.Friend);
+            int rivals = edges.Count(e => e.Kind == RelationshipKind.Rival);
+            int exes = everPartnered.Count(pair =>
+                graph.TryGetRelationship(pair.Item1, pair.Item2, out _, out RelationshipKind kind)
+                && kind is RelationshipKind.Friend or RelationshipKind.Rival);
+            // Exclusivity: nobody ever holds two live Partner edges.
+            var partnerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (RelationshipSeed edge in edges)
+            {
+                if (edge.Kind != RelationshipKind.Partner)
+                {
+                    continue;
+                }
+                partnerCounts[edge.PlayerAId] = partnerCounts.GetValueOrDefault(edge.PlayerAId) + 1;
+                partnerCounts[edge.PlayerBId] = partnerCounts.GetValueOrDefault(edge.PlayerBId) + 1;
+            }
+            bool exclusive = partnerCounts.Values.All(count => count == 1);
+            Check("a season of ticks mints friendships AND rivalries (both signs of the compatibility roll)",
+                friends > 0 && rivals > 0, $"{friends} friends, {rivals} rivals, {edges.Count} edges");
+            Check("NPC romances form organically and single-partner exclusivity holds throughout",
+                everPartnered.Count > 0 && exclusive,
+                $"{everPartnered.Count} ever-partnered pairs, exclusive={exclusive}");
+            Check("at least one NPC partnership has ended into a surviving Friend/Rival edge — organic exes exist (§8)",
+                exes > 0, $"{exes} exes of {everPartnered.Count} ever-partnered");
         }
     }
 

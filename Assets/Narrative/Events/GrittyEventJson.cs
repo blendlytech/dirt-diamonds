@@ -160,6 +160,7 @@ public static class GrittyEventJson
                 "health_ceiling" => SubjectField.HealthCeiling,
                 "detection_risk" => SubjectField.DetectionRisk,
                 "baseball_interest" => SubjectField.BaseballInterest,
+                "strictness" => SubjectField.Strictness,
                 _ => throw new FormatException($"Event '{eventId}': unknown prerequisite field '{fieldName}'."),
             };
 
@@ -346,6 +347,28 @@ public static class GrittyEventJson
                         $"Event '{eventId}' choice '{choiceId}': 'rekindle_partnership' is only valid on a 'scope: avatar' event.");
                 }
                 return EventConsequence.ForRekindlePartnership(RequireNumber(element, "affinity", eventId));
+            case "child_development":
+            {
+                // HS-5 rearing content (§7.1): only the avatar rears through
+                // events — same load-time gate as conceive_child.
+                if (scope != EventScope.Avatar)
+                {
+                    throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': 'child_development' is only valid on a 'scope: avatar' event.");
+                }
+                string axisText = RequireString(element, "axis", eventId);
+                ChildAxis axis = axisText switch
+                {
+                    "care" => ChildAxis.Care,
+                    "coaching" => ChildAxis.Coaching,
+                    "funding" => ChildAxis.Funding,
+                    "neglect" => ChildAxis.Neglect,
+                    _ => throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': unknown child_development axis '{axisText}' " +
+                        "(expected 'care', 'coaching', 'funding' or 'neglect')."),
+                };
+                return EventConsequence.ForChildDevelopment(axis, RequireNumber(element, "amount", eventId));
+            }
             case "person_stat":
             {
                 string statText = RequireString(element, "stat", eventId);

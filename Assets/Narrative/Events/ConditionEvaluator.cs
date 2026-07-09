@@ -60,6 +60,7 @@ public static class ConditionEvaluator
         SubjectField.HealthCeiling => subject.HealthCeiling,
         SubjectField.DetectionRisk => subject.DetectionRisk,
         SubjectField.BaseballInterest => subject.BaseballInterest,
+        SubjectField.Strictness => subject.Strictness,
         _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
     };
 

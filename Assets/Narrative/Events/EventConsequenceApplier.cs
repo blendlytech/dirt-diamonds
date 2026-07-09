@@ -78,6 +78,13 @@ public sealed class EventConsequenceApplier
     // conception request's co-parent resolution).
     private readonly List<RelationshipEdge> _edgeScratch = new(8);
 
+    // Child-edge scratch for the child_development consequence — resolved
+    // from the DATABASE, not the live graph: Child edges are DB-authored
+    // (ConceiveChild's own committed batch) and never written through
+    // RelationshipGraph, so a mid-session birth exists only in the DB until
+    // the next boot hydration — the exact inverse of the Partner polarity.
+    private readonly List<RelationshipRow> _childRowScratch = new(8);
+
     // Absence publications staged inside the DB batch (where the rust penalty
     // is computed against the same state the write saw), published after the
     // commit — the standard commit-then-publish ordering. Pooled; fires are
@@ -232,6 +239,9 @@ public sealed class EventConsequenceApplier
                         _persons.AdjustStat(
                             fired.SubjectPlayerId, (int)consequence.PersonStat, (int)Math.Round(consequence.Amount));
                         break;
+                    case ConsequenceKind.ChildDevelopment:
+                        ApplyChildDevelopment(fired, in consequence);
+                        break;
                 }
             }
 
@@ -348,6 +358,44 @@ public sealed class EventConsequenceApplier
         _players.SetAbsence(fired.SubjectPlayerId, consequence.AbsenceReason, untilDay, penalty, penaltyUntilDay);
         _absenceScratch.Add(new PlayerAbsenceChangedEvent(
             fired.SubjectPlayerId, (byte)consequence.AbsenceReason, untilDay, (byte)penalty, penaltyUntilDay));
+    }
+
+    /// <summary>
+    /// HS-5 rearing (§7.1): one clamped axis delta for EVERY child of the
+    /// subject — each Child edge whose other endpoint is YOUNGER (the §1.2
+    /// age invariant excludes the subject's own parents, whose edges share
+    /// the same kind). Runs inside the fire's DB batch like every other row
+    /// write; a childless subject touches nothing (the empty-pool
+    /// precedent). Applying to all children rather than drawing one keeps
+    /// the consequence deterministic — no RNG consumed — and reads as a
+    /// family beat; per-child targeting would be an additive selector field,
+    /// not a reshape.
+    /// </summary>
+    private void ApplyChildDevelopment(GrittyEventFiredEvent fired, in EventConsequence consequence)
+    {
+        if (!_players.TryGetById(fired.SubjectPlayerId, out PlayerRow subject))
+        {
+            throw new InvalidOperationException(
+                $"child_development consequence fired for '{fired.SubjectPlayerId}' but the Players row is missing.");
+        }
+        _players.LoadRelationshipsFor(fired.SubjectPlayerId, _childRowScratch);
+        int delta = (int)Math.Round(consequence.Amount);
+        for (int i = 0; i < _childRowScratch.Count; i++)
+        {
+            RelationshipRow row = _childRowScratch[i];
+            if (row.Type != RelationshipType.Child)
+            {
+                continue;
+            }
+            string otherId = string.Equals(row.Player1Id, fired.SubjectPlayerId, StringComparison.Ordinal)
+                ? row.Player2Id
+                : row.Player1Id;
+            if (!_players.TryGetById(otherId, out PlayerRow other) || other.Age >= subject.Age)
+            {
+                continue; // the subject's own parent, not a child (§1.2)
+            }
+            _persons.AdjustChildAxis(otherId, (int)consequence.ChildAxis, delta, fired.Day);
+        }
     }
 
     /// <summary>Weighted draw over autopilot_weight; an all-zero table falls back to the first choice.</summary>
