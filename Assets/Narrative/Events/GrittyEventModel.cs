@@ -118,6 +118,28 @@ public enum ConsequenceKind : byte
     /// live health_ceiling at apply time.
     /// </summary>
     Absence,
+
+    /// <summary>
+    /// Atomic clamped delta on one of the twelve <see cref="PersonStatId"/>
+    /// integer columns (high_school_person_layer.md §9, HS-5) — the same
+    /// writer (PersonQueries.AdjustStat) HS-4's schedule actions already use,
+    /// extended into the gritty-event vocabulary. GPA is deliberately
+    /// unreachable here (see PersonDrift.cs — it moves only through the
+    /// weekly closed form).
+    /// </summary>
+    PersonStat,
+
+    /// <summary>
+    /// Ends the subject's current partnership (HS-5 breakup/divorce): the live
+    /// Partner edge is RECLASSIFIED in place to the authored kind (Friend or
+    /// Rival) and affinity — never deleted, so the ex remains graph history
+    /// (the §8 "dating the rival's ex" substrate) and persistence rides the
+    /// existing dirty-edge upsert with no delete path. Reclassification is
+    /// what reopens ApplyRelationship's single-partner exclusivity guard, so
+    /// re-dating/remarriage works afterwards. An unpartnered subject is a
+    /// skip-by-design no-op (the empty-pool precedent).
+    /// </summary>
+    EndPartnership,
 }
 
 /// <summary>Who a relationship consequence pairs the subject with (§4), resolved at apply time.</summary>
@@ -144,10 +166,14 @@ public readonly struct EventConsequence
     // Absence form (Amount carries the day count):
     public readonly AbsenceReason AbsenceReason;
 
+    // PersonStat form (Amount carries the signed integer delta):
+    public readonly PersonStatId PersonStat;
+
     private EventConsequence(
         ConsequenceKind kind, double amount, string? flagName,
         RelationshipKind relationshipKind, RelationshipTargetSelector target,
-        AbsenceReason absenceReason = AbsenceReason.None)
+        AbsenceReason absenceReason = AbsenceReason.None,
+        PersonStatId personStat = default)
     {
         Kind = kind;
         Amount = amount;
@@ -155,6 +181,7 @@ public readonly struct EventConsequence
         RelationshipKind = relationshipKind;
         Target = target;
         AbsenceReason = absenceReason;
+        PersonStat = personStat;
     }
 
     public static EventConsequence ForAmount(ConsequenceKind kind, double amount)
@@ -196,6 +223,26 @@ public readonly struct EventConsequence
             throw new ArgumentOutOfRangeException(nameof(days), days, "An absence must last at least one day.");
         }
         return new EventConsequence(ConsequenceKind.Absence, days, null, default, default, reason);
+    }
+
+    /// <summary>Signed integer delta on one of the twelve adjustable person stats (§9, HS-5). GPA is not reachable this way.</summary>
+    public static EventConsequence ForPersonStat(PersonStatId stat, double amount) =>
+        new(ConsequenceKind.PersonStat, amount, null, default, default, AbsenceReason.None, stat);
+
+    /// <summary>
+    /// Reclassifies the subject's live Partner edge to <paramref name="newKind"/>
+    /// at <paramref name="affinity"/> (HS-5 breakup/divorce). Friend or Rival
+    /// only — a breakup cannot mint a new Partner (that is ForRelationship's
+    /// job) and Child edges are lineage state (the ForRelationship precedent).
+    /// </summary>
+    public static EventConsequence ForEndPartnership(RelationshipKind newKind, double affinity)
+    {
+        if (newKind is not (RelationshipKind.Friend or RelationshipKind.Rival))
+        {
+            throw new ArgumentOutOfRangeException(nameof(newKind), newKind,
+                "A partnership can only end into a Friend or Rival edge.");
+        }
+        return new EventConsequence(ConsequenceKind.EndPartnership, affinity, null, newKind, default);
     }
 }
 

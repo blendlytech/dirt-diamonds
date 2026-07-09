@@ -319,6 +319,47 @@ public static class GrittyEventJson
 
                 return EventConsequence.ForRelationship(kind, affinity, target);
             }
+            case "end_partnership":
+            {
+                // HS-5 breakup/divorce: reclassifies the subject's live
+                // Partner edge in place (never deletes it — the ex stays
+                // graph history). Friend or Rival only; 'partner' here would
+                // be a no-op contradiction and 'child' is lineage state.
+                string kindText = RequireString(element, "kind", eventId);
+                RelationshipKind kind = kindText switch
+                {
+                    "friend" => RelationshipKind.Friend,
+                    "rival" => RelationshipKind.Rival,
+                    _ => throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': end_partnership kind must be 'friend' or 'rival' (got '{kindText}')."),
+                };
+                return EventConsequence.ForEndPartnership(kind, RequireNumber(element, "affinity", eventId));
+            }
+            case "person_stat":
+            {
+                string statText = RequireString(element, "stat", eventId);
+                PersonStatId stat = statText switch
+                {
+                    "intelligence" => PersonStatId.Intelligence,
+                    "maturity" => PersonStatId.Maturity,
+                    "happiness" => PersonStatId.Happiness,
+                    "charisma" => PersonStatId.Charisma,
+                    "confidence" => PersonStatId.Confidence,
+                    "reputation" => PersonStatId.Reputation,
+                    "social_status" => PersonStatId.SocialStatus,
+                    "attractiveness" => PersonStatId.Attractiveness,
+                    "teamwork" => PersonStatId.Teamwork,
+                    "morality" => PersonStatId.Morality,
+                    "discipline" => PersonStatId.Discipline,
+                    "work_ethic" => PersonStatId.WorkEthic,
+                    // gpa is deliberately absent — it moves only through the
+                    // HS-4 weekly closed form (PersonDrift.cs), never a
+                    // per-event nudge.
+                    _ => throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': unknown person_stat '{statText}'."),
+                };
+                return EventConsequence.ForPersonStat(stat, RequireNumber(element, "amount", eventId));
+            }
             default:
                 throw new FormatException(
                     $"Event '{eventId}' choice '{choiceId}': unknown consequence type '{type}'.");

@@ -1,0 +1,397 @@
+{
+  "//": "HS-5 pre-marriage dating funnel + unplanned-pregnancy arc (docs/design/high_school_person_layer.md §9, HS-5), Sonnet 5; breakup/divorce realism pass by Fable 5 same day. Distinct from marriage_and_family_events.json's age>20 pro-career arc -- the funnel gates age < 20 (or inherits it via the hs_dating/hs_interest flag chain) and met_someone over there now gates flag_inactive hs_dating, so the two romance arcs can never collide or double-fire on the same subject. Every relationship-ending choice carries an 'end_partnership' consequence (Fable 5's ConsequenceKind.EndPartnership): the live Partner edge is RECLASSIFIED to friend/rival at an authored affinity -- never deleted, so exes stay in the graph as history and the single-partner exclusivity guard reopens for real re-dating. hs_breakup runs at realistic HS churn (weight 0.05 / cooldown 90, autopilot majority ends it -- most high-school relationships end, and now mechanically CAN). marry_hs_sweetheart is the funnel's other exit (spec §4.3 'marrying a high school sweetheart'): a year-plus hs_dating thread past age 20 converts to the married flag with the SAME Partner edge, feeding the pro file's starting_a_family/divorce arcs. Disclosed simplifications (see docs/progress.md): (1) hs_parental_approval doesn't branch on Family_Background.strictness -- the prerequisite algebra only reaches Players-row SubjectField values today; a real strictness gate needs a SubjectField extension, deferred as engine work. (2) hs_clubhouse_cancer is narrated, not verified -- there's no NPC-autonomy tick yet to have organically paired the teammate with an ex. (3) hs_hometown_anchor is a one-shot flavor beat, not the doc's real weekly-minute LDR drain (needs a PhoneService/FamilyService extension); long_distance is a documented forward hook for that mechanic. (4) rekindling with an ex is impossible by ApplyRelationship's adjust-don't-reclassify rule: if a new 'relationship: partner' consequence randomly targets the ex (an existing friend/rival edge), it deepens that edge's affinity without re-partnering -- disclosed, not a defect (the rule exists so a feud can't reclassify a marriage). hs_baby_born deliberately mirrors child_is_born's shape exactly (single choice, same 270-day gestation constant) -- the only event in this batch under the 3-choice convention, matching that shipped precedent for a terminal birth beat.",
+  "events": [
+    {
+      "id": "hs_crush_forms",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 60,
+      "contact": "hs_sweetheart",
+      "prompt": "Somebody in your grade has started showing up in your thoughts between innings and homework -- a laugh across the cafeteria, a look that lingers half a second too long.",
+      "prerequisites": [
+        { "field": "age", "op": "<", "value": 20 },
+        { "flag_inactive": "hs_dating" },
+        { "flag_inactive": "hs_interest" },
+        { "flag_inactive": "married" }
+      ],
+      "choices": [
+        { "id": "let_them_know", "autopilot_weight": 2, "label": "Let it show",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_interest" },
+            { "type": "person_stat", "stat": "confidence", "amount": 3 }
+          ] },
+        { "id": "play_it_cool", "autopilot_weight": 1, "label": "Play it cool",
+          "consequences": [
+            { "type": "person_stat", "stat": "happiness", "amount": -2 }
+          ] },
+        { "id": "bury_it_in_practice", "autopilot_weight": 1, "label": "Bury it in practice",
+          "consequences": [
+            { "type": "interest", "amount": 1 },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_ask_out",
+      "scope": "avatar",
+      "weight": 0.18,
+      "contact": "hs_sweetheart",
+      "prompt": "The moment is right there in front of you. All you have to do is say something.",
+      "prerequisites": [
+        { "flag_active": "hs_interest" }
+      ],
+      "choices": [
+        { "id": "ask_directly", "autopilot_weight": 2, "label": "Ask them out",
+          "consequences": [
+            { "type": "relationship", "kind": "partner", "affinity": 50, "target": "teammate" },
+            { "type": "set_flag", "flag": "hs_dating" },
+            { "type": "clear_flag", "flag": "hs_interest" },
+            { "type": "person_stat", "stat": "confidence", "amount": 4 }
+          ] },
+        { "id": "ask_through_a_friend", "autopilot_weight": 1, "label": "Get a friend to feel it out first",
+          "consequences": [
+            { "type": "relationship", "kind": "partner", "affinity": 35, "target": "teammate" },
+            { "type": "set_flag", "flag": "hs_dating" },
+            { "type": "clear_flag", "flag": "hs_interest" },
+            { "type": "person_stat", "stat": "charisma", "amount": 2 }
+          ] },
+        { "id": "chicken_out", "autopilot_weight": 1, "label": "Chicken out",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_interest" },
+            { "type": "person_stat", "stat": "happiness", "amount": -4 },
+            { "type": "stress", "amount": 5 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_parental_approval",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 180,
+      "contact": "family_dad",
+      "prompt": "Dad wants to know who's been texting you every night, and whether you're planning on introducing them any time soon.",
+      "prerequisites": [
+        { "flag_active": "hs_dating", "min_days_since": 7 }
+      ],
+      "choices": [
+        { "id": "bring_them_home", "autopilot_weight": 2, "label": "Bring them home for dinner",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 3 },
+            { "type": "stress", "amount": -5 }
+          ] },
+        { "id": "keep_it_secret", "autopilot_weight": 1, "label": "Keep it to yourself",
+          "consequences": [
+            { "type": "stress", "amount": 6 },
+            { "type": "person_stat", "stat": "morality", "amount": -2 }
+          ] },
+        { "id": "stand_your_ground", "autopilot_weight": 1, "label": "Tell him it's not up for discussion",
+          "consequences": [
+            { "type": "person_stat", "stat": "confidence", "amount": 3 },
+            { "type": "stress", "amount": 3 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_sneaking_out",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 30,
+      "contact": "hs_sweetheart",
+      "prompt": "It's late, the house is quiet, and your phone just lit up with three words: \"You up? Come.\"",
+      "prerequisites": [
+        { "flag_active": "hs_dating" },
+        { "flag_inactive": "snuck_out_recently" }
+      ],
+      "choices": [
+        { "id": "sneak_out", "autopilot_weight": 1, "label": "Climb out the window",
+          "consequences": [
+            { "type": "set_flag", "flag": "snuck_out_recently" },
+            { "type": "relationship", "kind": "partner", "affinity": 10, "target": "teammate" },
+            { "type": "person_stat", "stat": "happiness", "amount": 6 }
+          ] },
+        { "id": "stay_in", "autopilot_weight": 2, "label": "Text back and stay put",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 2 }
+          ] },
+        { "id": "invite_them_over_openly", "autopilot_weight": 1, "label": "Ask your parents if they can come over instead",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_caught_sneaking_out",
+      "scope": "avatar",
+      "weight": 0.35,
+      "contact": "family_dad",
+      "prompt": "The porch light snaps on the second your foot hits the driveway. Busted.",
+      "prerequisites": [
+        { "flag_active": "snuck_out_recently" },
+        { "field": "recklessness", "op": ">=", "value": 60 }
+      ],
+      "choices": [
+        { "id": "take_the_grounding", "autopilot_weight": 2, "label": "Take the grounding",
+          "consequences": [
+            { "type": "clear_flag", "flag": "snuck_out_recently" },
+            { "type": "stress", "amount": 10 },
+            { "type": "funds", "amount": -25 },
+            { "type": "person_stat", "stat": "maturity", "amount": -2 }
+          ] },
+        { "id": "argue_your_way_out", "autopilot_weight": 1, "label": "Argue your way out of it",
+          "consequences": [
+            { "type": "clear_flag", "flag": "snuck_out_recently" },
+            { "type": "stress", "amount": 6 },
+            { "type": "person_stat", "stat": "morality", "amount": -3 }
+          ] },
+        { "id": "own_it", "autopilot_weight": 1, "label": "Own it and apologize",
+          "consequences": [
+            { "type": "clear_flag", "flag": "snuck_out_recently" },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 },
+            { "type": "stress", "amount": 4 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_snuck_out_clean",
+      "scope": "avatar",
+      "weight": 0.6,
+      "contact": "hs_sweetheart",
+      "prompt": "You're back in bed before anyone stirs. Clean getaway.",
+      "prerequisites": [
+        { "flag_active": "snuck_out_recently" },
+        { "field": "recklessness", "op": "<", "value": 60 }
+      ],
+      "choices": [
+        { "id": "feel_lucky", "autopilot_weight": 2, "label": "Feel lucky",
+          "consequences": [
+            { "type": "clear_flag", "flag": "snuck_out_recently" },
+            { "type": "person_stat", "stat": "happiness", "amount": 3 }
+          ] },
+        { "id": "resolve_not_to_push_it", "autopilot_weight": 1, "label": "Tell yourself not to push it again",
+          "consequences": [
+            { "type": "clear_flag", "flag": "snuck_out_recently" },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 }
+          ] },
+        { "id": "already_planning_the_next_one", "autopilot_weight": 1, "label": "Start planning the next one",
+          "consequences": [
+            { "type": "clear_flag", "flag": "snuck_out_recently" },
+            { "type": "person_stat", "stat": "confidence", "amount": 2 },
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_breakup",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 90,
+      "contact": "hs_sweetheart",
+      "prompt": "It's been quiet between you two for a while now, and you both know what that usually means.",
+      "prerequisites": [
+        { "flag_active": "hs_dating", "min_days_since": 30 },
+        { "flag_inactive": "hs_expecting" },
+        { "flag_inactive": "hs_expecting_confirmed" }
+      ],
+      "choices": [
+        { "id": "stay_together", "autopilot_weight": 2, "label": "Work through it",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 }
+          ] },
+        { "id": "break_it_off", "autopilot_weight": 2, "label": "Call it",
+          "consequences": [
+            { "type": "end_partnership", "kind": "rival", "affinity": -25 },
+            { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "stress", "amount": 8 },
+            { "type": "person_stat", "stat": "happiness", "amount": -6 }
+          ] },
+        { "id": "mutual_split", "autopilot_weight": 1, "label": "Agree it's not working, stay friends",
+          "consequences": [
+            { "type": "end_partnership", "kind": "friend", "affinity": 15 },
+            { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "stress", "amount": 3 },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_pregnancy_scare",
+      "scope": "avatar",
+      "weight": 0.015,
+      "cooldown_days": 200,
+      "contact": "hs_sweetheart",
+      "prompt": "Two words in a text turn the whole world sideways: \"We're late.\"",
+      "prerequisites": [
+        { "flag_active": "hs_dating", "min_days_since": 14 },
+        { "flag_inactive": "hs_expecting" },
+        { "flag_inactive": "hs_expecting_confirmed" }
+      ],
+      "choices": [
+        { "id": "face_it_together", "autopilot_weight": 2, "label": "Face it together",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_expecting" },
+            { "type": "stress", "amount": 12 }
+          ] },
+        { "id": "panic_quietly", "autopilot_weight": 1, "label": "Panic quietly",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_expecting" },
+            { "type": "stress", "amount": 18 },
+            { "type": "person_stat", "stat": "happiness", "amount": -5 }
+          ] },
+        { "id": "lean_on_a_friend", "autopilot_weight": 1, "label": "Tell a friend before anyone else",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_expecting" },
+            { "type": "stress", "amount": 10 },
+            { "type": "person_stat", "stat": "maturity", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_pregnancy_decision",
+      "scope": "avatar",
+      "weight": 0.5,
+      "contact": "hs_sweetheart",
+      "prompt": "The test was real. Now comes the part nobody can decide for you.",
+      "prerequisites": [
+        { "flag_active": "hs_expecting", "min_days_since": 7 }
+      ],
+      "choices": [
+        { "id": "keep_the_baby", "autopilot_weight": 1, "label": "Keep the baby",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_expecting" },
+            { "type": "set_flag", "flag": "hs_expecting_confirmed" },
+            { "type": "person_stat", "stat": "maturity", "amount": 5 },
+            { "type": "stress", "amount": 10 }
+          ] },
+        { "id": "end_the_pregnancy", "autopilot_weight": 1, "label": "End the pregnancy",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_expecting" },
+            { "type": "funds", "amount": -400 },
+            { "type": "person_stat", "stat": "morality", "amount": -6 },
+            { "type": "stress", "amount": -8 }
+          ] },
+        { "id": "place_for_adoption", "autopilot_weight": 1, "label": "Carry it to term, place for adoption",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_expecting" },
+            { "type": "funds", "amount": -150 },
+            { "type": "person_stat", "stat": "social_status", "amount": -4 },
+            { "type": "stress", "amount": 6 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_baby_born",
+      "scope": "avatar",
+      "weight": 0.3,
+      "contact": "hs_sweetheart",
+      "prompt": "Nine months after a scare that turned into the biggest decision of your life, a hospital room in the middle of the night makes it real.",
+      "prerequisites": [
+        { "flag_active": "hs_expecting_confirmed", "min_days_since": 270 }
+      ],
+      "choices": [
+        { "id": "welcome_the_baby", "autopilot_weight": 1, "label": "Welcome the baby",
+          "consequences": [
+            { "type": "conceive_child" },
+            { "type": "clear_flag", "flag": "hs_expecting_confirmed" },
+            { "type": "funds", "amount": -600 },
+            { "type": "stress", "amount": -15 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_clubhouse_cancer",
+      "scope": "avatar",
+      "weight": 0.03,
+      "cooldown_days": 150,
+      "contact": "unknown",
+      "prompt": "Word gets around the clubhouse fast: the person you've been seeing used to date one of your own teammates.",
+      "prerequisites": [
+        { "flag_active": "hs_dating", "min_days_since": 21 }
+      ],
+      "choices": [
+        { "id": "keep_dating_them", "autopilot_weight": 2, "label": "It's none of their business",
+          "consequences": [
+            { "type": "relationship", "kind": "rival", "affinity": -20, "target": "teammate" },
+            { "type": "person_stat", "stat": "teamwork", "amount": -5 }
+          ] },
+        { "id": "smooth_it_over", "autopilot_weight": 1, "label": "Have an honest conversation with the teammate",
+          "consequences": [
+            { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" },
+            { "type": "person_stat", "stat": "teamwork", "amount": -1 }
+          ] },
+        { "id": "end_it_for_the_team", "autopilot_weight": 1, "label": "End things for the sake of team chemistry",
+          "consequences": [
+            { "type": "end_partnership", "kind": "friend", "affinity": 10 },
+            { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "person_stat", "stat": "teamwork", "amount": 3 },
+            { "type": "stress", "amount": 8 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_hometown_anchor",
+      "scope": "avatar",
+      "weight": 0.04,
+      "cooldown_days": 200,
+      "contact": "hs_sweetheart",
+      "prompt": "Graduation is close enough to taste, and the two of you still haven't talked about what happens to \"us\" once the calendar runs out.",
+      "prerequisites": [
+        { "flag_active": "hs_dating", "min_days_since": 60 },
+        { "field": "age", "op": ">=", "value": 18 },
+        { "flag_inactive": "long_distance" }
+      ],
+      "choices": [
+        { "id": "stay_together_for_now", "autopilot_weight": 2, "label": "Cross that bridge later",
+          "consequences": [
+            { "type": "person_stat", "stat": "happiness", "amount": 2 },
+            { "type": "stress", "amount": -2 }
+          ] },
+        { "id": "grow_apart", "autopilot_weight": 1, "label": "Admit it's probably ending",
+          "consequences": [
+            { "type": "end_partnership", "kind": "friend", "affinity": 5 },
+            { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "set_flag", "flag": "long_distance" },
+            { "type": "stress", "amount": 6 }
+          ] },
+        { "id": "commit_long_distance", "autopilot_weight": 1, "label": "Commit to making it work long-distance",
+          "consequences": [
+            { "type": "set_flag", "flag": "long_distance" },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 },
+            { "type": "stress", "amount": 8 }
+          ] }
+      ]
+    },
+    {
+      "id": "marry_hs_sweetheart",
+      "scope": "avatar",
+      "weight": 0.04,
+      "cooldown_days": 120,
+      "contact": "hs_sweetheart",
+      "prompt": "Years of bus rides, box scores, and late-night calls later, they're still the first person you want to tell everything to. Maybe it's time to make it official.",
+      "prerequisites": [
+        { "field": "age", "op": ">", "value": 20 },
+        { "flag_active": "hs_dating", "min_days_since": 365 },
+        { "flag_inactive": "married" }
+      ],
+      "choices": [
+        { "id": "propose", "autopilot_weight": 2, "label": "Propose",
+          "consequences": [
+            { "type": "set_flag", "flag": "married" },
+            { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "stress", "amount": -10 },
+            { "type": "person_stat", "stat": "happiness", "amount": 5 }
+          ] },
+        { "id": "let_it_fade", "autopilot_weight": 1, "label": "Admit you've grown into different people",
+          "consequences": [
+            { "type": "end_partnership", "kind": "friend", "affinity": 10 },
+            { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "stress", "amount": 5 }
+          ] },
+        { "id": "not_ready", "autopilot_weight": 1, "label": "Not yet",
+          "consequences": [
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    }
+  ]
+}

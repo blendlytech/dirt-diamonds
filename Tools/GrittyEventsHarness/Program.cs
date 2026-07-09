@@ -60,6 +60,9 @@ internal static class Program
             RunCascadeAndWriterChecks();
             RunChoiceUiChecks();
             RunMarriageConceptionChecks();
+            RunPersonStatChecks();
+            RunHsDatingArcChecks();
+            RunEndPartnershipChecks();
             RunStressChecks();
             RunHustleIntegrationChecks();
             RunEquipmentIntegrationChecks();
@@ -150,8 +153,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 5
-            && wholeFolder.Count == 31
+            batchFiles.Length >= 6
+            && wholeFolder.Count == 46
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -171,7 +174,22 @@ internal static class Program
             && wholeFolder.TryGetById("clubhouse_welcome", out _)
             && wholeFolder.TryGetById("first_paycheck", out _)
             && wholeFolder.TryGetById("splurge_callback", out _)
-            && wholeFolder.TryGetById("frugal_callback", out _),
+            && wholeFolder.TryGetById("frugal_callback", out _)
+            && wholeFolder.TryGetById("hs_crush_forms", out _)
+            && wholeFolder.TryGetById("hs_ask_out", out _)
+            && wholeFolder.TryGetById("hs_parental_approval", out _)
+            && wholeFolder.TryGetById("hs_sneaking_out", out _)
+            && wholeFolder.TryGetById("hs_caught_sneaking_out", out _)
+            && wholeFolder.TryGetById("hs_snuck_out_clean", out _)
+            && wholeFolder.TryGetById("hs_breakup", out _)
+            && wholeFolder.TryGetById("hs_pregnancy_scare", out _)
+            && wholeFolder.TryGetById("hs_pregnancy_decision", out _)
+            && wholeFolder.TryGetById("hs_baby_born", out _)
+            && wholeFolder.TryGetById("hs_clubhouse_cancer", out _)
+            && wholeFolder.TryGetById("hs_hometown_anchor", out _)
+            && wholeFolder.TryGetById("marry_hs_sweetheart", out _)
+            && wholeFolder.TryGetById("marriage_on_the_rocks", out _)
+            && wholeFolder.TryGetById("divorce_papers", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -235,7 +253,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 31 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 46 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -928,6 +946,215 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
+    // 4d. PersonStat consequence (HS-5, high_school_person_layer.md §9)
+    // ------------------------------------------------------------------
+
+    private static void RunPersonStatChecks()
+    {
+        Console.WriteLine("--- PersonStat consequence ---");
+
+        Check("loader accepts person_stat with a known stat name", !Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "person_stat", "stat": "confidence", "amount": 3 } ] } ] } ] }"""));
+        Check("loader rejects person_stat with an unknown stat name", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "person_stat", "stat": "gpa", "amount": 1 } ] } ] } ] }"""));
+
+        using (World world = World.Create("personStat", GrittyEventJson.Parse(
+            """
+            { "events": [ { "id": "x", "scope": "avatar", "weight": 1.0,
+              "choices": [ { "id": "a", "consequences": [
+                { "type": "person_stat", "stat": "confidence", "amount": 7 },
+                { "type": "person_stat", "stat": "morality", "amount": -60 } ] } ] } ] }
+            """)))
+        {
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool found = world.Persons.TryGet("hero", out PersonRow row);
+            Check("person_stat consequence adjusts the targeted column and leaves the rest neutral",
+                found && row.Confidence == 57 && row.Discipline == 50 && row.Happiness == 50,
+                $"confidence={row.Confidence}, discipline={row.Discipline}");
+            Check("person_stat clamps at the floor (a -60 delta off neutral 50 bottoms out at 0, never negative)",
+                found && row.Morality == 0, $"morality={row.Morality}");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4e. HS dating funnel flow (HS-5 content, high_school_person_layer.md §9)
+    // ------------------------------------------------------------------
+
+    private static void RunHsDatingArcChecks()
+    {
+        Console.WriteLine("--- HS dating funnel ---");
+
+        // Mirrors hs_dating_events.json's hs_crush_forms -> hs_ask_out shape
+        // with a minimal inline pair (isolates the mechanic from future
+        // content edits, same discipline as RunMarriageConceptionChecks §4).
+        using World world = World.Create("hsDating", GrittyEventJson.Parse(
+            """
+            { "events": [
+              { "id": "crush", "scope": "avatar", "weight": 1.0,
+                "prerequisites": [ { "flag_inactive": "hs_dating" }, { "flag_inactive": "hs_interest" } ],
+                "choices": [ { "id": "shoot_shot", "consequences": [
+                  { "type": "set_flag", "flag": "hs_interest" },
+                  { "type": "person_stat", "stat": "confidence", "amount": 5 } ] } ] },
+              { "id": "ask", "scope": "avatar", "weight": 1.0,
+                "prerequisites": [ { "flag_active": "hs_interest" } ],
+                "choices": [ { "id": "ask_out", "consequences": [
+                  { "type": "relationship", "kind": "partner", "affinity": 50, "target": "teammate" },
+                  { "type": "set_flag", "flag": "hs_dating" },
+                  { "type": "clear_flag", "flag": "hs_interest" } ] } ] }
+            ] }
+            """));
+        world.AddPlayer("hero", age: 17, teamId: 101);
+        world.AddPlayer("crush_candidate", age: 17, teamId: 101);
+        world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+        world.Dispatcher.PollOnce();
+
+        world.Clock.AdvanceDay(); // day 2: crush
+        world.Bus.DispatchPending();
+        world.Dispatcher.PollOnce();
+        world.Bus.DispatchPending();
+
+        world.Clock.AdvanceDay(); // day 3: ask (hs_interest now active)
+        world.Bus.DispatchPending();
+        world.Dispatcher.PollOnce();
+        world.Bus.DispatchPending();
+
+        var flagRows = new List<EntityFlagRow>();
+        world.Players.LoadActiveFlags("hero", flagRows);
+        bool dating = flagRows.Any(f => f.FlagName == "hs_dating");
+        bool interestCleared = flagRows.All(f => f.FlagName != "hs_interest");
+
+        var edges = new List<RelationshipEdge>();
+        world.Graph.GetEdgesFor("hero", edges);
+        bool partnered = edges.Any(e => e.Kind == RelationshipKind.Partner
+            && e.OtherId == "crush_candidate" && e.Affinity == 50);
+
+        world.Persons.TryGet("hero", out PersonRow row);
+
+        Check("HS dating funnel: crush -> ask_out ends in a Partner edge + hs_dating flag + confidence bump",
+            world.Fired.Count == 2
+            && world.Fired[0].EventId == "crush" && world.Fired[1].EventId == "ask"
+            && dating && interestCleared && partnered && row.Confidence == 55,
+            $"fired: {string.Join(",", world.Fired.Select(f => f.EventId))}, dating={dating}, partnered={partnered}, confidence={row.Confidence}");
+    }
+
+    // ------------------------------------------------------------------
+    // 4f. EndPartnership consequence (HS-5 breakup/divorce realism)
+    // ------------------------------------------------------------------
+
+    private static void RunEndPartnershipChecks()
+    {
+        Console.WriteLine("--- EndPartnership (breakup/divorce) ---");
+
+        Check("loader accepts end_partnership into friend", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "end_partnership", "kind": "friend", "affinity": 10 } ] } ] } ] }"""));
+        Check("loader accepts end_partnership into rival", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "end_partnership", "kind": "rival", "affinity": -30 } ] } ] } ] }"""));
+        Check("loader rejects end_partnership into partner (a breakup can't mint a Partner)", Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "end_partnership", "kind": "partner", "affinity": 10 } ] } ] } ] }"""));
+        Check("loader rejects end_partnership without an affinity", Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "end_partnership", "kind": "friend" } ] } ] } ] }"""));
+
+        // Full lifecycle: marry -> divorce (edge RECLASSIFIED, never deleted)
+        // -> remarry (exclusivity guard reopened). Team-targeted so the two
+        // partner picks are deterministic by construction: "marry" targets the
+        // only opponent (ex, team 2); "remarry" targets the only teammate
+        // (rebound, team 1).
+        {
+            using World world = World.Create("endPartnership", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "marry", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_inactive": "married" }, { "flag_inactive": "divorced" } ],
+                    "choices": [ { "id": "wed", "consequences": [
+                      { "type": "relationship", "kind": "partner", "affinity": 60, "target": "opponent" },
+                      { "type": "set_flag", "flag": "married" } ] } ] },
+                  { "id": "split", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "married" } ],
+                    "choices": [ { "id": "sign", "consequences": [
+                      { "type": "end_partnership", "kind": "rival", "affinity": -30 },
+                      { "type": "clear_flag", "flag": "married" },
+                      { "type": "set_flag", "flag": "divorced" } ] } ] },
+                  { "id": "remarry", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "divorced" }, { "flag_inactive": "remarried" } ],
+                    "choices": [ { "id": "wed_again", "consequences": [
+                      { "type": "relationship", "kind": "partner", "affinity": 45, "target": "teammate" },
+                      { "type": "set_flag", "flag": "remarried" } ] } ] }
+                ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.AddPlayer("ex", age: 27, teamId: 2);
+            world.AddPlayer("rebound", age: 27, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            var rivalryEvents = new List<RivalryChangedEvent>();
+            world.Bus.Subscribe<RivalryChangedEvent>(rivalryEvents.Add);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: marry (ex is the only opponent)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDay(); // day 3: split
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            Check("divorce reclassifies the Partner edge in place: one Rival edge to the ex at -30, zero Partner edges",
+                edges.Count == 1 && edges[0].OtherId == "ex"
+                && edges[0].Kind == RelationshipKind.Rival && edges[0].Affinity == -30,
+                $"{edges.Count} edges, kind={(edges.Count > 0 ? edges[0].Kind.ToString() : "none")}");
+            Check("the bitter-ex reclassification rides the Phase-6 rivalry transport (intensity 30 published)",
+                rivalryEvents.Count == 1 && rivalryEvents[0].Intensity == 30,
+                $"{rivalryEvents.Count} rivalry events");
+
+            world.Clock.AdvanceDay(); // day 4: remarry (rebound is the only teammate)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Graph.GetEdgesFor("hero", edges);
+            bool remarried = edges.Any(e => e.Kind == RelationshipKind.Partner
+                && e.OtherId == "rebound" && e.Affinity == 45);
+            bool exHistoryKept = edges.Any(e => e.Kind == RelationshipKind.Rival && e.OtherId == "ex");
+            Check("exclusivity guard reopens after the divorce: remarriage lands a fresh Partner edge, the ex stays as graph history",
+                world.Fired.Count == 3 && remarried && exHistoryKept && edges.Count == 2,
+                $"{edges.Count} edges, remarried={remarried}, exKept={exHistoryKept}");
+        }
+
+        // Unpartnered subject: end_partnership is a skip-by-design no-op.
+        {
+            using World world = World.Create("endPartnershipSolo", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "split_solo", "scope": "avatar", "weight": 1.0,
+                  "choices": [ { "id": "sign", "consequences": [
+                    { "type": "end_partnership", "kind": "rival", "affinity": -30 } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            Check("end_partnership on an unpartnered subject is a clean no-op (fires, writes nothing)",
+                world.Fired.Count == 1 && edges.Count == 0,
+                $"{world.Fired.Count} fires, {edges.Count} edges");
+        }
+    }
+
+    // ------------------------------------------------------------------
     // 5. Stress scalar wiring (life_sim_needs_decay.md §4.2 goes live)
     // ------------------------------------------------------------------
 
@@ -1440,6 +1667,7 @@ internal static class Program
         public EventBus Bus = null!;
         public GameStateQueries GameState = null!;
         public PlayerQueries Players = null!;
+        public PersonQueries Persons = null!;
         public GlobalState State = null!;
         public TimeManager Clock = null!;
         public RelationshipGraph Graph = null!;
@@ -1461,6 +1689,7 @@ internal static class Program
             world.Bus = new EventBus();
             world.GameState = new GameStateQueries(world.Db);
             world.Players = new PlayerQueries(world.Db);
+            world.Persons = new PersonQueries(world.Db);
             world.State = new GlobalState();
             world.Clock = new TimeManager(world.Db, world.GameState, world.State, world.Bus);
             world.Clock.Initialize(2026);
@@ -1470,7 +1699,7 @@ internal static class Program
             world.NarrativeLog = new NarrativeLogQueries(world.Db);
 
             world.Applier = new EventConsequenceApplier(
-                world.Db, world.Players, library, world.Graph, world.Bus, world.GameState,
+                world.Db, world.Players, world.Persons, library, world.Graph, world.Bus, world.GameState,
                 world.State, world.NarrativeLog, rngSeed: 4242UL);
             world.Applier.AttachTo(world.Bus);
             world.View = world.Db.CreateReadOnlyView();
@@ -1497,6 +1726,11 @@ internal static class Program
                 BaseballInterest = 0,
                 DetectionRisk = 0,
             });
+            // Real gameplay never has a Players row without a Player_Person
+            // row (the v11 boot backfill invariant) — the harness's synthetic
+            // players honor the same contract so a PersonStat consequence has
+            // something to adjust.
+            Persons.Upsert(PersonRow.Neutral(id));
         }
 
         public void Dispose()

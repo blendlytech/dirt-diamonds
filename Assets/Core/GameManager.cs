@@ -465,7 +465,7 @@ public sealed partial class GameManager : Node
         Contacts = ContactJson.Parse(contactsJson);
         NarrativeLog = new NarrativeLogQueries(_database);
         GrittyEventChoices = new EventConsequenceApplier(
-            _database, Players, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
+            _database, Players, Persons, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);
         // The real game pauses the avatar's own fires for the choice UI;
         // headless/harness callers construct their own applier and keep the

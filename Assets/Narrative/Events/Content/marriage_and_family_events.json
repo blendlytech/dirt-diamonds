@@ -1,5 +1,5 @@
 {
-  "//": "Marriage -> family -> birth content arc (docs/design/marriage_and_conception.md §5), Sonnet 5. All three events are scope: avatar -- only the avatar has a tracked bloodline, and conceive_child is loader-rejected on any other scope. Departs from the design doc's own literal example (`target: league`) for met_someone's partner consequence: uses `target: teammate` instead, the same call career_arc_events.json already made for spring_training_romance -- the league pool spans every Players row with no age floor (an heir of any age is a candidate), while teammate/opponent are engine-guaranteed rostered-and-therefore-adult (LeagueGenerator rolls age 21-36; succession backfill windows to [MaturityAge, MandatoryRetirementAge)). It also guarantees the partner carries a real Player_Ratings row, which is strictly better for CareerManager.ConceiveChild's two-parent blend than an arbitrary league pick. This was flagged explicitly as a judgment call for Sonnet to weigh in the engine-plumbing progress entry's known artifacts; resolved here in favor of teammate. married/expecting are wholly self-contained in this one file (set and read only here), paced by the min_days_since cascade clock exactly like bribe -> compromised_syndicate -> shakedown: met_someone (partner + married) -> starting_a_family at +365 days (expecting) -> child_is_born at +270 days (conceive_child, clears expecting so the arc can repeat for a second child).",
+  "//": "Marriage -> family -> birth content arc (docs/design/marriage_and_conception.md §5), Sonnet 5. All three events are scope: avatar -- only the avatar has a tracked bloodline, and conceive_child is loader-rejected on any other scope. Departs from the design doc's own literal example (`target: league`) for met_someone's partner consequence: uses `target: teammate` instead, the same call career_arc_events.json already made for spring_training_romance -- the league pool spans every Players row with no age floor (an heir of any age is a candidate), while teammate/opponent are engine-guaranteed rostered-and-therefore-adult (LeagueGenerator rolls age 21-36; succession backfill windows to [MaturityAge, MandatoryRetirementAge)). It also guarantees the partner carries a real Player_Ratings row, which is strictly better for CareerManager.ConceiveChild's two-parent blend than an arbitrary league pick. This was flagged explicitly as a judgment call for Sonnet to weigh in the engine-plumbing progress entry's known artifacts; resolved here in favor of teammate. Paced by the min_days_since cascade clock exactly like bribe -> compromised_syndicate -> shakedown: met_someone (partner + married) -> starting_a_family at +365 days (expecting) -> child_is_born at +270 days (conceive_child, clears expecting so the arc can repeat for a second child). HS-5 realism pass (Fable 5): marriage is no longer permanent-until-death -- marriage_on_the_rocks (year-plus marriages, ~1-2 fires/season) can set marriage_strained, and divorce_papers 60+ days later ends it via 'end_partnership' (the Partner edge reclassified friend/rival, never deleted -- exes stay graph history), clearing married so met_someone can eventually fire again (remarriage). Reconciliation paths exist at both beats, so a player who fights for the marriage keeps it; the autopilot default divorces strained marriages 3-to-1, landing career-long divorce odds in the real-life ~half-of-marriages band. Cross-file flags: met_someone now also gates flag_inactive hs_dating (an avatar still with their high-school sweetheart doesn't 'meet someone' -- hs_dating_events.json's marry_hs_sweetheart converts that thread into this file's married flag instead, same Partner edge). A divorce while expecting deliberately leaves expecting set: child_is_born then fires with the co-parent resolved live as null -- a single-parent birth, which CareerManager.ConceiveChild supports by design.",
   "events": [
     {
       "id": "met_someone",
@@ -10,7 +10,8 @@
       "prompt": "Somewhere between the bus rides and the bullpen small talk, one teammate has become the person you look for first. This feels like more than a clubhouse friendship.",
       "prerequisites": [
         { "field": "age", "op": ">", "value": 20 },
-        { "flag_inactive": "married" }
+        { "flag_inactive": "married" },
+        { "flag_inactive": "hs_dating" }
       ],
       "choices": [
         {
@@ -83,6 +84,96 @@
             { "type": "clear_flag", "flag": "expecting" },
             { "type": "funds", "amount": -1000 },
             { "type": "stress", "amount": -20 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "marriage_on_the_rocks",
+      "scope": "avatar",
+      "weight": 0.01,
+      "cooldown_days": 150,
+      "contact": "girlfriend_jess",
+      "prompt": "The road trips are longer, the conversations are shorter, and lately the house feels quietest when you're both in it. Something has to give.",
+      "prerequisites": [
+        { "flag_active": "married", "min_days_since": 365 },
+        { "flag_inactive": "marriage_strained" }
+      ],
+      "choices": [
+        {
+          "id": "work_on_it",
+          "autopilot_weight": 2,
+          "label": "Put in the work",
+          "consequences": [
+            { "type": "stress", "amount": -5 },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 }
+          ]
+        },
+        {
+          "id": "counseling",
+          "autopilot_weight": 1,
+          "label": "Start couples counseling",
+          "consequences": [
+            { "type": "funds", "amount": -500 },
+            { "type": "stress", "amount": -8 }
+          ]
+        },
+        {
+          "id": "drift_apart",
+          "autopilot_weight": 1,
+          "label": "Let it drift",
+          "consequences": [
+            { "type": "set_flag", "flag": "marriage_strained" },
+            { "type": "stress", "amount": 8 },
+            { "type": "person_stat", "stat": "happiness", "amount": -4 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "divorce_papers",
+      "scope": "avatar",
+      "weight": 0.2,
+      "contact": "girlfriend_jess",
+      "prompt": "A manila envelope is waiting on the kitchen table when you get home from the ballpark. You both knew this was coming; seeing it in writing still knocks the wind out of you.",
+      "prerequisites": [
+        { "flag_active": "marriage_strained", "min_days_since": 60 }
+      ],
+      "choices": [
+        {
+          "id": "sign_amicably",
+          "autopilot_weight": 2,
+          "label": "Sign and part on decent terms",
+          "consequences": [
+            { "type": "end_partnership", "kind": "friend", "affinity": 10 },
+            { "type": "clear_flag", "flag": "married" },
+            { "type": "clear_flag", "flag": "marriage_strained" },
+            { "type": "funds", "amount": -5000 },
+            { "type": "stress", "amount": 10 },
+            { "type": "person_stat", "stat": "happiness", "amount": -5 }
+          ]
+        },
+        {
+          "id": "fight_it_in_court",
+          "autopilot_weight": 1,
+          "label": "Lawyer up and fight it",
+          "consequences": [
+            { "type": "end_partnership", "kind": "rival", "affinity": -40 },
+            { "type": "clear_flag", "flag": "married" },
+            { "type": "clear_flag", "flag": "marriage_strained" },
+            { "type": "funds", "amount": -20000 },
+            { "type": "stress", "amount": 25 },
+            { "type": "person_stat", "stat": "happiness", "amount": -8 }
+          ]
+        },
+        {
+          "id": "last_minute_reconciliation",
+          "autopilot_weight": 1,
+          "label": "Tear it up and try again",
+          "consequences": [
+            { "type": "clear_flag", "flag": "marriage_strained" },
+            { "type": "stress", "amount": -5 },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 }
           ]
         }
       ]

@@ -59,6 +59,7 @@ public sealed class EventConsequenceApplier
 
     private readonly DatabaseManager _db;
     private readonly PlayerQueries _players;
+    private readonly PersonQueries _persons;
     private readonly GrittyEventLibrary _library;
     private readonly RelationshipGraph _relationships;
     private readonly EventBus _bus;
@@ -96,12 +97,13 @@ public sealed class EventConsequenceApplier
     public bool HasPendingChoice => _hasPending;
 
     public EventConsequenceApplier(
-        DatabaseManager db, PlayerQueries players, GrittyEventLibrary library,
+        DatabaseManager db, PlayerQueries players, PersonQueries persons, GrittyEventLibrary library,
         RelationshipGraph relationships, EventBus bus, GameStateQueries gameState,
         GlobalState state, NarrativeLogQueries narrativeLog, ulong rngSeed)
     {
         _db = db;
         _players = players;
+        _persons = persons;
         _library = library;
         _relationships = relationships;
         _bus = bus;
@@ -222,6 +224,10 @@ public sealed class EventConsequenceApplier
                     case ConsequenceKind.ClearFlag:
                         _players.SetFlag(fired.SubjectPlayerId, consequence.FlagName!, false, fired.Day);
                         break;
+                    case ConsequenceKind.PersonStat:
+                        _persons.AdjustStat(
+                            fired.SubjectPlayerId, (int)consequence.PersonStat, (int)Math.Round(consequence.Amount));
+                        break;
                 }
             }
 
@@ -260,6 +266,9 @@ public sealed class EventConsequenceApplier
                     break;
                 case ConsequenceKind.Relationship:
                     ApplyRelationship(fired.SubjectPlayerId, in consequence);
+                    break;
+                case ConsequenceKind.EndPartnership:
+                    ApplyEndPartnership(fired.SubjectPlayerId, in consequence);
                     break;
                 case ConsequenceKind.ConceiveChild:
                     // The load-time gate (§4.1) restricts this consequence to
@@ -381,6 +390,29 @@ public sealed class EventConsequenceApplier
         {
             _relationships.SetRelationship(subjectId, targetId, affinity, consequence.RelationshipKind);
         }
+    }
+
+    /// <summary>
+    /// HS-5 breakup/divorce: reclassifies the subject's live Partner edge to
+    /// the authored kind/affinity via SetRelationship's overwrite path — the
+    /// edge survives as ex-history (never deleted), the dirty flush upserts
+    /// the kind change through the existing daily cadence, and a Rival
+    /// reclassification into negative affinity rides the untouched Phase-6
+    /// rivalry transport into both baseball sims (bitter exes are real).
+    /// Unpartnered subjects skip (the empty-pool precedent), so the same
+    /// choice is safe whether or not the romance arc actually ran. Consequences
+    /// apply in authored order, so a choice may end one partnership and mint a
+    /// rebound Partner in the same breath — end_partnership first.
+    /// </summary>
+    private void ApplyEndPartnership(string subjectId, in EventConsequence consequence)
+    {
+        string? partnerId = FindLivePartnerId(subjectId);
+        if (partnerId is null)
+        {
+            return;
+        }
+        _relationships.SetRelationship(
+            subjectId, partnerId, (int)Math.Round(consequence.Amount), consequence.RelationshipKind);
     }
 
     /// <summary>The subject's Partner counterpart in the in-memory graph, or null. At most one exists (the exclusivity guard); the first found is returned.</summary>
