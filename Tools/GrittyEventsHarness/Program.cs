@@ -158,8 +158,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 6
-            && wholeFolder.Count == 47
+            batchFiles.Length >= 7
+            && wholeFolder.Count == 55
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -195,7 +195,15 @@ internal static class Program
             && wholeFolder.TryGetById("hs_hometown_anchor", out _)
             && wholeFolder.TryGetById("marry_hs_sweetheart", out _)
             && wholeFolder.TryGetById("marriage_on_the_rocks", out _)
-            && wholeFolder.TryGetById("divorce_papers", out _),
+            && wholeFolder.TryGetById("divorce_papers", out _)
+            && wholeFolder.TryGetById("hs_bedtime_story", out _)
+            && wholeFolder.TryGetById("hs_backyard_catch", out _)
+            && wholeFolder.TryGetById("hs_paying_for_lessons", out _)
+            && wholeFolder.TryGetById("hs_missed_the_recital", out _)
+            && wholeFolder.TryGetById("hs_family_game_night", out _)
+            && wholeFolder.TryGetById("hs_the_hard_conversation", out _)
+            && wholeFolder.TryGetById("hs_school_calls_about_neglect", out _)
+            && wholeFolder.TryGetById("hs_course_correction", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -259,7 +267,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 47 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 55 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 

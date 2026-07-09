@@ -28,6 +28,7 @@ internal static class Program
         "Teams", "Player_Ratings", "Pitcher_Roles", "Pitch_Arsenals", "Life_Needs", "Life_Stress", "Team_Tiers",
         "Player_Absences", "Player_Equipment", "Player_Potential",
         "Player_Person", "Family_Background", "Phone_State", "Player_Items", "Child_Development",
+        "Child_Rearing_Commitment",
     };
 
     private static int Main(string[] args)
@@ -103,7 +104,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 11", db.GetSchemaVersion() == 11, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 12", db.GetSchemaVersion() == 12, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);
@@ -425,6 +426,13 @@ internal static class Program
             person.TryGetChild(subjectId, out ChildDevelopmentRow child) &&
             child.Care == 60 && child.Coaching == 40 && child.Funding == 30 && child.Neglect == 10 && child.LastTickDay == 12);
 
+        // Child_Rearing_Commitment round-trip (schema v12).
+        Check("v12 rearing commitment: no row until one is written", !person.TryGetChildRearingCommitment(subjectId, out _));
+        person.UpsertChildRearingCommitment(new ChildRearingCommitmentRow { PlayerId = subjectId, WeeklyFunding = 75 });
+        Check("v12 rearing commitment round-trip",
+            person.TryGetChildRearingCommitment(subjectId, out ChildRearingCommitmentRow commitment) &&
+            commitment.WeeklyFunding == 75);
+
         // CHECK coverage on the new tables.
         bool badTierRejected = false;
         try
@@ -437,10 +445,21 @@ internal static class Program
         }
         Check("v11 CHECK rejects out-of-range wealth_tier", badTierRejected);
 
-        // Cascade: deleting the player clears every v11 satellite.
+        bool badFundingRejected = false;
+        try
+        {
+            person.UpsertChildRearingCommitment(new ChildRearingCommitmentRow { PlayerId = survivorId, WeeklyFunding = 301 });
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            badFundingRejected = true;
+        }
+        Check("v12 CHECK rejects out-of-range weekly_funding", badFundingRejected);
+
+        // Cascade: deleting the player clears every v11+v12 satellite.
         queries.Delete(subjectId);
-        Check("v11 delete cascades across all five person-layer tables",
-            ScalarLong(db, "SELECT (SELECT COUNT(*) FROM Player_Person WHERE player_id = @id) + (SELECT COUNT(*) FROM Family_Background WHERE player_id = @id) + (SELECT COUNT(*) FROM Phone_State WHERE player_id = @id) + (SELECT COUNT(*) FROM Player_Items WHERE player_id = @id) + (SELECT COUNT(*) FROM Child_Development WHERE child_id = @id);", subjectId) == 0);
+        Check("v11+v12 delete cascades across all six person-layer tables",
+            ScalarLong(db, "SELECT (SELECT COUNT(*) FROM Player_Person WHERE player_id = @id) + (SELECT COUNT(*) FROM Family_Background WHERE player_id = @id) + (SELECT COUNT(*) FROM Phone_State WHERE player_id = @id) + (SELECT COUNT(*) FROM Player_Items WHERE player_id = @id) + (SELECT COUNT(*) FROM Child_Development WHERE child_id = @id) + (SELECT COUNT(*) FROM Child_Rearing_Commitment WHERE player_id = @id);", subjectId) == 0);
     }
 
     // HS-4: PersonRow accessors keyed by the PersonStatId ordinal (0 =

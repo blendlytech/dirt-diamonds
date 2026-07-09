@@ -35,7 +35,7 @@ public sealed partial class ScheduleScreen : PanelContainer
 {
     [Export]
     public string PlanSetFormat { get; set; } =
-        "Plan set — Sleep {0}h, School {1}h, Practice {2}h, Game {3}h, Work {4}h, {5} {6}h, Free {7}h.";
+        "Plan set — Sleep {0}h, School {1}h, Practice {2}h, Game {3}h, Work {4}h, {5} {6}h, Family {8}h, Free {7}h.";
 
     [Export]
     public string NoPlanText { get; set; } = "No plan set — today runs on autopilot.";
@@ -63,6 +63,7 @@ public sealed partial class ScheduleScreen : PanelContainer
 
     private Control _schoolRow = null!;
     private Control _gameRow = null!;
+    private Control _familyRow = null!;
 
     private HSlider _sleepSlider = null!;
     private Label _sleepValueLabel = null!;
@@ -78,6 +79,8 @@ public sealed partial class ScheduleScreen : PanelContainer
     private HSlider _freeTimeSlider = null!;
     private Label _freeTimeValueLabel = null!;
     private OptionButton _freeTimeActivityOption = null!;
+    private HSlider _familySlider = null!;
+    private Label _familyValueLabel = null!;
 
     private Label _planStatusLabel = null!;
     private Label _lockLabel = null!;
@@ -142,6 +145,7 @@ public sealed partial class ScheduleScreen : PanelContainer
     {
         _schoolRow = GetNode<Control>("Layout/SchoolRow");
         _gameRow = GetNode<Control>("Layout/GameRow");
+        _familyRow = GetNode<Control>("Layout/FamilyRow");
 
         _sleepSlider = GetNode<HSlider>("Layout/SleepRow/SleepSlider");
         _sleepValueLabel = GetNode<Label>("Layout/SleepRow/SleepValueLabel");
@@ -157,6 +161,8 @@ public sealed partial class ScheduleScreen : PanelContainer
         _freeTimeSlider = GetNode<HSlider>("Layout/FreeTimeRow/FreeTimeSlider");
         _freeTimeValueLabel = GetNode<Label>("Layout/FreeTimeRow/FreeTimeValueLabel");
         _freeTimeActivityOption = GetNode<OptionButton>("Layout/FreeTimeActivityRow/FreeTimeActivityOption");
+        _familySlider = GetNode<HSlider>("Layout/FamilyRow/FamilySlider");
+        _familyValueLabel = GetNode<Label>("Layout/FamilyRow/FamilyValueLabel");
 
         _planStatusLabel = GetNode<Label>("Layout/PlanStatusLabel");
         _lockLabel = GetNode<Label>("Layout/LockLabel");
@@ -173,6 +179,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         _gameSlider.ValueChanged += _ => RefreshHoursLabels();
         _workSlider.ValueChanged += _ => RefreshHoursLabels();
         _freeTimeSlider.ValueChanged += _ => RefreshHoursLabels();
+        _familySlider.ValueChanged += _ => RefreshHoursLabels();
         _confirmButton.Pressed += OnConfirmPressed;
         _clearButton.Pressed += OnClearPressed;
 
@@ -217,6 +224,16 @@ public sealed partial class ScheduleScreen : PanelContainer
             _gameSlider.Value = 0;
         }
 
+        // HS-5 §7.1: the Family row only makes sense once the avatar has a
+        // child — GameManager caches this (avatar-sync + ChildBornEvent), so
+        // this poll never touches the DB.
+        bool hasChildren = GameManager.Instance!.AvatarHasChildren;
+        _familyRow.Visible = hasChildren;
+        if (!hasChildren && _familySlider.Value != 0)
+        {
+            _familySlider.Value = 0;
+        }
+
         bool hasPlan = lifeSim.TryGetTodaySchedule(out DaySchedule plan);
         bool identical = hasPlan == _shownHasPlan && (!hasPlan || SchedulesEqual(plan, _shownPlan));
         if (!identical)
@@ -227,7 +244,7 @@ public sealed partial class ScheduleScreen : PanelContainer
                 ? string.Format(
                     PlanSetFormat, plan.SleepHours, plan.SchoolHours, plan.PracticeHours,
                     plan.GameHours, plan.WorkHours, FreeTimeActivityLabel(plan.FreeTimeActivity),
-                    plan.FreeTimeHours, plan.FreeHours)
+                    plan.FreeTimeHours, plan.FreeHours, plan.FamilyHours)
                 : NoPlanText;
         }
 
@@ -295,7 +312,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         a.SleepHours == b.SleepHours && a.SchoolHours == b.SchoolHours
         && a.PracticeHours == b.PracticeHours && a.GameHours == b.GameHours
         && a.WorkHours == b.WorkHours && a.FreeTimeHours == b.FreeTimeHours
-        && a.FreeTimeActivity == b.FreeTimeActivity;
+        && a.FreeTimeActivity == b.FreeTimeActivity && a.FamilyHours == b.FamilyHours;
 
     private void RefreshHoursLabels()
     {
@@ -305,9 +322,11 @@ public sealed partial class ScheduleScreen : PanelContainer
         _gameValueLabel.Text = ((int)_gameSlider.Value).ToString();
         _workValueLabel.Text = ((int)_workSlider.Value).ToString();
         _freeTimeValueLabel.Text = ((int)_freeTimeSlider.Value).ToString();
+        _familyValueLabel.Text = ((int)_familySlider.Value).ToString();
 
         int total = (int)_sleepSlider.Value + (int)_schoolSlider.Value + (int)_practiceSlider.Value
-            + (int)_gameSlider.Value + (int)_workSlider.Value + (int)_freeTimeSlider.Value;
+            + (int)_gameSlider.Value + (int)_workSlider.Value + (int)_freeTimeSlider.Value
+            + (int)_familySlider.Value;
         int free = DaySchedule.HoursPerDay - total;
         bool overAllocated = free < 0;
         _freeHoursLabel.Text = string.Format(overAllocated ? OverAllocatedFormat : FreeHoursFormat, Math.Abs(free));
@@ -319,7 +338,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         var schedule = new DaySchedule(
             (int)_sleepSlider.Value, (int)_schoolSlider.Value, (int)_practiceSlider.Value,
             (int)_gameSlider.Value, (int)_workSlider.Value, (int)_freeTimeSlider.Value,
-            FreeTimeActivities[_freeTimeActivityOption.Selected]);
+            FreeTimeActivities[_freeTimeActivityOption.Selected], (int)_familySlider.Value);
         var workActivity = (WorkActivity)_workActivityOption.Selected;
         try
         {

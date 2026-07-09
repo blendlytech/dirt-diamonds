@@ -158,6 +158,27 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string CarrierInsufficientFundsText { get; set; } = "Not enough cash for that.";
 
+    [Export]
+    public string NoChildrenText { get; set; } = "No children yet.";
+
+    [Export]
+    public string ChildCardHeadingFormat { get; set; } = "{0} (age {1})";
+
+    [Export]
+    public string CareLabelText { get; set; } = "Care";
+
+    [Export]
+    public string CoachingLabelText { get; set; } = "Coaching";
+
+    [Export]
+    public string FundingLabelText { get; set; } = "Funding";
+
+    [Export]
+    public string NeglectLabelText { get; set; } = "Neglect";
+
+    [Export]
+    public string CommitmentValueFormat { get; set; } = "${0}";
+
     private ItemList _contactList = null!;
     private PortraitView _threadPortrait = null!;
     private Label _threadHeaderLabel = null!;
@@ -183,6 +204,12 @@ public sealed partial class BurnerPhone : PanelContainer
     private VBoxContainer _itemsContainer = null!;
     private Label _marketplaceStatusLabel = null!;
     private int _marketplaceTabIndex = -1;
+
+    private Label _noChildrenLabel = null!;
+    private VBoxContainer _childrenContainer = null!;
+    private HSlider _commitmentSlider = null!;
+    private Label _commitmentValueLabel = null!;
+    private Button _commitmentConfirmButton = null!;
 
     private PanelContainer _carrierCard = null!;
     private Label _phoneStatusLabel = null!;
@@ -234,6 +261,13 @@ public sealed partial class BurnerPhone : PanelContainer
     private bool _carrierDirty = true;
     private double _shownCarrierFunds = double.NaN;
 
+    // HS-5 §7.1: the Family tab — Child_Development axes and the weekly
+    // funding commitment are DB rows with no in-memory mirror, same posture
+    // as the Phone_State/owned-items snapshots above, so they're re-read
+    // once per day change rather than per-frame.
+    private long _familyLoadedDay = long.MinValue;
+    private readonly List<PlayerRow> _familyChildrenScratch = new(4);
+
     public override void _Ready()
     {
         _contactList = GetNode<ItemList>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ContactList");
@@ -280,6 +314,14 @@ public sealed partial class BurnerPhone : PanelContainer
         _marketplaceStatusLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Marketplace/MarketplaceScroll/MarketplaceLayout/MarketplaceCard/MarketplaceCardLayout/MarketplaceStatusLabel");
         _phoneTabs.TabChanged += OnPhoneTabChanged;
         BuildMarketplaceRows();
+
+        _noChildrenLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/NoChildrenLabel");
+        _childrenContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/ChildrenContainer");
+        _commitmentSlider = GetNode<HSlider>("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout/CommitmentRow/CommitmentSlider");
+        _commitmentValueLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout/CommitmentRow/CommitmentValueLabel");
+        _commitmentConfirmButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout/CommitmentConfirmButton");
+        _commitmentSlider.ValueChanged += _ => _commitmentValueLabel.Text = string.Format(CommitmentValueFormat, (int)_commitmentSlider.Value);
+        _commitmentConfirmButton.Pressed += OnCommitmentConfirmPressed;
     }
 
     public override void _ExitTree()
@@ -292,6 +334,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _buyMinutesButton.Pressed -= OnBuyMinutesPressed;
         _upgradePhoneButton.Pressed -= OnUpgradePhonePressed;
         _phoneTabs.TabChanged -= OnPhoneTabChanged;
+        _commitmentConfirmButton.Pressed -= OnCommitmentConfirmPressed;
     }
 
     /// <summary>
@@ -345,6 +388,7 @@ public sealed partial class BurnerPhone : PanelContainer
         RefreshPhoneSnapshot(gm);
         RefreshBankTab(gm);
         RefreshMarketplaceTab(gm);
+        RefreshFamilyTab(gm);
 
         bool hasPending = gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending);
         string? identity = hasPending
@@ -823,6 +867,88 @@ public sealed partial class BurnerPhone : PanelContainer
             return;
         }
         button.Disabled = funds < GameManager.Instance!.Items.Require(itemId).Price;
+    }
+
+    /// <summary>
+    /// HS-5 §7.1: the Family tab — the avatar's children (Care/Coaching/
+    /// Funding/Neglect, rebuilt fresh each refresh since the roster only
+    /// ever grows by one at a time and this runs once per day change, never
+    /// per-frame) plus the standing weekly funding commitment. No
+    /// Child_Development row means the pure-nature neutral default
+    /// (ChildDevelopmentRow.Neutral), same "absent row = neutral" contract
+    /// TryGetChild's every other caller relies on.
+    /// </summary>
+    private void RefreshFamilyTab(GameManager gm)
+    {
+        if (gm.State.CurrentDay == _familyLoadedDay)
+        {
+            return;
+        }
+        _familyLoadedDay = gm.State.CurrentDay;
+        string avatarId = gm.Career.AvatarPlayerId;
+
+        int weeklyFunding = gm.Persons.TryGetChildRearingCommitment(avatarId, out ChildRearingCommitmentRow commitment)
+            ? commitment.WeeklyFunding
+            : 0;
+        _commitmentSlider.SetValueNoSignal(weeklyFunding);
+        _commitmentValueLabel.Text = string.Format(CommitmentValueFormat, weeklyFunding);
+
+        foreach (Node existing in _childrenContainer.GetChildren())
+        {
+            existing.QueueFree();
+        }
+        int childCount = gm.Players.LoadChildrenOf(avatarId, _familyChildrenScratch);
+        _noChildrenLabel.Visible = childCount == 0;
+        _childrenContainer.Visible = childCount > 0;
+        foreach (PlayerRow child in _familyChildrenScratch)
+        {
+            ChildDevelopmentRow axes = gm.Persons.TryGetChild(child.PlayerId, out ChildDevelopmentRow row)
+                ? row
+                : ChildDevelopmentRow.Neutral(child.PlayerId);
+            _childrenContainer.AddChild(BuildChildCard(in child, in axes));
+        }
+    }
+
+    private Control BuildChildCard(in PlayerRow child, in ChildDevelopmentRow axes)
+    {
+        var layout = new VBoxContainer();
+        layout.AddThemeConstantOverride("separation", 4);
+        layout.AddChild(new Label
+        {
+            Text = string.Format(ChildCardHeadingFormat, child.FirstName, child.Age),
+            ThemeTypeVariation = "HeadingLabel",
+        });
+        layout.AddChild(BuildAxisRow(CareLabelText, axes.Care));
+        layout.AddChild(BuildAxisRow(CoachingLabelText, axes.Coaching));
+        layout.AddChild(BuildAxisRow(FundingLabelText, axes.Funding));
+        layout.AddChild(BuildAxisRow(NeglectLabelText, axes.Neglect));
+
+        var card = new PanelContainer { ThemeTypeVariation = "Card" };
+        card.AddChild(layout);
+        return card;
+    }
+
+    private static Control BuildAxisRow(string label, int value)
+    {
+        var row = new HBoxContainer();
+        row.AddChild(new Label { Text = label, CustomMinimumSize = new Vector2(70, 0) });
+        row.AddChild(new ProgressBar
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            Value = value,
+        });
+        return row;
+    }
+
+    private void OnCommitmentConfirmPressed()
+    {
+        GameManager gm = GameManager.Instance!;
+        if (!gm.Career.HasAvatar)
+        {
+            return;
+        }
+        gm.SetWeeklyChildFunding(gm.Career.AvatarPlayerId, (int)_commitmentSlider.Value);
     }
 
     private void OnBuyItemPressed(string itemId)

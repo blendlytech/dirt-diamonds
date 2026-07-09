@@ -1,0 +1,232 @@
+{
+  "//": "HS-5 child-rearing content batch (docs/design/high_school_person_layer.md §7.1), Sonnet 5. Gives the four Child_Development axes (care/coaching/funding/neglect, neutral 50/50/50/0) their first-ever event-driven movers -- child_development had zero consumers before this file. Gates on the 'hs_has_child' flag, newly set by BOTH birth paths (hs_dating_events.json's hs_baby_born and marriage_and_family_events.json's child_is_born) so this batch fires regardless of which romance arc produced the child, and applies via EventConsequenceApplier.ApplyChildDevelopment to EVERY child of the subject (no per-child targeting exists, matching that consequence's own documented shape). No prerequisite can read a live axis value (ParsePrerequisite has no Child_Development field), so the neglect escalation below is flag-chained like every other multi-beat arc in this batch of files, not axis-threshold-gated: hs_missed_the_recital's most avoidant choice sets hs_child_neglect_pattern, hs_school_calls_about_neglect fires once that's been true for a while, and either resolves it (clearing the flag) or leaves it active to loop back around -- never a dead end. hs_course_correction is a second, independent on-ramp to the same resolution for a player who wants to self-correct without waiting on the school to call. The weekly time/funds allocation tick (§7.1's other mover) is a separate engine seam, not content -- these events are the ad-hoc beats layered on top of it.",
+  "events": [
+    {
+      "id": "hs_bedtime_story",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 14,
+      "contact": "family_kid",
+      "prompt": "It's been a long day for both of you, but the kid won't settle down until you finish one more chapter.",
+      "prerequisites": [
+        { "flag_active": "hs_has_child" }
+      ],
+      "choices": [
+        { "id": "read_one_more", "autopilot_weight": 2, "label": "Read one more chapter",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 3 },
+            { "type": "stress", "amount": -3 }
+          ] },
+        { "id": "rush_through_it", "autopilot_weight": 1, "label": "Rush through it",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 1 }
+          ] },
+        { "id": "skip_it_tonight", "autopilot_weight": 1, "label": "Skip it tonight, you're exhausted",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": -2 },
+            { "type": "stress", "amount": -1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_backyard_catch",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 14,
+      "contact": "family_kid",
+      "prompt": "The kid's got a glove two sizes too big and won't stop asking you to throw a few with them before it gets dark.",
+      "prerequisites": [
+        { "flag_active": "hs_has_child" }
+      ],
+      "choices": [
+        { "id": "make_time_for_it", "autopilot_weight": 2, "label": "Make time for it",
+          "consequences": [
+            { "type": "child_development", "axis": "coaching", "amount": 3 },
+            { "type": "child_development", "axis": "care", "amount": 1 },
+            { "type": "stress", "amount": -2 }
+          ] },
+        { "id": "quick_toss", "autopilot_weight": 1, "label": "Ten minutes, then you're done",
+          "consequences": [
+            { "type": "child_development", "axis": "coaching", "amount": 1 }
+          ] },
+        { "id": "too_busy_today", "autopilot_weight": 1, "label": "Not today, kid",
+          "consequences": [
+            { "type": "child_development", "axis": "coaching", "amount": -1 },
+            { "type": "child_development", "axis": "care", "amount": -1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_paying_for_lessons",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 30,
+      "contact": "family_kid",
+      "prompt": "The travel-ball coach pulls you aside: your kid's got real potential, if you can cover the private lesson fees.",
+      "prerequisites": [
+        { "flag_active": "hs_has_child" }
+      ],
+      "choices": [
+        { "id": "pay_in_full", "autopilot_weight": 1, "label": "Pay for the full season",
+          "consequences": [
+            { "type": "child_development", "axis": "funding", "amount": 4 },
+            { "type": "funds", "amount": -150 }
+          ] },
+        { "id": "split_the_difference", "autopilot_weight": 1, "label": "Cover half, coach can work with that",
+          "consequences": [
+            { "type": "child_development", "axis": "funding", "amount": 2 },
+            { "type": "funds", "amount": -60 }
+          ] },
+        { "id": "cant_afford_it", "autopilot_weight": 2, "label": "Can't swing it right now",
+          "consequences": [
+            { "type": "child_development", "axis": "funding", "amount": -1 },
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_missed_the_recital",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 30,
+      "contact": "family_kid",
+      "prompt": "The recital started an hour ago. Practice ran long, and your phone is full of missed calls.",
+      "prerequisites": [
+        { "flag_active": "hs_has_child" }
+      ],
+      "choices": [
+        { "id": "rush_over_late", "autopilot_weight": 2, "label": "Drop everything and rush over",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": -1 },
+            { "type": "child_development", "axis": "neglect", "amount": 1 },
+            { "type": "stress", "amount": 4 }
+          ] },
+        { "id": "call_and_apologize", "autopilot_weight": 1, "label": "Call and apologize, you'll catch the next one",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": -2 },
+            { "type": "child_development", "axis": "neglect", "amount": 2 },
+            { "type": "set_flag", "flag": "hs_child_neglect_pattern" },
+            { "type": "stress", "amount": 2 }
+          ] },
+        { "id": "make_it_up_this_weekend", "autopilot_weight": 1, "label": "Promise a whole weekend to make up for it",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 1 },
+            { "type": "stress", "amount": 3 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_family_game_night",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 21,
+      "contact": "family_kid",
+      "prompt": "Everyone's actually home for once. The board games are still in the closet from last time.",
+      "prerequisites": [
+        { "flag_active": "hs_has_child" }
+      ],
+      "choices": [
+        { "id": "commit_to_it", "autopilot_weight": 2, "label": "Commit to it, phone off",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 2 },
+            { "type": "child_development", "axis": "coaching", "amount": 1 },
+            { "type": "person_stat", "stat": "happiness", "amount": 2 }
+          ] },
+        { "id": "half_present", "autopilot_weight": 1, "label": "Play along, phone in hand",
+          "consequences": [
+            { "type": "stress", "amount": -1 }
+          ] },
+        { "id": "bail_early", "autopilot_weight": 1, "label": "Bail early, something came up",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": -2 },
+            { "type": "child_development", "axis": "neglect", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_the_hard_conversation",
+      "scope": "avatar",
+      "weight": 0.03,
+      "cooldown_days": 60,
+      "contact": "family_kid",
+      "prompt": "Your kid got in trouble at school today. How you handle tonight's conversation is going to stick with them.",
+      "prerequisites": [
+        { "flag_active": "hs_has_child" }
+      ],
+      "choices": [
+        { "id": "listen_first", "autopilot_weight": 2, "label": "Listen before you react",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 2 },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 }
+          ] },
+        { "id": "lay_down_the_law", "autopilot_weight": 1, "label": "Lay down the law",
+          "consequences": [
+            { "type": "child_development", "axis": "coaching", "amount": 1 },
+            { "type": "child_development", "axis": "care", "amount": -1 },
+            { "type": "stress", "amount": 2 }
+          ] },
+        { "id": "let_it_slide", "autopilot_weight": 1, "label": "Let it slide, you don't have the energy tonight",
+          "consequences": [
+            { "type": "child_development", "axis": "neglect", "amount": 1 },
+            { "type": "child_development", "axis": "care", "amount": -1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_school_calls_about_neglect",
+      "scope": "avatar",
+      "weight": 0.04,
+      "cooldown_days": 45,
+      "contact": "family_kid",
+      "prompt": "The school counselor is on the phone. She's noticed your kid slipping -- grades, mood, somebody picking them up late again and again.",
+      "prerequisites": [
+        { "flag_active": "hs_child_neglect_pattern", "min_days_since": 14 }
+      ],
+      "choices": [
+        { "id": "take_it_seriously", "autopilot_weight": 2, "label": "Take it seriously, ask what you can do",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_child_neglect_pattern" },
+            { "type": "child_development", "axis": "care", "amount": 3 },
+            { "type": "child_development", "axis": "neglect", "amount": -3 },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": 5 }
+          ] },
+        { "id": "get_defensive", "autopilot_weight": 1, "label": "Get defensive, it's not that bad",
+          "consequences": [
+            { "type": "child_development", "axis": "neglect", "amount": 2 },
+            { "type": "person_stat", "stat": "morality", "amount": -2 },
+            { "type": "stress", "amount": 6 }
+          ] },
+        { "id": "promise_to_do_better", "autopilot_weight": 1, "label": "Promise to do better and mean it, for now",
+          "consequences": [
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_course_correction",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 30,
+      "contact": "family_kid",
+      "prompt": "You've noticed it too -- the distance building between you and your kid. Tonight's as good a night as any to actually do something about it.",
+      "prerequisites": [
+        { "flag_active": "hs_child_neglect_pattern", "min_days_since": 21 }
+      ],
+      "choices": [
+        { "id": "make_the_effort", "autopilot_weight": 2, "label": "Clear the evening, just the two of you",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_child_neglect_pattern" },
+            { "type": "child_development", "axis": "care", "amount": 4 },
+            { "type": "child_development", "axis": "coaching", "amount": 1 },
+            { "type": "child_development", "axis": "neglect", "amount": -4 },
+            { "type": "stress", "amount": -3 }
+          ] },
+        { "id": "keep_putting_it_off", "autopilot_weight": 1, "label": "There's always next week",
+          "consequences": [
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    }
+  ]
+}

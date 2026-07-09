@@ -98,6 +98,9 @@ public sealed partial class GameManager : Node
     /// <summary>HS-3 §3/§3.2: the weekly family tick — allowance, Basic-plan minute refill, parental auto-purchase.</summary>
     public FamilyService Family { get; private set; } = null!;
 
+    /// <summary>HS-5 §7.1: the weekly child-rearing tick — the avatar's own children, the reverse direction from <see cref="Family"/>.</summary>
+    public ChildRearingService ChildRearing { get; private set; } = null!;
+
     /// <summary>Phase 8e Layer 2 orchestration — gear-shop snapshots and purchase application.</summary>
     public EquipmentService GearShop { get; private set; } = null!;
 
@@ -133,6 +136,15 @@ public sealed partial class GameManager : Node
     // the items list backs the §5.3 transport re-projection reads.
     private readonly List<(string PlayerId, PersonStats Applied)> _personSettleScratch = new();
     private readonly List<PlayerItemRow> _avatarItemsScratch = new();
+
+    // HS-5 §7.1: ScheduleScreen's FamilyRow visibility — recomputed on avatar
+    // sync (creation/succession/load) and kept live by OnChildBorn, so the UI
+    // never queries the DB from its own per-frame poll.
+    private readonly List<PlayerRow> _avatarChildrenScratch = new(4);
+    private bool _avatarHasChildren;
+
+    /// <summary>Whether the avatar has at least one living child — gates ScheduleScreen's Family row and BurnerPhone's Family tab.</summary>
+    public bool AvatarHasChildren => _avatarHasChildren;
 
     // HS-5 §8: the weekly autonomy projection's pooled buffers — a full
     // Players + Player_Person read once per tick week, never per day.
@@ -455,6 +467,13 @@ public sealed partial class GameManager : Node
         Family = new FamilyService(_database, Players, Persons, Baseball, Items, Phone, Events);
         Events.Subscribe<DayAdvancedEvent>(OnFamilyDayAdvanced);
 
+        // HS-5 §7.1: the weekly child-rearing tick — subscribed after LifeSim
+        // so today's Family-block hours (if any) have already accumulated
+        // into PeekFamilyHoursThisWeek before this handler reads it.
+        ChildRearing = new ChildRearingService(_database, Players, Persons, Events);
+        Events.Subscribe<DayAdvancedEvent>(OnChildRearingDayAdvanced);
+        Events.Subscribe<ChildBornEvent>(OnChildBorn);
+
         // HS-4 §5.3: ownership changes re-project the avatar's transport
         // refund; the boot-time avatar sync above ran before the catalog
         // existed, so a loaded avatar gets the projection topped up here.
@@ -648,6 +667,11 @@ public sealed partial class GameManager : Node
             Baseball.TryGetTeamTier(teamId, out LeagueTier tier)
             && tier is LeagueTier.HS or LeagueTier.College;
 
+        // HS-5 §7.1: covers a loaded save whose avatar already has children
+        // from a prior session — OnChildBorn keeps this live for a birth that
+        // resolves mid-session, after this sync already ran.
+        _avatarHasChildren = Players.LoadChildrenOf(avatarId, _avatarChildrenScratch) > 0;
+
         // HS-4: hydrate the avatar's person stats (the v11 backfill
         // guarantees a row for every player, so the miss branch only covers
         // a hand-built scratch save). PersonRow (Data) is projected into the
@@ -776,6 +800,16 @@ public sealed partial class GameManager : Node
     }
 
     /// <summary>
+    /// HS-5 §7.1: BurnerPhone's Family-tab write path for the player's
+    /// standing weekly funding commitment — a direct preference write (not
+    /// day-tick math), read back by ChildRearingService's next tick. The one
+    /// sanctioned exception to "UI never writes directly": every other
+    /// screen mutates through a Service call exactly like this one.
+    /// </summary>
+    public void SetWeeklyChildFunding(string playerId, int weeklyFunding) =>
+        Persons.UpsertChildRearingCommitment(new ChildRearingCommitmentRow { PlayerId = playerId, WeeklyFunding = weeklyFunding });
+
+    /// <summary>
     /// Subscribed after LifeSim's own DayAdvancedEvent handler, so today's
     /// Work block (if any) has already ticked. An unplayed pending session
     /// forfeits to the design's plain "no-deal default" — unlike
@@ -828,6 +862,41 @@ public sealed partial class GameManager : Node
         if (Career.HasAvatar)
         {
             Family.ProcessDay(Career.AvatarPlayerId, e.Day);
+        }
+    }
+
+    /// <summary>
+    /// HS-5 §7.1: the weekly child-rearing tick — the avatar's own children.
+    /// The cadence gate lives inside ChildRearingService (the FamilyService
+    /// discipline); this handler supplies the avatar plus the one piece of
+    /// state ChildRearingService can't reach itself — LifeSimManager's
+    /// Data-free FamilyHoursThisWeek accumulator (LifeSimManager.cs's own
+    /// "deliberately decoupled from PlayerQueries/Data" contract). The
+    /// PeekFamilyHoursThisWeek / ClearFamilyHoursThisWeek pair mirrors
+    /// PersistLifeSimState's peek-then-clear-after-commit funds discipline:
+    /// peeked before the tick (so today's contribution is included), cleared
+    /// only once ChildRearingService's own batch has committed.
+    /// </summary>
+    private void OnChildRearingDayAdvanced(DayAdvancedEvent e)
+    {
+        if (!Career.HasAvatar)
+        {
+            return;
+        }
+        string avatarId = Career.AvatarPlayerId;
+        ChildRearing.ProcessDay(avatarId, e.Day, LifeSim.PeekFamilyHoursThisWeek(avatarId));
+        if (e.Day % ChildRearingService.TickCadenceDays == 0)
+        {
+            LifeSim.ClearFamilyHoursThisWeek(avatarId);
+        }
+    }
+
+    /// <summary>Keeps AvatarHasChildren live for a birth resolving mid-session, after SyncLifeSimAvatar's own snapshot already ran.</summary>
+    private void OnChildBorn(ChildBornEvent e)
+    {
+        if (Career.HasAvatar && string.Equals(e.AvatarId, Career.AvatarPlayerId, StringComparison.Ordinal))
+        {
+            _avatarHasChildren = true;
         }
     }
 

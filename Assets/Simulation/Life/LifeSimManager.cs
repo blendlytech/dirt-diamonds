@@ -77,6 +77,15 @@ public sealed class LifeSimManager
         public float SchoolHoursThisWeek;
         public float ExpectedSchoolHoursThisWeek;
         public float StudyHoursThisWeek;
+
+        // HS-5 (person-layer doc §7.1): the Family block's weekly total.
+        // Unlike the School/Study accumulators above, this one does NOT
+        // self-reset at TickPersonDay's weekly gate — ChildRearingService
+        // (Economy.Family, outside this Data-free assembly) needs to read the
+        // finalized total via PeekFamilyHoursThisWeek before it clears via
+        // ClearFamilyHoursThisWeek, the exact peek-then-clear-after-commit
+        // discipline UnflushedFundsDelta already uses.
+        public float FamilyHoursThisWeek;
     }
 
     private const int HoursPerDay = 24;
@@ -432,6 +441,29 @@ public sealed class LifeSimManager
         }
     }
 
+    /// <summary>
+    /// Non-destructive read of the avatar's Family-block hours accumulated
+    /// this week (HS-5, person-layer doc §7.1) — GameManager's
+    /// OnChildRearingDayAdvanced peeks this before handing it to
+    /// ChildRearingService, then calls <see cref="ClearFamilyHoursThisWeek"/>
+    /// only once that tick's batch has committed, the same discipline
+    /// <see cref="PeekFundsDelta"/> uses. 0 for an untracked id or one this
+    /// bridge never hydrated a person for.
+    /// </summary>
+    public float PeekFamilyHoursThisWeek(string playerId) =>
+        _npcs.TryGetValue(playerId, out NpcRuntime? runtime) && runtime.Person is PersonRuntime person
+            ? person.FamilyHoursThisWeek
+            : 0f;
+
+    /// <summary>Resets a tracked, hydrated NPC's weekly Family-hours accumulator to 0 (call only after ChildRearingService's tick has durably committed). No-op otherwise.</summary>
+    public void ClearFamilyHoursThisWeek(string playerId)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime) && runtime.Person is PersonRuntime person)
+        {
+            person.FamilyHoursThisWeek = 0f;
+        }
+    }
+
     private void OnStressImpulse(StressImpulseEvent e)
     {
         if (_npcs.TryGetValue(e.PlayerId, out NpcRuntime? runtime))
@@ -622,6 +654,10 @@ public sealed class LifeSimManager
             TickBlockHours(npc, schedule.FreeTimeHours, in freeTimeDef);
         }
 
+        // HS-5: Family rides Idle's neutral definition per-hour, same as
+        // Practice/Game above — its real effect is weekly, accumulated below.
+        TickBlockHours(npc, schedule.FamilyHours, in ActionCatalog.Idle);
+
         // §2.2 weekly-drift inputs: a planned day's attendance is exactly its
         // scheduled School hours (planning 0 = deliberate truancy), and Study
         // free-time hours feed the StudyHoursTerm — the one way GPA benefits
@@ -633,6 +669,11 @@ public sealed class LifeSimManager
             {
                 person.StudyHoursThisWeek += schedule.FreeTimeHours;
             }
+            // HS-5 §7.1: only a planned day contributes — unlike School there
+            // is no autopilot default, a day with no plan commits no family
+            // time (matching the ScheduleScreen row's own "no plan set"
+            // framing, not the attendance-assumed truancy framing School uses).
+            person.FamilyHoursThisWeek += schedule.FamilyHours;
         }
 
         // §5.3: the transport refund — hours not spent walking come back as

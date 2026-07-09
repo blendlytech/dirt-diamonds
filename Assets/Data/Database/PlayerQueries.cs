@@ -168,6 +168,8 @@ public sealed class PlayerQueries
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertPlayer;
     private readonly SqliteCommand _selectPlayerById;
+    // Reused by LoadChildrenOf — a small once-per-week-tick read, never a hot loop.
+    private readonly List<RelationshipRow> _loadChildrenScratch = new();
     private readonly SqliteCommand _selectAllPlayers;
     private readonly SqliteCommand _countPlayers;
     private readonly SqliteCommand _updateFunds;
@@ -650,6 +652,44 @@ public sealed class PlayerQueries
         AffinityScore = reader.GetInt32(3),
         Type = RelationshipTypeMap.FromDbString(reader.GetString(4)),
     };
+
+    /// <summary>
+    /// Loads <paramref name="parentId"/>'s children (full PlayerRows) into
+    /// <paramref name="destination"/> (cleared first): every Child-type edge
+    /// whose other endpoint is YOUNGER than the parent — the age invariant
+    /// that excludes the parent's own parents, whose edges share the same
+    /// Child kind. Extracted from EventConsequenceApplier.ApplyChildDevelopment
+    /// (HS-5 §7.1's original "every child of the subject" fan-out) so a second
+    /// caller — ChildRearingService's weekly tick — doesn't duplicate the age
+    /// guard a third time. A parent with no Players row is a clean empty
+    /// result, not a throw.
+    /// </summary>
+    public int LoadChildrenOf(string parentId, List<PlayerRow> destination)
+    {
+        destination.Clear();
+        if (!TryGetById(parentId, out PlayerRow parent))
+        {
+            return 0;
+        }
+        LoadRelationshipsFor(parentId, _loadChildrenScratch);
+        for (int i = 0; i < _loadChildrenScratch.Count; i++)
+        {
+            RelationshipRow row = _loadChildrenScratch[i];
+            if (row.Type != RelationshipType.Child)
+            {
+                continue;
+            }
+            string otherId = string.Equals(row.Player1Id, parentId, StringComparison.Ordinal)
+                ? row.Player2Id
+                : row.Player1Id;
+            if (!TryGetById(otherId, out PlayerRow other) || other.Age >= parent.Age)
+            {
+                continue; // the parent's own parent, not a child (§1.2)
+            }
+            destination.Add(other);
+        }
+        return destination.Count;
+    }
 
     // ------------------------------------------------------------------
     // Player absences (roster availability, schema v8)

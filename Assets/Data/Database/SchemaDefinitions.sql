@@ -497,10 +497,24 @@ CREATE TABLE IF NOT EXISTS Child_Development (
     last_tick_day INTEGER NOT NULL DEFAULT 0  CHECK (last_tick_day >= 0)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Child_Rearing_Commitment — schema v12. The player-set half of the §7.1
+-- weekly family tick: a standing weekly dollar commitment toward the
+-- avatar's children (applied by ChildRearingService, deducted from the
+-- avatar's own funds — the time half of the allocation rides DaySchedule's
+-- FamilyHours block instead, since minutes aren't schema state). One row
+-- per avatar, PK on player_id — not child_id, because the commitment is a
+-- household decision applied uniformly to every child (Child_Development's
+-- own ApplyChildDevelopment precedent: fan out to all children, no
+-- per-child targeting). No row = 0 commitment, the pre-v12 default.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Child_Rearing_Commitment (
+    player_id      TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    weekly_funding INTEGER NOT NULL DEFAULT 0 CHECK (weekly_funding BETWEEN 0 AND 300)
+) STRICT;
+
 COMMIT;
 
--- Schema version 11 — adds the High School person layer: Player_Person
--- (neutral-row backfill over Players), Family_Background, Phone_State,
--- Player_Items, Child_Development (all purely additive; see the per-table
--- comments above). Bump with every migration.
-PRAGMA user_version = 11;
+-- Schema version 12 — adds Child_Rearing_Commitment (purely additive; see
+-- its own comment above). Bump with every migration.
+PRAGMA user_version = 12;

@@ -325,6 +325,65 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "Texas Hold'em"
 
+[node name="Family" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="FamilyScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Family"]
+layout_mode = 2
+
+[node name="FamilyLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="NoChildrenLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No children yet."
+
+[node name="ChildrenContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CommitmentCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="CommitmentCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CommitmentHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Weekly Funding Commitment"
+
+[node name="CommitmentRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout"]
+layout_mode = 2
+
+[node name="CommitmentSlider" type="HSlider" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout/CommitmentRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0
+max_value = 300
+step = 25
+value = 0
+
+[node name="CommitmentValueLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout/CommitmentRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "$0"
+
+[node name="CommitmentConfirmButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout"]
+layout_mode = 2
+text = "Set Commitment"
+
 [node name="Marketplace" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
 layout_mode = 2

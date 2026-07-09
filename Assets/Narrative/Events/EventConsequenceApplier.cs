@@ -83,7 +83,10 @@ public sealed class EventConsequenceApplier
     // (ConceiveChild's own committed batch) and never written through
     // RelationshipGraph, so a mid-session birth exists only in the DB until
     // the next boot hydration — the exact inverse of the Partner polarity.
-    private readonly List<RelationshipRow> _childRowScratch = new(8);
+    // Filled by PlayerQueries.LoadChildrenOf, which owns the Child-edge/age-
+    // guard filtering (extracted here from this method for ChildRearingService
+    // to share, HS-5 §7.1's weekly tick).
+    private readonly List<PlayerRow> _childRowScratch = new(8);
 
     // Absence publications staged inside the DB batch (where the rust penalty
     // is computed against the same state the write saw), published after the
@@ -373,28 +376,16 @@ public sealed class EventConsequenceApplier
     /// </summary>
     private void ApplyChildDevelopment(GrittyEventFiredEvent fired, in EventConsequence consequence)
     {
-        if (!_players.TryGetById(fired.SubjectPlayerId, out PlayerRow subject))
+        if (!_players.TryGetById(fired.SubjectPlayerId, out _))
         {
             throw new InvalidOperationException(
                 $"child_development consequence fired for '{fired.SubjectPlayerId}' but the Players row is missing.");
         }
-        _players.LoadRelationshipsFor(fired.SubjectPlayerId, _childRowScratch);
+        _players.LoadChildrenOf(fired.SubjectPlayerId, _childRowScratch);
         int delta = (int)Math.Round(consequence.Amount);
         for (int i = 0; i < _childRowScratch.Count; i++)
         {
-            RelationshipRow row = _childRowScratch[i];
-            if (row.Type != RelationshipType.Child)
-            {
-                continue;
-            }
-            string otherId = string.Equals(row.Player1Id, fired.SubjectPlayerId, StringComparison.Ordinal)
-                ? row.Player2Id
-                : row.Player1Id;
-            if (!_players.TryGetById(otherId, out PlayerRow other) || other.Age >= subject.Age)
-            {
-                continue; // the subject's own parent, not a child (§1.2)
-            }
-            _persons.AdjustChildAxis(otherId, (int)consequence.ChildAxis, delta, fired.Day);
+            _persons.AdjustChildAxis(_childRowScratch[i].PlayerId, (int)consequence.ChildAxis, delta, fired.Day);
         }
     }
 

@@ -91,6 +91,23 @@ public struct ChildDevelopmentRow
     public int Funding;
     public int Neglect;
     public int LastTickDay;
+
+    /// <summary>The schema's neutral defaults — what an absent row means (TryGetChild's false case), for callers (e.g. UI) that need a display value rather than a bool.</summary>
+    public static ChildDevelopmentRow Neutral(string childId) => new()
+    {
+        ChildId = childId,
+        Care = 50,
+        Coaching = 50,
+        Funding = 50,
+        Neglect = 0,
+    };
+}
+
+/// <summary>Row DTO mirroring Child_Rearing_Commitment one-to-one (schema v12). No row = 0 weekly funding (pre-v12 default).</summary>
+public struct ChildRearingCommitmentRow
+{
+    public string PlayerId;
+    public int WeeklyFunding;
 }
 
 /// <summary>
@@ -232,6 +249,13 @@ public sealed class PersonQueries
         "SELECT child_id, care, coaching, funding, neglect, last_tick_day FROM Child_Development " +
         "WHERE child_id = @childId;";
 
+    private const string SqlUpsertChildRearingCommitment =
+        "INSERT INTO Child_Rearing_Commitment (player_id, weekly_funding) VALUES (@playerId, @weeklyFunding) " +
+        "ON CONFLICT (player_id) DO UPDATE SET weekly_funding = excluded.weekly_funding;";
+
+    private const string SqlSelectChildRearingCommitment =
+        "SELECT player_id, weekly_funding FROM Child_Rearing_Commitment WHERE player_id = @playerId;";
+
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _upsertPerson;
     private readonly SqliteCommand _selectPerson;
@@ -249,6 +273,8 @@ public sealed class PersonQueries
     private readonly SqliteCommand _upsertChild;
     private readonly SqliteCommand _selectChild;
     private readonly SqliteCommand[] _adjustChildAxis;
+    private readonly SqliteCommand _upsertChildRearingCommitment;
+    private readonly SqliteCommand _selectChildRearingCommitment;
 
     public PersonQueries(DatabaseManager db)
     {
@@ -402,6 +428,21 @@ public sealed class PersonQueries
                 command.Prepare();
             }
             _adjustChildAxis[i] = command;
+        }
+
+        _upsertChildRearingCommitment = db.GetPooledCommand(SqlUpsertChildRearingCommitment);
+        if (_upsertChildRearingCommitment.Parameters.Count == 0)
+        {
+            _upsertChildRearingCommitment.Parameters.Add("@playerId", SqliteType.Text);
+            _upsertChildRearingCommitment.Parameters.Add("@weeklyFunding", SqliteType.Integer);
+            _upsertChildRearingCommitment.Prepare();
+        }
+
+        _selectChildRearingCommitment = db.GetPooledCommand(SqlSelectChildRearingCommitment);
+        if (_selectChildRearingCommitment.Parameters.Count == 0)
+        {
+            _selectChildRearingCommitment.Parameters.Add("@playerId", SqliteType.Text);
+            _selectChildRearingCommitment.Prepare();
         }
     }
 
@@ -701,6 +742,32 @@ public sealed class PersonQueries
             Funding = reader.GetInt32(3),
             Neglect = reader.GetInt32(4),
             LastTickDay = reader.GetInt32(5),
+        };
+        return true;
+    }
+
+    /// <summary>§7.1's player-set weekly funding commitment toward the avatar's children — a standing preference, upserted directly (not an atomic delta like AdjustChildAxis, since the player is replacing their commitment, not accumulating one).</summary>
+    public void UpsertChildRearingCommitment(in ChildRearingCommitmentRow row)
+    {
+        SqliteParameterCollection p = _upsertChildRearingCommitment.Parameters;
+        p["@playerId"].Value = row.PlayerId;
+        p["@weeklyFunding"].Value = row.WeeklyFunding;
+        _db.ExecuteNonQuery(_upsertChildRearingCommitment);
+    }
+
+    public bool TryGetChildRearingCommitment(string playerId, out ChildRearingCommitmentRow row)
+    {
+        _selectChildRearingCommitment.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectChildRearingCommitment);
+        if (!reader.Read())
+        {
+            row = default;
+            return false;
+        }
+        row = new ChildRearingCommitmentRow
+        {
+            PlayerId = reader.GetString(0),
+            WeeklyFunding = reader.GetInt32(1),
         };
         return true;
     }

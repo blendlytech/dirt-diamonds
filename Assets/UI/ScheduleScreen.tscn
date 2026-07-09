@@ -206,6 +206,27 @@ popup/item_2/id = 2
 popup/item_3/text = "Hangout"
 popup/item_3/id = 3
 
+[node name="FamilyRow" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="FamilyLabel" type="Label" parent="Layout/FamilyRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Family"
+
+[node name="FamilySlider" type="HSlider" parent="Layout/FamilyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0
+max_value = 24
+step = 1
+value = 0
+
+[node name="FamilyValueLabel" type="Label" parent="Layout/FamilyRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(24, 0)
+text = "0"
+
 [node name="FreeHoursLabel" type="Label" parent="Layout"]
 layout_mode = 2
 text = "Free hours: 24"

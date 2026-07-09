@@ -82,6 +82,7 @@
           "consequences": [
             { "type": "conceive_child" },
             { "type": "clear_flag", "flag": "expecting" },
+            { "type": "set_flag", "flag": "hs_has_child" },
             { "type": "funds", "amount": -1000 },
             { "type": "stress", "amount": -20 }
           ]
