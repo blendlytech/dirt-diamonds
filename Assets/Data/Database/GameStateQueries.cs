@@ -55,6 +55,17 @@ public static class GameStateKeys
     /// always starts at zero).
     /// </summary>
     public const string AvatarPracticeCredit = "avatar_practice_credit";
+
+    /// <summary>
+    /// player_id (text) of the avatar's most recent ex-partner, written when
+    /// an end_partnership consequence reclassifies the avatar's live Partner
+    /// edge (HS-5) and consumed by the rekindle_partnership consequence to
+    /// re-mint that specific edge. Overwritten by each later breakup, never
+    /// cleared — every reader re-guards against the live graph (the edge must
+    /// still exist as Friend/Rival for the subject), so a stale id, including
+    /// one inherited across a succession handoff, is a skip, never a mis-mint.
+    /// </summary>
+    public const string AvatarExPartnerId = "avatar_ex_partner_id";
 }
 
 /// <summary>

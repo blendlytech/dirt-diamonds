@@ -335,6 +335,17 @@ public static class GrittyEventJson
                 };
                 return EventConsequence.ForEndPartnership(kind, RequireNumber(element, "affinity", eventId));
             }
+            case "rekindle_partnership":
+                // HS-5 "getting back together": re-mints Partner on the
+                // recorded ex. Only the avatar's romance history is tracked
+                // (Game_State avatar_ex_partner_id), so a scope-any rekindle
+                // is meaningless — same load-time gate as conceive_child.
+                if (scope != EventScope.Avatar)
+                {
+                    throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': 'rekindle_partnership' is only valid on a 'scope: avatar' event.");
+                }
+                return EventConsequence.ForRekindlePartnership(RequireNumber(element, "affinity", eventId));
             case "person_stat":
             {
                 string statText = RequireString(element, "stat", eventId);

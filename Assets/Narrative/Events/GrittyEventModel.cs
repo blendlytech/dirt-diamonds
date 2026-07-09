@@ -140,6 +140,21 @@ public enum ConsequenceKind : byte
     /// skip-by-design no-op (the empty-pool precedent).
     /// </summary>
     EndPartnership,
+
+    /// <summary>
+    /// Re-mints the Partner edge with the subject's recorded most-recent ex
+    /// (HS-5 "getting back together"): the targeted counterpart to
+    /// <see cref="Relationship"/>'s random-pool Partner mint, which
+    /// ApplyRelationship's adjust-don't-reclassify rule correctly stops from
+    /// re-partnering an existing friend/rival edge. Valid only on
+    /// scope-avatar events (load-time gate, the <see cref="ConceiveChild"/>
+    /// precedent) because only the avatar's romance history is tracked
+    /// (Game_State avatar_ex_partner_id, written by <see cref="EndPartnership"/>).
+    /// Skips when the subject is already partnered (exclusivity guard), no ex
+    /// is recorded, or the recorded ex no longer has a Friend/Rival edge to
+    /// the subject.
+    /// </summary>
+    RekindlePartnership,
 }
 
 /// <summary>Who a relationship consequence pairs the subject with (§4), resolved at apply time.</summary>
@@ -244,6 +259,15 @@ public readonly struct EventConsequence
         }
         return new EventConsequence(ConsequenceKind.EndPartnership, affinity, null, newKind, default);
     }
+
+    /// <summary>
+    /// Re-mints the Partner edge with the subject's recorded ex at
+    /// <paramref name="affinity"/> (HS-5 rekindle). The kind is always
+    /// Partner by construction — the target is the recorded ex, never a pool
+    /// draw, so this carries no selector.
+    /// </summary>
+    public static EventConsequence ForRekindlePartnership(double affinity) =>
+        new(ConsequenceKind.RekindlePartnership, affinity, null, RelationshipKind.Partner, default);
 }
 
 public sealed class EventChoice

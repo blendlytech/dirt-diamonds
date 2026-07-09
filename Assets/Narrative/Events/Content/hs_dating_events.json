@@ -1,5 +1,5 @@
 {
-  "//": "HS-5 pre-marriage dating funnel + unplanned-pregnancy arc (docs/design/high_school_person_layer.md §9, HS-5), Sonnet 5; breakup/divorce realism pass by Fable 5 same day. Distinct from marriage_and_family_events.json's age>20 pro-career arc -- the funnel gates age < 20 (or inherits it via the hs_dating/hs_interest flag chain) and met_someone over there now gates flag_inactive hs_dating, so the two romance arcs can never collide or double-fire on the same subject. Every relationship-ending choice carries an 'end_partnership' consequence (Fable 5's ConsequenceKind.EndPartnership): the live Partner edge is RECLASSIFIED to friend/rival at an authored affinity -- never deleted, so exes stay in the graph as history and the single-partner exclusivity guard reopens for real re-dating. hs_breakup runs at realistic HS churn (weight 0.05 / cooldown 90, autopilot majority ends it -- most high-school relationships end, and now mechanically CAN). marry_hs_sweetheart is the funnel's other exit (spec §4.3 'marrying a high school sweetheart'): a year-plus hs_dating thread past age 20 converts to the married flag with the SAME Partner edge, feeding the pro file's starting_a_family/divorce arcs. Disclosed simplifications (see docs/progress.md): (1) hs_parental_approval doesn't branch on Family_Background.strictness -- the prerequisite algebra only reaches Players-row SubjectField values today; a real strictness gate needs a SubjectField extension, deferred as engine work. (2) hs_clubhouse_cancer is narrated, not verified -- there's no NPC-autonomy tick yet to have organically paired the teammate with an ex. (3) hs_hometown_anchor is a one-shot flavor beat, not the doc's real weekly-minute LDR drain (needs a PhoneService/FamilyService extension); long_distance is a documented forward hook for that mechanic. (4) rekindling with an ex is impossible by ApplyRelationship's adjust-don't-reclassify rule: if a new 'relationship: partner' consequence randomly targets the ex (an existing friend/rival edge), it deepens that edge's affinity without re-partnering -- disclosed, not a defect (the rule exists so a feud can't reclassify a marriage). hs_baby_born deliberately mirrors child_is_born's shape exactly (single choice, same 270-day gestation constant) -- the only event in this batch under the 3-choice convention, matching that shipped precedent for a terminal birth beat.",
+  "//": "HS-5 pre-marriage dating funnel + unplanned-pregnancy arc (docs/design/high_school_person_layer.md §9, HS-5), Sonnet 5; breakup/divorce realism pass by Fable 5 same day. Distinct from marriage_and_family_events.json's age>20 pro-career arc -- the funnel gates age < 20 (or inherits it via the hs_dating/hs_interest flag chain) and met_someone over there now gates flag_inactive hs_dating, so the two romance arcs can never collide or double-fire on the same subject. Every relationship-ending choice carries an 'end_partnership' consequence (Fable 5's ConsequenceKind.EndPartnership): the live Partner edge is RECLASSIFIED to friend/rival at an authored affinity -- never deleted, so exes stay in the graph as history and the single-partner exclusivity guard reopens for real re-dating. hs_breakup runs at realistic HS churn (weight 0.05 / cooldown 90, autopilot majority ends it -- most high-school relationships end, and now mechanically CAN). marry_hs_sweetheart is the funnel's other exit (spec §4.3 'marrying a high school sweetheart'): a year-plus hs_dating thread past age 20 converts to the married flag with the SAME Partner edge, feeding the pro file's starting_a_family/divorce arcs. Disclosed simplifications (see docs/progress.md): (1) hs_parental_approval doesn't branch on Family_Background.strictness -- the prerequisite algebra only reaches Players-row SubjectField values today; a real strictness gate needs a SubjectField extension, deferred as engine work. (2) hs_clubhouse_cancer is narrated, not verified -- there's no NPC-autonomy tick yet to have organically paired the teammate with an ex. (3) hs_hometown_anchor is a one-shot flavor beat, not the doc's real weekly-minute LDR drain (needs a PhoneService/FamilyService extension); long_distance is a documented forward hook for that mechanic. (4) CLOSED 2026-07-09 (Fable 5): rekindling with an ex is now its own targeted 'rekindle_partnership' consequence (avatar-scope only) -- every end_partnership on the avatar records WHO in Game_State (avatar_ex_partner_id, in-batch), the relationship-ending choices below additionally set the hs_ex flag, and hs_rekindle re-mints the Partner edge with that specific ex (re-entering the hs_dating funnel, bitter-ex rivalry dissolving through the Phase-6 transport). The adjust-don't-reclassify rule itself is untouched -- a random 'relationship: partner' pool draw still can't re-type an existing edge, which remains what stops a feud reclassifying a marriage. keep_wondering deliberately leaves hs_ex active so the event can re-fire after its cooldown (a paced loop, not a dead-end). hs_baby_born deliberately mirrors child_is_born's shape exactly (single choice, same 270-day gestation constant) -- the only event in this batch under the 3-choice convention, matching that shipped precedent for a terminal birth beat.",
   "events": [
     {
       "id": "hs_crush_forms",
@@ -202,6 +202,7 @@
           "consequences": [
             { "type": "end_partnership", "kind": "rival", "affinity": -25 },
             { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "set_flag", "flag": "hs_ex" },
             { "type": "stress", "amount": 8 },
             { "type": "person_stat", "stat": "happiness", "amount": -6 }
           ] },
@@ -209,8 +210,43 @@
           "consequences": [
             { "type": "end_partnership", "kind": "friend", "affinity": 15 },
             { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "set_flag", "flag": "hs_ex" },
             { "type": "stress", "amount": 3 },
             { "type": "person_stat", "stat": "maturity", "amount": 3 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_rekindle",
+      "scope": "avatar",
+      "weight": 0.04,
+      "cooldown_days": 90,
+      "contact": "hs_sweetheart",
+      "prompt": "A name you haven't let yourself think about shows up on your phone: \"saw the box score tonight. couldn't not say something.\"",
+      "prerequisites": [
+        { "flag_active": "hs_ex", "min_days_since": 30 },
+        { "flag_inactive": "hs_dating" },
+        { "flag_inactive": "hs_interest" },
+        { "flag_inactive": "married" }
+      ],
+      "choices": [
+        { "id": "reach_out", "autopilot_weight": 1, "label": "Meet up and see what's still there",
+          "consequences": [
+            { "type": "rekindle_partnership", "affinity": 40 },
+            { "type": "set_flag", "flag": "hs_dating" },
+            { "type": "clear_flag", "flag": "hs_ex" },
+            { "type": "person_stat", "stat": "happiness", "amount": 6 },
+            { "type": "stress", "amount": -4 }
+          ] },
+        { "id": "leave_it_closed", "autopilot_weight": 2, "label": "Leave it in the past",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_ex" },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 }
+          ] },
+        { "id": "keep_wondering", "autopilot_weight": 1, "label": "Type, delete, type again. Send nothing",
+          "consequences": [
+            { "type": "stress", "amount": 4 },
+            { "type": "person_stat", "stat": "happiness", "amount": -3 }
           ] }
       ]
     },
@@ -323,6 +359,7 @@
           "consequences": [
             { "type": "end_partnership", "kind": "friend", "affinity": 10 },
             { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "set_flag", "flag": "hs_ex" },
             { "type": "person_stat", "stat": "teamwork", "amount": 3 },
             { "type": "stress", "amount": 8 }
           ] }
@@ -350,6 +387,7 @@
           "consequences": [
             { "type": "end_partnership", "kind": "friend", "affinity": 5 },
             { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "set_flag", "flag": "hs_ex" },
             { "type": "set_flag", "flag": "long_distance" },
             { "type": "stress", "amount": 6 }
           ] },
@@ -385,6 +423,7 @@
           "consequences": [
             { "type": "end_partnership", "kind": "friend", "affinity": 10 },
             { "type": "clear_flag", "flag": "hs_dating" },
+            { "type": "set_flag", "flag": "hs_ex" },
             { "type": "stress", "amount": 5 }
           ] },
         { "id": "not_ready", "autopilot_weight": 1, "label": "Not yet",

@@ -63,6 +63,7 @@ internal static class Program
             RunPersonStatChecks();
             RunHsDatingArcChecks();
             RunEndPartnershipChecks();
+            RunRekindleChecks();
             RunStressChecks();
             RunHustleIntegrationChecks();
             RunEquipmentIntegrationChecks();
@@ -154,7 +155,7 @@ internal static class Program
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
             batchFiles.Length >= 6
-            && wholeFolder.Count == 46
+            && wholeFolder.Count == 47
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -182,6 +183,7 @@ internal static class Program
             && wholeFolder.TryGetById("hs_caught_sneaking_out", out _)
             && wholeFolder.TryGetById("hs_snuck_out_clean", out _)
             && wholeFolder.TryGetById("hs_breakup", out _)
+            && wholeFolder.TryGetById("hs_rekindle", out _)
             && wholeFolder.TryGetById("hs_pregnancy_scare", out _)
             && wholeFolder.TryGetById("hs_pregnancy_decision", out _)
             && wholeFolder.TryGetById("hs_baby_born", out _)
@@ -253,7 +255,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 46 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 47 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -1151,6 +1153,204 @@ internal static class Program
             Check("end_partnership on an unpartnered subject is a clean no-op (fires, writes nothing)",
                 world.Fired.Count == 1 && edges.Count == 0,
                 $"{world.Fired.Count} fires, {edges.Count} edges");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4g. RekindlePartnership consequence (HS-5 getting back together)
+    // ------------------------------------------------------------------
+
+    private static void RunRekindleChecks()
+    {
+        Console.WriteLine("--- RekindlePartnership (getting back together) ---");
+
+        Check("loader accepts rekindle_partnership on a scope-avatar event", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "rekindle_partnership", "affinity": 40 } ] } ] } ] }"""));
+        Check("loader rejects rekindle_partnership on a scope-any event (only the avatar's romance history is tracked)", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "rekindle_partnership", "affinity": 40 } ] } ] } ] }"""));
+        Check("loader rejects rekindle_partnership without an affinity", Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "rekindle_partnership" } ] } ] } ] }"""));
+
+        // Full lifecycle: partner -> breakup (edge reclassified Rival AND the
+        // ex RECORDED in Game_State) -> rekindle (the SAME edge re-minted
+        // Partner, rivalry dissolved through the Phase-6 transport).
+        // Opponent-targeted so the partner pick is deterministic: "ex" is the
+        // only opponent.
+        {
+            using World world = World.Create("rekindle", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "date", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_inactive": "dating" }, { "flag_inactive": "split_up" } ],
+                    "choices": [ { "id": "ask", "consequences": [
+                      { "type": "relationship", "kind": "partner", "affinity": 50, "target": "opponent" },
+                      { "type": "set_flag", "flag": "dating" } ] } ] },
+                  { "id": "split", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "dating" } ],
+                    "choices": [ { "id": "end_it", "consequences": [
+                      { "type": "end_partnership", "kind": "rival", "affinity": -25 },
+                      { "type": "clear_flag", "flag": "dating" },
+                      { "type": "set_flag", "flag": "split_up" } ] } ] },
+                  { "id": "rekindle", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "split_up" } ],
+                    "choices": [ { "id": "reach_out", "consequences": [
+                      { "type": "rekindle_partnership", "affinity": 40 },
+                      { "type": "set_flag", "flag": "dating" },
+                      { "type": "clear_flag", "flag": "split_up" } ] } ] }
+                ] }
+                """));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.AddPlayer("ex", age: 17, teamId: 2);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            var rivalryEvents = new List<RivalryChangedEvent>();
+            world.Bus.Subscribe<RivalryChangedEvent>(rivalryEvents.Add);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: date (ex is the only opponent)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDay(); // day 3: split
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool exRecorded = world.GameState.TryGetText(GameStateKeys.AvatarExPartnerId, out string exId);
+            Check("an avatar breakup records WHO in Game_State (avatar_ex_partner_id, written in the fire's own batch)",
+                exRecorded && exId == "ex",
+                $"recorded={exRecorded}, id={(exRecorded ? exId : "none")}");
+
+            world.Clock.AdvanceDay(); // day 4: rekindle
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            Check("rekindle re-mints the Partner edge with the recorded ex at the authored affinity (the exact edge, not a pool draw)",
+                world.Fired.Count == 3 && edges.Count == 1 && edges[0].OtherId == "ex"
+                && edges[0].Kind == RelationshipKind.Partner && edges[0].Affinity == 40,
+                $"{world.Fired.Count} fires, {edges.Count} edges, kind={(edges.Count > 0 ? edges[0].Kind.ToString() : "none")}");
+            Check("the bitter-ex rivalry dissolves through the Phase-6 transport (intensity 25 on the split, 0 on the rekindle)",
+                rivalryEvents.Count == 2 && rivalryEvents[0].Intensity == 25 && rivalryEvents[1].Intensity == 0,
+                $"{rivalryEvents.Count} rivalry events: [{string.Join(",", rivalryEvents.Select(e => e.Intensity))}]");
+        }
+
+        // No recorded ex: a rekindle fire is a clean skip (the empty-pool
+        // precedent) — safe whether or not a breakup ever actually ran.
+        {
+            using World world = World.Create("rekindleNoEx", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "rekindle_solo", "scope": "avatar", "weight": 1.0, "choices": [ { "id": "reach_out", "consequences": [ { "type": "rekindle_partnership", "affinity": 40 } ] } ] } ] }"""));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            Check("rekindle with no recorded ex is a clean no-op (fires, writes nothing)",
+                world.Fired.Count == 1 && edges.Count == 0,
+                $"{world.Fired.Count} fires, {edges.Count} edges");
+        }
+
+        // Already partnered (stale ex recorded): the exclusivity guard wins —
+        // rekindling can never accrete a second Partner edge.
+        {
+            using World world = World.Create("rekindlePartnered", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "rekindle_taken", "scope": "avatar", "weight": 1.0, "choices": [ { "id": "reach_out", "consequences": [ { "type": "rekindle_partnership", "affinity": 40 } ] } ] } ] }"""));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.AddPlayer("old_flame", age: 17, teamId: 2);
+            world.AddPlayer("current", age: 17, teamId: 1);
+            world.Graph.SetRelationship("hero", "old_flame", 10, RelationshipKind.Friend);
+            world.Graph.SetRelationship("hero", "current", 55, RelationshipKind.Partner);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.GameState.SetText(GameStateKeys.AvatarExPartnerId, "old_flame");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            bool currentKept = edges.Any(e => e.OtherId == "current"
+                && e.Kind == RelationshipKind.Partner && e.Affinity == 55);
+            bool oldFlameUntouched = edges.Any(e => e.OtherId == "old_flame"
+                && e.Kind == RelationshipKind.Friend && e.Affinity == 10);
+            Check("rekindle while already partnered skips (exclusivity guard): current partner and old flame both untouched",
+                world.Fired.Count == 1 && edges.Count == 2 && currentKept && oldFlameUntouched,
+                $"{edges.Count} edges, currentKept={currentKept}, oldFlameUntouched={oldFlameUntouched}");
+        }
+
+        // A stale/foreign recorded id can never mis-mint: no surviving edge
+        // (e.g. an id inherited across a succession handoff) skips, and so
+        // does an edge in a non-re-datable kind (Child is lineage state).
+        {
+            using World world = World.Create("rekindleStale", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "rekindle_stale", "scope": "avatar", "weight": 1.0, "choices": [ { "id": "reach_out", "consequences": [ { "type": "rekindle_partnership", "affinity": 40 } ] } ] } ] }"""));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.AddPlayer("mom", age: 44, teamId: null);
+            world.Graph.SetRelationship("hero", "mom", 80, RelationshipKind.Child);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.GameState.SetText(GameStateKeys.AvatarExPartnerId, "ghost");
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: recorded id has no edge at all
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("hero", edges);
+            Check("rekindle with a recorded id that has no surviving edge skips (succession-stale ids are inert)",
+                edges.Count == 1 && edges[0].Kind == RelationshipKind.Child,
+                $"{edges.Count} edges, kind={(edges.Count > 0 ? edges[0].Kind.ToString() : "none")}");
+
+            world.GameState.SetText(GameStateKeys.AvatarExPartnerId, "mom");
+            world.Clock.AdvanceDay(); // day 3: recorded id resolves to a Child edge
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Graph.GetEdgesFor("hero", edges);
+            Check("rekindle never re-types a Child edge (lineage state is not a re-datable kind)",
+                edges.Count == 1 && edges[0].Kind == RelationshipKind.Child && edges[0].Affinity == 80,
+                $"{edges.Count} edges, kind={(edges.Count > 0 ? edges[0].Kind.ToString() : "none")}");
+        }
+
+        // Only the avatar's romance history is tracked: a non-avatar
+        // end_partnership reclassifies its edge exactly as before but
+        // records nothing.
+        {
+            using World world = World.Create("rekindleNonAvatar", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "npc_split", "scope": "any", "weight": 1.0,
+                  "prerequisites": [ { "field": "recklessness", "op": ">=", "value": 60 } ],
+                  "choices": [ { "id": "end_it", "consequences": [
+                    { "type": "end_partnership", "kind": "friend", "affinity": 5 } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.AddPlayer("npc", age: 27, teamId: 1, recklessness: 80);
+            world.AddPlayer("npc_partner", age: 27, teamId: 2);
+            world.Graph.SetRelationship("npc", "npc_partner", 60, RelationshipKind.Partner);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("npc", edges);
+            bool reclassified = edges.Count == 1 && edges[0].Kind == RelationshipKind.Friend && edges[0].Affinity == 5;
+            bool nothingRecorded = !world.GameState.TryGetText(GameStateKeys.AvatarExPartnerId, out _);
+            Check("a non-avatar end_partnership still reclassifies its edge but records no ex (avatar-only history)",
+                world.Fired.Count == 1 && world.Fired[0].SubjectPlayerId == "npc" && reclassified && nothingRecorded,
+                $"{world.Fired.Count} fires, reclassified={reclassified}, nothingRecorded={nothingRecorded}");
         }
     }
 

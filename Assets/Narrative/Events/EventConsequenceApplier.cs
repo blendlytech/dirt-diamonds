@@ -150,10 +150,7 @@ public sealed class EventConsequenceApplier
                 $"Gritty event '{fired.EventId}' fired but is not in the loaded library.");
         }
 
-        bool isAvatar = _gameState.TryGetText(GameStateKeys.AvatarPlayerId, out string avatarId)
-            && string.Equals(avatarId, fired.SubjectPlayerId, StringComparison.Ordinal);
-
-        if (!AutopilotAvatarChoices && isAvatar)
+        if (!AutopilotAvatarChoices && IsAvatarSubject(fired.SubjectPlayerId))
         {
             if (_hasPending)
             {
@@ -185,14 +182,21 @@ public sealed class EventConsequenceApplier
         // Relationship targets resolve before any write so an empty pool
         // (consequence skipped, §4) is decided on a consistent snapshot.
         bool needsTargets = false;
+        bool endsPartnership = false;
         for (int i = 0; i < consequences.Length; i++)
         {
             needsTargets |= consequences[i].Kind == ConsequenceKind.Relationship;
+            endsPartnership |= consequences[i].Kind == ConsequenceKind.EndPartnership;
         }
         if (needsTargets)
         {
             _players.LoadAll(_playerScratch);
         }
+
+        // The ending partner resolves once, pre-batch, off the same live
+        // graph the reclassification will hit — so the ex-history record
+        // (below, inside the batch) and the graph write can never disagree.
+        string? endedPartnerId = endsPartnership ? FindLivePartnerId(fired.SubjectPlayerId) : null;
 
         // Database consequences commit atomically in this handler's own batch.
         _absenceScratch.Clear();
@@ -229,6 +233,16 @@ public sealed class EventConsequenceApplier
                             fired.SubjectPlayerId, (int)consequence.PersonStat, (int)Math.Round(consequence.Amount));
                         break;
                 }
+            }
+
+            // Ex-history record (HS-5 rekindle substrate): an avatar breakup
+            // remembers WHO inside the same batch as the fire's other writes
+            // (the trait-flag-in-batch discipline). Only the avatar's romance
+            // history is tracked — a non-avatar end_partnership reclassifies
+            // its edge exactly as before and records nothing.
+            if (endedPartnerId is not null && IsAvatarSubject(fired.SubjectPlayerId))
+            {
+                _gameState.SetText(GameStateKeys.AvatarExPartnerId, endedPartnerId);
             }
 
             // The Burner Phone read-model (presentation_layer_narrative.md
@@ -268,7 +282,10 @@ public sealed class EventConsequenceApplier
                     ApplyRelationship(fired.SubjectPlayerId, in consequence);
                     break;
                 case ConsequenceKind.EndPartnership:
-                    ApplyEndPartnership(fired.SubjectPlayerId, in consequence);
+                    ApplyEndPartnership(fired.SubjectPlayerId, in consequence, endedPartnerId);
+                    break;
+                case ConsequenceKind.RekindlePartnership:
+                    ApplyRekindle(fired.SubjectPlayerId, in consequence);
                     break;
                 case ConsequenceKind.ConceiveChild:
                     // The load-time gate (§4.1) restricts this consequence to
@@ -403,10 +420,12 @@ public sealed class EventConsequenceApplier
     /// choice is safe whether or not the romance arc actually ran. Consequences
     /// apply in authored order, so a choice may end one partnership and mint a
     /// rebound Partner in the same breath — end_partnership first.
+    /// <paramref name="partnerId"/> arrives pre-resolved from ApplyChoice's
+    /// pre-batch pass, where the same value fed the in-batch ex-history record
+    /// — the two writes agree by construction.
     /// </summary>
-    private void ApplyEndPartnership(string subjectId, in EventConsequence consequence)
+    private void ApplyEndPartnership(string subjectId, in EventConsequence consequence, string? partnerId)
     {
-        string? partnerId = FindLivePartnerId(subjectId);
         if (partnerId is null)
         {
             return;
@@ -414,6 +433,46 @@ public sealed class EventConsequenceApplier
         _relationships.SetRelationship(
             subjectId, partnerId, (int)Math.Round(consequence.Amount), consequence.RelationshipKind);
     }
+
+    /// <summary>
+    /// HS-5 "getting back together": re-mints the Partner edge with the
+    /// recorded most-recent ex (Game_State avatar_ex_partner_id — the
+    /// load-time scope gate makes the subject the avatar). This is the
+    /// deliberate counterpart to ApplyRelationship's adjust-don't-reclassify
+    /// rule: that rule stops a feud consequence reclassifying a marriage, and
+    /// it equally stopped a random-pool Partner consequence re-partnering an
+    /// ex — so rekindling gets its own targeted write instead of a loophole.
+    /// Skip-by-design (the empty-pool precedent) when already partnered
+    /// (exclusivity guard), no ex was ever recorded, or the recorded ex no
+    /// longer has a Friend/Rival edge to the subject (a stale id — e.g. one
+    /// inherited across a succession handoff — can never mis-mint). The
+    /// SetRelationship overwrite path dissolves a bitter-ex rivalry to
+    /// intensity 0 through the untouched Phase-6 transport.
+    /// </summary>
+    private void ApplyRekindle(string subjectId, in EventConsequence consequence)
+    {
+        if (FindLivePartnerId(subjectId) is not null)
+        {
+            return;
+        }
+        if (!_gameState.TryGetText(GameStateKeys.AvatarExPartnerId, out string exId)
+            || string.IsNullOrEmpty(exId))
+        {
+            return;
+        }
+        if (!_relationships.TryGetRelationship(subjectId, exId, out _, out RelationshipKind kind)
+            || kind is not (RelationshipKind.Friend or RelationshipKind.Rival))
+        {
+            return;
+        }
+        _relationships.SetRelationship(
+            subjectId, exId, (int)Math.Round(consequence.Amount), RelationshipKind.Partner);
+    }
+
+    /// <summary>Whether this subject is the current avatar (Game_State avatar_player_id) — the OnFired pause check and the ex-history record share this.</summary>
+    private bool IsAvatarSubject(string subjectId) =>
+        _gameState.TryGetText(GameStateKeys.AvatarPlayerId, out string avatarId)
+        && string.Equals(avatarId, subjectId, StringComparison.Ordinal);
 
     /// <summary>The subject's Partner counterpart in the in-memory graph, or null. At most one exists (the exclusivity guard); the first found is returned.</summary>
     private string? FindLivePartnerId(string subjectId)
