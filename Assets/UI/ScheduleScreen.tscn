@@ -26,6 +26,16 @@ autowrap_mode = 2
 visible = false
 text = ""
 
+[node name="PersonStatsLabel" type="Label" parent="Layout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="TransportLabel" type="Label" parent="Layout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
 [node name="SleepRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
@@ -151,6 +161,49 @@ popup/item_1/id = 1
 popup/item_2/text = "Fencing"
 popup/item_2/id = 2
 popup/item_3/text = "Poker"
+popup/item_3/id = 3
+
+[node name="FreeTimeRow" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="FreeTimeLabel" type="Label" parent="Layout/FreeTimeRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Free Time"
+
+[node name="FreeTimeSlider" type="HSlider" parent="Layout/FreeTimeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0
+max_value = 24
+step = 1
+value = 0
+
+[node name="FreeTimeValueLabel" type="Label" parent="Layout/FreeTimeRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(24, 0)
+text = "0"
+
+[node name="FreeTimeActivityRow" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="FreeTimeActivityLabel" type="Label" parent="Layout/FreeTimeActivityRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Doing"
+
+[node name="FreeTimeActivityOption" type="OptionButton" parent="Layout/FreeTimeActivityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 4
+selected = 0
+popup/item_0/text = "Church"
+popup/item_0/id = 0
+popup/item_1/text = "Video Games"
+popup/item_1/id = 1
+popup/item_2/text = "Study"
+popup/item_2/id = 2
+popup/item_3/text = "Hangout"
 popup/item_3/id = 3
 
 [node name="FreeHoursLabel" type="Label" parent="Layout"]

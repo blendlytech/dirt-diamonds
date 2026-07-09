@@ -12,7 +12,8 @@ namespace DirtAndDiamonds.UI;
 /// corner-anchored overlay under Main, which floated over the phone; it now
 /// occupies a real container slot in BaseballDashboard.tscn so nothing ever
 /// overlaps it). Phase 9b's UI half: lets the player plan the avatar's next
-/// day across the five <see cref="DaySchedule"/> blocks and submit it via
+/// day across the six <see cref="DaySchedule"/> blocks (HS-4 added the
+/// free-time activity picker to the original five) and submit it via
 /// <see cref="LifeSimManager.SetTodaySchedule"/>. Not modal like
 /// SuccessionScreen (or the Burner Phone's pending-choice thread) — a plan is optional (an unset plan
 /// autopilots exactly as before 9b), so this never joins BaseballDashboard's
@@ -22,14 +23,19 @@ namespace DirtAndDiamonds.UI;
 /// <see cref="CareerManager.TryGetPendingGame"/>), so a stale hour never
 /// rides along silently after a tier change or an offseason day. Playing an
 /// attended game itself stays BaseballDashboard's flow — the Game slider
-/// only reserves the hours, it never launches the at-bat view. Node paths
+/// only reserves the hours, it never launches the at-bat view. HS-4 also adds
+/// two read-only context lines above the blocks: the transport-refund rate
+/// (<see cref="LifeSimManager.AvatarTransportHoursSaved"/>) and the avatar's
+/// GPA/Intelligence/Discipline/Happiness readout
+/// (<see cref="LifeSimManager.TryGetPersonStats"/>) — neither is editable
+/// here, they're context for the plan the player is about to make. Node paths
 /// verified against ScheduleScreen.tscn before this script was written.
 /// </summary>
 public sealed partial class ScheduleScreen : PanelContainer
 {
     [Export]
     public string PlanSetFormat { get; set; } =
-        "Plan set — Sleep {0}h, School {1}h, Practice {2}h, Game {3}h, Work {4}h, Free {5}h.";
+        "Plan set — Sleep {0}h, School {1}h, Practice {2}h, Game {3}h, Work {4}h, {5} {6}h, Free {7}h.";
 
     [Export]
     public string NoPlanText { get; set; } = "No plan set — today runs on autopilot.";
@@ -43,6 +49,17 @@ public sealed partial class ScheduleScreen : PanelContainer
     [Export]
     public string JailLockFormat { get; set; } =
         "In custody — day planning is locked until day {0}. Today runs on autopilot.";
+
+    [Export]
+    public string TransportSavedFormat { get; set; } =
+        "Transport: {0}h/day saved off tonight's free hours (banked {1}h toward tomorrow).";
+
+    [Export]
+    public string NoTransportText { get; set; } = "Transport: none — walking costs the full day.";
+
+    [Export]
+    public string PersonStatsFormat { get; set; } =
+        "GPA {0:F2}  •  Intelligence {1}  Discipline {2}  Happiness {3}";
 
     private Control _schoolRow = null!;
     private Control _gameRow = null!;
@@ -58,13 +75,36 @@ public sealed partial class ScheduleScreen : PanelContainer
     private HSlider _workSlider = null!;
     private Label _workValueLabel = null!;
     private OptionButton _workActivityOption = null!;
+    private HSlider _freeTimeSlider = null!;
+    private Label _freeTimeValueLabel = null!;
+    private OptionButton _freeTimeActivityOption = null!;
 
     private Label _planStatusLabel = null!;
     private Label _lockLabel = null!;
+    private Label _personStatsLabel = null!;
+    private Label _transportLabel = null!;
     private Label _freeHoursLabel = null!;
     private Label _errorLabel = null!;
     private Button _confirmButton = null!;
     private Button _clearButton = null!;
+
+    // HS-4 free-time block (person-layer doc §2.1's Epic 4 activities): the
+    // DaySchedule struct forces FreeTimeActivity back to Idle whenever hours
+    // are 0 (see its constructor), so the option's selected index only ever
+    // matters when the slider is above 0 — no extra gating needed here.
+    private static readonly NpcActionId[] FreeTimeActivities =
+    {
+        NpcActionId.Church, NpcActionId.VideoGames, NpcActionId.Study, NpcActionId.Hangout,
+    };
+
+    private static string FreeTimeActivityLabel(NpcActionId id) => id switch
+    {
+        NpcActionId.Church => "Church",
+        NpcActionId.VideoGames => "Video Games",
+        NpcActionId.Study => "Study",
+        NpcActionId.Hangout => "Hangout",
+        _ => "Idle",
+    };
 
     // Dirty-flag identity for the plan-status label (ui_conventions.md: no
     // per-frame string formatting) — reformatted only when the polled plan
@@ -75,6 +115,23 @@ public sealed partial class ScheduleScreen : PanelContainer
     // Same dirty-flag discipline for the jail-lock label (8c).
     private bool _shownLocked;
     private long _shownLockUntilDay;
+
+    // HS-4: the transport-refund readout — sentinels so the very first
+    // _Process call always formats once (a real saved/carry value is never
+    // negative).
+    private float _shownTransportSaved = -1f;
+    private float _shownTransportCarry = -1f;
+
+    // HS-4: the GPA/person-stat readout — same sentinel discipline.
+    // Intelligence/Discipline/Happiness are displayed rounded to whole points
+    // (the underlying floats carry the HS-4 effect channel's fractional
+    // remainder between days), so the dirty check compares the ROUNDED value,
+    // not the raw float, to avoid reformatting every frame over sub-point churn.
+    private bool _shownHasPersonStats;
+    private double _shownGpa = double.MinValue;
+    private int _shownIntelligence = int.MinValue;
+    private int _shownDiscipline = int.MinValue;
+    private int _shownHappiness = int.MinValue;
 
     // Set each frame by RefreshHoursLabels; combined with the jail lock to
     // drive ConfirmButton's disabled state every frame in _Process (the lock
@@ -97,9 +154,14 @@ public sealed partial class ScheduleScreen : PanelContainer
         _workSlider = GetNode<HSlider>("Layout/WorkRow/WorkSlider");
         _workValueLabel = GetNode<Label>("Layout/WorkRow/WorkValueLabel");
         _workActivityOption = GetNode<OptionButton>("Layout/WorkActivityRow/WorkActivityOption");
+        _freeTimeSlider = GetNode<HSlider>("Layout/FreeTimeRow/FreeTimeSlider");
+        _freeTimeValueLabel = GetNode<Label>("Layout/FreeTimeRow/FreeTimeValueLabel");
+        _freeTimeActivityOption = GetNode<OptionButton>("Layout/FreeTimeActivityRow/FreeTimeActivityOption");
 
         _planStatusLabel = GetNode<Label>("Layout/PlanStatusLabel");
         _lockLabel = GetNode<Label>("Layout/LockLabel");
+        _personStatsLabel = GetNode<Label>("Layout/PersonStatsLabel");
+        _transportLabel = GetNode<Label>("Layout/TransportLabel");
         _freeHoursLabel = GetNode<Label>("Layout/FreeHoursLabel");
         _errorLabel = GetNode<Label>("Layout/ErrorLabel");
         _confirmButton = GetNode<Button>("Layout/ButtonsRow/ConfirmButton");
@@ -110,6 +172,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         _practiceSlider.ValueChanged += _ => RefreshHoursLabels();
         _gameSlider.ValueChanged += _ => RefreshHoursLabels();
         _workSlider.ValueChanged += _ => RefreshHoursLabels();
+        _freeTimeSlider.ValueChanged += _ => RefreshHoursLabels();
         _confirmButton.Pressed += OnConfirmPressed;
         _clearButton.Pressed += OnClearPressed;
 
@@ -163,8 +226,46 @@ public sealed partial class ScheduleScreen : PanelContainer
             _planStatusLabel.Text = hasPlan
                 ? string.Format(
                     PlanSetFormat, plan.SleepHours, plan.SchoolHours, plan.PracticeHours,
-                    plan.GameHours, plan.WorkHours, plan.FreeHours)
+                    plan.GameHours, plan.WorkHours, FreeTimeActivityLabel(plan.FreeTimeActivity),
+                    plan.FreeTimeHours, plan.FreeHours)
                 : NoPlanText;
+        }
+
+        // HS-4 §5.3: the transport-refund readout — daily rate plus the
+        // sub-hour carry banked toward tomorrow's evening (LifeSimManager's
+        // TickScheduledDay tail, one whole refund hour every Nth planned day
+        // for a fractional-rate item like the bike).
+        float transportSaved = lifeSim.AvatarTransportHoursSaved;
+        float transportCarry = lifeSim.TransportRefundCarry;
+        if (transportSaved != _shownTransportSaved || transportCarry != _shownTransportCarry)
+        {
+            _shownTransportSaved = transportSaved;
+            _shownTransportCarry = transportCarry;
+            _transportLabel.Text = transportSaved > 0f
+                ? string.Format(TransportSavedFormat, transportSaved, transportCarry)
+                : NoTransportText;
+        }
+
+        // HS-4 §2.1/§2.2: the first GPA/person-stat readout. No-op (label left
+        // as last shown) for the rare frame before the avatar's person row is
+        // hydrated — SyncLifeSimAvatar runs synchronously on avatar creation,
+        // so this only ever matters for one boot-time frame at most.
+        if (lifeSim.TryGetPersonStats(career.AvatarPlayerId, out PersonStats stats))
+        {
+            int intelligence = (int)MathF.Round(stats.Intelligence);
+            int discipline = (int)MathF.Round(stats.Discipline);
+            int happiness = (int)MathF.Round(stats.Happiness);
+            if (!_shownHasPersonStats || stats.Gpa != _shownGpa || intelligence != _shownIntelligence
+                || discipline != _shownDiscipline || happiness != _shownHappiness)
+            {
+                _shownHasPersonStats = true;
+                _shownGpa = stats.Gpa;
+                _shownIntelligence = intelligence;
+                _shownDiscipline = discipline;
+                _shownHappiness = happiness;
+                _personStatsLabel.Text = string.Format(
+                    PersonStatsFormat, stats.Gpa, intelligence, discipline, happiness);
+            }
         }
 
         // 8c: an arrest locks the whole day plan (jail autopilots) —
@@ -193,7 +294,8 @@ public sealed partial class ScheduleScreen : PanelContainer
     private static bool SchedulesEqual(in DaySchedule a, in DaySchedule b) =>
         a.SleepHours == b.SleepHours && a.SchoolHours == b.SchoolHours
         && a.PracticeHours == b.PracticeHours && a.GameHours == b.GameHours
-        && a.WorkHours == b.WorkHours;
+        && a.WorkHours == b.WorkHours && a.FreeTimeHours == b.FreeTimeHours
+        && a.FreeTimeActivity == b.FreeTimeActivity;
 
     private void RefreshHoursLabels()
     {
@@ -202,9 +304,10 @@ public sealed partial class ScheduleScreen : PanelContainer
         _practiceValueLabel.Text = ((int)_practiceSlider.Value).ToString();
         _gameValueLabel.Text = ((int)_gameSlider.Value).ToString();
         _workValueLabel.Text = ((int)_workSlider.Value).ToString();
+        _freeTimeValueLabel.Text = ((int)_freeTimeSlider.Value).ToString();
 
         int total = (int)_sleepSlider.Value + (int)_schoolSlider.Value + (int)_practiceSlider.Value
-            + (int)_gameSlider.Value + (int)_workSlider.Value;
+            + (int)_gameSlider.Value + (int)_workSlider.Value + (int)_freeTimeSlider.Value;
         int free = DaySchedule.HoursPerDay - total;
         bool overAllocated = free < 0;
         _freeHoursLabel.Text = string.Format(overAllocated ? OverAllocatedFormat : FreeHoursFormat, Math.Abs(free));
@@ -215,7 +318,8 @@ public sealed partial class ScheduleScreen : PanelContainer
     {
         var schedule = new DaySchedule(
             (int)_sleepSlider.Value, (int)_schoolSlider.Value, (int)_practiceSlider.Value,
-            (int)_gameSlider.Value, (int)_workSlider.Value);
+            (int)_gameSlider.Value, (int)_workSlider.Value, (int)_freeTimeSlider.Value,
+            FreeTimeActivities[_freeTimeActivityOption.Selected]);
         var workActivity = (WorkActivity)_workActivityOption.Selected;
         try
         {
