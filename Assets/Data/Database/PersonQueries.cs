@@ -124,6 +124,41 @@ public sealed class PersonQueries
         "SELECT player_id, gpa, intelligence, maturity, happiness, charisma, confidence, reputation, " +
         "social_status, attractiveness, teamwork, morality, discipline, work_ethic FROM Player_Person;";
 
+    // HS-4 atomic per-stat adjusters (the PlayerQueries.AdjustFunds
+    // discipline): deltas clamped in SQL against the columns' own CHECK
+    // ranges, so the Life sim's delta flush composes with any other person
+    // writer (e.g. ItemService's §3.1 in-batch reward) instead of
+    // read-modify-write clobbering it. CONTRACT: the array index IS the
+    // Simulation.Life.PersonStatId ordinal (that folder is Data-free, so the
+    // mapping is mirrored, not referenced — the RelationshipKind precedent);
+    // Tools/SchemaValidator pins each ordinal to its column round-trip.
+    // Column names come from this fixed table, never caller input — building
+    // the SQL by concatenation is injection-safe here by construction.
+    private static readonly string[] AdjustStatColumns =
+    {
+        "intelligence",   // 0 = PersonStatId.Intelligence
+        "maturity",       // 1 = PersonStatId.Maturity
+        "happiness",      // 2 = PersonStatId.Happiness
+        "charisma",       // 3 = PersonStatId.Charisma
+        "confidence",     // 4 = PersonStatId.Confidence
+        "reputation",     // 5 = PersonStatId.Reputation
+        "social_status",  // 6 = PersonStatId.SocialStatus
+        "attractiveness", // 7 = PersonStatId.Attractiveness
+        "teamwork",       // 8 = PersonStatId.Teamwork
+        "morality",       // 9 = PersonStatId.Morality
+        "discipline",     // 10 = PersonStatId.Discipline
+        "work_ethic",     // 11 = PersonStatId.WorkEthic
+    };
+
+    /// <summary>The number of adjustable integer person stats (gpa rides its own REAL adjuster).</summary>
+    public const int AdjustableStatCount = 12;
+
+    private static string AdjustStatSql(string column) =>
+        $"UPDATE Player_Person SET {column} = MAX(0, MIN(100, {column} + @delta)) WHERE player_id = @playerId;";
+
+    private const string SqlAdjustGpa =
+        "UPDATE Player_Person SET gpa = MAX(0.0, MIN(4.0, gpa + @delta)) WHERE player_id = @playerId;";
+
     private const string SqlUpsertFamily =
         "INSERT INTO Family_Background (player_id, wealth_tier, household_income, parent1_id, parent2_id, " +
         "home_wifi, allowance_weekly, strictness) VALUES " +
@@ -177,6 +212,8 @@ public sealed class PersonQueries
     private readonly SqliteCommand _upsertPerson;
     private readonly SqliteCommand _selectPerson;
     private readonly SqliteCommand _selectAllPersons;
+    private readonly SqliteCommand[] _adjustStat;
+    private readonly SqliteCommand _adjustGpa;
     private readonly SqliteCommand _upsertFamily;
     private readonly SqliteCommand _selectFamily;
     private readonly SqliteCommand _upsertPhone;
@@ -220,6 +257,27 @@ public sealed class PersonQueries
         }
 
         _selectAllPersons = db.GetPooledCommand(SqlSelectAllPersons);
+
+        _adjustStat = new SqliteCommand[AdjustStatColumns.Length];
+        for (int i = 0; i < AdjustStatColumns.Length; i++)
+        {
+            SqliteCommand command = db.GetPooledCommand(AdjustStatSql(AdjustStatColumns[i]));
+            if (command.Parameters.Count == 0)
+            {
+                command.Parameters.Add("@delta", SqliteType.Integer);
+                command.Parameters.Add("@playerId", SqliteType.Text);
+                command.Prepare();
+            }
+            _adjustStat[i] = command;
+        }
+
+        _adjustGpa = db.GetPooledCommand(SqlAdjustGpa);
+        if (_adjustGpa.Parameters.Count == 0)
+        {
+            _adjustGpa.Parameters.Add("@delta", SqliteType.Real);
+            _adjustGpa.Parameters.Add("@playerId", SqliteType.Text);
+            _adjustGpa.Prepare();
+        }
 
         _upsertFamily = db.GetPooledCommand(SqlUpsertFamily);
         if (_upsertFamily.Parameters.Count == 0)
@@ -354,6 +412,34 @@ public sealed class PersonQueries
             }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Atomically nudges one integer person stat, clamped into [0,100] in
+    /// SQL. <paramref name="statIndex"/> is the PersonStatId ordinal (see
+    /// AdjustStatColumns' contract comment); out-of-range throws loudly.
+    /// A player with no row (impossible after the v11 boot backfill) is a
+    /// silent zero-row no-op, matching AdjustFunds.
+    /// </summary>
+    public void AdjustStat(string playerId, int statIndex, int delta)
+    {
+        if (statIndex < 0 || statIndex >= AdjustStatColumns.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(statIndex),
+                $"Person stat index {statIndex} is outside the 0–{AdjustStatColumns.Length - 1} PersonStatId range.");
+        }
+        SqliteCommand command = _adjustStat[statIndex];
+        command.Parameters["@delta"].Value = delta;
+        command.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(command);
+    }
+
+    /// <summary>Atomically nudges gpa, clamped into [0.0, 4.0] in SQL — the REAL twin of <see cref="AdjustStat"/>.</summary>
+    public void AdjustGpa(string playerId, double delta)
+    {
+        _adjustGpa.Parameters["@delta"].Value = delta;
+        _adjustGpa.Parameters["@playerId"].Value = playerId;
+        _db.ExecuteNonQuery(_adjustGpa);
     }
 
     public bool TryGet(string playerId, out PersonRow row)

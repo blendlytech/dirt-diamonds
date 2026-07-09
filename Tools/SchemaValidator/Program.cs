@@ -332,6 +332,52 @@ internal static class Program
             person.TryGet(subjectId, out PersonRow after) &&
             Math.Abs(after.Gpa - 3.7) < 1e-9 && after.Morality == 82 && after.SocialStatus == 31);
 
+        // HS-4 atomic adjusters: the PersonStatId ordinal → column contract
+        // is MIRRORED across the Data/Life wall (the Life folder is compiled
+        // Data-free), so this is the check that pins the numbering — every
+        // ordinal must move exactly its contracted column and nothing else.
+        person.TryGet(subjectId, out PersonRow expectedRow);
+        bool ordinalContractHolds = true;
+        for (int s = 0; s < PersonQueries.AdjustableStatCount; s++)
+        {
+            person.AdjustStat(subjectId, s, 3);
+            SetStatByOrdinal(ref expectedRow, s, GetStatByOrdinal(in expectedRow, s) + 3);
+            if (!person.TryGet(subjectId, out PersonRow movedRow) || !PersonRowsEqual(in movedRow, in expectedRow))
+            {
+                ordinalContractHolds = false;
+                break;
+            }
+        }
+        Check("HS-4 AdjustStat: all 12 PersonStatId ordinals move exactly their contracted column (the Life-side enum mirror pinned)",
+            ordinalContractHolds);
+
+        person.AdjustStat(subjectId, 11, 500);  // work_ethic → far past the ceiling
+        person.AdjustStat(subjectId, 9, -500);  // morality → far past the floor
+        person.TryGet(subjectId, out PersonRow clampedRow);
+        Check("HS-4 AdjustStat clamps in SQL to [0,100] — the CHECK constraint never trips",
+            clampedRow.WorkEthic == 100 && clampedRow.Morality == 0);
+
+        person.AdjustGpa(subjectId, -0.25);
+        person.TryGet(subjectId, out PersonRow gpaNudged);
+        bool gpaDeltaExact = Math.Abs(gpaNudged.Gpa - (after.Gpa - 0.25)) < 1e-9;
+        person.AdjustGpa(subjectId, 99.0);
+        person.TryGet(subjectId, out PersonRow gpaCeiling);
+        person.AdjustGpa(subjectId, -99.0);
+        person.TryGet(subjectId, out PersonRow gpaFloor);
+        Check("HS-4 AdjustGpa: REAL delta lands exactly and clamps to [0.0, 4.0] in SQL",
+            gpaDeltaExact && Math.Abs(gpaCeiling.Gpa - 4.0) < 1e-9 && Math.Abs(gpaFloor.Gpa) < 1e-9);
+
+        bool badOrdinalThrows = false;
+        try
+        {
+            person.AdjustStat(subjectId, PersonQueries.AdjustableStatCount, 1);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            badOrdinalThrows = true;
+        }
+        Check("HS-4 AdjustStat rejects an out-of-range ordinal loudly", badOrdinalThrows);
+
         // Family_Background round-trip + parent SET NULL.
         person.UpsertFamily(new FamilyBackgroundRow
         {
@@ -395,6 +441,62 @@ internal static class Program
         queries.Delete(subjectId);
         Check("v11 delete cascades across all five person-layer tables",
             ScalarLong(db, "SELECT (SELECT COUNT(*) FROM Player_Person WHERE player_id = @id) + (SELECT COUNT(*) FROM Family_Background WHERE player_id = @id) + (SELECT COUNT(*) FROM Phone_State WHERE player_id = @id) + (SELECT COUNT(*) FROM Player_Items WHERE player_id = @id) + (SELECT COUNT(*) FROM Child_Development WHERE child_id = @id);", subjectId) == 0);
+    }
+
+    // HS-4: PersonRow accessors keyed by the PersonStatId ordinal (0 =
+    // intelligence … 11 = work_ethic, the Player_Person column order after
+    // gpa) — the harness-side half of the mirrored contract under test.
+    private static int GetStatByOrdinal(in PersonRow row, int ordinal) => ordinal switch
+    {
+        0 => row.Intelligence,
+        1 => row.Maturity,
+        2 => row.Happiness,
+        3 => row.Charisma,
+        4 => row.Confidence,
+        5 => row.Reputation,
+        6 => row.SocialStatus,
+        7 => row.Attractiveness,
+        8 => row.Teamwork,
+        9 => row.Morality,
+        10 => row.Discipline,
+        11 => row.WorkEthic,
+        _ => throw new ArgumentOutOfRangeException(nameof(ordinal)),
+    };
+
+    private static void SetStatByOrdinal(ref PersonRow row, int ordinal, int value)
+    {
+        switch (ordinal)
+        {
+            case 0: row.Intelligence = value; break;
+            case 1: row.Maturity = value; break;
+            case 2: row.Happiness = value; break;
+            case 3: row.Charisma = value; break;
+            case 4: row.Confidence = value; break;
+            case 5: row.Reputation = value; break;
+            case 6: row.SocialStatus = value; break;
+            case 7: row.Attractiveness = value; break;
+            case 8: row.Teamwork = value; break;
+            case 9: row.Morality = value; break;
+            case 10: row.Discipline = value; break;
+            case 11: row.WorkEthic = value; break;
+            default: throw new ArgumentOutOfRangeException(nameof(ordinal));
+        }
+    }
+
+    private static bool PersonRowsEqual(in PersonRow a, in PersonRow b)
+    {
+        if (Math.Abs(a.Gpa - b.Gpa) > 1e-9)
+        {
+            return false;
+        }
+        for (int s = 0; s < PersonQueries.AdjustableStatCount; s++)
+        {
+            if (GetStatByOrdinal(in a, s) != GetStatByOrdinal(in b, s))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static long ScalarLong(DatabaseManager db, string sql, string playerId)

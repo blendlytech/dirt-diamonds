@@ -277,6 +277,59 @@ public readonly struct PlayerEquipmentChangedEvent : IGameEvent
     }
 }
 
+/// <summary>
+/// HS-4: a person-stat delta already committed to Player_Person by an atomic
+/// clamped write inside the publisher's own batch (e.g. ItemService's §3.1
+/// self-buy transport reward), mirrored to the Life sim's in-memory person
+/// stats so the GPA drift's inputs stay in step — the FundsImpulseEvent
+/// pattern exactly. <see cref="Stat"/> is the Simulation.Life.PersonStatId
+/// ordinal (0 = Intelligence … 11 = WorkEthic) carried as a raw int: this
+/// file is compiled by harnesses that do not compile the Life folder
+/// (MonteCarloHarness, CoreLoopHarness), so no Life type may appear here —
+/// the PlayerAbsenceChangedEvent primitives rule. GPA has no impulse — the
+/// §2.2 weekly closed form is its only mover this arc.
+/// </summary>
+public readonly struct PersonStatImpulseEvent : IGameEvent
+{
+    public readonly string PlayerId;
+
+    /// <summary>PersonStatId ordinal, 0–11 in Player_Person column order.</summary>
+    public readonly int Stat;
+
+    /// <summary>Signed; the ACTUAL clamped movement the DB took, not the nominal nudge.</summary>
+    public readonly float Delta;
+
+    public PersonStatImpulseEvent(string playerId, int stat, float delta)
+    {
+        PlayerId = playerId;
+        Stat = stat;
+        Delta = delta;
+    }
+}
+
+/// <summary>
+/// HS-4: published AFTER a Player_Items ownership row has committed —
+/// marketplace purchases (ItemService) and §3.2 parental auto-gifts
+/// (FamilyService) both raise it, the Economy → bus → consumer routing
+/// PlayerEquipmentChangedEvent already uses. GameManager re-projects the
+/// avatar's §5.3 transport-hours refund off it; it is also the ownership
+/// cache-invalidation seam any UI can ride. Payload is primitives only (the
+/// standing CoreEvents rule).
+/// </summary>
+public readonly struct PlayerItemAcquiredEvent : IGameEvent
+{
+    public readonly string PlayerId;
+
+    /// <summary>The items.json catalog id just added to Player_Items.</summary>
+    public readonly string ItemId;
+
+    public PlayerItemAcquiredEvent(string playerId, string itemId)
+    {
+        PlayerId = playerId;
+        ItemId = itemId;
+    }
+}
+
 public readonly struct RivalryChangedEvent : IGameEvent
 {
     /// <summary>Canonical pair order: <see cref="PlayerAId"/> sorts before <see cref="PlayerBId"/> ordinally.</summary>

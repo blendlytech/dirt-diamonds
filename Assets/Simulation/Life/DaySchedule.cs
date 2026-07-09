@@ -18,6 +18,11 @@ namespace DirtAndDiamonds.Simulation.Life;
 ///   Game     — life-side inert; the attended game itself is CareerManager's
 ///              pending-game flow, coordinated by the UI, never by this class.
 ///   Work     — inert hook until Phase 8a's hustles plug a real payout in.
+///   FreeTime — HS-4: a chosen evening activity (Church / VideoGames / Study /
+///              Hangout) so free time is a choice, not just autopilot; the
+///              hours tick under the chosen catalog definition (person-stat
+///              effects included). 0 hours = the pre-HS-4 all-autopilot
+///              evening, bit-identical.
 /// </summary>
 public readonly struct DaySchedule
 {
@@ -28,28 +33,45 @@ public readonly struct DaySchedule
     public readonly int PracticeHours;
     public readonly int GameHours;
     public readonly int WorkHours;
+    public readonly int FreeTimeHours;
 
-    public DaySchedule(int sleepHours, int schoolHours, int practiceHours, int gameHours, int workHours)
+    /// <summary>The activity <see cref="FreeTimeHours"/> ticks under; Idle iff the block is empty.</summary>
+    public readonly NpcActionId FreeTimeActivity;
+
+    public DaySchedule(
+        int sleepHours, int schoolHours, int practiceHours, int gameHours, int workHours,
+        int freeTimeHours = 0, NpcActionId freeTimeActivity = NpcActionId.Idle)
     {
-        if (sleepHours < 0 || schoolHours < 0 || practiceHours < 0 || gameHours < 0 || workHours < 0)
+        if (sleepHours < 0 || schoolHours < 0 || practiceHours < 0 || gameHours < 0 || workHours < 0
+            || freeTimeHours < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(sleepHours), "Schedule block hours cannot be negative.");
         }
-        int total = sleepHours + schoolHours + practiceHours + gameHours + workHours;
+        int total = sleepHours + schoolHours + practiceHours + gameHours + workHours + freeTimeHours;
         if (total > HoursPerDay)
         {
             throw new ArgumentException(
                 $"Schedule allocates {total}h — a day has only {HoursPerDay}.");
+        }
+        if (freeTimeHours > 0 && !ActionCatalog.IsFreeTimeActivity(freeTimeActivity))
+        {
+            throw new ArgumentException(
+                $"'{freeTimeActivity}' is not a free-time activity — the free-time block takes Church/VideoGames/Study/Hangout only.");
         }
         SleepHours = sleepHours;
         SchoolHours = schoolHours;
         PracticeHours = practiceHours;
         GameHours = gameHours;
         WorkHours = workHours;
+        FreeTimeHours = freeTimeHours;
+        // Idle when empty, whatever the caller passed — an unused selection
+        // must never make two otherwise-identical plans compare different.
+        FreeTimeActivity = freeTimeHours > 0 ? freeTimeActivity : NpcActionId.Idle;
     }
 
-    public int AllocatedHours => SleepHours + SchoolHours + PracticeHours + GameHours + WorkHours;
+    public int AllocatedHours =>
+        SleepHours + SchoolHours + PracticeHours + GameHours + WorkHours + FreeTimeHours;
 
     /// <summary>Unallocated hours, ticked by the standard autopilot after the blocks run.</summary>
     public int FreeHours => HoursPerDay - AllocatedHours;

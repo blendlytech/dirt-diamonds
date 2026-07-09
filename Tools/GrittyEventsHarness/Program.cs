@@ -1889,6 +1889,48 @@ internal static class Program
             shop.TryPurchase("shopper", "fake_chain", day: 3, out _)
             && !persons.TryGet("shopper", out _));
 
+        // --- HS-4 publisher side: acquired events + person-stat mirror -----
+        // The subscriber half (LifeSimManager's mirror) is NeedsDecayHarness
+        // territory; this pins that the Economy services actually PUBLISH,
+        // post-commit, with the actual clamped deltas and the contracted
+        // PersonStatId ordinals.
+        var acquired = new List<PlayerItemAcquiredEvent>();
+        var statImpulses = new List<PersonStatImpulseEvent>();
+        bus.Subscribe<PlayerItemAcquiredEvent>(acquired.Add);
+        bus.Subscribe<PersonStatImpulseEvent>(statImpulses.Add);
+        bus.DispatchPending(); // drain everything queued before the collectors attached
+        acquired.Clear();
+        statImpulses.Clear();
+
+        AddPerson("mover", null, 2000);
+        shop.TryPurchase("mover", "skateboard", day: 5, out _);
+        bus.DispatchPending();
+        Check("HS-4 publish: a purchase raises PlayerItemAcquiredEvent post-commit (the §5.3 transport re-projection seam)",
+            acquired.Count == 1 && acquired[0].PlayerId == "mover" && acquired[0].ItemId == "skateboard");
+        Check("HS-4 publish: the §3.1 reward mirrors as three person-stat impulses (ordinals 1/10/11 = maturity/discipline/work_ethic, +5 each)",
+            statImpulses.Count == 3
+            && statImpulses.All(i => i.PlayerId == "mover" && Math.Abs(i.Delta - 5f) < 1e-6)
+            && statImpulses.Select(i => i.Stat).OrderBy(s => s).SequenceEqual(new[] { 1, 10, 11 }));
+
+        acquired.Clear();
+        statImpulses.Clear();
+        shop.TryPurchase("mover", "fake_chain", day: 5, out _);
+        bus.DispatchPending();
+        Check("HS-4 publish: a non-transport purchase raises the acquired event but zero stat impulses",
+            acquired.Count == 1 && acquired[0].ItemId == "fake_chain" && statImpulses.Count == 0);
+
+        AddPerson("kid2", 900, 100);
+        persons.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = "kid2", WealthTier = 3, HouseholdIncome = 135_000,
+            Parent1Id = null, Parent2Id = null, HomeWifi = true, AllowanceWeekly = 60, Strictness = 50,
+        });
+        acquired.Clear();
+        family.ProcessDay("kid2", 7);
+        bus.DispatchPending();
+        Check("HS-4 publish: a §3.2 parental gift raises PlayerItemAcquiredEvent too (both Player_Items writers covered)",
+            acquired.Count == 1 && acquired[0].PlayerId == "kid2" && acquired[0].ItemId == "used_sedan");
+
         // --- §4.3 the narrative-never-gates invariant ----------------------
         // An avatar with a metered phone at literally 0 minutes: the event
         // still fires, still parks as a pending choice, and resolving it

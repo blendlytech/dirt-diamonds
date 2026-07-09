@@ -79,6 +79,7 @@ public sealed class FamilyService
 
         bool parentalSupport = IsHighSchooler(avatarId);
         double allowancePaid = 0.0;
+        string? giftedItemId = null;
 
         _db.BeginBatch();
         try
@@ -93,7 +94,7 @@ public sealed class FamilyService
                 }
                 if (family.WealthTier >= ParentalAutobuyMinWealthTier)
                 {
-                    RunParentalAutobuy(avatarId, family.WealthTier, day);
+                    giftedItemId = RunParentalAutobuy(avatarId, family.WealthTier, day);
                 }
             }
             _db.CommitBatch();
@@ -110,6 +111,12 @@ public sealed class FamilyService
             // catches up — the ItemService/EquipmentService ordering, kept.
             _bus.Publish(new FundsImpulseEvent(avatarId, allowancePaid));
         }
+        if (giftedItemId is not null)
+        {
+            // HS-4: a gifted car must re-project the §5.3 transport refund
+            // (and invalidate any ownership cache) exactly like a purchase.
+            _bus.Publish(new PlayerItemAcquiredEvent(avatarId, giftedItemId));
+        }
     }
 
     /// <summary>
@@ -119,8 +126,10 @@ public sealed class FamilyService
     /// same-category item at or above the candidate's price counts as "owning
     /// something at that level", so tier-4 parents never gift a bike to a kid
     /// with a car. One item per tick — the weekly drip, not a shopping spree.
+    /// Returns the gifted item id (for the caller's post-commit publish), or
+    /// null when nothing qualified.
     /// </summary>
-    private void RunParentalAutobuy(string avatarId, int wealthTier, long day)
+    private string? RunParentalAutobuy(string avatarId, int wealthTier, long day)
     {
         _persons.LoadItemsFor(avatarId, _ownedScratch);
 
@@ -139,7 +148,7 @@ public sealed class FamilyService
         }
         if (pick is null)
         {
-            return;
+            return null;
         }
 
         _persons.AddItem(new PlayerItemRow
@@ -149,6 +158,7 @@ public sealed class FamilyService
             Category = pick.Category,
             AcquiredDay = (int)day,
         });
+        return pick.Id;
     }
 
     private bool IsOwnedOrCovered(ItemDefinition candidate)

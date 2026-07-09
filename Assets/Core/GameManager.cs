@@ -123,6 +123,13 @@ public sealed partial class GameManager : Node
     private readonly List<StressRow> _stressScratch = new();
     private readonly List<RelationshipSeed> _relationshipScratch = new();
 
+    // HS-4 person-layer bridge scratch: the settle list holds what the flush
+    // batch actually applied per hydrated person (only the avatar this arc)
+    // so LifeSim is settled strictly AFTER the commit, the funds discipline;
+    // the items list backs the §5.3 transport re-projection reads.
+    private readonly List<(string PlayerId, PersonStats Applied)> _personSettleScratch = new();
+    private readonly List<PlayerItemRow> _avatarItemsScratch = new();
+
     // Phase 6 rivalry transport: subscribes to RivalryChangedEvent and feeds
     // both baseball sims. Owned here because it exists exactly as long as the
     // bus does; the sims only hold the optional reference.
@@ -431,6 +438,15 @@ public sealed partial class GameManager : Node
         Family = new FamilyService(_database, Players, Persons, Baseball, Items, Phone, Events);
         Events.Subscribe<DayAdvancedEvent>(OnFamilyDayAdvanced);
 
+        // HS-4 §5.3: ownership changes re-project the avatar's transport
+        // refund; the boot-time avatar sync above ran before the catalog
+        // existed, so a loaded avatar gets the projection topped up here.
+        Events.Subscribe<PlayerItemAcquiredEvent>(OnItemAcquired);
+        if (avatarLoaded)
+        {
+            RefreshAvatarTransport(Career.AvatarPlayerId);
+        }
+
         // Phase 7: Gritty Events. Content loads from every batch file in the
         // Content folder (a new Sonnet batch is a dropped-in file); the applier
         // subscribes on the main pump; the dispatcher polls from its own
@@ -614,6 +630,64 @@ public sealed partial class GameManager : Node
         LifeSim.AvatarSchoolAvailable =
             Baseball.TryGetTeamTier(teamId, out LeagueTier tier)
             && tier is LeagueTier.HS or LeagueTier.College;
+
+        // HS-4: hydrate the avatar's person stats (the v11 backfill
+        // guarantees a row for every player, so the miss branch only covers
+        // a hand-built scratch save). PersonRow (Data) is projected into the
+        // Life-side PersonStats here at the persistence boundary, the exact
+        // RelationshipRow→RelationshipSeed pattern.
+        if (Persons.TryGet(avatarId, out PersonRow personRow))
+        {
+            LifeSim.SetPersonStats(avatarId, ToPersonStats(in personRow));
+        }
+        // §5.3 transport projection — guarded because the boot-time sync runs
+        // before the item catalog block loads; boot tops it up right after.
+        if (Items is not null)
+        {
+            RefreshAvatarTransport(avatarId);
+        }
+    }
+
+    private static PersonStats ToPersonStats(in PersonRow row) => new()
+    {
+        Gpa = row.Gpa,
+        Intelligence = row.Intelligence,
+        Maturity = row.Maturity,
+        Happiness = row.Happiness,
+        Charisma = row.Charisma,
+        Confidence = row.Confidence,
+        Reputation = row.Reputation,
+        SocialStatus = row.SocialStatus,
+        Attractiveness = row.Attractiveness,
+        Teamwork = row.Teamwork,
+        Morality = row.Morality,
+        Discipline = row.Discipline,
+        WorkEthic = row.WorkEthic,
+    };
+
+    /// <summary>
+    /// HS-4 §5.3: projects the avatar's best owned Transport item into the
+    /// Life sim's schedule refund — computed at read from the catalog, never
+    /// persisted (the ItemEffects discipline). Re-run whenever ownership
+    /// changes (<see cref="OnItemAcquired"/>) and on every avatar sync.
+    /// </summary>
+    private void RefreshAvatarTransport(string avatarId)
+    {
+        Persons.LoadItemsFor(avatarId, _avatarItemsScratch);
+        LifeSim.AvatarTransportHoursSaved =
+            (float)ItemEffects.BestTransportHoursSaved(_avatarItemsScratch, Items);
+    }
+
+    /// <summary>
+    /// HS-4: a Player_Items row landed (marketplace buy or §3.2 parental
+    /// gift) — re-project the transport refund when it's the avatar's.
+    /// </summary>
+    private void OnItemAcquired(PlayerItemAcquiredEvent e)
+    {
+        if (Career.HasAvatar && string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal))
+        {
+            RefreshAvatarTransport(e.PlayerId);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -783,6 +857,7 @@ public sealed partial class GameManager : Node
         // One batch for the whole life-sim flush (both BulkUpserts join an
         // already-open batch) — still its own transaction, never the calendar
         // tick's (database_rules.md).
+        _personSettleScratch.Clear();
         Database.BeginBatch();
         try
         {
@@ -795,6 +870,43 @@ public sealed partial class GameManager : Node
                 {
                     Players.AdjustFunds(ids[i], fundsDelta);
                 }
+
+                // HS-4: person-stat deltas ride the same atomic-delta
+                // discipline funds do (AdjustStat/AdjustGpa clamp in SQL, so
+                // this flush composes with any in-batch person writer like
+                // the §3.1 reward instead of clobbering it). The INTEGER
+                // columns take only each delta's accumulated whole part —
+                // the fraction stays banked in LifeSim until it fills a
+                // point (SettlePersonDeltas' contract). False for every
+                // never-hydrated NPC, so this adds no work to the 800-row
+                // background population.
+                if (!LifeSim.TryPeekPersonDeltas(ids[i], out PersonStats personDeltas))
+                {
+                    continue;
+                }
+                PersonStats applied = default;
+                bool anyApplied = false;
+                for (int s = 0; s < PersonStats.StatCount; s++)
+                {
+                    var stat = (PersonStatId)s;
+                    int whole = (int)personDeltas.Get(stat);
+                    if (whole != 0)
+                    {
+                        Persons.AdjustStat(ids[i], s, whole);
+                        applied.Set(stat, whole);
+                        anyApplied = true;
+                    }
+                }
+                if (personDeltas.Gpa != 0.0)
+                {
+                    Persons.AdjustGpa(ids[i], personDeltas.Gpa);
+                    applied.Gpa = personDeltas.Gpa;
+                    anyApplied = true;
+                }
+                if (anyApplied)
+                {
+                    _personSettleScratch.Add((ids[i], applied));
+                }
             }
             Database.CommitBatch();
         }
@@ -806,6 +918,11 @@ public sealed partial class GameManager : Node
         for (int i = 0; i < ids.Count; i++)
         {
             LifeSim.ClearFundsDelta(ids[i]);
+        }
+        for (int i = 0; i < _personSettleScratch.Count; i++)
+        {
+            (string playerId, PersonStats applied) = _personSettleScratch[i];
+            LifeSim.SettlePersonDeltas(playerId, in applied);
         }
     }
 

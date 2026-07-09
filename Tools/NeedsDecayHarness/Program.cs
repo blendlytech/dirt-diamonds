@@ -66,6 +66,7 @@ internal static class Program
         RunLifeSimChecks();
         RunDailyClockChecks();
         RunSurvivalEconomyChecks();
+        RunPersonLayerChecks();
         RunRelationshipGraphChecks();
 
         int failed = 0;
@@ -933,6 +934,314 @@ internal static class Program
         bool drained = graph.CollectDirty(dirty) == 0;
         Check("CollectDirty: Seed is clean, mutations coalesce per pair, second call empty",
             seedClean && mutationsCollected && drained);
+    }
+
+    // ------------------------------------------------------------------
+    // HS-4 person layer (high_school_person_layer.md §2.2/§2.3/§5.3): the
+    // GPA closed form and its end-to-end drive, happiness reversion, the
+    // person-stat effect channel, the delta/settle bridge bookkeeping, and
+    // the transport-hours refund. The §9.1 acceptance hook's own suite.
+    // ------------------------------------------------------------------
+
+    private static void RunPersonLayerChecks()
+    {
+        Console.WriteLine("--- HS-4 person layer: GPA drift, happiness reversion, effect channel, transport refund ---\n");
+
+        const string AvatarId = "hs-avatar";
+        const string BystanderId = "hs-bystander";
+        const double SeedFunds = 50000.0;
+
+        // --- §2.2 closed form, pure ---
+        Check("GPA closed form: the §2.2 neutral identity is EXACT (full attendance, 50/50, no study, no partner, no stress → 0.0)",
+            PersonDrift.GpaWeeklyDelta(1f, 50f, 50f, 0f, 0f) == 0.0);
+        Check("GPA closed form: full truancy costs exactly GpaBasePerWeek, regardless of aptitude (you can't ace classes you skip)",
+            PersonDrift.GpaWeeklyDelta(0f, 50f, 50f, 0f, 0f) == -PersonDrift.GpaBasePerWeek
+            && PersonDrift.GpaWeeklyDelta(0f, 100f, 100f, 0f, 0f) == -PersonDrift.GpaBasePerWeek);
+        Check("GPA closed form: 100/100 aptitude at full attendance earns exactly +GpaBasePerWeek (symmetric with truancy)",
+            PersonDrift.GpaWeeklyDelta(1f, 100f, 100f, 0f, 0f) == PersonDrift.GpaBasePerWeek);
+        // Hand-computed week (the doc's §2.2 fixture mandate): int 70, disc 60,
+        // attendance 24/30 = 0.8, 6h study, stress 25.
+        //   aptitude = (0.5·20 + 0.5·10)/50 = 0.3
+        //   Δ = 0.15·(0.8·1.3 − 1) + 0.01·6 − 0.10·0.25 = 0.006 + 0.06 − 0.025 = 0.041
+        double handComputed = PersonDrift.GpaWeeklyDelta(0.8f, 70f, 60f, 6f, 25f);
+        Check("GPA closed form: hand-computed mixed week lands on 0.041 (int 70 / disc 60 / 80% attendance / 6h study / stress 25)",
+            Math.Abs(handComputed - 0.041) < 1e-6, $"Δ = {handComputed:F9}");
+        // §2.3 reversion step: zero at the setpoint, proportional off it.
+        Check("happiness reversion step: 0 at the setpoint, ~-4 for a +20 spike (rate 0.2/day)",
+            PersonDrift.HappinessDailyStep(50f, 50f) == 0f
+            && Math.Abs(PersonDrift.HappinessDailyStep(70f, 50f) + 4f) < 1e-4);
+
+        // --- DaySchedule free-time block validation ---
+        Check("DaySchedule free-time block: negative hours / >24h totals / non-free-time activity all throw; 0 hours normalizes the activity to Idle",
+            Throws(() => new DaySchedule(8, 0, 0, 0, 0, -1, NpcActionId.Study))
+            && Throws(() => new DaySchedule(10, 8, 4, 0, 0, 3, NpcActionId.Study)) // 25h
+            && Throws(() => new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.LegalWork))
+            && Throws(() => new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.Idle))
+            && new DaySchedule(8, 0, 0, 0, 0, 0, NpcActionId.Study).FreeTimeActivity == NpcActionId.Idle);
+        Check("free-time catalog: exactly Church/VideoGames/Study/Hangout qualify, and none is autopilot-selectable (absent from All)",
+            ActionCatalog.IsFreeTimeActivity(NpcActionId.Church)
+            && ActionCatalog.IsFreeTimeActivity(NpcActionId.VideoGames)
+            && ActionCatalog.IsFreeTimeActivity(NpcActionId.Study)
+            && ActionCatalog.IsFreeTimeActivity(NpcActionId.Hangout)
+            && !ActionCatalog.IsFreeTimeActivity(NpcActionId.School)
+            && Array.TrueForAll(ActionCatalog.All, def => !ActionCatalog.IsFreeTimeActivity(def.Id)));
+
+        // --- §9.1 neutral bit-identity: hydrating the person layer (neutral
+        // row, no free-time block, no transport) must change NOTHING about
+        // needs/stress/funds over a mixed planned+autopilot fortnight. ---
+        (LifeSimManager plain, EventBus plainBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        (LifeSimManager hydrated, EventBus hydratedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        plain.AvatarSchoolAvailable = true;
+        hydrated.AvatarSchoolAvailable = true;
+        hydrated.SetPersonStats(AvatarId, PersonStats.Neutral());
+        bool neutralIdentity = true;
+        for (int day = 1; day <= 14; day++)
+        {
+            if (day <= 7)
+            {
+                plain.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0));
+                hydrated.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0));
+            }
+            plainBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            plainBus.DispatchPending();
+            hydratedBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            hydratedBus.DispatchPending();
+            neutralIdentity &= PersonStateIdentical(plain, hydrated, AvatarId)
+                && PersonStateIdentical(plain, hydrated, BystanderId);
+        }
+        Check("§9.1 neutral bit-identity: a neutral-hydrated avatar's needs/stress/funds trace matches an unhydrated twin bit-for-bit over 14 mixed days",
+            neutralIdentity);
+        hydrated.TryGetPersonStats(AvatarId, out PersonStats afterFortnight);
+        hydrated.TryPeekPersonDeltas(AvatarId, out PersonStats fortnightDeltas);
+        Check("§2.2 neutral identity end-to-end: two neutral weeks (planned full attendance + pure autopilot) hold GPA at exactly 2.5, zero pending delta",
+            afterFortnight.Gpa == 2.5 && fortnightDeltas.Gpa == 0.0
+            && afterFortnight.Happiness == 50f && fortnightDeltas.Happiness == 0f,
+            $"gpa {afterFortnight.Gpa:F9}, Δgpa {fortnightDeltas.Gpa:E2}");
+        Check("unhydrated twin exposes no person surface (TryGet/TryPeek false — NPCs cost nothing)",
+            !plain.TryGetPersonStats(AvatarId, out _) && !plain.TryPeekPersonDeltas(AvatarId, out _)
+            && !hydrated.TryPeekPersonDeltas(BystanderId, out _));
+
+        // --- Truancy end-to-end: a week of deliberate 0-school plans ---
+        (LifeSimManager truant, EventBus truantBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        truant.AvatarSchoolAvailable = true;
+        truant.SetPersonStats(AvatarId, PersonStats.Neutral());
+        for (int day = 1; day <= 7; day++)
+        {
+            truant.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+            truantBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            truantBus.DispatchPending();
+        }
+        truant.TryGetPersonStats(AvatarId, out PersonStats truantStats);
+        double truantExpected = 2.5 + PersonDrift.GpaWeeklyDelta(0f, 50f, 50f, 0f, 0f);
+        Check("truancy end-to-end: seven planned 0-school days cost exactly one GpaBasePerWeek (planning 0 school = deliberate truancy; autopilot days would have attended)",
+            truantStats.Gpa == truantExpected, $"gpa {truantStats.Gpa:F4} vs {truantExpected:F4}");
+
+        // --- Study payoff end-to-end: full attendance + 10h of Study evenings ---
+        (LifeSimManager scholar, EventBus scholarBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        scholar.AvatarSchoolAvailable = true;
+        scholar.SetPersonStats(AvatarId, PersonStats.Neutral());
+        for (int day = 1; day <= 7; day++)
+        {
+            if (day <= 5)
+            {
+                scholar.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0, 2, NpcActionId.Study));
+            }
+            scholarBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            scholarBus.DispatchPending();
+        }
+        scholar.TryGetPersonStats(AvatarId, out PersonStats scholarStats);
+        double scholarExpected = 2.5 + PersonDrift.GpaWeeklyDelta(1f, 50f, 50f, 10f, 0f);
+        Check("study end-to-end: 5 school days + 2 autopilot days + 10 Study hours land exactly the StudyHoursTerm (+0.1)",
+            scholarStats.Gpa == scholarExpected, $"gpa {scholarStats.Gpa:F4} vs {scholarExpected:F4}");
+        Check("study's happiness cost moved the stat (the §2.1 grind trade-off)", scholarStats.Happiness < 50f,
+            $"happiness {scholarStats.Happiness:F2}");
+
+        // --- Aptitude drift + the school gate + stress drag ---
+        var gifted = PersonStats.Neutral();
+        gifted.Intelligence = 100f;
+        gifted.Discipline = 100f;
+        (LifeSimManager honors, EventBus honorsBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        honors.AvatarSchoolAvailable = true;
+        honors.SetPersonStats(AvatarId, gifted);
+        (LifeSimManager pro, EventBus proBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        pro.AvatarSchoolAvailable = false; // post-graduation tier — GPA freezes
+        var struggling = PersonStats.Neutral();
+        struggling.Intelligence = 0f;
+        struggling.Discipline = 0f;
+        pro.SetPersonStats(AvatarId, struggling);
+        (LifeSimManager frayed, EventBus frayedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 80f, markAvatar: true);
+        frayed.AvatarSchoolAvailable = true;
+        frayed.SetPersonStats(AvatarId, PersonStats.Neutral());
+        for (int day = 1; day <= 7; day++)
+        {
+            honorsBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            honorsBus.DispatchPending();
+            proBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            proBus.DispatchPending();
+            if (day == 7)
+            {
+                // The seed-80 arc fully relaxes/relieves away in ~2 days
+                // (passive 9.6/day + crisis relief), so re-fray right before
+                // the weekly tick — the point under test is that the drag
+                // samples whatever the scalar IS at tick time.
+                frayed.SetStress(AvatarId, 80f);
+            }
+            frayedBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            frayedBus.DispatchPending();
+        }
+        honors.TryGetPersonStats(AvatarId, out PersonStats honorsStats);
+        Check("aptitude drift: a 100/100 autopilot week earns exactly +GpaBasePerWeek",
+            honorsStats.Gpa == 2.5 + PersonDrift.GpaBasePerWeek, $"gpa {honorsStats.Gpa:F4}");
+        pro.TryGetPersonStats(AvatarId, out PersonStats proStats);
+        pro.TryPeekPersonDeltas(AvatarId, out PersonStats proDeltas);
+        Check("school gate: with AvatarSchoolAvailable false (pro tiers) GPA freezes — even for a 0/0 aptitude",
+            proStats.Gpa == 2.5 && proDeltas.Gpa == 0.0, $"gpa {proStats.Gpa:F4}");
+        frayed.TryGetPersonStats(AvatarId, out PersonStats frayedStats);
+        frayed.TryGetStress(AvatarId, out float frayedEndStress);
+        double frayedExpected = 2.5 + PersonDrift.GpaWeeklyDelta(1f, 50f, 50f, 0f, frayedEndStress);
+        Check("stress drag: sampled AT the weekly tick (post-relaxation), full-attendance neutral week loses exactly the drag term",
+            frayedStats.Gpa == frayedExpected && frayedStats.Gpa < 2.5,
+            $"gpa {frayedStats.Gpa:F6}, end stress {frayedEndStress:F1}");
+
+        // --- Effect channel: a VideoGames evening, ops replicated exactly ---
+        (LifeSimManager gamer, EventBus gamerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        gamer.SetPersonStats(AvatarId, PersonStats.Neutral());
+        gamer.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.VideoGames));
+        gamerBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        gamerBus.DispatchPending();
+        float expHappiness = 50f, expDiscipline = 50f, expUnflushedH = 0f, expUnflushedD = 0f;
+        for (int h = 0; h < 2; h++)
+        {
+            float movedH = Math.Clamp(expHappiness + 1.0f, 0f, 100f) - expHappiness;
+            expHappiness += movedH;
+            expUnflushedH += movedH;
+            float movedD = Math.Clamp(expDiscipline - 0.2f, 0f, 100f) - expDiscipline;
+            expDiscipline += movedD;
+            expUnflushedD += movedD;
+        }
+        float reversion = PersonDrift.HappinessDailyStep(expHappiness, 50f);
+        float movedRev = Math.Clamp(expHappiness + reversion, 0f, 100f) - expHappiness;
+        expHappiness += movedRev;
+        expUnflushedH += movedRev;
+        gamer.TryGetPersonStats(AvatarId, out PersonStats gamerStats);
+        gamer.TryPeekPersonDeltas(AvatarId, out PersonStats gamerDeltas);
+        Check("effect channel: a 2h VideoGames evening applies +1.0 happiness/-0.2 discipline per hour, then the daily reversion — op-for-op exact",
+            gamerStats.Happiness == expHappiness && gamerStats.Discipline == expDiscipline
+            && gamerDeltas.Happiness == expUnflushedH && gamerDeltas.Discipline == expUnflushedD,
+            $"happiness {gamerStats.Happiness:F4} (Δ{gamerDeltas.Happiness:F4}), discipline {gamerStats.Discipline:F4}");
+
+        // --- Settle bookkeeping: whole parts persist, fractions carry ---
+        var applied = default(PersonStats);
+        applied.Happiness = (int)gamerDeltas.Happiness; // what the bridge would persist
+        gamer.SettlePersonDeltas(AvatarId, in applied);
+        gamer.TryPeekPersonDeltas(AvatarId, out PersonStats settled);
+        Check("settle bookkeeping: persisting the whole part leaves exactly the fraction banked (nothing rounds away)",
+            settled.Happiness == expUnflushedH - (int)expUnflushedH
+            && settled.Discipline == expUnflushedD,
+            $"happiness remainder {settled.Happiness:F4}, discipline untouched {settled.Discipline:F4}");
+
+        // --- Clamp bookkeeping at the ceiling ---
+        var nearCap = PersonStats.Neutral();
+        nearCap.Happiness = 99.5f;
+        (LifeSimManager capped, EventBus cappedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        capped.SetPersonStats(AvatarId, nearCap);
+        capped.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.VideoGames));
+        cappedBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        cappedBus.DispatchPending();
+        capped.TryGetPersonStats(AvatarId, out PersonStats cappedStats);
+        capped.TryPeekPersonDeltas(AvatarId, out PersonStats cappedDeltas);
+        float expCapH = 99.5f, expCapUnflushed = 0f;
+        for (int h = 0; h < 2; h++)
+        {
+            float moved = Math.Clamp(expCapH + 1.0f, 0f, 100f) - expCapH;
+            expCapH += moved;
+            expCapUnflushed += moved;
+        }
+        float capReversion = Math.Clamp(expCapH + PersonDrift.HappinessDailyStep(expCapH, 99.5f), 0f, 100f) - expCapH;
+        expCapH += capReversion;
+        expCapUnflushed += capReversion;
+        Check("clamp bookkeeping: a nudge into the 100 ceiling accrues only the CLAMPED movement (setpoint = the hydrated 99.5, so reversion pulls back down)",
+            cappedStats.Happiness == expCapH && cappedDeltas.Happiness == expCapUnflushed
+            && cappedStats.Happiness <= 100f && cappedDeltas.Happiness < 1f,
+            $"happiness {cappedStats.Happiness:F4}, Δ {cappedDeltas.Happiness:F4}");
+
+        // --- Hangout: charisma channel + the Social restore ---
+        (LifeSimManager social, EventBus socialBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        social.SetPersonStats(AvatarId, PersonStats.Neutral());
+        social.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0, 3, NpcActionId.Hangout));
+        socialBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        socialBus.DispatchPending();
+        social.TryGetPersonStats(AvatarId, out PersonStats socialStats);
+        Check("Hangout: 3 free hours moved charisma up (+0.3/h) and restored Social at the block rate",
+            socialStats.Charisma > 50f && Math.Abs(socialStats.Charisma - 50.9f) < 1e-3,
+            $"charisma {socialStats.Charisma:F4}");
+        (LifeSimManager pious, EventBus piousBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        pious.SetPersonStats(AvatarId, PersonStats.Neutral());
+        pious.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.Church));
+        piousBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        piousBus.DispatchPending();
+        pious.TryGetPersonStats(AvatarId, out PersonStats piousStats);
+        Check("Church: 2 free hours moved morality (+0.4/h)",
+            Math.Abs(piousStats.Morality - 50.8f) < 1e-3, $"morality {piousStats.Morality:F4}");
+
+        // --- Person-stat impulse: mirrors the DB, never re-queues a flush ---
+        (LifeSimManager mirrored, EventBus mirroredBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        mirrored.SetPersonStats(AvatarId, PersonStats.Neutral());
+        mirroredBus.Publish(new PersonStatImpulseEvent(AvatarId, (int)PersonStatId.Discipline, 5f));
+        mirroredBus.Publish(new PersonStatImpulseEvent(AvatarId, 99, 5f)); // out-of-range ordinal: ignored
+        mirroredBus.Publish(new PersonStatImpulseEvent(BystanderId, (int)PersonStatId.Discipline, 5f)); // unhydrated: ignored
+        mirroredBus.DispatchPending();
+        mirrored.TryGetPersonStats(AvatarId, out PersonStats mirroredStats);
+        mirrored.TryPeekPersonDeltas(AvatarId, out PersonStats mirroredDeltas);
+        Check("person-stat impulse: moves the in-memory CURRENT value only (the DB already moved — unflushed stays 0); junk ordinals and unhydrated targets are ignored",
+            mirroredStats.Discipline == 55f && mirroredDeltas.Discipline == 0f);
+
+        // --- §5.3 transport refund ---
+        (LifeSimManager walker, EventBus walkerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        (LifeSimManager driver, EventBus driverBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        driver.AvatarTransportHoursSaved = 1.0f;
+        walker.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        driver.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        walkerBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        walkerBus.DispatchPending();
+        driverBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        driverBus.DispatchPending();
+        Check("transport refund (car, 1.0): a planned day gains its extra evening hour immediately — traces diverge day 1, carry stays 0",
+            !PersonStateIdentical(walker, driver, AvatarId) && driver.TransportRefundCarry == 0f);
+
+        (LifeSimManager strider, EventBus striderBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        (LifeSimManager cyclist, EventBus cyclistBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        cyclist.AvatarTransportHoursSaved = 0.5f;
+        strider.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        cyclist.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        striderBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        striderBus.DispatchPending();
+        cyclistBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        cyclistBus.DispatchPending();
+        bool bikeDayOneIdentical = PersonStateIdentical(strider, cyclist, AvatarId);
+        float bikeCarryAfterDayOne = cyclist.TransportRefundCarry;
+        strider.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        cyclist.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        striderBus.Publish(new DayAdvancedEvent(2, 2026, 2));
+        striderBus.DispatchPending();
+        cyclistBus.Publish(new DayAdvancedEvent(2, 2026, 2));
+        cyclistBus.DispatchPending();
+        Check("transport refund (bike, 0.5): fraction banks — day 1 identical (carry 0.5), day 2 pays the whole hour (carry back to 0)",
+            bikeDayOneIdentical && bikeCarryAfterDayOne == 0.5f
+            && !PersonStateIdentical(strider, cyclist, AvatarId) && cyclist.TransportRefundCarry == 0f,
+            $"carry after day 1 {bikeCarryAfterDayOne:F2}, after day 2 {cyclist.TransportRefundCarry:F2}");
+
+        // Unplanned days never accrue or pay the refund (no schedule to
+        // refund) — an autopilot day stays the pre-HS-4 24 hours exactly.
+        (LifeSimManager idleWalker, EventBus idleWalkerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        (LifeSimManager idleDriver, EventBus idleDriverBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        idleDriver.AvatarTransportHoursSaved = 1.0f;
+        idleWalkerBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        idleWalkerBus.DispatchPending();
+        idleDriverBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        idleDriverBus.DispatchPending();
+        Check("transport refund: an UNPLANNED day is refund-inert (bit-identical to a no-transport twin, no carry accrual)",
+            PersonStateIdentical(idleWalker, idleDriver, AvatarId) && idleDriver.TransportRefundCarry == 0f);
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

@@ -38,6 +38,45 @@ public sealed class LifeSimManager
         // AdjustFunds writer gritty events use, keeping Players.funds
         // single-writer-clean end to end (see ApplyFundsDelta below).
         public double UnflushedFundsDelta;
+
+        // HS-4: hydrated person-layer state, null for everyone the bridge
+        // never hydrates (in practice: every NPC — only the avatar's person
+        // stats have movers this arc). Null keeps the NPC hot path exactly
+        // the pre-HS-4 code, allocation and branch-wise.
+        public PersonRuntime? Person;
+    }
+
+    // HS-4 person-layer runtime (person-layer doc §2.2/§2.3): in-memory
+    // current values (floats — fractional per-hour deltas), the unflushed
+    // accumulator GameManager settles through the atomic DB adjusters (the
+    // UnflushedFundsDelta pattern, per-stat), and the weekly GPA-drift
+    // accumulators. Allocated once per hydration, never in a tick.
+    private sealed class PersonRuntime
+    {
+        public PersonStats Stats;
+
+        // Accrued by actions/drift since the last settle. GameManager
+        // persists only the accumulated WHOLE part of each stat (the DB
+        // columns are INTEGER) and settles exactly what it applied, so
+        // sub-point fractions carry forward instead of rounding away.
+        public PersonStats Unflushed;
+
+        // §2.3: the per-person reversion target — the value observed at
+        // hydration (the neutral row's 50 for a fresh avatar; a trait-shifted
+        // base becomes that person's own setpoint). Saving mid-spike bakes
+        // the remnant into the next session's setpoint — disclosed, the same
+        // in-memory posture as stress cooldowns.
+        public float HappinessSetpoint;
+
+        // §2.2 weekly accumulators, reset at every weekly tick. Expected
+        // accrues ExpectedSchoolHoursPerDay per observed day; School accrues
+        // the planned block's actual hours (or the same per-day constant on
+        // an unplanned day — autopilot attends school by default), so a
+        // mid-week boot loses both sides together and the attendance
+        // fraction stays fair.
+        public float SchoolHoursThisWeek;
+        public float ExpectedSchoolHoursThisWeek;
+        public float StudyHoursThisWeek;
     }
 
     private const int HoursPerDay = 24;
@@ -78,10 +117,18 @@ public sealed class LifeSimManager
     private string? _avatarPlayerId;
     private DaySchedule _todaySchedule;
     private bool _hasTodaySchedule;
+
+    // HS-4 §5.3 transport refund: fractional hours bank between planned days
+    // (a bike's 0.5 h/day pays out one whole evening hour every second
+    // planned day). In-memory pacing, not state — resets with the avatar
+    // pointer, the stress-cooldown precedent.
+    private float _avatarTransportHoursSaved;
+    private float _transportRefundCarry;
     private readonly ActionWeights _weights;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
     private readonly Action<StressImpulseEvent> _onStressImpulse;
     private readonly Action<FundsImpulseEvent> _onFundsImpulse;
+    private readonly Action<PersonStatImpulseEvent> _onPersonStatImpulse;
 
     public LifeSimManager(ActionWeights? weights = null)
     {
@@ -89,6 +136,7 @@ public sealed class LifeSimManager
         _onDayAdvanced = OnDayAdvanced;
         _onStressImpulse = OnStressImpulse;
         _onFundsImpulse = OnFundsImpulse;
+        _onPersonStatImpulse = OnPersonStatImpulse;
     }
 
     public int NpcCount => _order.Count;
@@ -133,7 +181,28 @@ public sealed class LifeSimManager
         }
         _avatarPlayerId = playerId;
         _hasTodaySchedule = false;
+        // A succession heir starts with a fresh refund bank, same as the plan
+        // drop above — the retiree's half-banked bike hour never leaks.
+        _transportRefundCarry = 0f;
     }
+
+    /// <summary>
+    /// HS-4 §5.3: daily schedule hours refunded by the avatar's best owned
+    /// Transport item (car ~1.0, bike ~0.5, none 0) — projected in by the
+    /// bridge from the item catalog (this assembly never sees Player_Items),
+    /// consumed as extra evening autopilot hours on PLANNED days only (an
+    /// unplanned day has no schedule to refund; the pre-HS-4 24-hour
+    /// autopilot day stays bit-identical). Fractions bank across planned
+    /// days via <see cref="TransportRefundCarry"/>.
+    /// </summary>
+    public float AvatarTransportHoursSaved
+    {
+        get => _avatarTransportHoursSaved;
+        set => _avatarTransportHoursSaved = Math.Max(0f, value);
+    }
+
+    /// <summary>The banked sub-hour refund remainder (harness observability, like TrackedPlayerIds).</summary>
+    public float TransportRefundCarry => _transportRefundCarry;
 
     public bool HasTodaySchedule => _hasTodaySchedule;
 
@@ -211,9 +280,12 @@ public sealed class LifeSimManager
         bus.Subscribe(_onDayAdvanced);
         // Cross-system signals arrive via the bus, never a direct call
         // (life_sim_needs_decay.md §10) — gritty events raise stress and move
-        // money through these two impulses.
+        // money through these impulses; HS-4 adds the person-stat mirror
+        // (a DB-side person write, e.g. the §3.1 self-buy transport reward,
+        // keeps the in-memory copy the GPA drift reads in step).
         bus.Subscribe(_onStressImpulse);
         bus.Subscribe(_onFundsImpulse);
+        bus.Subscribe(_onPersonStatImpulse);
     }
 
     public void DetachFrom(EventBus bus)
@@ -221,6 +293,7 @@ public sealed class LifeSimManager
         bus.Unsubscribe(_onDayAdvanced);
         bus.Unsubscribe(_onStressImpulse);
         bus.Unsubscribe(_onFundsImpulse);
+        bus.Unsubscribe(_onPersonStatImpulse);
     }
 
     public bool TryGetNeeds(string playerId, out NeedsState needs)
@@ -265,6 +338,80 @@ public sealed class LifeSimManager
         }
     }
 
+    // ------------------------------------------------------------------
+    // HS-4 person-layer bridge surface (the needs/stress/funds pattern):
+    // GameManager hydrates the avatar's Player_Person row after Seed(), the
+    // drift/effect movers below accrue clamped deltas, and the daily flush
+    // settles the applied whole parts back out through the atomic DB
+    // adjusters. Untracked/unhydrated ids no-op exactly like SetNeeds.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Hydrates (or re-hydrates) a tracked person's stats. Sets the §2.3
+    /// happiness setpoint to the hydrated value, zeroes the unflushed
+    /// accumulator and the weekly GPA inputs — hydration is a checkpoint,
+    /// never a pending delta. No-op for an untracked id.
+    /// </summary>
+    public void SetPersonStats(string playerId, in PersonStats stats)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime))
+        {
+            runtime.Person = new PersonRuntime
+            {
+                Stats = stats,
+                HappinessSetpoint = stats.Happiness,
+            };
+        }
+    }
+
+    public bool TryGetPersonStats(string playerId, out PersonStats stats)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime) && runtime.Person is PersonRuntime person)
+        {
+            stats = person.Stats;
+            return true;
+        }
+        stats = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Non-destructive read of the person-stat deltas accrued since the last
+    /// settle (the PeekFundsDelta twin). False when the id is untracked or
+    /// never hydrated — the caller skips those entirely.
+    /// </summary>
+    public bool TryPeekPersonDeltas(string playerId, out PersonStats deltas)
+    {
+        if (_npcs.TryGetValue(playerId, out NpcRuntime? runtime) && runtime.Person is PersonRuntime person)
+        {
+            deltas = person.Unflushed;
+            return true;
+        }
+        deltas = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Subtracts exactly what the bridge durably persisted (call only after
+    /// its batch commits — the ClearFundsDelta discipline). Named Settle, not
+    /// Clear, deliberately: the DB columns are INTEGER, so the bridge applies
+    /// whole parts only and the sub-point fractions stay banked here instead
+    /// of rounding away. No-op when untracked/unhydrated.
+    /// </summary>
+    public void SettlePersonDeltas(string playerId, in PersonStats applied)
+    {
+        if (!_npcs.TryGetValue(playerId, out NpcRuntime? runtime) || runtime.Person is not PersonRuntime person)
+        {
+            return;
+        }
+        person.Unflushed.Gpa -= applied.Gpa;
+        for (int s = 0; s < PersonStats.StatCount; s++)
+        {
+            var stat = (PersonStatId)s;
+            person.Unflushed.Set(stat, person.Unflushed.Get(stat) - applied.Get(stat));
+        }
+    }
+
     /// <summary>
     /// Non-destructive read of the funds delta accrued since the last
     /// <see cref="ClearFundsDelta"/> (GameManager's persistence bridge, Phase
@@ -303,6 +450,51 @@ public sealed class LifeSimManager
         }
     }
 
+    // HS-4: the person-stat twin of OnFundsImpulse — the DB column already
+    // moved (an atomic clamped write inside the publisher's own batch, e.g.
+    // ItemService's §3.1 reward), so only the in-memory CURRENT value moves;
+    // Unflushed is deliberately untouched (flushing it again would
+    // double-apply). The raw int payload is the PersonStatId ordinal —
+    // CoreEvents carries primitives only.
+    private void OnPersonStatImpulse(PersonStatImpulseEvent e)
+    {
+        if (e.Stat < 0 || e.Stat >= PersonStats.StatCount)
+        {
+            return;
+        }
+        if (_npcs.TryGetValue(e.PlayerId, out NpcRuntime? runtime) && runtime.Person is PersonRuntime person)
+        {
+            var stat = (PersonStatId)e.Stat;
+            person.Stats.Set(stat, Math.Clamp(
+                person.Stats.Get(stat) + e.Delta, PersonDrift.StatMin, PersonDrift.StatMax));
+        }
+    }
+
+    /// <summary>
+    /// The sole LifeSim-internal mutator of a person stat (the
+    /// ApplyFundsDelta twin): clamps the current value into [0,100] and
+    /// accrues the CLAMPED movement — never the nominal delta — into
+    /// Unflushed, so a nudge that hits the ceiling never queues more change
+    /// than the mirror actually took (matching the DB adjuster's own
+    /// MAX/MIN clamp when the bridge later applies it).
+    /// </summary>
+    private static void ApplyPersonStatDelta(PersonRuntime person, PersonStatId stat, float delta)
+    {
+        float before = person.Stats.Get(stat);
+        float after = Math.Clamp(before + delta, PersonDrift.StatMin, PersonDrift.StatMax);
+        person.Stats.Set(stat, after);
+        person.Unflushed.Set(stat, person.Unflushed.Get(stat) + (after - before));
+    }
+
+    /// <summary>GPA twin of <see cref="ApplyPersonStatDelta"/> — clamped into [0.0, 4.0], clamped movement accrued.</summary>
+    private static void ApplyGpaDelta(PersonRuntime person, double delta)
+    {
+        double before = person.Stats.Gpa;
+        double after = Math.Clamp(before + delta, PersonDrift.GpaMin, PersonDrift.GpaMax);
+        person.Stats.Gpa = after;
+        person.Unflushed.Gpa += after - before;
+    }
+
     private void OnDayAdvanced(DayAdvancedEvent e)
     {
         bool costOfLivingDue = e.Day % CostOfLivingCadenceDays == 0;
@@ -322,30 +514,87 @@ public sealed class LifeSimManager
             // 9b: a planned avatar day runs its blocks instead of the
             // autopilot; everyone else (and an unplanned avatar) days through
             // the pre-9b loop unchanged.
-            if (_hasTodaySchedule && isAvatar)
+            bool dayWasPlanned = _hasTodaySchedule && isAvatar;
+            if (dayWasPlanned)
             {
                 TickScheduledDay(npc, in _todaySchedule);
                 _hasTodaySchedule = false;
-                continue;
             }
-            for (int hour = 0; hour < HoursPerDay; hour++)
+            else
             {
-                TickHour(npc);
+                for (int hour = 0; hour < HoursPerDay; hour++)
+                {
+                    TickHour(npc);
+                }
+            }
+
+            // HS-4 §2.2/§2.3: the person layer's end-of-day drift — a no-op
+            // for everyone the bridge never hydrated (all NPCs this arc).
+            if (npc.Person is PersonRuntime person)
+            {
+                TickPersonDay(npc, person, isAvatar, dayWasPlanned, costOfLivingDue);
             }
         }
     }
 
     /// <summary>
+    /// The two sanctioned exceptions to "person stats are sticky" (person-
+    /// layer doc §2.2/§2.3), run after the day's hours have ticked:
+    /// happiness's weak daily reversion toward the setpoint, and — on the
+    /// weekly beat the cost-of-living/family ticks already share — the GPA
+    /// closed form. An UNPLANNED day credits full default attendance (an
+    /// autopiloted student goes to school; truancy is a deliberate plan with
+    /// 0 School hours), and both attendance accumulators add the exact same
+    /// per-day constant so an all-autopilot neutral week divides to
+    /// attendanceFrac == 1 bit-exactly — the §2.2 neutral identity. GPA
+    /// drift is avatar-only (only the avatar has a schedule; NPC gpa stays
+    /// static until HS-5 gives it an event mover) and gated on the 9b school
+    /// gate (no drift in the pro tiers — GPA freezes at graduation). Stress
+    /// drag samples the scalar AT the weekly tick (pinned, not averaged).
+    /// </summary>
+    private void TickPersonDay(NpcRuntime npc, PersonRuntime person, bool isAvatar, bool dayWasPlanned, bool weeklyTickDue)
+    {
+        ApplyPersonStatDelta(person, PersonStatId.Happiness,
+            PersonDrift.HappinessDailyStep(person.Stats.Happiness, person.HappinessSetpoint));
+
+        person.ExpectedSchoolHoursThisWeek += PersonDrift.ExpectedSchoolHoursPerDay;
+        if (!dayWasPlanned)
+        {
+            person.SchoolHoursThisWeek += PersonDrift.ExpectedSchoolHoursPerDay;
+        }
+
+        if (!weeklyTickDue)
+        {
+            return;
+        }
+        if (isAvatar && AvatarSchoolAvailable)
+        {
+            float attendanceFrac = person.ExpectedSchoolHoursThisWeek > 0f
+                ? Math.Min(1f, person.SchoolHoursThisWeek / person.ExpectedSchoolHoursThisWeek)
+                : 1f;
+            ApplyGpaDelta(person, PersonDrift.GpaWeeklyDelta(
+                attendanceFrac, person.Stats.Intelligence, person.Stats.Discipline,
+                person.StudyHoursThisWeek, npc.Stress));
+        }
+        // Reset regardless of the gate so a mid-career tier change never
+        // inherits a stale week.
+        person.SchoolHoursThisWeek = 0f;
+        person.ExpectedSchoolHoursThisWeek = 0f;
+        person.StudyHoursThisWeek = 0f;
+    }
+
+    /// <summary>
     /// One player-planned day in a fixed canonical day order: the daytime
-    /// blocks (School → Practice → Game → Work), then the unallocated hours
-    /// on the standard autopilot (the evening), then Sleep as the night cap.
-    /// Sleep MUST run last: run first, an avatar sleeping from a full meter
-    /// wastes the whole restore against the 100-clamp and the meter drains
-    /// all day anyway (harness-measured: 8h-sleep day ending at Sleep 33.5).
-    /// Blocks are uninterruptible — the player's stated intent outranks the
-    /// crisis override for the skeleton (the stress-forces-the-avatar's-hand
-    /// rule can layer onto this seam later); free hours keep the full
-    /// TickHour behavior, override included.
+    /// blocks (School → Practice → Game → Work), then the HS-4 free-time
+    /// activity (the chosen evening), then the unallocated hours on the
+    /// standard autopilot — stretched by the §5.3 transport refund — then
+    /// Sleep as the night cap. Sleep MUST run last: run first, an avatar
+    /// sleeping from a full meter wastes the whole restore against the
+    /// 100-clamp and the meter drains all day anyway (harness-measured:
+    /// 8h-sleep day ending at Sleep 33.5). Blocks are uninterruptible — the
+    /// player's stated intent outranks the crisis override for the skeleton
+    /// (the stress-forces-the-avatar's-hand rule can layer onto this seam
+    /// later); free hours keep the full TickHour behavior, override included.
     /// </summary>
     private void TickScheduledDay(NpcRuntime npc, in DaySchedule schedule)
     {
@@ -365,7 +614,36 @@ public sealed class LifeSimManager
         ref readonly NpcActionDefinition workDef = ref (AvatarWorkIsHustle ? ref ActionCatalog.HustleWork : ref ActionCatalog.LegalWork);
         TickBlockHours(npc, schedule.WorkHours, in workDef);
 
-        for (int hour = 0; hour < schedule.FreeHours; hour++)
+        // HS-4: the chosen free-time activity ticks like any other block —
+        // per-hour needs restore/decay plus the person-stat effect channel.
+        if (schedule.FreeTimeHours > 0)
+        {
+            NpcActionDefinition freeTimeDef = ActionCatalog.Get(schedule.FreeTimeActivity);
+            TickBlockHours(npc, schedule.FreeTimeHours, in freeTimeDef);
+        }
+
+        // §2.2 weekly-drift inputs: a planned day's attendance is exactly its
+        // scheduled School hours (planning 0 = deliberate truancy), and Study
+        // free-time hours feed the StudyHoursTerm — the one way GPA benefits
+        // from an action, since the effect channel can't reach gpa.
+        if (npc.Person is PersonRuntime person)
+        {
+            person.SchoolHoursThisWeek += schedule.SchoolHours;
+            if (schedule.FreeTimeActivity == NpcActionId.Study)
+            {
+                person.StudyHoursThisWeek += schedule.FreeTimeHours;
+            }
+        }
+
+        // §5.3: the transport refund — hours not spent walking come back as
+        // extra evening autopilot hours. Whole hours only; the fractional
+        // remainder banks in the carry until it fills an hour (a bike pays
+        // out every second planned day).
+        _transportRefundCarry += _avatarTransportHoursSaved;
+        int refundHours = (int)_transportRefundCarry;
+        _transportRefundCarry -= refundHours;
+
+        for (int hour = 0; hour < schedule.FreeHours + refundHours; hour++)
         {
             TickHour(npc);
         }
@@ -405,6 +683,17 @@ public sealed class LifeSimManager
             if (fundsPerHour != 0.0)
             {
                 ApplyFundsDelta(npc, fundsPerHour);
+            }
+            // HS-4 effect channel: PersonStatEffect deltas are per-hour by
+            // definition, so a block applies them tick by tick — no proration
+            // needed. A never-hydrated person (every NPC) skips at the null.
+            if (npc.Person is PersonRuntime person)
+            {
+                PersonStatEffect[] effects = def.PersonEffects;
+                for (int i = 0; i < effects.Length; i++)
+                {
+                    ApplyPersonStatDelta(person, effects[i].Stat, effects[i].DeltaPerHour);
+                }
             }
             npc.Needs = NeedsEngine.DecayHour(
                 npc.Needs, def.Environment, NeedsEngine.StressModifierFor(npc.Stress));
@@ -482,6 +771,19 @@ public sealed class LifeSimManager
         if (def.IsStressRelief)
         {
             npc.Stress = Math.Max(MinStress, npc.Stress - StressReliefPerAction);
+        }
+        // HS-4 effect channel, one-shot form: the per-hour deltas scaled by
+        // the action's nominal hours (the RestoreAmount mirror). No autopilot
+        // catalog entry carries effects today — wired anyway so a future
+        // catalog edit can't silently no-op on the autopilot path.
+        if (npc.Person is PersonRuntime person && def.PersonEffects.Length > 0)
+        {
+            for (int i = 0; i < def.PersonEffects.Length; i++)
+            {
+                ApplyPersonStatDelta(
+                    person, def.PersonEffects[i].Stat,
+                    def.PersonEffects[i].DeltaPerHour * def.TemporalCostHours);
+            }
         }
         ApplyFundsDelta(npc, -def.FinancialCost);
         npc.CurrentAction = id;

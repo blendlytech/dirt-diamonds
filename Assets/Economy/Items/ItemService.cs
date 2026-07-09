@@ -117,6 +117,13 @@ public sealed class ItemService
             return false;
         }
 
+        // §3.1 reward mirror bookkeeping: the ACTUAL clamped movement each
+        // stat took (0 when already at the 100 ceiling), published as
+        // person-stat impulses post-commit so the Life sim's hydrated copy
+        // (the GPA drift's discipline input, HS-4) stays in step.
+        int workEthicApplied = 0, disciplineApplied = 0, maturityApplied = 0;
+        bool rewardApplied = false;
+
         _db.BeginBatch();
         try
         {
@@ -130,7 +137,8 @@ public sealed class ItemService
             });
             if (definition.Category == ItemCategory.Transport && !ownsAnyTransport)
             {
-                ApplySelfBuyTransportReward(playerId);
+                ApplySelfBuyTransportReward(playerId, out workEthicApplied, out disciplineApplied, out maturityApplied);
+                rewardApplied = true;
             }
             _db.CommitBatch();
         }
@@ -140,23 +148,50 @@ public sealed class ItemService
             throw;
         }
 
-        // Bus impulse follows the committed batch — the EquipmentService/
-        // HustleService ordering, kept exactly.
+        // Bus impulses follow the committed batch — the EquipmentService/
+        // HustleService ordering, kept exactly. The acquired event is the
+        // HS-4 §5.3 transport-refund re-projection seam (and any ownership
+        // cache's invalidation signal).
         _bus.Publish(new FundsImpulseEvent(playerId, -definition.Price));
+        _bus.Publish(new PlayerItemAcquiredEvent(playerId, itemId));
+        if (rewardApplied)
+        {
+            PublishRewardImpulse(playerId, PersonStatOrdinalWorkEthic, workEthicApplied);
+            PublishRewardImpulse(playerId, PersonStatOrdinalDiscipline, disciplineApplied);
+            PublishRewardImpulse(playerId, PersonStatOrdinalMaturity, maturityApplied);
+        }
         failure = ItemPurchaseFailure.None;
         return true;
     }
 
-    /// <summary>§3.1, inside the open purchase batch: the poverty-compensating one-time responsibility bump. A missing person row (a scratch save without the v11 boot backfill) starts from the schema's neutral defaults.</summary>
-    private void ApplySelfBuyTransportReward(string playerId)
+    // PersonStatId ordinals (Simulation.Life is not referenced from Economy —
+    // the CoreEvents primitives rule; SchemaValidator pins the numbering).
+    private const int PersonStatOrdinalMaturity = 1;
+    private const int PersonStatOrdinalDiscipline = 10;
+    private const int PersonStatOrdinalWorkEthic = 11;
+
+    private void PublishRewardImpulse(string playerId, int statOrdinal, int applied)
+    {
+        if (applied != 0)
+        {
+            _bus.Publish(new PersonStatImpulseEvent(playerId, statOrdinal, applied));
+        }
+    }
+
+    /// <summary>§3.1, inside the open purchase batch: the poverty-compensating one-time responsibility bump. A missing person row (a scratch save without the v11 boot backfill) starts from the schema's neutral defaults. The out params report the clamped movement each stat actually took, for the post-commit mirror impulses.</summary>
+    private void ApplySelfBuyTransportReward(
+        string playerId, out int workEthicApplied, out int disciplineApplied, out int maturityApplied)
     {
         if (!_persons.TryGet(playerId, out PersonRow person))
         {
             person = PersonRow.Neutral(playerId);
         }
-        person.WorkEthic = Math.Min(100, person.WorkEthic + SelfBuyTransportReward);
-        person.Discipline = Math.Min(100, person.Discipline + SelfBuyTransportReward);
-        person.Maturity = Math.Min(100, person.Maturity + SelfBuyTransportReward);
+        workEthicApplied = Math.Min(100, person.WorkEthic + SelfBuyTransportReward) - person.WorkEthic;
+        disciplineApplied = Math.Min(100, person.Discipline + SelfBuyTransportReward) - person.Discipline;
+        maturityApplied = Math.Min(100, person.Maturity + SelfBuyTransportReward) - person.Maturity;
+        person.WorkEthic += workEthicApplied;
+        person.Discipline += disciplineApplied;
+        person.Maturity += maturityApplied;
         _persons.Upsert(in person);
     }
 }
