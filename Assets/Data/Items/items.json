@@ -1,0 +1,114 @@
+{
+  "//": "Item catalog (HS-3, high_school_person_layer.md §5). Content, not schema: Player_Items.item_id is NOT an FK — GameManager validates every owned row against this file loudly at load. Entry contract (§5.1): id (stable, never reused), name (player-facing copy lives here, not C#), category (Transport/Clothing/Jewelry/Food/Gear), price (against Players.funds), modifiers (passive STATUS-stat buffs only — attractiveness/social_status/reputation, per-stat aggregate capped at ItemBuffCap=+15, computed at read never persisted), transport_hours_saved (Transport only; highest owned wins, §5.3), autobuy_min_tier (wealth tier at/above which parents may auto-gift, §3.2). The three creation transport gifts (commuter_bike/used_sedan/new_coupe) are a CONTRACT with BackstoryGenerator.BackstoryProfile.TransportGiftByTier — renaming any of them breaks avatar creation's gift row; both harnesses pin them. used_sedan is the design doc's own §5.1 worked example, kept verbatim. Food entries carry no passive modifiers by design (§5.1: consumable flavor, happiness/need nudges arrive as events in HS-4/5, never a standing passive). Gear here is lifestyle gear — baseball gear quality stays in Player_Equipment. All prices/modifiers are first-pass tunable content.",
+  "items": [
+    {
+      "id": "skateboard",
+      "name": "Skateboard",
+      "category": "Transport",
+      "price": 80,
+      "transport_hours_saved": 0.25
+    },
+    {
+      "id": "commuter_bike",
+      "name": "Commuter Bike",
+      "category": "Transport",
+      "price": 250,
+      "transport_hours_saved": 0.5,
+      "autobuy_min_tier": 2
+    },
+    {
+      "id": "used_sedan",
+      "name": "Used Sedan",
+      "category": "Transport",
+      "price": 1200,
+      "modifiers": { "social_status": 4, "reputation": 2 },
+      "transport_hours_saved": 1.0,
+      "autobuy_min_tier": 3
+    },
+    {
+      "id": "new_coupe",
+      "name": "New Coupe",
+      "category": "Transport",
+      "price": 9000,
+      "modifiers": { "social_status": 8, "attractiveness": 3 },
+      "transport_hours_saved": 1.0,
+      "autobuy_min_tier": 4
+    },
+    {
+      "id": "thrift_fit",
+      "name": "Thrift-Store Fit",
+      "category": "Clothing",
+      "price": 40,
+      "modifiers": { "attractiveness": 1 }
+    },
+    {
+      "id": "mall_wardrobe",
+      "name": "Mall Wardrobe",
+      "category": "Clothing",
+      "price": 220,
+      "modifiers": { "attractiveness": 3, "social_status": 1 },
+      "autobuy_min_tier": 3
+    },
+    {
+      "id": "designer_jacket",
+      "name": "Designer Jacket",
+      "category": "Clothing",
+      "price": 850,
+      "modifiers": { "attractiveness": 5, "social_status": 4 },
+      "autobuy_min_tier": 4
+    },
+    {
+      "id": "fake_chain",
+      "name": "Knock-Off Chain",
+      "category": "Jewelry",
+      "price": 25,
+      "modifiers": { "attractiveness": 2, "reputation": -1 }
+    },
+    {
+      "id": "silver_chain",
+      "name": "Silver Chain",
+      "category": "Jewelry",
+      "price": 300,
+      "modifiers": { "attractiveness": 2, "social_status": 2 }
+    },
+    {
+      "id": "gold_watch",
+      "name": "Gold Watch",
+      "category": "Jewelry",
+      "price": 2500,
+      "modifiers": { "social_status": 6, "reputation": 2 }
+    },
+    {
+      "id": "energy_drink",
+      "name": "Energy Drink",
+      "category": "Food",
+      "price": 4
+    },
+    {
+      "id": "pizza_night",
+      "name": "Pizza Night",
+      "category": "Food",
+      "price": 20
+    },
+    {
+      "id": "bluetooth_speaker",
+      "name": "Bluetooth Speaker",
+      "category": "Gear",
+      "price": 120,
+      "modifiers": { "social_status": 1 }
+    },
+    {
+      "id": "gaming_console",
+      "name": "Gaming Console",
+      "category": "Gear",
+      "price": 450
+    },
+    {
+      "id": "laptop",
+      "name": "Laptop",
+      "category": "Gear",
+      "price": 700,
+      "modifiers": { "social_status": 2 }
+    }
+  ]
+}

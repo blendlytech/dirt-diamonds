@@ -1,7 +1,10 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Economy.Equipment;
+using DirtAndDiamonds.Economy.Family;
 using DirtAndDiamonds.Economy.Hustles;
+using DirtAndDiamonds.Economy.Items;
+using DirtAndDiamonds.Economy.Phone;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Platform.Steam;
@@ -35,6 +38,9 @@ public sealed partial class GameManager : Node
     private const string GrittyEventContentDir = "res://Assets/Narrative/Events/Content";
     // NOTE: same export-filter caveat as GrittyEventContentDir above.
     private const string ContactsResourcePath = "res://Assets/Narrative/Contacts/contacts.json";
+    // NOTE: same export-filter caveat again — items.json must join the Phase 9
+    // export include filters alongside the .sql and the other content .json.
+    private const string ItemsResourcePath = "res://Assets/Data/Items/items.json";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -75,6 +81,18 @@ public sealed partial class GameManager : Node
 
     /// <summary>Phase 8e purchased gear — public like Absences so the UI can render the owned tier.</summary>
     public EquipmentLedger Gear { get; private set; } = null!;
+
+    /// <summary>HS-3: the loaded items.json catalog (person-layer doc §5) — public like Contacts so the Marketplace tab and the §3.2 autobuy tick read one shared instance. Ownership-audited against Player_Items at boot; content edits that break a shipped id fail here, never at a shop render.</summary>
+    public ItemCatalog Items { get; private set; } = null!;
+
+    /// <summary>HS-3 Layer 2 orchestration — Marketplace purchase application over the catalog above.</summary>
+    public ItemService ItemShop { get; private set; } = null!;
+
+    /// <summary>HS-3 §4.2: the phone minutes economy (spend / carrier bundle / hardware upgrade). The §4.3 never-gates invariant is structural — nothing in Narrative references this service.</summary>
+    public PhoneService Phone { get; private set; } = null!;
+
+    /// <summary>HS-3 §3/§3.2: the weekly family tick — allowance, Basic-plan minute refill, parental auto-purchase.</summary>
+    public FamilyService Family { get; private set; } = null!;
 
     /// <summary>Phase 8e Layer 2 orchestration — gear-shop snapshots and purchase application.</summary>
     public EquipmentService GearShop { get; private set; } = null!;
@@ -384,6 +402,35 @@ public sealed partial class GameManager : Node
         // funds-mirror events post-commit.
         GearShop = new EquipmentService(_database, Players, Events);
 
+        // HS-3: the item catalog (person-layer doc §5) — pure content like
+        // Contacts below, then the loud boot-time audit: every Player_Items
+        // row in the save must still resolve against the file (ids are
+        // never removed or renamed once shipped; categories never change).
+        string itemsJson = FileAccess.GetFileAsString(ItemsResourcePath);
+        if (string.IsNullOrWhiteSpace(itemsJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{ItemsResourcePath}' ({FileAccess.GetOpenError()}) — the item catalog is missing.");
+        }
+        Items = ItemCatalogJson.Parse(itemsJson);
+        var ownedItemsAudit = new List<PlayerItemRow>();
+        Persons.LoadAllItems(ownedItemsAudit);
+        Items.ValidateOwnership(ownedItemsAudit);
+
+        // HS-3: Marketplace purchase orchestration — the same request/response
+        // shape as GearShop above, over Player_Items instead of
+        // Player_Equipment.
+        ItemShop = new ItemService(_database, Players, Persons, Items, Events);
+
+        // HS-3 §4.2/§3.2: minutes economy + the weekly family tick. The tick
+        // rides DayAdvancedEvent like the hustle/practice seams above — its
+        // own batch, never sharing a transaction with the Life or Baseball
+        // flushes. Funds writes go through AdjustFunds + a post-commit
+        // FundsImpulseEvent, so the Life sim's in-memory mirror stays true.
+        Phone = new PhoneService(_database, Players, Persons, Events);
+        Family = new FamilyService(_database, Players, Persons, Baseball, Items, Phone, Events);
+        Events.Subscribe<DayAdvancedEvent>(OnFamilyDayAdvanced);
+
         // Phase 7: Gritty Events. Content loads from every batch file in the
         // Content folder (a new Sonnet batch is a dropped-in file); the applier
         // subscribes on the main pump; the dispatcher polls from its own
@@ -677,6 +724,20 @@ public sealed partial class GameManager : Node
             GameState.AdjustInt64(GameStateKeys.AvatarPracticeCredit, _plannedPracticeHours);
         }
         _plannedPracticeHours = 0;
+    }
+
+    /// <summary>
+    /// HS-3: the weekly family tick (person-layer doc §3/§3.2/§4.2). The
+    /// cadence gate lives inside FamilyService so the harness drives the
+    /// identical path; this handler only supplies the avatar. No avatar (or a
+    /// pre-HS-2 save with no Family_Background row) is a clean no-op.
+    /// </summary>
+    private void OnFamilyDayAdvanced(DayAdvancedEvent e)
+    {
+        if (Career.HasAvatar)
+        {
+            Family.ProcessDay(Career.AvatarPlayerId, e.Day);
+        }
     }
 
     /// <summary>

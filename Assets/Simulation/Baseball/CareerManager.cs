@@ -399,22 +399,25 @@ public sealed class CareerManager
     /// §3.1 transport gift — all one batch. Requires <see cref="Persons"/>.
     /// </summary>
     /// <param name="personSeed">The trait picker's adjusted person row (PlayerId is overwritten with the new avatar's id); null = the plain backstory seed.</param>
+    /// <param name="traitFlags">The trait picker's chosen trait_* Entity_Flag names, written INSIDE the creation batch (the HS-2 review's atomicity cleanup — the UI writes nothing itself; a failed flag write rolls the whole creation back).</param>
     public void CreateAvatar(
         string firstName, string lastName, int teamId, in PlayerRatingsRow ratings,
         in Backstory backstory, PersonRow? personSeed = null,
-        PitcherRole pitcherRole = PitcherRole.Starter)
+        PitcherRole pitcherRole = PitcherRole.Starter,
+        IReadOnlyList<string>? traitFlags = null)
     {
         if (Persons is null)
         {
             throw new InvalidOperationException(
                 "CreateAvatar with a Backstory requires Persons (PersonQueries) to be wired.");
         }
-        CreateAvatarCore(firstName, lastName, teamId, in ratings, pitcherRole, backstory, personSeed);
+        CreateAvatarCore(firstName, lastName, teamId, in ratings, pitcherRole, backstory, personSeed, traitFlags);
     }
 
     private void CreateAvatarCore(
         string firstName, string lastName, int teamId, in PlayerRatingsRow ratings,
-        PitcherRole pitcherRole, Backstory? backstory, PersonRow? personSeed)
+        PitcherRole pitcherRole, Backstory? backstory, PersonRow? personSeed,
+        IReadOnlyList<string>? traitFlags = null)
     {
         if (HasAvatar)
         {
@@ -487,6 +490,13 @@ public sealed class CareerManager
             if (backstory.HasValue)
             {
                 SeedFoundingHousehold(avatarId, lastName, backstory.Value, personSeed);
+            }
+            if (traitFlags is not null)
+            {
+                for (int i = 0; i < traitFlags.Count; i++)
+                {
+                    _players.SetFlag(avatarId, traitFlags[i], true, Math.Max(0, _state.CurrentDay));
+                }
             }
             _db.CommitBatch();
         }

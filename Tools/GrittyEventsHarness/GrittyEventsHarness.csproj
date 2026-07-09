@@ -44,6 +44,20 @@
       single files like RngState.cs.
     -->
     <Compile Include="..\..\Assets\Economy\Equipment\*.cs" Link="Economy\Equipment\%(Filename)%(Extension)" />
+    <!--
+      HS-3 (high_school_person_layer.md §5): the item catalog is the same
+      Data-adjacent content surface as the gritty-event loader — pure
+      parse/validate/aggregate over Data DTOs, no Godot type anywhere.
+    -->
+    <Compile Include="..\..\Assets\Economy\Items\*.cs" Link="Economy\Items\%(Filename)%(Extension)" />
+    <!--
+      HS-3 (high_school_person_layer.md §3.2/§4.2/§4.3): PhoneService and
+      FamilyService are the same Data + Core orchestration shape as
+      ItemService above — the minutes-economy arithmetic and the family tick
+      are §9.1's HS-3 acceptance surface, proven here.
+    -->
+    <Compile Include="..\..\Assets\Economy\Phone\*.cs" Link="Economy\Phone\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Economy\Family\*.cs" Link="Economy\Family\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\AtBatResolver.cs" Link="Baseball\AtBatResolver.cs" />
     <Compile Include="..\..\Assets\Simulation\Baseball\TierEffects.cs" Link="Baseball\TierEffects.cs" />
     <Compile Include="..\..\Assets\Simulation\Baseball\EquipmentEffects.cs" Link="Baseball\EquipmentEffects.cs" />

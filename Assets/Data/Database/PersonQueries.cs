@@ -157,6 +157,12 @@ public sealed class PersonQueries
     private const string SqlSelectItemsFor =
         "SELECT player_id, item_id, category, acquired_day FROM Player_Items WHERE player_id = @playerId;";
 
+    // Whole-table read for the boot-time catalog audit (items.json §5): the
+    // table holds a handful of rows per person who owns anything, so a full
+    // scan once per boot is trivial.
+    private const string SqlSelectAllItems =
+        "SELECT player_id, item_id, category, acquired_day FROM Player_Items;";
+
     private const string SqlUpsertChild =
         "INSERT INTO Child_Development (child_id, care, coaching, funding, neglect, last_tick_day) VALUES " +
         "(@childId, @care, @coaching, @funding, @neglect, @lastTickDay) " +
@@ -178,6 +184,7 @@ public sealed class PersonQueries
     private readonly SqliteCommand _addItem;
     private readonly SqliteCommand _removeItem;
     private readonly SqliteCommand _selectItemsFor;
+    private readonly SqliteCommand _selectAllItems;
     private readonly SqliteCommand _upsertChild;
     private readonly SqliteCommand _selectChild;
 
@@ -277,6 +284,8 @@ public sealed class PersonQueries
             _selectItemsFor.Parameters.Add("@playerId", SqliteType.Text);
             _selectItemsFor.Prepare();
         }
+
+        _selectAllItems = db.GetPooledCommand(SqlSelectAllItems);
 
         _upsertChild = db.GetPooledCommand(SqlUpsertChild);
         if (_upsertChild.Parameters.Count == 0)
@@ -476,6 +485,24 @@ public sealed class PersonQueries
         p["@playerId"].Value = playerId;
         p["@itemId"].Value = itemId;
         _db.ExecuteNonQuery(_removeItem);
+    }
+
+    /// <summary>Loads every Player_Items row in the save into <paramref name="destination"/> (cleared first) — the boot-time items.json ownership audit's read.</summary>
+    public int LoadAllItems(List<PlayerItemRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllItems);
+        while (reader.Read())
+        {
+            destination.Add(new PlayerItemRow
+            {
+                PlayerId = reader.GetString(0),
+                ItemId = reader.GetString(1),
+                Category = (ItemCategory)reader.GetInt32(2),
+                AcquiredDay = reader.GetInt32(3),
+            });
+        }
+        return destination.Count;
     }
 
     /// <summary>Loads every item the player owns into <paramref name="destination"/> (cleared first).</summary>

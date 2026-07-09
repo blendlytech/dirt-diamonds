@@ -1,6 +1,7 @@
 using System;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Items;
 using DirtAndDiamonds.Simulation.Baseball;
 using Godot;
 
@@ -86,8 +87,10 @@ public sealed partial class NewGameScreen : Control
 
     // Personality picks nudge one person stat each (first-pass tunable
     // magnitude — the person layer doc's §2.1 consumer table, not a rolled
-    // spread) and always write a matching trait_* Entity_Flag so future
-    // Gritty Event content can gate on the choice directly.
+    // spread) and always carry a matching trait_* Entity_Flag so future
+    // Gritty Event content can gate on the choice directly. The flag names
+    // ride the CreateAvatar call and are written inside the creation batch
+    // (HS-2 review cleanup) — this screen never touches the database.
     private const int MaxTraitPicks = 2;
     private const int TraitStatOffset = 8;
 
@@ -272,15 +275,21 @@ public sealed partial class NewGameScreen : Control
         _wifiLabel.Text = _backstory.HomeWifi ? WifiYesText : WifiNoText;
         _transportLabel.Text = string.Format(
             TransportFormat,
-            _backstory.TransportGiftItemId is null ? TransportNoneText : HumanizeItemId(_backstory.TransportGiftItemId));
+            _backstory.TransportGiftItemId is null ? TransportNoneText : ItemDisplayName(_backstory.TransportGiftItemId));
         _strictnessLabel.Text = string.Format(StrictnessFormat, _backstory.Strictness);
         _parentsLabel.Text = string.Format(
             ParentsFormat, _backstory.Parent1FirstName, _backstory.Parent1Age, _backstory.Parent2FirstName, _backstory.Parent2Age);
     }
 
-    // HS-3's item catalog (Assets/Data/Items/items.json) doesn't exist yet, so
-    // the reveal panel humanizes the catalog id directly — the same
-    // fallback-humanization precedent as GrittyEventJson.Humanize.
+    // HS-3's item catalog is now loaded at GameManager.Items — the reveal
+    // panel shows its real player-facing name. Humanization is only a
+    // defensive fallback (GrittyEventJson.Humanize's precedent) for the
+    // unreachable case of a gift id the catalog doesn't recognize.
+    private static string ItemDisplayName(string itemId) =>
+        GameManager.Instance!.Items.TryGet(itemId, out ItemDefinition definition)
+            ? definition.Name
+            : HumanizeItemId(itemId);
+
     private static string HumanizeItemId(string itemId)
     {
         string[] parts = itemId.Split('_');
@@ -426,26 +435,26 @@ public sealed partial class NewGameScreen : Control
         // inside the creation batch (CareerManager.SeedFoundingHousehold).
         PersonRow personSeed = BackstoryGenerator.BuildPersonRow(string.Empty, in _backstory);
         ApplyTraitOffsets(ref personSeed);
+        var traitFlags = new System.Collections.Generic.List<string>(MaxTraitPicks);
+        for (int i = 0; i < _traitCheckBoxes.Length; i++)
+        {
+            if (_traitCheckBoxes[i].ButtonPressed)
+            {
+                traitFlags.Add(TraitDefs[i].FlagName);
+            }
+        }
 
         try
         {
-            gm.Career.CreateAvatar(_nameLineEdit.Text.Trim(), string.Empty, teamId, in ratings, in _backstory, personSeed, role);
+            gm.Career.CreateAvatar(
+                _nameLineEdit.Text.Trim(), string.Empty, teamId, in ratings, in _backstory,
+                personSeed, role, traitFlags);
         }
         catch (System.Exception ex)
         {
             _errorLabel.Text = ex.Message;
             _errorLabel.Visible = true;
             return;
-        }
-
-        string avatarId = gm.Career.AvatarPlayerId;
-        long day = gm.State.CurrentDay;
-        for (int i = 0; i < _traitCheckBoxes.Length; i++)
-        {
-            if (_traitCheckBoxes[i].ButtonPressed)
-            {
-                gm.Players.SetFlag(avatarId, TraitDefs[i].FlagName, true, day);
-            }
         }
 
         _errorLabel.Visible = false;

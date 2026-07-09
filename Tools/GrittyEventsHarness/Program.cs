@@ -1,7 +1,10 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Economy.Equipment;
+using DirtAndDiamonds.Economy.Family;
 using DirtAndDiamonds.Economy.Hustles;
+using DirtAndDiamonds.Economy.Items;
+using DirtAndDiamonds.Economy.Phone;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -60,6 +63,8 @@ internal static class Program
             RunStressChecks();
             RunHustleIntegrationChecks();
             RunEquipmentIntegrationChecks();
+            RunItemCatalogChecks();
+            RunPhoneAndFamilyChecks();
             RunAbsenceChecks();
             RunThreadingCheck();
             RunAllocationCheck();
@@ -1501,6 +1506,458 @@ internal static class Program
             Db.Dispose();
         }
     }
+
+    // ------------------------------------------------------------------
+    // Item catalog (HS-3, high_school_person_layer.md §5)
+    // ------------------------------------------------------------------
+
+    private static void RunItemCatalogChecks()
+    {
+        Console.WriteLine("--- Item catalog (§5) ---");
+
+        // The shipped file parses; every ItemCategory value is represented so
+        // each category's parse branch is exercised by real content.
+        string shipped = File.ReadAllText(Path.Combine(_repoRoot, "Assets", "Data", "Items", "items.json"));
+        ItemCatalog catalog = ItemCatalogJson.Parse(shipped);
+        var seen = new bool[6];
+        foreach (ItemDefinition entry in catalog.Entries)
+        {
+            seen[(int)entry.Category] = true;
+        }
+        Check("shipped items.json loads with every category represented",
+            catalog.Count >= 12 && seen[1] && seen[2] && seen[3] && seen[4] && seen[5],
+            $"{catalog.Count} items");
+
+        // The HS-2 creation contract: BackstoryGenerator.TransportGiftByTier's
+        // three gift ids (tiers 2/3/4) must exist as Transport entries whose
+        // autobuy floors mirror the gifting tiers. Ids are pinned as strings
+        // here because this harness deliberately does not compile the Baseball
+        // assembly; MonteCarloHarness holds the mirror check from the other
+        // side (BackstoryProfile → the json file).
+        bool hasBike = catalog.TryGet("commuter_bike", out ItemDefinition bike);
+        bool hasSedan = catalog.TryGet("used_sedan", out ItemDefinition sedan);
+        bool hasCoupe = catalog.TryGet("new_coupe", out ItemDefinition coupe);
+        Check("HS-2 transport-gift contract ids present with the creation ladder's autobuy tiers",
+            hasBike && hasSedan && hasCoupe
+            && bike.Category == ItemCategory.Transport && bike.AutobuyMinTier == 2
+            && sedan.Category == ItemCategory.Transport && sedan.AutobuyMinTier == 3
+            && coupe.Category == ItemCategory.Transport && coupe.AutobuyMinTier == 4);
+
+        // §5.1's worked example is shipped verbatim — the doc's own fixture.
+        Check("§5.1 used_sedan example matches the doc cell for cell",
+            catalog.TryGet("used_sedan", out ItemDefinition example)
+            && example.Name == "Used Sedan"
+            && example.Price == 1200.0
+            && example.ModSocialStatus == 4 && example.ModReputation == 2 && example.ModAttractiveness == 0
+            && example.TransportHoursSaved == 1.0);
+
+        Check("AutobuysAt honors the tier floor (and never fires without one)",
+            sedan.AutobuysAt(3) && sedan.AutobuysAt(4) && !sedan.AutobuysAt(2)
+            && catalog.Require("skateboard").AutobuysAt(4) == false);
+
+        // Loader rejections — each malformed doc is loud and id-labelled.
+        Check("loader rejects duplicate item ids", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Gear", "price": 1 }, { "id": "x", "name": "B", "category": "Gear", "price": 2 } ] }"""));
+        Check("loader rejects unknown category", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Vehicle", "price": 1 } ] }"""));
+        Check("loader rejects negative price", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Gear", "price": -5 } ] }"""));
+        Check("loader rejects a non-status modifier stat (the §5.2 closed vocabulary — calibration inertness)", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Gear", "price": 1, "modifiers": { "teamwork": 5 } } ] }"""));
+        Check("loader rejects transport_hours_saved on a non-Transport item", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Clothing", "price": 1, "transport_hours_saved": 0.5 } ] }"""));
+        Check("loader rejects autobuy_min_tier outside 0-4", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Gear", "price": 1, "autobuy_min_tier": 5 } ] }"""));
+        Check("loader rejects a missing name", ItemParseThrows(
+            """{ "items": [ { "id": "x", "category": "Gear", "price": 1 } ] }"""));
+        Check("loader rejects a non-integer modifier value", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Gear", "price": 1, "modifiers": { "reputation": 1.5 } } ] }"""));
+        Check("loader rejects a modifier outside [-100, 100]", ItemParseThrows(
+            """{ "items": [ { "id": "x", "name": "A", "category": "Gear", "price": 1, "modifiers": { "reputation": 101 } } ] }"""));
+
+        // §5.2 aggregation: computed at read, per-stat sum capped at +15,
+        // negatives pass through, final effective clamps to [0, 100].
+        var owned = new List<PlayerItemRow>();
+        StatusBuffs none = ItemEffects.ComputeBuffs(owned, catalog);
+        Check("§5.2 empty ownership buffs nothing",
+            none.Attractiveness == 0 && none.SocialStatus == 0 && none.Reputation == 0
+            && ItemEffects.EffectiveStat(50, none.SocialStatus) == 50);
+
+        owned.Add(OwnedRow("p1", "used_sedan", ItemCategory.Transport));
+        StatusBuffs single = ItemEffects.ComputeBuffs(owned, catalog);
+        Check("§5.2 single item buffs exactly its modifiers",
+            single.SocialStatus == 4 && single.Reputation == 2 && single.Attractiveness == 0
+            && ItemEffects.EffectiveStat(50, single.SocialStatus) == 54);
+
+        owned.Add(OwnedRow("p1", "new_coupe", ItemCategory.Transport));
+        owned.Add(OwnedRow("p1", "gold_watch", ItemCategory.Jewelry));
+        owned.Add(OwnedRow("p1", "designer_jacket", ItemCategory.Clothing));
+        owned.Add(OwnedRow("p1", "silver_chain", ItemCategory.Jewelry));
+        owned.Add(OwnedRow("p1", "mall_wardrobe", ItemCategory.Clothing));
+        owned.Add(OwnedRow("p1", "laptop", ItemCategory.Gear));
+        owned.Add(OwnedRow("p1", "bluetooth_speaker", ItemCategory.Gear));
+        StatusBuffs hoard = ItemEffects.ComputeBuffs(owned, catalog);
+        Check("§5.2 hoarding hits the +15 cap (raw social_status sum 28)",
+            hoard.SocialStatus == ItemEffects.ItemBuffCap && hoard.Attractiveness == 13,
+            $"social {hoard.SocialStatus}, attract {hoard.Attractiveness}");
+        Check("§5.2 effective stat clamps at 100 under a capped buff",
+            ItemEffects.EffectiveStat(95, hoard.SocialStatus) == 100);
+
+        var edgy = new List<PlayerItemRow> { OwnedRow("p2", "fake_chain", ItemCategory.Jewelry) };
+        StatusBuffs negative = ItemEffects.ComputeBuffs(edgy, catalog);
+        Check("§5.2 negative modifiers pass the cap and clamp at the floor",
+            negative.Reputation == -1 && ItemEffects.EffectiveStat(0, negative.Reputation) == 0);
+
+        // §5.3: highest-value owned transport wins; non-transport is ignored.
+        Check("§5.3 no transport owned refunds 0 hours",
+            ItemEffects.BestTransportHoursSaved(edgy, catalog) == 0.0);
+        var garage = new List<PlayerItemRow>
+        {
+            OwnedRow("p3", "skateboard", ItemCategory.Transport),
+            OwnedRow("p3", "gold_watch", ItemCategory.Jewelry),
+        };
+        Check("§5.3 skateboard refunds its 0.25",
+            ItemEffects.BestTransportHoursSaved(garage, catalog) == 0.25);
+        garage.Add(OwnedRow("p3", "commuter_bike", ItemCategory.Transport));
+        garage.Add(OwnedRow("p3", "used_sedan", ItemCategory.Transport));
+        Check("§5.3 the car supersedes the bike and the board",
+            ItemEffects.BestTransportHoursSaved(garage, catalog) == 1.0);
+
+        // The boot-time ownership audit: valid rows pass, an unknown id and a
+        // category drift each fail loudly.
+        Check("ownership audit passes valid rows", !ThrowsAny(() => catalog.ValidateOwnership(garage)));
+        Check("ownership audit rejects an id missing from the catalog", ThrowsAny(() =>
+            catalog.ValidateOwnership(new List<PlayerItemRow> { OwnedRow("p4", "hoverboard", ItemCategory.Transport) })));
+        Check("ownership audit rejects a stored-category drift", ThrowsAny(() =>
+            catalog.ValidateOwnership(new List<PlayerItemRow> { OwnedRow("p4", "used_sedan", ItemCategory.Jewelry) })));
+
+        // LoadAllItems round-trip on a real scratch save: the whole-table read
+        // the boot audit uses returns every row across players, and AddItem's
+        // OR-IGNORE double-own stays a no-op.
+        string path = Path.Combine(Path.GetTempPath(), $"dnd_gritty_items_{Guid.NewGuid():N}.db");
+        ScratchFiles.Add(path);
+        using var db = new DatabaseManager(path);
+        db.InitializeSchema(_schemaPath);
+        var players = new PlayerQueries(db);
+        var persons = new PersonQueries(db);
+        players.Insert(new PlayerRow
+        {
+            PlayerId = "owner1", FirstName = "Test", LastName = "One", Age = 16, TeamId = null,
+            Funds = 100, HealthCeiling = 100, Recklessness = 0, BaseballInterest = 0, DetectionRisk = 0,
+        });
+        players.Insert(new PlayerRow
+        {
+            PlayerId = "owner2", FirstName = "Test", LastName = "Two", Age = 16, TeamId = null,
+            Funds = 100, HealthCeiling = 100, Recklessness = 0, BaseballInterest = 0, DetectionRisk = 0,
+        });
+        persons.AddItem(OwnedRow("owner1", "commuter_bike", ItemCategory.Transport));
+        persons.AddItem(OwnedRow("owner1", "fake_chain", ItemCategory.Jewelry));
+        persons.AddItem(OwnedRow("owner2", "used_sedan", ItemCategory.Transport));
+        persons.AddItem(OwnedRow("owner2", "used_sedan", ItemCategory.Transport)); // OR-IGNORE no-op
+        var loaded = new List<PlayerItemRow>();
+        int count = persons.LoadAllItems(loaded);
+        Check("LoadAllItems reads every row across players (double-own ignored)",
+            count == 3 && loaded.Count == 3, $"{count} rows");
+        Check("boot audit passes over rows read back from the save",
+            !ThrowsAny(() => catalog.ValidateOwnership(loaded)));
+    }
+
+    // ------------------------------------------------------------------
+    // Phone minutes economy + weekly family tick (HS-3,
+    // high_school_person_layer.md §3/§3.2/§4.2/§4.3 — the §9.1 HS-3
+    // acceptance hooks: minutes-economy arithmetic and the "pending event
+    // resolves at 0 minutes" invariant).
+    // ------------------------------------------------------------------
+
+    private static void RunPhoneAndFamilyChecks()
+    {
+        Console.WriteLine("--- Phone minutes economy + family tick (§4.2/§3.2/§4.3) ---");
+
+        ItemCatalog catalog = ItemCatalogJson.Parse(
+            File.ReadAllText(Path.Combine(_repoRoot, "Assets", "Data", "Items", "items.json")));
+
+        string path = Path.Combine(Path.GetTempPath(), $"dnd_gritty_phone_{Guid.NewGuid():N}.db");
+        ScratchFiles.Add(path);
+        using var db = new DatabaseManager(path);
+        db.InitializeSchema(_schemaPath);
+        var players = new PlayerQueries(db);
+        var persons = new PersonQueries(db);
+        var baseball = new BaseballQueries(db);
+        var bus = new EventBus();
+        var impulses = new List<FundsImpulseEvent>();
+        bus.Subscribe<FundsImpulseEvent>(impulses.Add);
+
+        var phone = new PhoneService(db, players, persons, bus);
+        var family = new FamilyService(db, players, persons, baseball, catalog, phone, bus);
+        var shop = new ItemService(db, players, persons, catalog, bus);
+
+        // Two teams pin the parental-support window: 900 = the HS window
+        // open, 901 = graduated (any non-HS tier).
+        baseball.InsertTeam(new TeamRow { TeamId = 900, City = "Test", Name = "Preps", Abbreviation = "PRE" });
+        baseball.UpsertTeamTier(900, LeagueTier.HS);
+        baseball.InsertTeam(new TeamRow { TeamId = 901, City = "Test", Name = "Pros", Abbreviation = "PRO" });
+        baseball.UpsertTeamTier(901, LeagueTier.MLB);
+
+        void AddPerson(string id, int? teamId, double funds)
+        {
+            players.Insert(new PlayerRow
+            {
+                PlayerId = id, FirstName = "Test", LastName = id, Age = 16, TeamId = teamId,
+                Funds = funds, HealthCeiling = 100, Recklessness = 0, BaseballInterest = 0, DetectionRisk = 0,
+            });
+        }
+        double FundsOf(string id) => players.TryGetById(id, out PlayerRow row) ? row.Funds : double.NaN;
+        PhoneStateRow PhoneOf(string id) => persons.TryGetPhone(id, out PhoneStateRow row) ? row : default;
+        int ItemCount(string id)
+        {
+            var rows = new List<PlayerItemRow>();
+            return persons.LoadItemsFor(id, rows);
+        }
+        bool OwnsItem(string id, string itemId)
+        {
+            var rows = new List<PlayerItemRow>();
+            persons.LoadItemsFor(id, rows);
+            return rows.Any(r => r.ItemId == itemId);
+        }
+
+        // --- §4.2 spend arithmetic ---------------------------------------
+        AddPerson("prepaid", 900, 500);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "prepaid", Tier = 1, Plan = PhoneService.PrepaidPlan, MinutesRemaining = 30, PurchasedDay = 0 });
+        AddPerson("unlimited", 900, 500);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "unlimited", Tier = 3, Plan = PhoneService.UnlimitedPlan, MinutesRemaining = 7, PurchasedDay = 0 });
+        AddPerson("norow", 900, 500);
+
+        Check("§4.2 spend: no Phone_State row is free and writes nothing",
+            phone.TrySpendMinutes("norow", PhoneService.CallMinuteCost, onWifi: false, out _)
+            && !persons.TryGetPhone("norow", out _));
+        Check("§4.2 spend: Unlimited bypasses all minute accounting",
+            phone.TrySpendMinutes("unlimited", PhoneService.CallMinuteCost, onWifi: false, out _)
+            && PhoneOf("unlimited").MinutesRemaining == 7);
+        Check("§4.2 spend: Wi-Fi is free on a metered plan",
+            phone.TrySpendMinutes("prepaid", PhoneService.CallMinuteCost, onWifi: true, out _)
+            && PhoneOf("prepaid").MinutesRemaining == 30);
+        bool spentBrowse = phone.TrySpendMinutes("prepaid", PhoneService.MarketplaceBrowseMinuteCost, onWifi: false, out _);
+        bool spentCall = phone.TrySpendMinutes("prepaid", PhoneService.CallMinuteCost, onWifi: false, out _);
+        bool spentText = phone.TrySpendMinutes("prepaid", PhoneService.TextMinuteCost, onWifi: false, out _);
+        Check("§4.2 spend: metered browse+call+text decrement exactly (30-3-6-2=19)",
+            spentBrowse && spentCall && spentText && PhoneOf("prepaid").MinutesRemaining == 19,
+            $"{PhoneOf("prepaid").MinutesRemaining} min");
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "prepaid", Tier = 1, Plan = PhoneService.PrepaidPlan, MinutesRemaining = 2, PurchasedDay = 0 });
+        Check("§4.2 spend: insufficient minutes refuses and writes nothing",
+            !phone.TrySpendMinutes("prepaid", PhoneService.MarketplaceBrowseMinuteCost, onWifi: false, out PhoneActionFailure broke)
+            && broke == PhoneActionFailure.InsufficientMinutes && PhoneOf("prepaid").MinutesRemaining == 2);
+
+        // --- §4.2 carrier bundle -----------------------------------------
+        impulses.Clear();
+        Check("§4.2 bundle: $10 → 100 minutes, funds and balance move together",
+            phone.TryBuyBundle("prepaid", out _)
+            && PhoneOf("prepaid").MinutesRemaining == 102
+            && Math.Abs(FundsOf("prepaid") - 490.0) < 1e-9,
+            $"{PhoneOf("prepaid").MinutesRemaining} min, ${FundsOf("prepaid")}");
+        bus.DispatchPending();
+        Check("§4.2 bundle: funds impulse published post-commit",
+            impulses.Count == 1 && impulses[0].PlayerId == "prepaid" && Math.Abs(impulses[0].Delta + 10.0) < 1e-9);
+        AddPerson("skint", 900, 4);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "skint", Tier = 1, Plan = PhoneService.PrepaidPlan, MinutesRemaining = 0, PurchasedDay = 0 });
+        Check("§4.2 bundle: refused broke, nothing moves",
+            !phone.TryBuyBundle("skint", out PhoneActionFailure skintWhy)
+            && skintWhy == PhoneActionFailure.InsufficientFunds
+            && PhoneOf("skint").MinutesRemaining == 0 && Math.Abs(FundsOf("skint") - 4.0) < 1e-9);
+        Check("§4.2 bundle: refused on Unlimited (NotMetered)",
+            !phone.TryBuyBundle("unlimited", out PhoneActionFailure unlimitedWhy)
+            && unlimitedWhy == PhoneActionFailure.NotMetered);
+
+        // --- §4.1 hardware upgrade (sold at the carrier) ------------------
+        Check("upgrade: burner→mid charges $150 and rewrites tier + purchased_day",
+            phone.TryUpgradePhone("skint", day: 9, out PhoneActionFailure poorWhy) == false
+            && poorWhy == PhoneActionFailure.InsufficientFunds
+            && phone.TryUpgradePhone("prepaid", day: 9, out _)
+            && PhoneOf("prepaid").Tier == 2 && PhoneOf("prepaid").PurchasedDay == 9
+            && Math.Abs(FundsOf("prepaid") - 340.0) < 1e-9,
+            $"tier {PhoneOf("prepaid").Tier}, ${FundsOf("prepaid")}");
+        Check("upgrade: flagship refuses TopTierOwned",
+            !phone.TryUpgradePhone("unlimited", day: 9, out PhoneActionFailure topWhy)
+            && topWhy == PhoneActionFailure.TopTierOwned);
+        Check("upgrade: no rung is priced outside 2-3",
+            PhoneService.PriceForTier(2) == PhoneService.MidTierPhonePrice
+            && PhoneService.PriceForTier(3) == PhoneService.FlagshipPhonePrice
+            && ThrowsAny(() => PhoneService.PriceForTier(1)));
+
+        // --- §4.2 Basic-plan weekly refill ---------------------------------
+        AddPerson("basic", 900, 100);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "basic", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 12, PurchasedDay = 0 });
+        Check("§4.2 refill: Basic below the allotment tops up to exactly 50",
+            phone.ApplyWeeklyRefill("basic") && PhoneOf("basic").MinutesRemaining == PhoneService.BasicWeeklyRefillMinutes);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "basic", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 80, PurchasedDay = 0 });
+        Check("§4.2 refill: a topped-up balance is never reduced",
+            !phone.ApplyWeeklyRefill("basic") && PhoneOf("basic").MinutesRemaining == 80);
+        Check("§4.2 refill: Prepaid and Unlimited are untouched",
+            !phone.ApplyWeeklyRefill("skint") && !phone.ApplyWeeklyRefill("unlimited") && !phone.ApplyWeeklyRefill("norow"));
+
+        // --- §3/§3.2 weekly family tick ------------------------------------
+        AddPerson("kid", 900, 100);
+        persons.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = "kid", WealthTier = 3, HouseholdIncome = 135_000,
+            Parent1Id = null, Parent2Id = null, HomeWifi = true, AllowanceWeekly = 60, Strictness = 50,
+        });
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "kid", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 10, PurchasedDay = 0 });
+
+        family.ProcessDay("kid", 8); // 8 % 7 != 0
+        Check("§3.2 tick: a non-cadence day is a complete no-op",
+            Math.Abs(FundsOf("kid") - 100.0) < 1e-9 && PhoneOf("kid").MinutesRemaining == 10 && ItemCount("kid") == 0);
+
+        bus.DispatchPending(); // drain the queued upgrade/bundle impulses first (publish is deferred)
+        impulses.Clear();
+        family.ProcessDay("kid", 7);
+        bus.DispatchPending();
+        Check("§3 tick: allowance paid (+60), impulse published, refill applied",
+            Math.Abs(FundsOf("kid") - 160.0) < 1e-9
+            && impulses.Count == 1 && impulses[0].PlayerId == "kid" && Math.Abs(impulses[0].Delta - 60.0) < 1e-9
+            && PhoneOf("kid").MinutesRemaining == 50,
+            $"${FundsOf("kid")}, {PhoneOf("kid").MinutesRemaining} min");
+        Check("§3.2 tick: tier-3 parents gift the highest qualifying rung (used_sedan), avatar funds untouched by it",
+            ItemCount("kid") == 1 && OwnsItem("kid", "used_sedan"));
+
+        family.ProcessDay("kid", 14);
+        Check("§3.2 tick: week 2 buys the next uncovered rung (mall_wardrobe, bike covered by the sedan)",
+            ItemCount("kid") == 2 && OwnsItem("kid", "mall_wardrobe") && !OwnsItem("kid", "commuter_bike")
+            && Math.Abs(FundsOf("kid") - 220.0) < 1e-9);
+
+        family.ProcessDay("kid", 21);
+        Check("§3.2 tick: week 3 has nothing left to gift (everything at-level is covered)",
+            ItemCount("kid") == 2 && Math.Abs(FundsOf("kid") - 280.0) < 1e-9);
+
+        AddPerson("rich", 900, 0);
+        persons.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = "rich", WealthTier = 4, HouseholdIncome = 320_000,
+            Parent1Id = null, Parent2Id = null, HomeWifi = true, AllowanceWeekly = 150, Strictness = 50,
+        });
+        family.ProcessDay("rich", 7);
+        family.ProcessDay("rich", 14);
+        family.ProcessDay("rich", 21);
+        Check("§3.2 tick: tier-4 ladder gifts coupe then jacket then stops (wardrobe covered)",
+            ItemCount("rich") == 2 && OwnsItem("rich", "new_coupe") && OwnsItem("rich", "designer_jacket")
+            && Math.Abs(FundsOf("rich") - 450.0) < 1e-9);
+
+        AddPerson("modest", 900, 100);
+        persons.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = "modest", WealthTier = 2, HouseholdIncome = 72_000,
+            Parent1Id = null, Parent2Id = null, HomeWifi = true, AllowanceWeekly = 25, Strictness = 50,
+        });
+        family.ProcessDay("modest", 7);
+        Check("§3.2 tick: tier-2 parents pay allowance but never auto-purchase",
+            Math.Abs(FundsOf("modest") - 125.0) < 1e-9 && ItemCount("modest") == 0);
+
+        AddPerson("grad", 901, 100); // non-HS team: the parental-support window is closed
+        persons.UpsertFamily(new FamilyBackgroundRow
+        {
+            PlayerId = "grad", WealthTier = 3, HouseholdIncome = 135_000,
+            Parent1Id = null, Parent2Id = null, HomeWifi = true, AllowanceWeekly = 60, Strictness = 50,
+        });
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "grad", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 5, PurchasedDay = 0 });
+        family.ProcessDay("grad", 7);
+        Check("§3.2 tick: a graduated avatar keeps the plan refill but loses allowance and gifts",
+            Math.Abs(FundsOf("grad") - 100.0) < 1e-9 && ItemCount("grad") == 0
+            && PhoneOf("grad").MinutesRemaining == 50);
+
+        AddPerson("legacy", 900, 100); // pre-HS-2 save shape: no family row at all
+        family.ProcessDay("legacy", 7);
+        Check("§3.2 tick: no Family_Background row is a clean no-op",
+            Math.Abs(FundsOf("legacy") - 100.0) < 1e-9 && ItemCount("legacy") == 0);
+
+        // --- §3.1 self-buy transport reward --------------------------------
+        AddPerson("earner", null, 2000);
+        Check("§3.1 first self-bought transport pays +5 work_ethic/discipline/maturity",
+            shop.TryPurchase("earner", "skateboard", day: 3, out _)
+            && persons.TryGet("earner", out PersonRow earned)
+            && earned.WorkEthic == 55 && earned.Discipline == 55 && earned.Maturity == 55
+            && Math.Abs(FundsOf("earner") - 1920.0) < 1e-9);
+        Check("§3.1 the reward is one-time (a second transport pays nothing)",
+            shop.TryPurchase("earner", "commuter_bike", day: 4, out _)
+            && persons.TryGet("earner", out PersonRow second)
+            && second.WorkEthic == 55 && second.Discipline == 55 && second.Maturity == 55);
+        AddPerson("gifted", null, 2000);
+        persons.AddItem(new PlayerItemRow { PlayerId = "gifted", ItemId = "commuter_bike", Category = ItemCategory.Transport, AcquiredDay = 0 });
+        Check("§3.1 a gifted-transport player never earns the reward",
+            shop.TryPurchase("gifted", "used_sedan", day: 3, out _)
+            && !persons.TryGet("gifted", out _));
+        AddPerson("shopper", null, 2000);
+        Check("§3.1 a non-transport purchase never touches person stats",
+            shop.TryPurchase("shopper", "fake_chain", day: 3, out _)
+            && !persons.TryGet("shopper", out _));
+
+        // --- §4.3 the narrative-never-gates invariant ----------------------
+        // An avatar with a metered phone at literally 0 minutes: the event
+        // still fires, still parks as a pending choice, and resolving it
+        // applies every consequence while the Phone_State row stays
+        // byte-identical. Nothing in Narrative can even reference the phone —
+        // this proves the wired path end to end.
+        const string brokeJson =
+            """
+            { "events": [
+              { "id": "no_minutes_event", "scope": "avatar", "weight": 1.0,
+                "choices": [ { "id": "answer", "autopilot_weight": 1, "consequences": [
+                  { "type": "funds", "amount": -50 } ] } ] }
+            ] }
+            """;
+        using (World world = World.Create("phoneInvariant", GrittyEventJson.Parse(brokeJson)))
+        {
+            world.Applier.AutopilotAvatarChoices = false;
+            world.AddPlayer("hero", age: 17, teamId: 900, funds: 1000);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            var worldPersons = new PersonQueries(world.Db);
+            worldPersons.UpsertPhone(new PhoneStateRow
+            {
+                PlayerId = "hero", Tier = 1, Plan = PhoneService.PrepaidPlan, MinutesRemaining = 0, PurchasedDay = 0,
+            });
+
+            world.Dispatcher.PollOnce(); // record the boot day
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool pending = world.Applier.HasPendingChoice;
+            if (pending)
+            {
+                world.Applier.ResolveChoice(0);
+                world.Bus.DispatchPending();
+            }
+            world.Players.TryGetById("hero", out PlayerRow heroAfter);
+            worldPersons.TryGetPhone("hero", out PhoneStateRow phoneAfter);
+            Check("§4.3 a pending event fires, parks, and resolves at 0 minutes",
+                pending && !world.Applier.HasPendingChoice
+                && Math.Abs(heroAfter.Funds - 950.0) < 1e-9,
+                $"pending={pending}, funds={heroAfter.Funds}");
+            Check("§4.3 the zero-minute Phone_State row is byte-identical after the resolve",
+                phoneAfter.Tier == 1 && phoneAfter.Plan == PhoneService.PrepaidPlan
+                && phoneAfter.MinutesRemaining == 0 && phoneAfter.PurchasedDay == 0);
+        }
+    }
+
+    private static bool ItemParseThrows(string json)
+    {
+        try
+        {
+            ItemCatalogJson.Parse(json);
+            return false;
+        }
+        catch (FormatException)
+        {
+            return true;
+        }
+    }
+
+    private static PlayerItemRow OwnedRow(string playerId, string itemId, ItemCategory category) => new()
+    {
+        PlayerId = playerId,
+        ItemId = itemId,
+        Category = category,
+        AcquiredDay = 0,
+    };
 
     // ------------------------------------------------------------------
     // Plumbing

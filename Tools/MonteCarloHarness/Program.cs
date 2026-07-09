@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -2777,6 +2778,34 @@ internal static class Program
         Check("§3 wealth table verbatim: funds/allowance/phone/plan/Wi-Fi/transport/social seed per tier "
             + "(tier-2 funds = the shipped flat $500)", tableOk);
 
+        // HS-3 contract mirror (items.json §5): every transport-gift id the
+        // creation engine writes must ship in the catalog as a Transport
+        // entry. GrittyEventsHarness pins the same three ids from the catalog
+        // side; this side walks the raw file so the check moves the moment
+        // BackstoryProfile does. (A text-level walk on purpose — the catalog
+        // classes live in Economy, which this harness deliberately does not
+        // compile.)
+        string itemsJsonPath = Path.GetFullPath(Path.Combine(
+            Path.GetDirectoryName(schemaPath)!, "..", "Items", "items.json"));
+        using (JsonDocument itemsDoc = JsonDocument.Parse(File.ReadAllText(itemsJsonPath)))
+        {
+            var transportIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JsonElement item in itemsDoc.RootElement.GetProperty("items").EnumerateArray())
+            {
+                if (item.GetProperty("category").GetString() == "Transport")
+                {
+                    transportIds.Add(item.GetProperty("id").GetString()!);
+                }
+            }
+            bool giftsShipped = true;
+            for (int tier = 0; tier <= 4; tier++)
+            {
+                string? gift = BackstoryGenerator.TransportGiftFor(tier);
+                giftsShipped &= gift is null || transportIds.Contains(gift);
+            }
+            Check("HS-3 items.json ships every §3.1 transport-gift id as a Transport entry", giftsShipped);
+        }
+
         bool ladderOk =
             BackstoryGenerator.WealthTierForFunds(0) == 0
             && BackstoryGenerator.WealthTierForFunds(199) == 0
@@ -2927,7 +2956,8 @@ internal static class Program
 
             var preRoster = new List<RosterPlayerRow>();
             baseball.LoadRoster(preRoster);
-            career.CreateAvatar("You", "Dynasty", 3, Ratings60Batter(), in bs);
+            career.CreateAvatar("You", "Dynasty", 3, Ratings60Batter(), in bs,
+                personSeed: null, PitcherRole.Starter, new[] { "trait_leader", "trait_humble" });
             var postRoster = new List<RosterPlayerRow>();
             baseball.LoadRoster(postRoster);
             string avatarId = career.AvatarPlayerId;
@@ -2967,6 +2997,17 @@ internal static class Program
                 persons.TryGetPhone(avatarId, out PhoneStateRow phoneRow)
                 && phoneRow.Tier == bs.PhoneTier && phoneRow.Plan == bs.PhonePlan
                 && phoneRow.MinutesRemaining == bs.PhoneMinutes && phoneRow.PurchasedDay == 0);
+
+            // HS-3 seam pass (the HS-2 review's deferred finding): the trait
+            // picker's flag names ride the CreateAvatar call and commit inside
+            // the creation batch — the UI no longer writes the database.
+            var avatarFlags = new List<EntityFlagRow>();
+            players.LoadActiveFlags(avatarId, avatarFlags);
+            Check("trait flags handed to CreateAvatar are active in the creation batch (UI writes nothing)",
+                avatarFlags.Count == 2
+                && avatarFlags.Any(f => f.FlagName == "trait_leader")
+                && avatarFlags.Any(f => f.FlagName == "trait_humble"),
+                $"{avatarFlags.Count} flags");
 
             var items = new List<PlayerItemRow>();
             persons.LoadItemsFor(avatarId, items);
