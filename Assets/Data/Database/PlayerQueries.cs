@@ -123,6 +123,20 @@ public sealed class PlayerQueries
     private const string SqlSelectAllRelationships =
         "SELECT rel_id, player_1_id, player_2_id, affinity_score, type_enum FROM Relationships;";
 
+    // Relationship_History (schema v13): append-only "ever partnered" ledger
+    // — OR IGNORE makes a redundant flush of an already-recorded pair a
+    // silent no-op (RelationshipGraph's dirty-history set can resend one
+    // across sessions harmlessly). No UPDATE arm; the fact never changes
+    // once true.
+    private const string SqlInsertRelationshipHistory =
+        "INSERT OR IGNORE INTO Relationship_History (player_1_id, player_2_id) VALUES (@player1Id, @player2Id);";
+
+    // Boot-time hydration for RelationshipGraph.SeedHistory — same
+    // deliberate full-scan precedent as SqlSelectAllRelationships (the
+    // history table is a small fraction of Relationships' row count).
+    private const string SqlSelectAllRelationshipHistory =
+        "SELECT player_1_id, player_2_id FROM Relationship_History;";
+
     // Roster-availability writer (schema v8, Phase 8c): one absence per player,
     // whichever ends LATER wins wholesale — the conditional DO UPDATE ... WHERE
     // makes a shorter overlapping absence a no-op, so the AvailabilityLedger's
@@ -191,6 +205,8 @@ public sealed class PlayerQueries
     private readonly SqliteCommand _upsertRelationship;
     private readonly SqliteCommand _selectRelationshipsFor;
     private readonly SqliteCommand _selectAllRelationships;
+    private readonly SqliteCommand _insertRelationshipHistory;
+    private readonly SqliteCommand _selectAllRelationshipHistory;
     private readonly SqliteCommand _upsertAbsence;
     private readonly SqliteCommand _selectActiveAbsences;
     private readonly SqliteCommand _selectAbsenceById;
@@ -246,6 +262,10 @@ public sealed class PlayerQueries
 
         _selectRelationshipsFor = Acquire(SqlSelectRelationshipsFor, ("@playerId", SqliteType.Text));
         _selectAllRelationships = Acquire(SqlSelectAllRelationships);
+
+        _insertRelationshipHistory = Acquire(SqlInsertRelationshipHistory,
+            ("@player1Id", SqliteType.Text), ("@player2Id", SqliteType.Text));
+        _selectAllRelationshipHistory = Acquire(SqlSelectAllRelationshipHistory);
 
         _upsertAbsence = Acquire(SqlUpsertAbsence,
             ("@playerId", SqliteType.Text), ("@reason", SqliteType.Integer), ("@untilDay", SqliteType.Integer),
@@ -652,6 +672,39 @@ public sealed class PlayerQueries
         AffinityScore = reader.GetInt32(3),
         Type = RelationshipTypeMap.FromDbString(reader.GetString(4)),
     };
+
+    /// <summary>
+    /// Records that this unordered pair was, at some point, a Partner edge —
+    /// the graph-reaching substrate hs_clubhouse_cancer's prerequisite reads
+    /// (RelationshipGraph.SetRelationship calls this once, the moment a pair
+    /// first becomes Partner). Ids are canonicalized like UpsertRelationship;
+    /// INSERT OR IGNORE makes the write idempotent, so RelationshipGraph never
+    /// needs to know whether a pair was already recorded.
+    /// </summary>
+    public void InsertRelationshipHistory(string playerAId, string playerBId)
+    {
+        if (string.CompareOrdinal(playerAId, playerBId) > 0)
+        {
+            (playerAId, playerBId) = (playerBId, playerAId);
+        }
+
+        SqliteParameterCollection p = _insertRelationshipHistory.Parameters;
+        p["@player1Id"].Value = playerAId;
+        p["@player2Id"].Value = playerBId;
+        _db.ExecuteNonQuery(_insertRelationshipHistory);
+    }
+
+    /// <summary>Bulk-loads every ever-partnered pair into <paramref name="destination"/> (cleared first) — RelationshipGraph.SeedHistory's hydration.</summary>
+    public int LoadAllRelationshipHistory(List<(string PlayerAId, string PlayerBId)> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllRelationshipHistory);
+        while (reader.Read())
+        {
+            destination.Add((reader.GetString(0), reader.GetString(1)));
+        }
+        return destination.Count;
+    }
 
     /// <summary>
     /// Loads <paramref name="parentId"/>'s children (full PlayerRows) into

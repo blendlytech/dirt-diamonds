@@ -81,6 +81,20 @@ public sealed class RelationshipGraph
     // flush set. Hydration (Seed) never dirties: those rows came FROM the DB.
     private readonly HashSet<(string, string)> _dirty = new();
 
+    // Canonical pairs that were EVER a Partner edge — the append-only "ex"
+    // ledger a Friend/Rival reclassification can't otherwise recover, since
+    // EdgeData only carries the CURRENT kind. Decoupled from _edges/_dirty on
+    // purpose: this fact never reverts once true, so it needs its own
+    // never-cleared membership set and its own one-way dirty set, and every
+    // existing edge consumer (adjacency, CollectEdges, CollectDirty, the
+    // Partner-lookup callers) stays untouched.
+    private readonly HashSet<(string, string)> _everPartnerPairs = new();
+
+    // Newly-true history pairs since the last CollectDirtyHistory — mirrors
+    // _dirty's flush-set role, but append-only (a pair is added once and
+    // never re-dirtied). Hydration (SeedHistory) never dirties, same as Seed.
+    private readonly HashSet<(string, string)> _dirtyHistory = new();
+
     private EventBus? _bus;
 
     public int EdgeCount => _edges.Count;
@@ -121,6 +135,19 @@ public sealed class RelationshipGraph
     /// immediately announces every currently active rivalry, so a subscriber
     /// wired at boot needs no separate hydration handshake with this graph.
     /// </summary>
+    /// <summary>
+    /// Boot-time hydration of the ever-partner ledger (Relationship_History),
+    /// the <see cref="Seed"/> counterpart — idempotent (a pair already known
+    /// is a no-op) and non-dirtying, called once right after Seed.
+    /// </summary>
+    public void SeedHistory(IReadOnlyList<(string PlayerAId, string PlayerBId)> pairs)
+    {
+        for (int i = 0; i < pairs.Count; i++)
+        {
+            _everPartnerPairs.Add(CanonicalKey(pairs[i].PlayerAId, pairs[i].PlayerBId));
+        }
+    }
+
     public void AttachTo(EventBus bus)
     {
         _bus = bus;
@@ -169,11 +196,43 @@ public sealed class RelationshipGraph
         _edges[key] = new EdgeData { Affinity = clamped, Kind = kind };
         _dirty.Add(key);
 
+        // Monotonic ex-history mark: every path that ever sets a Partner edge
+        // (a fresh mint, an NpcAutonomyService promotion, a rekindle) records
+        // it here for free — a later reclassify to Friend/Rival cannot lose
+        // it, since membership is add-only. Add() is already idempotent; the
+        // dirty side only needs to resend a pair the DB doesn't have yet.
+        if (kind == RelationshipKind.Partner && _everPartnerPairs.Add(key))
+        {
+            _dirtyHistory.Add(key);
+        }
+
         byte newIntensity = RivalryIntensity(clamped, kind);
         if (newIntensity != oldIntensity)
         {
             _bus?.Publish(new RivalryChangedEvent(key.Item1, key.Item2, newIntensity));
         }
+    }
+
+    /// <summary>Whether this unordered pair was ever a Partner edge, current kind notwithstanding — the graph-reaching check for "is X an ex of Y."</summary>
+    public bool WasEverPartner(string playerAId, string playerBId) =>
+        _everPartnerPairs.Contains(CanonicalKey(playerAId, playerBId));
+
+    /// <summary>
+    /// Persistence bridge counterpart to <see cref="CollectDirty"/>: fills
+    /// <paramref name="destination"/> (cleared first) with every pair newly
+    /// marked ever-partner since the previous call, then resets the set.
+    /// GameManager flushes these through PlayerQueries.InsertRelationshipHistory
+    /// on the same day-cadence as the edge flush.
+    /// </summary>
+    public int CollectDirtyHistory(List<(string PlayerAId, string PlayerBId)> destination)
+    {
+        destination.Clear();
+        foreach ((string, string) key in _dirtyHistory)
+        {
+            destination.Add((key.Item1, key.Item2));
+        }
+        _dirtyHistory.Clear();
+        return destination.Count;
     }
 
     /// <summary>

@@ -132,6 +132,7 @@ public sealed partial class GameManager : Node
     private readonly List<NeedsRow> _needsScratch = new();
     private readonly List<StressRow> _stressScratch = new();
     private readonly List<RelationshipSeed> _relationshipScratch = new();
+    private readonly List<(string PlayerAId, string PlayerBId)> _relationshipHistoryScratch = new();
 
     // HS-4 person-layer bridge scratch: the settle list holds what the flush
     // batch actually applied per hydrated person (only the avatar this arc)
@@ -429,6 +430,14 @@ public sealed partial class GameManager : Node
         }
         Relationships = new RelationshipGraph();
         Relationships.Seed(relationshipSeeds);
+
+        // Relationship_History (schema v13): the ever-partner ledger
+        // hs_clubhouse_cancer's graph-reaching prerequisite reads. Hydrated
+        // right after Seed, same non-dirtying idempotent shape.
+        var historyPairs = new List<(string PlayerAId, string PlayerBId)>();
+        Players.LoadAllRelationshipHistory(historyPairs);
+        Relationships.SeedHistory(historyPairs);
+
         Relationships.AttachTo(Events);
         // HS-5 (person-layer doc §8): the weekly NPC autonomy tick, on its own
         // rng fork (Split never advances the parent stream — the schema-v4
@@ -1094,7 +1103,9 @@ public sealed partial class GameManager : Node
     /// </summary>
     private void PersistRelationships(DayAdvancedEvent _)
     {
-        if (Relationships.CollectDirty(_relationshipScratch) == 0)
+        int dirtyEdges = Relationships.CollectDirty(_relationshipScratch);
+        int dirtyHistory = Relationships.CollectDirtyHistory(_relationshipHistoryScratch);
+        if (dirtyEdges == 0 && dirtyHistory == 0)
         {
             return;
         }
@@ -1105,6 +1116,11 @@ public sealed partial class GameManager : Node
             {
                 RelationshipSeed edge = _relationshipScratch[i];
                 Players.UpsertRelationship(edge.PlayerAId, edge.PlayerBId, edge.Affinity, ToType(edge.Kind));
+            }
+            for (int i = 0; i < _relationshipHistoryScratch.Count; i++)
+            {
+                (string playerAId, string playerBId) = _relationshipHistoryScratch[i];
+                Players.InsertRelationshipHistory(playerAId, playerBId);
             }
             Database.CommitBatch();
         }

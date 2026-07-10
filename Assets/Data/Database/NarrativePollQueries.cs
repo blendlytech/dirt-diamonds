@@ -9,6 +9,13 @@ namespace DirtAndDiamonds.Data;
 /// join is HS-5's Family_Background.strictness (a PK LEFT JOIN, COALESCEd to
 /// the neutral 50 for the no-row majority), so parental-approval content can
 /// gate on how strict the household actually is.
+///
+/// TeammateExOfPartner is the second, graph-reaching addition (schema v13):
+/// true when the subject has a live Partner edge AND that partner has a
+/// Relationship_History row with one of the subject's teammates — i.e. "does
+/// a teammate have an ex who is my current partner" is answerable from the
+/// poll thread's read-only DB view, never the main-thread RelationshipGraph
+/// (hs_clubhouse_cancer, high_school_person_layer.md §9 disclosure (2)).
 /// </summary>
 public struct PollPlayerRow
 {
@@ -21,6 +28,7 @@ public struct PollPlayerRow
     public int BaseballInterest;
     public int DetectionRisk;
     public int Strictness;
+    public bool TeammateExOfPartner;
 }
 
 /// <summary>
@@ -40,9 +48,36 @@ public sealed class NarrativePollQueries
     // Schema MCP-validated 2026-07-09 (No Blind Queries): Family_Background
     // is PK player_id with strictness INTEGER NOT NULL DEFAULT 50 — the
     // LEFT JOIN rides the primary key, and COALESCE keeps row shape total.
+    //
+    // TeammateExOfPartner (schema v13, MCP-validated against the live save
+    // with a synthetic history row before wiring): RelPairs/HistPairs unpivot
+    // Relationships/Relationship_History bidirectionally so the correlated
+    // EXISTS needs no player_1/player_2 OR-branching. For subject p: find p's
+    // current Partner edge (partner_rel), then check whether the OTHER end
+    // of that edge (the partner) has ANY Relationship_History row (ex_hist)
+    // whose other side is a teammate of p (excluding p itself). Runs once per
+    // evaluated day over the whole poll, same cost class as the strictness
+    // join — Relationships/Relationship_History are both small tables next
+    // to Players.
     private const string SqlSelectPollPlayers =
+        "WITH RelPairs AS (" +
+        "  SELECT player_1_id AS pid, player_2_id AS other_id, type_enum FROM Relationships " +
+        "  UNION ALL " +
+        "  SELECT player_2_id AS pid, player_1_id AS other_id, type_enum FROM Relationships" +
+        "), HistPairs AS (" +
+        "  SELECT player_1_id AS pid, player_2_id AS other_id FROM Relationship_History " +
+        "  UNION ALL " +
+        "  SELECT player_2_id AS pid, player_1_id AS other_id FROM Relationship_History" +
+        ") " +
         "SELECT p.player_id, p.age, p.team_id, p.funds, p.health_ceiling, p.recklessness, " +
-        "p.baseball_interest, p.detection_risk, COALESCE(f.strictness, 50) " +
+        "p.baseball_interest, p.detection_risk, COALESCE(f.strictness, 50), " +
+        "CASE WHEN EXISTS (" +
+        "  SELECT 1 FROM RelPairs partner_rel " +
+        "  JOIN HistPairs ex_hist ON ex_hist.pid = partner_rel.other_id " +
+        "  JOIN Players teammate ON teammate.player_id = ex_hist.other_id " +
+        "  WHERE partner_rel.pid = p.player_id AND partner_rel.type_enum = 'Partner' " +
+        "    AND teammate.team_id = p.team_id AND teammate.player_id != p.player_id" +
+        ") THEN 1 ELSE 0 END " +
         "FROM Players p LEFT JOIN Family_Background f ON f.player_id = p.player_id;";
 
     // Rides idx_entity_flags_active_name (the v1 partial index built for the
@@ -122,6 +157,7 @@ public sealed class NarrativePollQueries
                 BaseballInterest = reader.GetInt32(6),
                 DetectionRisk = reader.GetInt32(7),
                 Strictness = reader.GetInt32(8),
+                TeammateExOfPartner = reader.GetInt32(9) != 0,
             });
         }
         return destination.Count;

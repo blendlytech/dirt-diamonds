@@ -104,6 +104,29 @@ CREATE TABLE IF NOT EXISTS Relationships (
 CREATE INDEX IF NOT EXISTS idx_relationships_player_2 ON Relationships(player_2_id);
 
 -- ----------------------------------------------------------------------------
+-- Relationship_History — schema v13. Append-only "ever partnered" ledger,
+-- same canonical (player_1_id < player_2_id) ordering as Relationships. It
+-- exists because Relationships.type_enum only holds the CURRENT kind: once a
+-- Partner edge is reclassified to Friend/Rival (an organic NPC breakup via
+-- NpcAutonomyService, or the avatar's end_partnership/rekindle_partnership
+-- consequences), nothing else records that the pair ever dated. A row here
+-- means exactly that, permanently — written once when a pair first becomes
+-- Partner, never cleared. This is the graph-reaching substrate
+-- hs_clubhouse_cancer's prerequisite needs to ask "does a teammate have an ex
+-- who is my current partner" from the poll thread's read-only DB view,
+-- instead of firing on flavor text alone (high_school_person_layer.md §9
+-- disclosure (2)).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Relationship_History (
+    player_1_id TEXT NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    player_2_id TEXT NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    CHECK (player_1_id <> player_2_id),
+    PRIMARY KEY (player_1_id, player_2_id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_relationship_history_player_2 ON Relationship_History(player_2_id);
+
+-- ----------------------------------------------------------------------------
 -- Entity_Flags — narrative prerequisites for the Gritty Event System.
 -- set_on_day is the absolute game-day ordinal the flag was written, so
 -- cascades can fire "seasons later". UNIQUE(player_id, flag_name) doubles as
@@ -515,6 +538,6 @@ CREATE TABLE IF NOT EXISTS Child_Rearing_Commitment (
 
 COMMIT;
 
--- Schema version 12 — adds Child_Rearing_Commitment (purely additive; see
--- its own comment above). Bump with every migration.
-PRAGMA user_version = 12;
+-- Schema version 13 — adds Relationship_History (purely additive; see its
+-- own comment above). Bump with every migration.
+PRAGMA user_version = 13;
