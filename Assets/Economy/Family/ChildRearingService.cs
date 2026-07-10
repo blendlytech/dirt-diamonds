@@ -36,6 +36,34 @@ public sealed class ChildRearingService
     // no Monte Carlo proof required, this isn't the baseball engine).
     public const double ChildSupportPerChild = 20.0;
 
+    /// <summary>
+    /// Weekly family-hours treated as the neutral baseline for the care axis
+    /// (below it, care decays; above it, care grows). Calibrated to the
+    /// FamilyRow slider (0–24h/day, accumulated across 7 days), not an
+    /// arbitrary round number: the old baseline of 2h/WEEK meant any single
+    /// ~1h/day habit already saturated the delta, making the axis a near
+    /// on/off switch instead of a gradient.
+    /// </summary>
+    public const float CareNeutralHoursPerWeek = 3f;
+
+    /// <summary>Weekly family hours needed per additional ±1 care-axis point beyond the baseline.</summary>
+    public const float CareHoursPerPoint = 2f;
+
+    /// <summary>
+    /// Weekly discretionary $ (Child_Rearing_Commitment.weekly_funding,
+    /// schema-capped at 300) needed per +1 funding-axis point. Chosen so the
+    /// schema's actual $300/wk ceiling lands exactly at the +5 cap — the old
+    /// $25 divisor saturated at $150/wk, leaving the top half of the
+    /// commitment range with no further effect.
+    /// </summary>
+    public const int FundingDollarsPerPoint = 50;
+
+    /// <summary>Weekly neglect-axis gain when the avatar logs zero family hours AND zero funding.</summary>
+    public const int NeglectAccrualDelta = 3;
+
+    /// <summary>Weekly neglect-axis decay whenever either hours or funding is nonzero.</summary>
+    public const int NeglectRecoveryDelta = -1;
+
     // PersonQueries.AdjustChildAxis's axisIndex contract: the Narrative
     // ChildAxis ordinal, mirrored (not referenced — this assembly stays
     // Narrative-free) per ChildAxisColumns' own contract comment.
@@ -82,9 +110,15 @@ public sealed class ChildRearingService
             ? commitment.WeeklyFunding
             : 0;
 
-        int careDelta = Math.Clamp((int)MathF.Round(familyHoursThisWeek) - 2, -3, 5);
-        int fundingDelta = Math.Clamp(weeklyFunding / 25 - 1, -3, 5);
-        int neglectDelta = familyHoursThisWeek <= 0f && weeklyFunding <= 0 ? 3 : -1;
+        int careDelta = Math.Clamp(
+            RoundAwayFromZero((familyHoursThisWeek - CareNeutralHoursPerWeek) / CareHoursPerPoint),
+            -2, 5);
+        int fundingDelta = Math.Clamp(
+            RoundAwayFromZero((double)weeklyFunding / FundingDollarsPerPoint - 1.0),
+            -1, 5);
+        int neglectDelta = familyHoursThisWeek <= 0f && weeklyFunding <= 0
+            ? NeglectAccrualDelta
+            : NeglectRecoveryDelta;
 
         double totalExpense = weeklyFunding + (ChildSupportPerChild * _childrenScratch.Count);
 
@@ -117,4 +151,10 @@ public sealed class ChildRearingService
             _bus.Publish(new FundsImpulseEvent(avatarId, -totalExpense));
         }
     }
+
+    // The codebase-wide rounding discipline (NurtureBlend/DevelopmentManager's
+    // own private helper of the same name) — away-from-zero, not the CLR's
+    // to-even default, so a .5 always breaks toward the larger-magnitude delta.
+    private static int RoundAwayFromZero(double value) =>
+        (int)Math.Round(value, MidpointRounding.AwayFromZero);
 }

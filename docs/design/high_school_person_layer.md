@@ -583,9 +583,38 @@ events, so this is genuinely new.
 | `PotentialNurtureCap` | ±8 | §7.2 |
 | `InterestNurtureCap` | ±20 | §7.2 |
 | Nurture weights (coach/fund/neglect) | 0.5 / 0.3 / 0.5 | §7.2 |
-| `MaxPairInteractionsPerWeek` | 256 | §8.1 |
+| `ChildSupportPerChild` | $20/wk, mandatory | §7.1 |
+| `CareNeutralHoursPerWeek` / `CareHoursPerPoint` | 3h baseline, ±1pt per 2h beyond it | §7.1 |
+| `FundingDollarsPerPoint` | $50/wk per +1pt (schema's $300 cap ⇒ +5 cap exactly) | §7.1 |
+| Neglect accrual / recovery | +3/wk (zero hours AND zero funding) / −1/wk otherwise | §7.1 |
+| `MaxPairInteractionsPerWeek` (+ tier shares 128/64/remainder) | 256 (same-team 128, edge 64, random remainder) | §8.1 |
+| `MintProbability` | 0.15 per edgeless draw | §8.1 |
+| `PartnerPromoteProbability` / `PartnerPromoteMinAffinity` | 0.04 per interaction / affinity ≥15 | §8.1 |
+| `BreakupProbability` / `BreakupBitterShare` | 0.02 per interaction / 40% bitter | §8.1 |
+| Breakup affinities (friend / rival) | +15 / −25 | §8.1 |
+| `MaxNudge`, `PositiveFloor`/`PositiveRange` | ±1–3 magnitude, 0.25–0.75 positive-outcome probability | §8.1 |
 
 All values here are first-pass and change as **data edits**, not logic edits —
 the `HeirGeneticsProfile` / `NeedDecayProfile` / `TierEffects` table discipline.
 Any edit that reaches the sim (§6, §7 potential blend feeding a playable heir)
 re-runs `run_monte_carlo_batch` under the standing rule.
+
+### 11.1 2026-07-10 tuning pass
+
+`ChildRearingService`'s `careDelta`/`fundingDelta` formulas were rescaled
+(values only, no schema/logic change): the original 2h/week care baseline and
+$25-per-point funding divisor saturated the ±5 cap almost immediately — any
+single ~1h/day family habit maxed care, and funding maxed out at $150/wk even
+though `Child_Rearing_Commitment.weekly_funding` allows up to $300. The new
+baseline (3h/week neutral, ±1 care point per 2h beyond it) and funding divisor
+($50/point) give a real gradient across the slider's/schema's actual reachable
+ranges, and funding now saturates exactly at the schema's $300 ceiling instead
+of leaving its top half inert. Also switched the rounding from the CLR's
+to-even default to the codebase-wide away-from-zero discipline
+(`NurtureBlend`/`DevelopmentManager`'s own `RoundAwayFromZero`), which this
+formula had silently diverged from. `NpcAutonomyService`'s constants were
+reviewed and left unchanged — each already carries an inline first-principles
+justification (reachable-band comments) from HS-5 authorship; no gradient or
+reachability defect was found. No harness pins exact numeric output from
+either service (both are structural/conservation-checked only), so this is a
+pure data edit — no golden reset required.

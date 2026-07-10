@@ -476,3 +476,25 @@ Both NEXT items from the PersonLedger entry resolved. **(1) Commit state:** `git
 **Gates:** `dotnet build` 0/0. GrittyEvents **206→210/210**. MonteCarloHarness **345/345** unchanged, no band moved (Narrative folder isn't in either sim's compile set). CoreLoopHarness **22/22** unchanged. NeedsDecayHarness **94/94** unchanged (confirms `LifeSimManager.OnPersonStatImpulse`'s existing subscriber-side behavior needed no changes — it was always correct and waiting for a publisher). SchemaValidator **111/111** unchanged (no schema touch).
 
 **NEXT / model assignments:** remaining open Sonnet seam is just autonomy/rearing first-pass constants (`NpcAutonomyService`/`ChildRearingService` weekly-tick tuning knobs) — everything else disclosed across the HS arc is now closed. Manual playtest checklist remains the arc's only user-driven exit.
+
+---
+
+## 2026-07-10 — autonomy/rearing first-pass constants tuning pass CLOSED (Sonnet 5)
+
+**What:** the last open Sonnet seam from the HS arc. Reviewed both services' §11 knobs from first principles (user-directed: "sanity-tune now" without waiting on real playtest data).
+
+**`NpcAutonomyService.NpcAutonomyProfile`:** reviewed every constant (mint/promote/breakup probabilities, affinities, nudge range) — each already carries an inline first-principles justification from HS-5 authorship (e.g. `PartnerPromoteMinAffinity=15`'s comment on the 0–30 reachable band under the 256-interaction budget). No gradient or reachability defect found. **Left unchanged.**
+
+**`ChildRearingService.cs`:** found and fixed a real defect — `careDelta`/`fundingDelta` had no justifying comments and, unlike the NPC service, were genuinely miscalibrated:
+
+- `careDelta` used a 2-hours/WEEK neutral baseline against a per-DAY FamilyRow slider (0–24h, accumulated ×7) — any ~1h/day habit already saturated the ±5 cap, making the axis a near on/off switch instead of a gradient. Rescaled to a named `CareNeutralHoursPerWeek=3f` baseline / `CareHoursPerPoint=2f` divisor; floor tightened from the dead `-3` to the actually-reachable `-2`.
+- `fundingDelta` used a $25-per-point divisor that saturated the +5 cap at $150/wk even though `Child_Rearing_Commitment.weekly_funding` is schema-capped at $300 — the top half of the player's allowed commitment range did nothing. Rescaled to `FundingDollarsPerPoint=50`, so the delta now reaches exactly +5 at the schema's real $300 ceiling; floor tightened from dead `-3` to reachable `-1`.
+- `neglectDelta`'s ±3/−1 binary was reviewed and left as-is (directionally correct: neglect accrues faster than it heals) but pulled into named `NeglectAccrualDelta`/`NeglectRecoveryDelta` consts for consistency with the file's own "disclosed-tunable constants" heading.
+- Also fixed a rounding-discipline drift: the old formula used `MathF.Round` (CLR to-even default), diverging from the codebase-wide away-from-zero convention (`NurtureBlend`/`DevelopmentManager`'s `RoundAwayFromZero`). Added the same private helper here.
+- `ChildSupportPerChild` ($20/wk mandatory) and the neglect binary's core logic were sanity-checked against `LifeSimManager.WeeklyCostOfLiving` ($70/wk per adult) and left unchanged — already proportionate.
+
+**Docs:** `docs/design/high_school_person_layer.md` §11 table backfilled — only `MaxPairInteractionsPerWeek` had ever been entered there; added rows for every other `NpcAutonomyProfile` constant and all of `ChildRearingService`'s (previously entirely undocumented). New §11.1 records the tuning pass and its rationale.
+
+**Gates:** `dotnet build` 0/0. MonteCarloHarness **345/345** unchanged, MLB bit-identity, no band moved (guard worlds carry no `Child_Development` rows — identity holds by contract, same as every prior HS-6-era change). GrittyEventsHarness **210/210** unchanged (no harness pins exact numeric output from either service — both are structural/conservation-checked only, confirmed by grep before editing). No schema touch, no golden reset.
+
+**Arc status: HS-0…HS-6 all code-complete, every disclosed Sonnet seam now closed.** The only remaining exit is the user playing the manual checklist (`docs/hs_manual_playtest_checklist.md`) — pacing complaints from real play (not this first-principles pass) are the next legitimate reason to revisit any of these constants.
