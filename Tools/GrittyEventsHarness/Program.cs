@@ -2671,6 +2671,54 @@ internal static class Program
         Check("§3.2 tick: no Family_Background row is a clean no-op",
             Math.Abs(FundsOf("legacy") - 100.0) < 1e-9 && ItemCount("legacy") == 0);
 
+        // --- §4.2 LDR upkeep (hs_hometown_anchor "commit_long_distance") --
+        void SetupLdr(string id, bool homeWifi)
+        {
+            AddPerson(id, 900, 100);
+            persons.UpsertFamily(new FamilyBackgroundRow
+            {
+                PlayerId = id, WealthTier = 1, HouseholdIncome = 40_000,
+                Parent1Id = null, Parent2Id = null, HomeWifi = homeWifi, AllowanceWeekly = 0, Strictness = 50,
+            });
+        }
+        SetupLdr("ldr", homeWifi: false);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "ldr", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 12, PurchasedDay = 0 });
+        players.SetFlag("ldr", "hs_dating", isActive: true, setOnDay: 0);
+        players.SetFlag("ldr", "long_distance", isActive: true, setOnDay: 0);
+        family.ProcessDay("ldr", 7);
+        Check("§4.2 LDR: committed long-distance bills 20 min on top of the Basic refill (12→50→30)",
+            PhoneOf("ldr").MinutesRemaining == 30, $"{PhoneOf("ldr").MinutesRemaining} min");
+
+        SetupLdr("ex", homeWifi: false);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "ex", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 12, PurchasedDay = 0 });
+        players.SetFlag("ex", "long_distance", isActive: true, setOnDay: 0); // grow_apart: long_distance set, hs_dating cleared/never set
+        family.ProcessDay("ex", 7);
+        Check("§4.2 LDR: an ex (long_distance set, hs_dating not active) is never billed upkeep",
+            PhoneOf("ex").MinutesRemaining == 50, $"{PhoneOf("ex").MinutesRemaining} min");
+
+        SetupLdr("dating_only", homeWifi: false);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "dating_only", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 12, PurchasedDay = 0 });
+        players.SetFlag("dating_only", "hs_dating", isActive: true, setOnDay: 0);
+        family.ProcessDay("dating_only", 7);
+        Check("§4.2 LDR: dating locally (hs_dating without long_distance) is never billed upkeep",
+            PhoneOf("dating_only").MinutesRemaining == 50, $"{PhoneOf("dating_only").MinutesRemaining} min");
+
+        SetupLdr("broke_ldr", homeWifi: false);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "broke_ldr", Tier = 1, Plan = PhoneService.PrepaidPlan, MinutesRemaining = 15, PurchasedDay = 0 });
+        players.SetFlag("broke_ldr", "hs_dating", isActive: true, setOnDay: 0);
+        players.SetFlag("broke_ldr", "long_distance", isActive: true, setOnDay: 0);
+        family.ProcessDay("broke_ldr", 7);
+        Check("§4.2 LDR: insufficient minutes goes unpaid, not negative (Prepaid, 15 < 20)",
+            PhoneOf("broke_ldr").MinutesRemaining == 15, $"{PhoneOf("broke_ldr").MinutesRemaining} min");
+
+        SetupLdr("wifi_ldr", homeWifi: true);
+        persons.UpsertPhone(new PhoneStateRow { PlayerId = "wifi_ldr", Tier = 2, Plan = PhoneService.BasicPlan, MinutesRemaining = 12, PurchasedDay = 0 });
+        players.SetFlag("wifi_ldr", "hs_dating", isActive: true, setOnDay: 0);
+        players.SetFlag("wifi_ldr", "long_distance", isActive: true, setOnDay: 0);
+        family.ProcessDay("wifi_ldr", 7);
+        Check("§4.2 LDR: home Wi-Fi bypasses the upkeep like any other metered action (12→50, no further drain)",
+            PhoneOf("wifi_ldr").MinutesRemaining == 50, $"{PhoneOf("wifi_ldr").MinutesRemaining} min");
+
         // --- §3.1 self-buy transport reward --------------------------------
         AddPerson("earner", null, 2000);
         Check("§3.1 first self-bought transport pays +5 work_ethic/discipline/maturity",

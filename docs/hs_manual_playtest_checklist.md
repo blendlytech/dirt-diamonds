@@ -76,7 +76,7 @@ These ride whatever save gets deepest — check at season rollovers rather than 
 - A jailed avatar credits default school attendance for those days (≤ a few days, ~0 GPA impact).
 - Mid-week saves reset the partial attendance/study accumulators (both sides together — the fraction stays fair).
 - Plan line renders "Idle 0h" for a zeroed free-time block — cosmetic.
-- `hs_hometown_anchor`'s long-distance thread has **no real weekly minute drain yet** (open seam); `hs_clubhouse_cancer` is narrated, not verified against a real teammate-ex (open seam).
+- `hs_hometown_anchor`'s "commit to long-distance" branch now bills 20 min/week via the family tick (closed 2026-07-09, Sonnet 5 — `FamilyService.IsCommittedLongDistance`, gated on `long_distance` + `hs_dating` both active so an ex from the "grow apart" branch is never billed; Wi-Fi bypasses it like any metered action). `hs_clubhouse_cancer` is still narrated, not verified against a real teammate-ex (open seam).
 - Divorce while `expecting` → single-parent birth: supported by design.
 - Background league (macro tiers) picks up person-stat movement only at season rollover — season-stable by design; only attended games refresh per-game.
 
