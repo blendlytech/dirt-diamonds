@@ -56,7 +56,7 @@ public sealed class PhoneService
     public const int TextMinuteCost = 2;
     public const int CallMinuteCost = 6;
     public const int MarketplaceBrowseMinuteCost = 3;
-    /// <summary>§4.2 long-distance relationship weekly upkeep — staged for HS-5's hometown anchor, no consumer yet.</summary>
+    /// <summary>§4.2 long-distance relationship weekly upkeep for the `hs_hometown_anchor` "commit long-distance" branch — billed by FamilyService's weekly tick.</summary>
     public const int LongDistanceWeeklyMinutes = 20;
 
     /// <summary>§4.2 carrier bundle: $10 → 100 minutes.</summary>

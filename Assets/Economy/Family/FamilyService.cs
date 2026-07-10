@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
@@ -9,9 +10,10 @@ namespace DirtAndDiamonds.Economy.Family;
 /// <summary>
 /// The weekly family tick (docs/design/high_school_person_layer.md §3/§3.2/§4.2)
 /// for the avatar's household: pays the wealth-tier allowance, refills a
-/// Basic plan's minute allotment, and runs the §3.2 parental auto-purchase.
-/// One batch per tick (the database rules' calendar-tick discipline), funds
-/// impulse published only after the commit.
+/// Basic plan's minute allotment, runs the §3.2 parental auto-purchase, and
+/// bills the §4.2 long-distance-relationship upkeep. One batch per tick (the
+/// database rules' calendar-tick discipline), funds impulse published only
+/// after the commit.
 ///
 /// Parental support (allowance + auto-purchase) runs only while the avatar is
 /// still on a HIGH SCHOOL tier team — a disclosed reading of the arc's scope:
@@ -45,6 +47,7 @@ public sealed class FamilyService
     // Reused across ticks — one small list, never a hot loop, but the weekly
     // tick has no reason to allocate either.
     private readonly List<PlayerItemRow> _ownedScratch = new();
+    private readonly List<EntityFlagRow> _flagsScratch = new();
 
     public FamilyService(
         DatabaseManager db, PlayerQueries players, PersonQueries persons,
@@ -85,6 +88,11 @@ public sealed class FamilyService
         try
         {
             _phone.ApplyWeeklyRefill(avatarId);
+            if (IsCommittedLongDistance(avatarId))
+            {
+                _phone.TrySpendMinutes(
+                    avatarId, PhoneService.LongDistanceWeeklyMinutes, _phone.IsOnHomeWifi(avatarId), out _);
+            }
             if (parentalSupport)
             {
                 if (family.AllowanceWeekly > 0.0)
@@ -185,4 +193,31 @@ public sealed class FamilyService
         && row.TeamId.HasValue
         && _baseball.TryGetTeamTier(row.TeamId.Value, out LeagueTier tier)
         && tier == LeagueTier.HS;
+
+    /// <summary>
+    /// True only for the `hs_hometown_anchor` "commit_long_distance" branch:
+    /// both `long_distance` AND `hs_dating` still active. The `grow_apart`
+    /// branch also sets `long_distance` (it doubles as "this arc is resolved,
+    /// don't refire the anchor event"), but it clears `hs_dating` in the same
+    /// consequence list, so an ex never gets billed for upkeep on a
+    /// relationship that already ended.
+    /// </summary>
+    private bool IsCommittedLongDistance(string avatarId)
+    {
+        _players.LoadActiveFlags(avatarId, _flagsScratch);
+        bool longDistance = false;
+        bool stillDating = false;
+        foreach (EntityFlagRow flag in _flagsScratch)
+        {
+            if (string.Equals(flag.FlagName, "long_distance", StringComparison.Ordinal))
+            {
+                longDistance = true;
+            }
+            else if (string.Equals(flag.FlagName, "hs_dating", StringComparison.Ordinal))
+            {
+                stillDating = true;
+            }
+        }
+        return longDistance && stillDating;
+    }
 }
