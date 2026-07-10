@@ -381,6 +381,36 @@ byte-exact (§2.5); live worlds carrying NPC person-spread get a documented
 `run_monte_carlo_batch` re-band with golden resets recorded where §4/§8 bands
 move — Fable-owned, exactly as the plan's HS-6 states.
 
+### 6.5 The per-game refresh (PersonLedger — the HS-6 disclosure, closed)
+
+§6.2's season-stable bake read literally meant in-season lever movement reached
+the sim only at the next re-Initialize beat. The follow-up closes that for
+**attended games only**: a `PersonLedger` (the EquipmentLedger transport
+pattern) mirrors committed lever values off the bus, and `MicroGame` re-bakes
+affected slots at game start — never mid-game, never a DB read (micro runs off
+the main thread).
+
+- **Transport:** `PersonLeversChangedEvent`, published AFTER the writing batch
+  commits, carrying the row's **read-back absolutes** (never the nominal nudge
+  — `AdjustStat` clamps in SQL, so only the row knows what moved). Publishers:
+  the HS-4 daily settle flush (GameManager) and the gritty `person_stat`
+  consequence (EventConsequenceApplier). ItemService's §3.1 reward touches no
+  lever (work_ethic/discipline/maturity), so it stays silent.
+- **No boot seed, by design:** Initialize already bakes every persisted row;
+  the ledger carries only post-boot movement. Empty ledger = the Initialize
+  bake stands = bit-identity (every harness guard world). Absolutes make a
+  survivor from before a re-Initialize beat redundant, never stale.
+- **Refresh ≡ re-Initialize:** the refresh shares the ONE bake site
+  (`BakeSlotRatings` + the retained fielding/teamwork sums) with Initialize,
+  so whenever ledger and `Player_Person` agree — the read-back contract — the
+  per-game refresh lands byte-identical arrays to a fresh Initialize.
+  Harness-pinned (suite 10 section (i)).
+- **Scope:** the macro (tier) sims deliberately stay on the §6.2 season-stable
+  bake — background NPC seasons don't chase daily mood. Autopilot games played
+  inside the same day-tick dispatch see the previous pump's levers (one-pump
+  lag); player-attended games always cross a pump and see everything settled
+  through the last day tick.
+
 ---
 
 ## 7. Nurture: child-rearing blend (`Child_Development`)
