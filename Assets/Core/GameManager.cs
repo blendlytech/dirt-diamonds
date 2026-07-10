@@ -86,6 +86,9 @@ public sealed partial class GameManager : Node
     /// <summary>Phase 8e purchased gear — public like Absences so the UI can render the owned tier.</summary>
     public EquipmentLedger Gear { get; private set; } = null!;
 
+    /// <summary>HS-6 follow-up: the attended game's live §6.2 person-lever mirror (per-game refresh; empty = the Initialize bake stands).</summary>
+    public PersonLedger PersonLevers { get; private set; } = null!;
+
     /// <summary>HS-3: the loaded items.json catalog (person-layer doc §5) — public like Contacts so the Marketplace tab and the §3.2 autobuy tick read one shared instance. Ownership-audited against Player_Items at boot; content edits that break a shipped id fail here, never at a shop render.</summary>
     public ItemCatalog Items { get; private set; } = null!;
 

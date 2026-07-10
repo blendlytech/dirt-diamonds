@@ -1944,12 +1944,16 @@ internal static class Program
     //     control — the sanctioned HS-6 re-band statement. Every pre-existing
     //     harness world generates with no Persons source and zero
     //     Player_Person rows, so the MLB bit-identity guard stays byte-exact
-    //     by the §6.1 zero-at-50 contract, not by luck.
+    //     by the §6.1 zero-at-50 contract, not by luck. Section (i) covers
+    //     the PersonLedger per-game refresh (the HS-6 follow-up): empty
+    //     ledger = identity, redundant announcements = no-ops, and an
+    //     in-season lever move landing the exact re-Initialize bytes at the
+    //     next game start.
     // ------------------------------------------------------------------
 
     private static void RunPersonEffectsSuite(string schemaPath, string scratchPath)
     {
-        Console.WriteLine("--- HS-6 person effects (§6 PointsFor/bake order, neutral identity, direction, spread re-band) ---");
+        Console.WriteLine("--- HS-6 person effects (§6 PointsFor/bake order, neutral identity, direction, spread re-band, ledger refresh) ---");
 
         // ---- (a) §6.1 PointsFor: zero-at-50, endpoints, rounding, symmetry ----
         Check("PointsFor: 50 → 0 for every cap (zero-at-50 by contract)",
@@ -2188,6 +2192,102 @@ internal static class Program
                 !MicroResultsEqual(baselineGame, maxedGame),
                 $"base {baselineGame.AwayScore}-{baselineGame.HomeScore}/{baselineGame.Innings}, " +
                 $"maxed {maxedGame.AwayScore}-{maxedGame.HomeScore}/{maxedGame.Innings}");
+
+            // ---- (i) the per-game PersonLedger refresh (the HS-6 "next
+            // re-Initialize beat" disclosure, closed): an in-season lever move
+            // announced on the bus must reach the NEXT attended game at game
+            // start, landing the exact bytes a re-Initialize would. Game
+            // divergence is deliberately not asserted here (the teamwork
+            // test-power lesson) — refresh ≡ re-Initialize equality plus the
+            // defense-byte pins are deterministic statements.
+
+            // Wired-but-empty ledger: nothing announced = the Initialize bake
+            // stands, bit-identical (the no-boot-seed identity contract).
+            var emptyLedgerMicro = new MicroGame(db, baseball)
+            {
+                LoggingEnabled = false, Persons = persons, PersonLevers = new PersonLedger(),
+            };
+            emptyLedgerMicro.Initialize();
+            var emptyLedgerPolicy = new NeutralBatterPolicy();
+            var emptyLedgerRng = new RngState(MicroSeed);
+            MicroGameResult emptyLedgerGame = emptyLedgerMicro.PlayGame(
+                homeTeamId, awayTeamId, MicroGame.NoHuman, ref emptyLedgerPolicy, ref emptyLedgerRng);
+            Check("ledger: wired-but-empty PersonLedger bit-identical (empty = the Initialize bake stands)",
+                MicroResultsEqual(maxedGame, emptyLedgerGame));
+
+            // Redundant announcements: entries equal to the baked rows are
+            // per-slot no-ops — a survivor from before a re-Initialize beat is
+            // merely redundant, never stale (the read-back-absolutes contract).
+            var staleBus = new EventBus();
+            var staleLedger = new PersonLedger();
+            staleLedger.AttachTo(staleBus);
+            foreach (RosterPlayerRow r in rosterRows)
+            {
+                if (r.TeamId == homeTeamId)
+                {
+                    staleBus.Publish(new PersonLeversChangedEvent(r.PlayerId, 100, 100, 100));
+                }
+            }
+            staleBus.DispatchPending();
+            var staleMicro = new MicroGame(db, baseball)
+            {
+                LoggingEnabled = false, Persons = persons, PersonLevers = staleLedger,
+            };
+            staleMicro.Initialize();
+            var stalePolicy = new NeutralBatterPolicy();
+            var staleRng = new RngState(MicroSeed);
+            MicroGameResult staleGame = staleMicro.PlayGame(
+                homeTeamId, awayTeamId, MicroGame.NoHuman, ref stalePolicy, ref staleRng);
+            Check("ledger: entries equal to the baked rows are a no-op (redundant announcement ≡ Initialize)",
+                MicroResultsEqual(maxedGame, staleGame));
+
+            // Refresh ≡ re-Initialize: initialize against the maxed rows, then
+            // commit AND announce a lever collapse (100s → 0s, the read-back
+            // publish contract: row first, absolutes on the bus after).
+            var refreshBus = new EventBus();
+            var refreshLedger = new PersonLedger();
+            refreshLedger.AttachTo(refreshBus);
+            var refreshMicro = new MicroGame(db, baseball)
+            {
+                LoggingEnabled = false, Persons = persons, PersonLevers = refreshLedger,
+            };
+            refreshMicro.Initialize(); // bakes the maxed home rows
+            foreach (RosterPlayerRow r in rosterRows)
+            {
+                if (r.TeamId != homeTeamId)
+                {
+                    continue;
+                }
+                PersonRow zeroed = PersonRow.Neutral(r.PlayerId);
+                zeroed.Happiness = 0;
+                zeroed.Confidence = 0;
+                zeroed.Teamwork = 0;
+                persons.Upsert(in zeroed);
+                refreshBus.Publish(new PersonLeversChangedEvent(r.PlayerId, 0, 0, 0));
+            }
+            refreshBus.DispatchPending();
+            var refreshPolicy = new NeutralBatterPolicy();
+            var refreshRng = new RngState(MicroSeed);
+            MicroGameResult refreshGame = refreshMicro.PlayGame(
+                homeTeamId, awayTeamId, MicroGame.NoHuman, ref refreshPolicy, ref refreshRng);
+
+            var reinitMicro = new MicroGame(db, baseball) { LoggingEnabled = false, Persons = persons };
+            reinitMicro.Initialize(); // fresh bake over the committed zeroed rows
+            var reinitPolicy = new NeutralBatterPolicy();
+            var reinitRng = new RngState(MicroSeed);
+            MicroGameResult reinitGame = reinitMicro.PlayGame(
+                homeTeamId, awayTeamId, MicroGame.NoHuman, ref reinitPolicy, ref reinitRng);
+
+            Check("ledger: refresh ≡ re-Initialize (same-seed game identical after the in-season lever collapse)",
+                MicroResultsEqual(refreshGame, reinitGame),
+                $"refresh {refreshGame.AwayScore}-{refreshGame.HomeScore}/{refreshGame.Innings}, " +
+                $"reinit {reinitGame.AwayScore}-{reinitGame.HomeScore}/{reinitGame.Innings}");
+            Check("ledger: the defense byte moves through the bus alone (neutral ±2 both directions, reinit parity)",
+                refreshMicro.TeamDefenseFor(homeTeamId) == neutralMicroProbe.TeamDefenseFor(homeTeamId) - 2
+                && refreshMicro.TeamDefenseFor(homeTeamId) == reinitMicro.TeamDefenseFor(homeTeamId)
+                && teamworkMicroProbe.TeamDefenseFor(homeTeamId) == neutralMicroProbe.TeamDefenseFor(homeTeamId) + 2,
+                $"neutral {neutralMicroProbe.TeamDefenseFor(homeTeamId)}, maxed {teamworkMicroProbe.TeamDefenseFor(homeTeamId)}, " +
+                $"refresh {refreshMicro.TeamDefenseFor(homeTeamId)}, reinit {reinitMicro.TeamDefenseFor(homeTeamId)}");
         }
     }
 

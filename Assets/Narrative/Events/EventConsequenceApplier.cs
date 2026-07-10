@@ -274,6 +274,7 @@ public sealed class EventConsequenceApplier
         // In-memory / bus-routed consequences follow the committed batch, so a
         // subscriber reacting to an impulse always observes the DB state the
         // same fire produced.
+        bool simLeversMoved = false;
         for (int i = 0; i < consequences.Length; i++)
         {
             ref readonly EventConsequence consequence = ref consequences[i];
@@ -284,6 +285,11 @@ public sealed class EventConsequenceApplier
                     {
                         _bus.Publish(new FundsImpulseEvent(fired.SubjectPlayerId, consequence.Amount));
                     }
+                    break;
+                case ConsequenceKind.PersonStat:
+                    simLeversMoved |= consequence.Amount != 0
+                        && consequence.PersonStat is PersonStatId.Happiness
+                            or PersonStatId.Confidence or PersonStatId.Teamwork;
                     break;
                 case ConsequenceKind.Stress:
                     if (consequence.Amount != 0)
@@ -321,6 +327,20 @@ public sealed class EventConsequenceApplier
             _bus.Publish(_absenceScratch[i]);
         }
         _absenceScratch.Clear();
+
+        // HS-6 follow-up (per-game person refresh): a person_stat consequence
+        // that moved a §6.2 sim lever re-announces the subject's COMMITTED
+        // lever values for the attended game's PersonLedger — read back AFTER
+        // the batch (the ledger only ever mirrors persisted rows), absolutes
+        // not deltas (AdjustStat clamps in SQL, so only the row knows what
+        // actually moved). One publish per fire, however many lever
+        // consequences the choice carried.
+        if (simLeversMoved && _persons.TryGet(fired.SubjectPlayerId, out PersonRow personRow))
+        {
+            _bus.Publish(new PersonLeversChangedEvent(
+                fired.SubjectPlayerId,
+                (byte)personRow.Happiness, (byte)personRow.Confidence, (byte)personRow.Teamwork));
+        }
 
         _bus.Publish(new GrittyEventResolvedEvent(fired.EventId, fired.SubjectPlayerId, choiceIndex, fired.Day));
     }
