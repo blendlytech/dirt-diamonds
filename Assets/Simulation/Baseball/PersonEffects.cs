@@ -77,10 +77,19 @@ public static class PersonEffects
             -cap, cap);
 
     /// <summary>The §6.2 delta vector for one person row.</summary>
-    public static PersonRatingDeltas For(in PersonRow person) => new(
-        (sbyte)PointsFor(person.Confidence, ConfidenceCap),
-        (sbyte)PointsFor(person.Happiness, HappinessCap),
-        (sbyte)PointsFor(person.Teamwork, TeamworkCap));
+    public static PersonRatingDeltas For(in PersonRow person) =>
+        ForLevers(person.Happiness, person.Confidence, person.Teamwork);
+
+    /// <summary>
+    /// The §6.2 delta vector from raw lever values — the PersonLedger's
+    /// per-game refresh path, where only the three levers travel (a
+    /// PersonLeversChangedEvent payload, not a full row).
+    /// <see cref="For"/> delegates here so the stat → cap mapping lives once.
+    /// </summary>
+    public static PersonRatingDeltas ForLevers(int happiness, int confidence, int teamwork) => new(
+        (sbyte)PointsFor(confidence, ConfidenceCap),
+        (sbyte)PointsFor(happiness, HappinessCap),
+        (sbyte)PointsFor(teamwork, TeamworkCap));
 
     /// <summary>
     /// §6.3 order of operations, pinned in ONE place both sims call:

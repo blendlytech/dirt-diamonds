@@ -308,6 +308,44 @@ public readonly struct PersonStatImpulseEvent : IGameEvent
 }
 
 /// <summary>
+/// HS-6 follow-up (the per-game person refresh): published AFTER a write that
+/// moved one of the §6.2 sim levers (happiness / confidence / teamwork) has
+/// COMMITTED to Player_Person — the Baseball sims' PersonLedger consumes it,
+/// the same writer → bus → ledger routing as
+/// <see cref="PlayerEquipmentChangedEvent"/>. The payload carries the
+/// committed row's ABSOLUTE lever values, read back post-commit — never the
+/// nominal nudge (AdjustStat clamps in SQL, so only the row knows what
+/// actually moved; absolutes make mirror and row agree by construction,
+/// where a delta transport would need the EquipmentLedger's merge-rule
+/// gymnastics). Deliberately distinct from <see cref="PersonStatImpulseEvent"/>:
+/// that impulse is the LIFE sim's in-memory mirror feed and carries deltas
+/// the Life sim folds into its own hydrated copy — the daily settle flush is
+/// the Life sim's own write, so re-publishing it as an impulse would
+/// double-apply. Payload is primitives only (the standing CoreEvents rule).
+/// </summary>
+public readonly struct PersonLeversChangedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+
+    /// <summary>Committed happiness, 0–100 (→ bat_contact / pit_control, §6.2).</summary>
+    public readonly byte Happiness;
+
+    /// <summary>Committed confidence, 0–100 (→ bat_power / pit_stuff, §6.2).</summary>
+    public readonly byte Confidence;
+
+    /// <summary>Committed teamwork, 0–100 (→ lineup team-defense share, §6.2).</summary>
+    public readonly byte Teamwork;
+
+    public PersonLeversChangedEvent(string playerId, byte happiness, byte confidence, byte teamwork)
+    {
+        PlayerId = playerId;
+        Happiness = happiness;
+        Confidence = confidence;
+        Teamwork = teamwork;
+    }
+}
+
+/// <summary>
 /// HS-4: published AFTER a Player_Items ownership row has committed —
 /// marketplace purchases (ItemService) and §3.2 parental auto-gifts
 /// (FamilyService) both raise it, the Economy → bus → consumer routing

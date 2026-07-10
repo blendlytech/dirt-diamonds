@@ -140,6 +140,19 @@ public sealed class MicroGame
     /// </summary>
     public PersonQueries? Persons;
 
+    /// <summary>
+    /// Live person-lever mirror (the HS-6 disclosure's per-game person
+    /// refresh), optional like <see cref="Equipment"/>: null keeps every
+    /// attended game on the season-stable Initialize bake exactly. When set,
+    /// slots whose committed happiness/confidence/teamwork moved since
+    /// Initialize re-bake at game start (<see cref="RefreshPersonCache"/>) —
+    /// so the avatar's in-season mood reaches TODAY'S attended game instead
+    /// of waiting for the next re-Initialize beat. The ledger is in-memory
+    /// (micro games run off the main thread — no mid-game DB reads); the
+    /// macro sims deliberately stay Initialize-baked (§6.2 season-stable).
+    /// </summary>
+    public PersonLedger? PersonLevers;
+
     // Slot×slot intensity cache refreshed at game start when the ledger's
     // Version has moved — the per-PA cost is one byte read (zero-GC mandate).
     private byte[] _rivalrySlots = Array.Empty<byte>();
@@ -194,6 +207,20 @@ public sealed class MicroGame
     private readonly List<EquipmentEntry> _equipmentScratch = new();
     private int _equipmentVersionSeen = -1;
     private bool _hasEquipment;
+
+    // Per-game person refresh (the HS-6 disclosure): the currently-baked
+    // §6.2 deltas per slot plus the Initialize-time inputs a re-bake needs
+    // (team index, tier deltas, lineup membership, per-team fielding and
+    // teamwork sums) — so RefreshPersonCache can land the exact bytes a full
+    // re-Initialize would, without touching the database.
+    private PersonRatingDeltas[] _slotPersonDeltas = Array.Empty<PersonRatingDeltas>();
+    private int[] _slotTeam = Array.Empty<int>();
+    private bool[] _slotInLineup = Array.Empty<bool>();
+    private TierRatingDeltas[] _teamTierDeltas = Array.Empty<TierRatingDeltas>();
+    private int[] _teamFieldingSum = Array.Empty<int>();
+    private int[] _teamTeamworkSum = Array.Empty<int>();
+    private readonly List<PersonLeverEntry> _personScratch = new();
+    private int _personVersionSeen = -1;
 
     private bool _initialized;
 
@@ -253,12 +280,12 @@ public sealed class MicroGame
         // game therefore plays in the HS environment the macro-sim calibrates,
         // and the §11 macro/micro consistency holds tier by tier by
         // construction. MLB (and every pre-v7 world) is all-zero deltas.
-        var teamTiers = new LeagueTier[_teamCount];
         var teamIndexById = new Dictionary<int, int>(_teamCount);
+        _teamTierDeltas = new TierRatingDeltas[_teamCount];
         for (int t = 0; t < _teamCount; t++)
         {
             _teamIds[t] = teams[t].TeamId;
-            teamTiers[t] = teams[t].Tier;
+            _teamTierDeltas[t] = TierEffects.For(teams[t].Tier);
             teamIndexById.Add(teams[t].TeamId, t);
         }
 
@@ -309,6 +336,10 @@ public sealed class MicroGame
         _slotGearBoost = new byte[slots];
         _equipmentVersionSeen = -1; // roster changed — force a cache rebuild
         _hasEquipment = false;
+        _slotPersonDeltas = new PersonRatingDeltas[slots];
+        _slotTeam = new int[slots];
+        _slotInLineup = new bool[slots];
+        _personVersionSeen = -1; // roster changed — force a cache rebuild
         // One extra line past the roster: the discard row a shadowed slot's
         // replacement accumulates into. FlushGame loops the roster length
         // only, so a call-up's stats and PED bookkeeping never reach the
@@ -323,7 +354,7 @@ public sealed class MicroGame
         _replacementPitcherByTeam = new PitcherRatings[_teamCount];
         for (int t = 0; t < _teamCount; t++)
         {
-            TierRatingDeltas deltas = TierEffects.For(teamTiers[t]);
+            TierRatingDeltas deltas = _teamTierDeltas[t];
             _replacementBatterByTeam[t] = new BatterRatings(
                 TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.BatPower),
                 TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.BatContact),
@@ -342,8 +373,11 @@ public sealed class MicroGame
         Span<int> lineupCount = stackalloc int[_teamCount];
         Span<int> rotationCount = stackalloc int[_teamCount];
         Span<int> bullpenCount = stackalloc int[_teamCount];
-        Span<int> fieldingSum = stackalloc int[_teamCount];
-        Span<int> teamworkPointsSum = stackalloc int[_teamCount];
+        // Fielding/teamwork sums are retained past Initialize (fields, not
+        // stack scratch): the per-game person refresh re-bakes a team's
+        // defense byte from them when a lineup teamwork lever moves.
+        _teamFieldingSum = new int[_teamCount];
+        _teamTeamworkSum = new int[_teamCount];
 
         // HS-6 (person-layer doc §6): person levers load once here and bake
         // with the per-team tier deltas below — the exact macro-sim bake, so
@@ -367,20 +401,14 @@ public sealed class MicroGame
 
             bool ped = pedSet.Contains(row.PlayerId);
             _pedActive[i] = ped;
-            TierRatingDeltas tierDeltas = TierEffects.For(teamTiers[team]);
+            _slotTeam[i] = team;
             PersonRatingDeltas person = default;
             if (personRows is not null && personRows.TryGetValue(row.PlayerId, out PersonRow personRow))
             {
                 person = PersonEffects.For(in personRow);
             }
-            _batterRatings[i] = new BatterRatings(
-                PersonEffects.Bake(row.BatPower, tierDeltas.BatPower, person.Confidence),
-                PersonEffects.Bake(row.BatContact, tierDeltas.BatContact, person.Happiness),
-                TierEffects.Shift(row.BatDiscipline, tierDeltas.BatDiscipline), ped);
-            _pitcherRatings[i] = new PitcherRatings(
-                PersonEffects.Bake(row.PitStuff, tierDeltas.PitStuff, person.Confidence),
-                PersonEffects.Bake(row.PitControl, tierDeltas.PitControl, person.Happiness),
-                (byte)row.PitStamina);
+            _slotPersonDeltas[i] = person;
+            BakeSlotRatings(i, in person);
 
             if (row.IsPitcher)
             {
@@ -411,8 +439,9 @@ public sealed class MicroGame
             else if (lineupCount[team] < LeagueSimulator.LineupSize)
             {
                 _lineupSlots[team * LeagueSimulator.LineupSize + lineupCount[team]++] = i;
-                fieldingSum[team] += row.Fielding;
-                teamworkPointsSum[team] += person.Teamwork;
+                _slotInLineup[i] = true;
+                _teamFieldingSum[team] += row.Fielding;
+                _teamTeamworkSum[team] += person.Teamwork;
             }
         }
 
@@ -430,11 +459,94 @@ public sealed class MicroGame
             // Mean-then-shift-then-teamwork, the exact formula LeagueSimulator
             // bakes, so the same team carries the same defense byte in both sims.
             _teamDefense[t] = PersonEffects.BakeTeamDefense(
-                fieldingSum[t], LeagueSimulator.LineupSize,
-                TierEffects.For(teamTiers[t]).Defense, teamworkPointsSum[t]);
+                _teamFieldingSum[t], LeagueSimulator.LineupSize,
+                _teamTierDeltas[t].Defense, _teamTeamworkSum[t]);
         }
 
         _initialized = true;
+    }
+
+    /// <summary>
+    /// Bakes one slot's batter/pitcher rating structs from its roster base,
+    /// its team's tier deltas, and the given §6.2 person deltas — the ONE
+    /// bake site <see cref="Initialize"/> and <see cref="RefreshPersonCache"/>
+    /// share, so the §6.3 order (base → tier → person, clamped per step in
+    /// <see cref="PersonEffects.Bake"/>) can never fork between the season
+    /// bake and the per-game refresh.
+    /// </summary>
+    private void BakeSlotRatings(int slot, in PersonRatingDeltas person)
+    {
+        ref readonly RosterPlayerRow row = ref _roster[slot];
+        TierRatingDeltas tierDeltas = _teamTierDeltas[_slotTeam[slot]];
+        _batterRatings[slot] = new BatterRatings(
+            PersonEffects.Bake(row.BatPower, tierDeltas.BatPower, person.Confidence),
+            PersonEffects.Bake(row.BatContact, tierDeltas.BatContact, person.Happiness),
+            TierEffects.Shift(row.BatDiscipline, tierDeltas.BatDiscipline), _pedActive[slot]);
+        _pitcherRatings[slot] = new PitcherRatings(
+            PersonEffects.Bake(row.PitStuff, tierDeltas.PitStuff, person.Confidence),
+            PersonEffects.Bake(row.PitControl, tierDeltas.PitControl, person.Happiness),
+            (byte)row.PitStamina);
+    }
+
+    /// <summary>
+    /// Re-bakes the §6 person deltas for any slot whose committed lever
+    /// values moved since Initialize (the HS-6 disclosure's per-game person
+    /// refresh) — Version-gated at game start like the rivalry/equipment
+    /// caches, all in-memory (micro games run off the main thread; no
+    /// mid-game DB reads). A null or empty ledger leaves every baked byte
+    /// exactly as Initialize wrote it; entries equal to the baked row are
+    /// per-slot no-ops. Because the ledger carries committed absolutes and
+    /// this shares <see cref="BakeSlotRatings"/> (and the retained
+    /// fielding/teamwork sums) with Initialize, refresh ≡ re-Initialize
+    /// whenever ledger and Player_Person agree — which the read-back publish
+    /// contract guarantees. Ids outside the roster are skipped; the linear
+    /// <see cref="FindRosterSlot"/> probe is fine here (moved levers are
+    /// sparse — typically the avatar — and rebuilds are gated).
+    /// </summary>
+    private void RefreshPersonCache()
+    {
+        if (PersonLevers is null || PersonLevers.Version == _personVersionSeen)
+        {
+            return;
+        }
+        _personVersionSeen = PersonLevers.Version;
+
+        Span<bool> defenseDirty = stackalloc bool[_teamCount];
+        PersonLevers.CopyAll(_personScratch);
+        for (int i = 0; i < _personScratch.Count; i++)
+        {
+            PersonLeverEntry entry = _personScratch[i];
+            int slot = FindRosterSlot(entry.PlayerId);
+            if (slot == NoHuman)
+            {
+                continue;
+            }
+            PersonRatingDeltas next = PersonEffects.ForLevers(entry.Happiness, entry.Confidence, entry.Teamwork);
+            PersonRatingDeltas current = _slotPersonDeltas[slot];
+            if (current.Confidence == next.Confidence && current.Happiness == next.Happiness
+                && current.Teamwork == next.Teamwork)
+            {
+                continue;
+            }
+            // Only lineup slots feed the §6.2 team-defense share (pitchers
+            // and bench never summed at Initialize either).
+            if (_slotInLineup[slot] && current.Teamwork != next.Teamwork)
+            {
+                _teamTeamworkSum[_slotTeam[slot]] += next.Teamwork - current.Teamwork;
+                defenseDirty[_slotTeam[slot]] = true;
+            }
+            _slotPersonDeltas[slot] = next;
+            BakeSlotRatings(slot, in next);
+        }
+        for (int t = 0; t < _teamCount; t++)
+        {
+            if (defenseDirty[t])
+            {
+                _teamDefense[t] = PersonEffects.BakeTeamDefense(
+                    _teamFieldingSum[t], LeagueSimulator.LineupSize,
+                    _teamTierDeltas[t].Defense, _teamTeamworkSum[t]);
+            }
+        }
     }
 
     /// <summary>Baked team-defense byte (tier + HS-6 §6.2 teamwork lever) — internal so run_monte_carlo_batch pins the defense bake per sim.</summary>
@@ -654,6 +766,7 @@ public sealed class MicroGame
         }
         RefreshRivalryCache();
         RefreshEquipmentCache();
+        RefreshPersonCache();
         int homeTeam = TeamIndexOf(homeTeamId);
         int awayTeam = TeamIndexOf(awayTeamId);
         if (homeTeam == awayTeam)

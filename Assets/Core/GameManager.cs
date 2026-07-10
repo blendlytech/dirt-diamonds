@@ -267,6 +267,14 @@ public sealed partial class GameManager : Node
         Gear.Seed(equipmentRows);
         Gear.AttachTo(Events);
 
+        // HS-6 follow-up: live person levers for the attended game. NO boot
+        // hydration BY DESIGN (unlike Absences/Gear): the sims' Initialize
+        // below already bakes every persisted Player_Person row, so the
+        // ledger carries only post-boot movement — an empty ledger IS the
+        // boot state's identity.
+        PersonLevers = new PersonLedger();
+        PersonLevers.AttachTo(Events);
+
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
         // own 8-team league, each with its own forked rng stream. All six run
         // the same day loop off the bus; the avatar's tier is resolved by
@@ -301,6 +309,9 @@ public sealed partial class GameManager : Node
         Micro.Rivalries = _rivalryLedger;
         Micro.Availability = Absences;
         Micro.Equipment = Gear;
+        // The per-game person refresh is the micro's alone — the tier sims
+        // above deliberately stay on the §6.2 season-stable Initialize bake.
+        Micro.PersonLevers = PersonLevers;
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
         Career.Availability = Absences;
@@ -1048,6 +1059,28 @@ public sealed partial class GameManager : Node
         {
             (string playerId, PersonStats applied) = _personSettleScratch[i];
             LifeSim.SettlePersonDeltas(playerId, in applied);
+        }
+        // HS-6 follow-up (per-game person refresh): any settled movement on a
+        // §6.2 sim lever re-announces the player's COMMITTED lever values so
+        // the attended game's PersonLedger re-bakes at the next game start
+        // instead of waiting for a re-Initialize beat. Read back AFTER the
+        // commit above — the ledger only ever mirrors persisted rows (the
+        // AvailabilityLedger discipline) — and as absolutes, because
+        // AdjustStat clamps in SQL and only the row knows what actually moved.
+        for (int i = 0; i < _personSettleScratch.Count; i++)
+        {
+            (string playerId, PersonStats applied) = _personSettleScratch[i];
+            if (applied.Get(PersonStatId.Happiness) == 0f
+                && applied.Get(PersonStatId.Confidence) == 0f
+                && applied.Get(PersonStatId.Teamwork) == 0f)
+            {
+                continue;
+            }
+            if (Persons.TryGet(playerId, out PersonRow personRow))
+            {
+                Events.Publish(new PersonLeversChangedEvent(
+                    playerId, (byte)personRow.Happiness, (byte)personRow.Confidence, (byte)personRow.Teamwork));
+            }
         }
     }
 
