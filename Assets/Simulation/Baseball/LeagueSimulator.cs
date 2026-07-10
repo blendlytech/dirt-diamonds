@@ -85,6 +85,18 @@ public sealed class LeagueSimulator
     /// </summary>
     public RivalryLedger? Rivalries;
 
+    /// <summary>
+    /// Person-layer lever source (HS-6, person-layer doc §6), the same
+    /// optional-attachment pattern as <see cref="Rivalries"/>: null — the
+    /// default for every existing harness path — skips the load entirely, and
+    /// an absent Player_Person row reads as the neutral 50s; both bake
+    /// bit-identical rating arrays (<see cref="PersonEffects.Bake"/> with a 0
+    /// delta is the exact tier-only shift). Set BEFORE <see cref="Initialize"/>;
+    /// every re-Initialize beat (promotion sweep, development pass,
+    /// succession) re-reads it, which is what makes the bake season-stable.
+    /// </summary>
+    public PersonQueries? Persons;
+
     // Flat slot×slot intensity cache rebuilt only when the ledger's Version
     // moves (rivalries change at day granularity at most; PAs read one byte).
     private byte[] _rivalrySlots = Array.Empty<byte>();
@@ -251,6 +263,20 @@ public sealed class LeagueSimulator
         Span<int> lineupCount = stackalloc int[TeamCount];
         Span<int> rotationCount = stackalloc int[TeamCount];
         Span<int> fieldingSum = stackalloc int[TeamCount];
+        Span<int> teamworkPointsSum = stackalloc int[TeamCount];
+
+        // HS-6 (person-layer doc §6): person levers load once here and bake
+        // with the tier deltas below. No Persons source, or no Player_Person
+        // row, reads as the neutral 50s — a 0 person delta collapses to the
+        // exact tier-only bake, so every pre-HS-6 world (and the all-neutral
+        // guard world) keeps byte-identical rating arrays. Cold load, never
+        // per PA.
+        Dictionary<string, PersonRow>? personRows = null;
+        if (Persons is not null)
+        {
+            personRows = new Dictionary<string, PersonRow>(slots, StringComparer.Ordinal);
+            Persons.LoadAll(personRows);
+        }
 
         // Phase 9a: the tier's league-environment deltas bake into the rating
         // arrays here, once — the per-PA hot path is untouched, and rivalry/PED
@@ -282,13 +308,19 @@ public sealed class LeagueSimulator
             _slotByPlayerId.Add(row.PlayerId, i);
             bool ped = pedSet.Contains(row.PlayerId);
             _pedActive[i] = ped;
+            PersonRatingDeltas person = default;
+            if (personRows is not null && personRows.TryGetValue(row.PlayerId, out PersonRow personRow))
+            {
+                person = PersonEffects.For(in personRow);
+            }
             _batterRatings[i] = new BatterRatings(
-                TierEffects.Shift(row.BatPower, tierDeltas.BatPower),
-                TierEffects.Shift(row.BatContact, tierDeltas.BatContact),
+                PersonEffects.Bake(row.BatPower, tierDeltas.BatPower, person.Confidence),
+                PersonEffects.Bake(row.BatContact, tierDeltas.BatContact, person.Happiness),
                 TierEffects.Shift(row.BatDiscipline, tierDeltas.BatDiscipline), ped);
             _pitcherRatings[i] = new PitcherRatings(
-                TierEffects.Shift(row.PitStuff, tierDeltas.PitStuff),
-                TierEffects.Shift(row.PitControl, tierDeltas.PitControl), (byte)row.PitStamina);
+                PersonEffects.Bake(row.PitStuff, tierDeltas.PitStuff, person.Confidence),
+                PersonEffects.Bake(row.PitControl, tierDeltas.PitControl, person.Happiness),
+                (byte)row.PitStamina);
 
             if (row.IsPitcher)
             {
@@ -309,6 +341,7 @@ public sealed class LeagueSimulator
             {
                 _lineupSlots[team * LineupSize + lineupCount[team]++] = i;
                 fieldingSum[team] += row.Fielding;
+                teamworkPointsSum[team] += person.Teamwork;
             }
         }
 
@@ -321,9 +354,10 @@ public sealed class LeagueSimulator
                     $"position players and {rotationCount[t]}/{RotationSize} starters — cannot field a season.");
             }
             // §3: team defense = mean fielding of the lineup, rounded, then
-            // tier-shifted (9a — a zero delta is the exact pre-tier value).
-            _teamDefense[t] = TierEffects.Shift(
-                (fieldingSum[t] + LineupSize / 2) / LineupSize, tierDeltas.Defense);
+            // tier-shifted (9a), then the HS-6 §6.2 teamwork lever (a zero
+            // points sum is the exact pre-HS-6 defense byte).
+            _teamDefense[t] = PersonEffects.BakeTeamDefense(
+                fieldingSum[t], LineupSize, tierDeltas.Defense, teamworkPointsSum[t]);
         }
 
         _initialized = true;
@@ -546,6 +580,19 @@ public sealed class LeagueSimulator
         PitcherRatings p = EquipmentEffects.Pitcher(in _pitcherRatings[slot], gear);
         return rust == 0 ? p : new PitcherRatings(
             TierEffects.Shift(p.Stuff, -rust), TierEffects.Shift(p.Control, -rust), p.Stamina);
+    }
+
+    /// <summary>Baked team-defense byte (tier + HS-6 §6.2 teamwork lever) — internal so run_monte_carlo_batch pins the defense bake per sim.</summary>
+    internal byte TeamDefenseFor(int teamId)
+    {
+        for (int t = 0; t < _teamIds.Length; t++)
+        {
+            if (_teamIds[t] == teamId)
+            {
+                return _teamDefense[t];
+            }
+        }
+        throw new ArgumentException($"Team {teamId} is not in this league.", nameof(teamId));
     }
 
     /// <summary>Batter-side rust dock (0 = the array value unchanged). PED flag rides along — the resolver layers its multiplier as usual. Internal so run_monte_carlo_batch pins the arithmetic.</summary>

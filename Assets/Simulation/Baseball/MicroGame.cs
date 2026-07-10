@@ -131,6 +131,15 @@ public sealed class MicroGame
     /// </summary>
     public RivalryLedger? Rivalries;
 
+    /// <summary>
+    /// Person-layer lever source (HS-6, person-layer doc §6), optional like
+    /// <see cref="Rivalries"/>: null (or an absent Player_Person row) reads
+    /// as the neutral 50s and bakes bit-identical rating arrays. Set BEFORE
+    /// <see cref="Initialize"/>; the same re-Initialize beats that refresh
+    /// the macro sims refresh this one.
+    /// </summary>
+    public PersonQueries? Persons;
+
     // Slot×slot intensity cache refreshed at game start when the ledger's
     // Version has moved — the per-PA cost is one byte read (zero-GC mandate).
     private byte[] _rivalrySlots = Array.Empty<byte>();
@@ -334,6 +343,18 @@ public sealed class MicroGame
         Span<int> rotationCount = stackalloc int[_teamCount];
         Span<int> bullpenCount = stackalloc int[_teamCount];
         Span<int> fieldingSum = stackalloc int[_teamCount];
+        Span<int> teamworkPointsSum = stackalloc int[_teamCount];
+
+        // HS-6 (person-layer doc §6): person levers load once here and bake
+        // with the per-team tier deltas below — the exact macro-sim bake, so
+        // the §11 macro/micro consistency holds through the person layer by
+        // construction. No source / no row = neutral = bit-identical arrays.
+        Dictionary<string, PersonRow>? personRows = null;
+        if (Persons is not null)
+        {
+            personRows = new Dictionary<string, PersonRow>(slots, StringComparer.Ordinal);
+            Persons.LoadAll(personRows);
+        }
 
         for (int i = 0; i < slots; i++)
         {
@@ -347,13 +368,19 @@ public sealed class MicroGame
             bool ped = pedSet.Contains(row.PlayerId);
             _pedActive[i] = ped;
             TierRatingDeltas tierDeltas = TierEffects.For(teamTiers[team]);
+            PersonRatingDeltas person = default;
+            if (personRows is not null && personRows.TryGetValue(row.PlayerId, out PersonRow personRow))
+            {
+                person = PersonEffects.For(in personRow);
+            }
             _batterRatings[i] = new BatterRatings(
-                TierEffects.Shift(row.BatPower, tierDeltas.BatPower),
-                TierEffects.Shift(row.BatContact, tierDeltas.BatContact),
+                PersonEffects.Bake(row.BatPower, tierDeltas.BatPower, person.Confidence),
+                PersonEffects.Bake(row.BatContact, tierDeltas.BatContact, person.Happiness),
                 TierEffects.Shift(row.BatDiscipline, tierDeltas.BatDiscipline), ped);
             _pitcherRatings[i] = new PitcherRatings(
-                TierEffects.Shift(row.PitStuff, tierDeltas.PitStuff),
-                TierEffects.Shift(row.PitControl, tierDeltas.PitControl), (byte)row.PitStamina);
+                PersonEffects.Bake(row.PitStuff, tierDeltas.PitStuff, person.Confidence),
+                PersonEffects.Bake(row.PitControl, tierDeltas.PitControl, person.Happiness),
+                (byte)row.PitStamina);
 
             if (row.IsPitcher)
             {
@@ -385,6 +412,7 @@ public sealed class MicroGame
             {
                 _lineupSlots[team * LeagueSimulator.LineupSize + lineupCount[team]++] = i;
                 fieldingSum[team] += row.Fielding;
+                teamworkPointsSum[team] += person.Teamwork;
             }
         }
 
@@ -399,14 +427,27 @@ public sealed class MicroGame
                     $"{bullpenCount[t]}/{LeagueSimulator.BullpenSize} relievers — cannot host an attended game " +
                     "(did LeagueGenerator.EnsureV4 run?).");
             }
-            // Mean-then-shift, the exact formula LeagueSimulator bakes, so the
-            // same team carries the same defense byte in both sims.
-            _teamDefense[t] = TierEffects.Shift(
-                (fieldingSum[t] + LeagueSimulator.LineupSize / 2) / LeagueSimulator.LineupSize,
-                TierEffects.For(teamTiers[t]).Defense);
+            // Mean-then-shift-then-teamwork, the exact formula LeagueSimulator
+            // bakes, so the same team carries the same defense byte in both sims.
+            _teamDefense[t] = PersonEffects.BakeTeamDefense(
+                fieldingSum[t], LeagueSimulator.LineupSize,
+                TierEffects.For(teamTiers[t]).Defense, teamworkPointsSum[t]);
         }
 
         _initialized = true;
+    }
+
+    /// <summary>Baked team-defense byte (tier + HS-6 §6.2 teamwork lever) — internal so run_monte_carlo_batch pins the defense bake per sim.</summary>
+    internal byte TeamDefenseFor(int teamId)
+    {
+        for (int t = 0; t < _teamCount; t++)
+        {
+            if (_teamIds[t] == teamId)
+            {
+                return _teamDefense[t];
+            }
+        }
+        throw new ArgumentException($"Team {teamId} is not in this league.", nameof(teamId));
     }
 
     /// <summary>Roster slot of a player id, or <see cref="NoHuman"/> — resolve the avatar once, not per PA.</summary>

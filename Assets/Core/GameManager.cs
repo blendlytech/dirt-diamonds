@@ -277,6 +277,9 @@ public sealed partial class GameManager : Node
         {
             var tierSim = new LeagueSimulator(
                 _database, Baseball, normalizer, new RngState(rng.NextUInt64() | 1UL), (LeagueTier)t);
+            // HS-6: person levers bake at Initialize, so the source must be
+            // wired first (unlike the per-PA ledgers below).
+            tierSim.Persons = Persons;
             tierSim.Initialize();
             tierSim.Rivalries = _rivalryLedger;
             tierSim.Availability = Absences;
@@ -291,6 +294,9 @@ public sealed partial class GameManager : Node
         // The career handler is attached AFTER the leagues' so an attended day
         // is resolved once the rest of the league has played.
         Micro = new MicroGame(_database, Baseball);
+        // HS-6: wired before Initialize for the same bake-time reason as the
+        // tier sims above.
+        Micro.Persons = Persons;
         Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
         Micro.Availability = Absences;

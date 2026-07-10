@@ -81,6 +81,7 @@ internal static class Program
         string practiceScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_practice_{Guid.NewGuid():N}.db");
         string devEquilibriumScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_devequilibrium_{Guid.NewGuid():N}.db");
         string backstoryScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_backstory_{Guid.NewGuid():N}.db");
+        string personFxScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_personfx_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -100,6 +101,7 @@ internal static class Program
             RunNurtureBlendSuite(schemaPath, nurtureScratchPath);
             RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
             RunBackstoryPersonSuite(schemaPath, backstoryScratchPath);
+            RunPersonEffectsSuite(schemaPath, personFxScratchPath);
             RunTierLadderSuite(schemaPath, tierScratchPath);
             RunAvailabilitySuite(schemaPath, availScratchPath);
             RunEquipmentSuite(schemaPath, equipScratchPath);
@@ -179,6 +181,9 @@ internal static class Program
                     devEquilibriumScratchPath,
                     backstoryScratchPath, backstoryScratchPath + ".legacy",
                     backstoryScratchPath + ".spread", backstoryScratchPath + ".spreadbare",
+                    personFxScratchPath, personFxScratchPath + ".neutral",
+                    personFxScratchPath + ".boosted", personFxScratchPath + ".spreadctl",
+                    personFxScratchPath + ".spread",
                 })
             {
                 TryDelete(variant);
@@ -1929,6 +1934,345 @@ internal static class Program
         a.HomeScore == b.HomeScore && a.AwayScore == b.AwayScore && a.Innings == b.Innings
         && a.HumanPa == b.HumanPa && a.HomeStarterPitches.Equals(b.HomeStarterPitches)
         && a.AwayStarterPitches.Equals(b.AwayStarterPitches);
+
+    // ------------------------------------------------------------------
+    // 8b. HS-6 person→performance modifiers (high_school_person_layer.md §6):
+    //     PointsFor arithmetic, the tier→person bake order, the zero-at-50
+    //     identity through full same-seed seasons (macro) and exhibitions
+    //     (micro), analytic direction per lever, and the live-world-shaped
+    //     organic-person-spread season staying inside a delta bound of its
+    //     control — the sanctioned HS-6 re-band statement. Every pre-existing
+    //     harness world generates with no Persons source and zero
+    //     Player_Person rows, so the MLB bit-identity guard stays byte-exact
+    //     by the §6.1 zero-at-50 contract, not by luck.
+    // ------------------------------------------------------------------
+
+    private static void RunPersonEffectsSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- HS-6 person effects (§6 PointsFor/bake order, neutral identity, direction, spread re-band) ---");
+
+        // ---- (a) §6.1 PointsFor: zero-at-50, endpoints, rounding, symmetry ----
+        Check("PointsFor: 50 → 0 for every cap (zero-at-50 by contract)",
+            PersonEffects.PointsFor(50, PersonEffects.ConfidenceCap) == 0
+            && PersonEffects.PointsFor(50, 3) == 0 && PersonEffects.PointsFor(50, 1) == 0);
+        Check("PointsFor: endpoints hit ±cap exactly (100 → +2, 0 → −2 at the shipped ±2 band)",
+            PersonEffects.PointsFor(100, 2) == 2 && PersonEffects.PointsFor(0, 2) == -2);
+        Check("PointsFor: rounding pinned (cap 2: 62 → 0, 63 → +1, 37 → −1; cap 3: midpoint 75 → +2 away-from-zero)",
+            PersonEffects.PointsFor(62, 2) == 0 && PersonEffects.PointsFor(63, 2) == 1
+            && PersonEffects.PointsFor(37, 2) == -1
+            && PersonEffects.PointsFor(75, 3) == 2 && PersonEffects.PointsFor(25, 3) == -2);
+        bool sweepOk = true;
+        foreach (int cap in new[] { 2, 3 })
+        {
+            int prev = int.MinValue;
+            for (int s = 0; s <= 100; s++)
+            {
+                int pts = PersonEffects.PointsFor(s, cap);
+                if (pts < -cap || pts > cap || pts < prev || pts != -PersonEffects.PointsFor(100 - s, cap))
+                {
+                    sweepOk = false;
+                    break;
+                }
+                prev = pts;
+            }
+        }
+        Check("PointsFor: 0–100 sweep stays in-cap, monotone, odd-symmetric about 50 (caps 2 and 3)", sweepOk);
+
+        // ---- (b) §6.3 bake order pinned at the clamps (tier first, then person) ----
+        Check("Bake order: base 1, tier −20, person +2 bakes to 2 (person-first would clamp to 0)",
+            PersonEffects.Bake(1, -20, 2) == 2);
+        Check("Bake order: base 99, tier −20, person +2 bakes to 81; top clamp 99 + 0 + 2 → 100",
+            PersonEffects.Bake(99, -20, 2) == 81 && PersonEffects.Bake(99, 0, 2) == 100);
+        bool bakeIdentity = true;
+        for (int r = 0; r <= 100; r += 7)
+        {
+            foreach (int t in new[] { -20, -8, 0 })
+            {
+                if (PersonEffects.Bake(r, t, 0) != TierEffects.Shift(r, t))
+                {
+                    bakeIdentity = false;
+                }
+            }
+        }
+        Check("Bake: 0 person delta ≡ the exact pre-HS-6 tier shift (rating × tier sweep)", bakeIdentity);
+
+        // ---- (c) team-defense bake: neutral identity + rounded-mean teamwork shift ----
+        bool defenseIdentity = true;
+        foreach (int sum in new[] { 0, 315, 450, 617, 900 })
+        {
+            foreach (int t in new[] { -20, 0 })
+            {
+                if (PersonEffects.BakeTeamDefense(sum, 9, t, 0) != TierEffects.Shift((sum + 4) / 9, t))
+                {
+                    defenseIdentity = false;
+                }
+            }
+        }
+        Check("BakeTeamDefense: zero teamwork sum ≡ the exact pre-HS-6 mean-then-tier-shift", defenseIdentity);
+        Check("BakeTeamDefense: rounded lineup mean of teamwork points (±18 → ±2, +9 → +1, +4 → 0, ±5 → ±1)",
+            PersonEffects.BakeTeamDefense(450, 9, 0, 18) == 52
+            && PersonEffects.BakeTeamDefense(450, 9, 0, -18) == 48
+            && PersonEffects.BakeTeamDefense(450, 9, 0, 9) == 51
+            && PersonEffects.BakeTeamDefense(450, 9, 0, 4) == 50
+            && PersonEffects.BakeTeamDefense(450, 9, 0, 5) == 51
+            && PersonEffects.BakeTeamDefense(450, 9, 0, -5) == 49);
+
+        // ---- (d) the §6.2 mapping off a real PersonRow ----
+        PersonRatingDeltas neutralDeltas = PersonEffects.For(PersonRow.Neutral("p"));
+        PersonRow skewed = PersonRow.Neutral("p");
+        skewed.Confidence = 100;
+        skewed.Happiness = 0;
+        skewed.Teamwork = 100;
+        PersonRatingDeltas skewedDeltas = PersonEffects.For(in skewed);
+        Check("For(row): neutral row → all-zero deltas; confidence 100 / happiness 0 / teamwork 100 → (+2, −2, +2)",
+            neutralDeltas.Confidence == 0 && neutralDeltas.Happiness == 0 && neutralDeltas.Teamwork == 0
+            && skewedDeltas.Confidence == 2 && skewedDeltas.Happiness == -2 && skewedDeltas.Teamwork == 2);
+
+        // ---- (e) analytic direction per lever against the unchanged resolver ----
+        var flatBatter = new BatterRatings(50, 50, 50, false);
+        var flatPitcher = new PitcherRatings(50, 50, 50);
+        Span<double> baseline = stackalloc double[AtBatResolver.OutcomeCount];
+        Span<double> shifted = stackalloc double[AtBatResolver.OutcomeCount];
+        AtBatResolver.ComputeProbabilities(in flatBatter, in flatPitcher, 50, baseline);
+
+        var confidentBatter = new BatterRatings(52, 50, 50, false); // confidence 100 → power +2
+        AtBatResolver.ComputeProbabilities(in confidentBatter, in flatPitcher, 50, shifted);
+        Check("confidence lever (bat_power +2): HR probability rises",
+            shifted[(int)PaOutcome.HomeRun] > baseline[(int)PaOutcome.HomeRun],
+            $"HR {baseline[(int)PaOutcome.HomeRun]:P2} → {shifted[(int)PaOutcome.HomeRun]:P2}");
+
+        var happyBatter = new BatterRatings(50, 52, 50, false); // happiness 100 → contact +2
+        AtBatResolver.ComputeProbabilities(in happyBatter, in flatPitcher, 50, shifted);
+        double baseHits = baseline[(int)PaOutcome.Single] + baseline[(int)PaOutcome.Double]
+            + baseline[(int)PaOutcome.Triple] + baseline[(int)PaOutcome.HomeRun];
+        double happyHits = shifted[(int)PaOutcome.Single] + shifted[(int)PaOutcome.Double]
+            + shifted[(int)PaOutcome.Triple] + shifted[(int)PaOutcome.HomeRun];
+        Check("happiness lever (bat_contact +2): total hit probability rises",
+            happyHits > baseHits, $"hits {baseHits:P1} → {happyHits:P1}");
+
+        var nastyPitcher = new PitcherRatings(52, 50, 50); // confidence 100 → stuff +2
+        AtBatResolver.ComputeProbabilities(in flatBatter, in nastyPitcher, 50, shifted);
+        Check("confidence lever (pit_stuff +2): strikeout probability rises",
+            shifted[(int)PaOutcome.Strikeout] > baseline[(int)PaOutcome.Strikeout],
+            $"K {baseline[(int)PaOutcome.Strikeout]:P1} → {shifted[(int)PaOutcome.Strikeout]:P1}");
+
+        var paintingPitcher = new PitcherRatings(50, 52, 50); // happiness 100 → control +2
+        AtBatResolver.ComputeProbabilities(in flatBatter, in paintingPitcher, 50, shifted);
+        Check("happiness lever (pit_control +2): walk probability falls",
+            shifted[(int)PaOutcome.Walk] < baseline[(int)PaOutcome.Walk],
+            $"BB {baseline[(int)PaOutcome.Walk]:P1} → {shifted[(int)PaOutcome.Walk]:P1}");
+
+        AtBatResolver.ComputeProbabilities(in flatBatter, in flatPitcher, 52, shifted); // teamwork 100 lineup → defense +2
+        double baseInPlayHits = baseline[(int)PaOutcome.Single] + baseline[(int)PaOutcome.Double]
+            + baseline[(int)PaOutcome.Triple];
+        double defendedInPlayHits = shifted[(int)PaOutcome.Single] + shifted[(int)PaOutcome.Double]
+            + shifted[(int)PaOutcome.Triple];
+        Check("teamwork lever (team defense +2): in-play hit probability falls",
+            defendedInPlayHits < baseInPlayHits, $"1B+2B+3B {baseInPlayHits:P1} → {defendedInPlayHits:P1}");
+
+        // ---- (f) same-seed macro seasons: identity, divergence, delta bound ----
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) control =
+            RunPersonSeason(schemaPath, scratchPath, ratingSpread: 0, personsAtGeneration: false, null, attachPersonsToSim: false);
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) neutralSeason =
+            RunPersonSeason(schemaPath, scratchPath + ".neutral", 0, false, SeedNeutralPersons, true);
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) boosted =
+            RunPersonSeason(schemaPath, scratchPath + ".boosted", 0, false, SeedBoostedTeamPersons, true);
+
+        Check("macro: all-neutral Player_Person rows bit-identical to no source at all (neutral row ≡ no row ≡ no source)",
+            BattingTotalsEqual(control.Bat, neutralSeason.Bat) && PitchingTotalsEqual(control.Pit, neutralSeason.Pit));
+        Check("macro: one team at confidence/happiness/teamwork 100 reaches PAs (same-seed season diverges)",
+            !BattingTotalsEqual(control.Bat, boosted.Bat));
+
+        (double avg, double obp, double slg, double kRate, double bbRate, double hrRate, double runsPerTeamGame) controlLine =
+            RivalrySeasonLine(control.Bat, control.Pit);
+        (double avg, double obp, double slg, double kRate, double bbRate, double hrRate, double runsPerTeamGame) boostedLine =
+            RivalrySeasonLine(boosted.Bat, boosted.Pit);
+        double boostAvgDelta = Math.Abs(boostedLine.avg - controlLine.avg);
+        double boostRgDelta = Math.Abs(boostedLine.runsPerTeamGame - controlLine.runsPerTeamGame);
+        Check("macro: boosted-team season keeps the league line vs same-seed control (ΔAVG ≤ .003, ΔR/G ≤ .05)",
+            boostAvgDelta <= 0.003 && boostRgDelta <= 0.05,
+            $"ΔAVG {boostAvgDelta:.0000} (boosted {boostedLine.avg:.000} vs control {controlLine.avg:.000})  " +
+            $"ΔR/G {boostRgDelta:F2} (boosted {boostedLine.runsPerTeamGame:F2} vs control {controlLine.runsPerTeamGame:F2})");
+
+        // ---- (g) the live-world-shaped re-band: §2.5 organic person spread ----
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) spreadCtl =
+            RunPersonSeason(schemaPath, scratchPath + ".spreadctl", LeagueGenerator.DefaultRatingSpread, false, null, false);
+        (LeagueBattingTotals Bat, LeaguePitchingTotals Pit) spread =
+            RunPersonSeason(schemaPath, scratchPath + ".spread", LeagueGenerator.DefaultRatingSpread, personsAtGeneration: true, null, attachPersonsToSim: true);
+
+        Check("spread world: organic person rows reach the same-seed season (the sanctioned re-band is real, not a no-op)",
+            !BattingTotalsEqual(spreadCtl.Bat, spread.Bat));
+        (double avg, double obp, double slg, double kRate, double bbRate, double hrRate, double runsPerTeamGame) spreadCtlLine =
+            RivalrySeasonLine(spreadCtl.Bat, spreadCtl.Pit);
+        (double avg, double obp, double slg, double kRate, double bbRate, double hrRate, double runsPerTeamGame) spreadLine =
+            RivalrySeasonLine(spread.Bat, spread.Pit);
+        double spreadAvgDelta = Math.Abs(spreadLine.avg - spreadCtlLine.avg);
+        double spreadRgDelta = Math.Abs(spreadLine.runsPerTeamGame - spreadCtlLine.runsPerTeamGame);
+        Console.WriteLine($"  Person-spread season: {spreadLine.avg:.000}/{spreadLine.obp:.000}/{spreadLine.slg:.000}  " +
+            $"K% {spreadLine.kRate:P1}  BB% {spreadLine.bbRate:P1}  R/G {spreadLine.runsPerTeamGame:F2}  ({spread.Bat.Pa:N0} PA)");
+        Check("spread world: zero-mean ±2-capped person spread keeps the league line (ΔAVG ≤ .003, ΔR/G ≤ .05)",
+            spreadAvgDelta <= 0.003 && spreadRgDelta <= 0.05,
+            $"ΔAVG {spreadAvgDelta:.0000} (spread {spreadLine.avg:.000} vs control {spreadCtlLine.avg:.000})  " +
+            $"ΔR/G {spreadRgDelta:F2} (spread {spreadLine.runsPerTeamGame:F2} vs control {spreadCtlLine.runsPerTeamGame:F2})");
+
+        // ---- (h) micro path: same-seed exhibitions on the control db ----
+        using (var db = new DatabaseManager(scratchPath))
+        {
+            var baseball = new BaseballQueries(db);
+            var persons = new PersonQueries(db);
+            var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
+            baseball.LoadAllTeams(teams);
+            int homeTeamId = teams[0].TeamId;
+            int awayTeamId = teams[1].TeamId;
+            var rosterRows = new List<RosterPlayerRow>();
+            baseball.LoadRoster(rosterRows);
+
+            MicroGameResult baselineGame = PlayPersonMicroGame(db, baseball, homeTeamId, awayTeamId, null);
+            MicroGameResult wiredNoRows = PlayPersonMicroGame(db, baseball, homeTeamId, awayTeamId, persons);
+            foreach (RosterPlayerRow r in rosterRows)
+            {
+                persons.Upsert(PersonRow.Neutral(r.PlayerId));
+            }
+            MicroGameResult wiredNeutralRows = PlayPersonMicroGame(db, baseball, homeTeamId, awayTeamId, persons);
+            Check("micro: wired-but-rowless and wired-all-neutral games bit-identical to no source (same seed)",
+                MicroResultsEqual(baselineGame, wiredNoRows) && MicroResultsEqual(baselineGame, wiredNeutralRows));
+
+            // Teamwork alone — a ±2 defense shift moves per-PA probabilities
+            // too little for one same-seed game to reliably diverge, so this
+            // pins the baked defense BYTE in both sims instead (the analytic
+            // check above already proves byte → probability direction).
+            foreach (RosterPlayerRow r in rosterRows)
+            {
+                if (r.TeamId != homeTeamId)
+                {
+                    continue;
+                }
+                PersonRow row = PersonRow.Neutral(r.PlayerId);
+                row.Teamwork = 100;
+                persons.Upsert(row);
+            }
+            var neutralMicroProbe = new MicroGame(db, baseball) { LoggingEnabled = false };
+            neutralMicroProbe.Initialize();
+            var teamworkMicroProbe = new MicroGame(db, baseball) { LoggingEnabled = false, Persons = persons };
+            teamworkMicroProbe.Initialize();
+            Check("micro: home-lineup teamwork 100 bakes team defense +2 (away team unmoved)",
+                teamworkMicroProbe.TeamDefenseFor(homeTeamId) == neutralMicroProbe.TeamDefenseFor(homeTeamId) + 2
+                && teamworkMicroProbe.TeamDefenseFor(awayTeamId) == neutralMicroProbe.TeamDefenseFor(awayTeamId),
+                $"home {neutralMicroProbe.TeamDefenseFor(homeTeamId)} → {teamworkMicroProbe.TeamDefenseFor(homeTeamId)}, " +
+                $"away {neutralMicroProbe.TeamDefenseFor(awayTeamId)} → {teamworkMicroProbe.TeamDefenseFor(awayTeamId)}");
+
+            var neutralMacroProbe = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+            neutralMacroProbe.Initialize();
+            var teamworkMacroProbe = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+            teamworkMacroProbe.Persons = persons;
+            teamworkMacroProbe.Initialize();
+            Check("macro: the same +2 defense byte bakes in LeagueSimulator (micro/macro parity through the person layer)",
+                teamworkMacroProbe.TeamDefenseFor(homeTeamId) == neutralMacroProbe.TeamDefenseFor(homeTeamId) + 2
+                && teamworkMacroProbe.TeamDefenseFor(awayTeamId) == neutralMacroProbe.TeamDefenseFor(awayTeamId)
+                && teamworkMacroProbe.TeamDefenseFor(homeTeamId) == teamworkMicroProbe.TeamDefenseFor(homeTeamId));
+
+            foreach (RosterPlayerRow r in rosterRows)
+            {
+                if (r.TeamId != homeTeamId)
+                {
+                    continue;
+                }
+                PersonRow row = PersonRow.Neutral(r.PlayerId);
+                row.Confidence = 100;
+                row.Happiness = 100;
+                row.Teamwork = 100;
+                persons.Upsert(row);
+            }
+            MicroGameResult maxedGame = PlayPersonMicroGame(db, baseball, homeTeamId, awayTeamId, persons);
+            Check("micro: fully maxed home-team levers diverge the same-seed game",
+                !MicroResultsEqual(baselineGame, maxedGame),
+                $"base {baselineGame.AwayScore}-{baselineGame.HomeScore}/{baselineGame.Innings}, " +
+                $"maxed {maxedGame.AwayScore}-{maxedGame.HomeScore}/{maxedGame.Innings}");
+        }
+    }
+
+    /// <summary>
+    /// One fresh single-season pipeline run on its own scratch db where the
+    /// person-lever source is decided (and any Player_Person rows seeded)
+    /// BEFORE <see cref="LeagueSimulator.Initialize"/> — the §6 bake happens
+    /// at load, so the rivalry suite's post-Initialize wire shape cannot
+    /// exercise it. Same league seed, same season seed; variants differ only
+    /// in the person setup.
+    /// </summary>
+    private static (LeagueBattingTotals, LeaguePitchingTotals) RunPersonSeason(
+        string schemaPath, string dbPath, int ratingSpread, bool personsAtGeneration,
+        Action<BaseballQueries, PersonQueries>? seedPersons, bool attachPersonsToSim)
+    {
+        using var db = new DatabaseManager(dbPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var persons = new PersonQueries(db);
+        var genRng = new RngState(LeagueSeed);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread, ref genRng,
+            personsAtGeneration ? persons : null);
+        seedPersons?.Invoke(baseball, persons);
+
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+        clock.Initialize(StartYear);
+
+        var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed));
+        league.Persons = attachPersonsToSim ? persons : null;
+        league.Initialize();
+        league.AttachTo(bus);
+
+        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+        return (baseball.LoadLeagueBattingTotals(StartYear), baseball.LoadLeaguePitchingTotals(StartYear));
+    }
+
+    /// <summary>Every rostered player gets an explicitly neutral row — must be indistinguishable from no rows.</summary>
+    private static void SeedNeutralPersons(BaseballQueries baseball, PersonQueries persons)
+    {
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        foreach (RosterPlayerRow r in roster)
+        {
+            persons.Upsert(PersonRow.Neutral(r.PlayerId));
+        }
+    }
+
+    /// <summary>Team A's whole roster at confidence/happiness/teamwork 100; everyone else explicitly neutral.</summary>
+    private static void SeedBoostedTeamPersons(BaseballQueries baseball, PersonQueries persons)
+    {
+        var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
+        baseball.LoadAllTeams(teams);
+        int teamAId = teams[0].TeamId;
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        foreach (RosterPlayerRow r in roster)
+        {
+            PersonRow row = PersonRow.Neutral(r.PlayerId);
+            if (r.TeamId == teamAId)
+            {
+                row.Confidence = 100;
+                row.Happiness = 100;
+                row.Teamwork = 100;
+            }
+            persons.Upsert(row);
+        }
+    }
+
+    /// <summary>Fresh micro instance per variant (the <see cref="PlayMicroGame"/> shape) with the person source wired BEFORE Initialize.</summary>
+    private static MicroGameResult PlayPersonMicroGame(
+        DatabaseManager db, BaseballQueries baseball, int homeTeamId, int awayTeamId, PersonQueries? persons)
+    {
+        var micro = new MicroGame(db, baseball) { LoggingEnabled = false, Persons = persons };
+        micro.Initialize();
+        var policy = new NeutralBatterPolicy();
+        var rng = new RngState(MicroSeed);
+        return micro.PlayGame(homeTeamId, awayTeamId, MicroGame.NoHuman, ref policy, ref rng);
+    }
 
     // ------------------------------------------------------------------
     // 9. Phase 6 heir mechanics: genetic blending & hidden interest
