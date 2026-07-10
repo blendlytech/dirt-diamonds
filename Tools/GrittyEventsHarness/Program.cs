@@ -983,6 +983,17 @@ internal static class Program
         {
             world.AddPlayer("hero", age: 17, teamId: 1);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+
+            // The gritty→PersonStatImpulseEvent gap fix: gritty PersonStat
+            // consequences must mirror into the Life sim exactly like
+            // ItemService's HS-4 rewards already do (Tools/GrittyEventsHarness
+            // "HS-4 publish" checks, ItemService.cs's ApplySelfBuyTransportReward
+            // precedent) — subscribed before the fire so nothing is missed.
+            var statImpulses = new List<PersonStatImpulseEvent>();
+            var leverChanges = new List<PersonLeversChangedEvent>();
+            world.Bus.Subscribe<PersonStatImpulseEvent>(statImpulses.Add);
+            world.Bus.Subscribe<PersonLeversChangedEvent>(leverChanges.Add);
+
             world.Dispatcher.PollOnce();
             world.Clock.AdvanceDay();
             world.Bus.DispatchPending();
@@ -995,6 +1006,48 @@ internal static class Program
                 $"confidence={row.Confidence}, discipline={row.Discipline}");
             Check("person_stat clamps at the floor (a -60 delta off neutral 50 bottoms out at 0, never negative)",
                 found && row.Morality == 0, $"morality={row.Morality}");
+
+            Check("gritty person_stat publishes PersonStatImpulseEvent with the ACTUAL clamped movement (confidence +7, morality -50 not -60)",
+                statImpulses.Count == 2
+                && statImpulses.Any(i => i.PlayerId == "hero" && i.Stat == (int)PersonStatId.Confidence && Math.Abs(i.Delta - 7f) < 1e-6)
+                && statImpulses.Any(i => i.PlayerId == "hero" && i.Stat == (int)PersonStatId.Morality && Math.Abs(i.Delta - (-50f)) < 1e-6),
+                string.Join(",", statImpulses.Select(i => $"{i.Stat}:{i.Delta}")));
+            Check("gritty person_stat re-announces PersonLeversChangedEvent when a §6.2 sim lever moved (confidence is one; morality is not)",
+                leverChanges.Count == 1 && leverChanges[0].PlayerId == "hero"
+                && leverChanges[0].Happiness == 50 && leverChanges[0].Confidence == 57 && leverChanges[0].Teamwork == 50,
+                $"count={leverChanges.Count}");
+        }
+
+        using (World world = World.Create("personStatNet", GrittyEventJson.Parse(
+            """
+            { "events": [ { "id": "y", "scope": "avatar", "weight": 1.0,
+              "choices": [ { "id": "a", "consequences": [
+                { "type": "person_stat", "stat": "happiness", "amount": 5 },
+                { "type": "person_stat", "stat": "happiness", "amount": -3 },
+                { "type": "person_stat", "stat": "teamwork", "amount": 10 } ] } ] } ] }
+            """)))
+        {
+            world.AddPlayer("hero2", age: 17, teamId: 1);
+            PersonRow maxedTeamwork = PersonRow.Neutral("hero2");
+            maxedTeamwork.Teamwork = 100;
+            world.Persons.Upsert(maxedTeamwork);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero2");
+
+            var statImpulses = new List<PersonStatImpulseEvent>();
+            world.Bus.Subscribe<PersonStatImpulseEvent>(statImpulses.Add);
+
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            Check("a stat touched twice in one choice nets to ONE publish carrying the net delta (+5 then -3 = +2)",
+                statImpulses.Count(i => i.Stat == (int)PersonStatId.Happiness) == 1
+                && Math.Abs(statImpulses.First(i => i.Stat == (int)PersonStatId.Happiness).Delta - 2f) < 1e-6,
+                string.Join(",", statImpulses.Select(i => $"{i.Stat}:{i.Delta}")));
+            Check("a consequence that cannot actually move (already at the 100 cap) publishes no impulse at all",
+                statImpulses.All(i => i.Stat != (int)PersonStatId.Teamwork));
         }
     }
 

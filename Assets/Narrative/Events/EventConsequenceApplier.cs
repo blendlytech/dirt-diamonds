@@ -94,6 +94,13 @@ public sealed class EventConsequenceApplier
     // rare and the list is cleared per fire.
     private readonly List<PlayerAbsenceChangedEvent> _absenceScratch = new(4);
 
+    // PersonStat ordinal touch table (the PersonStatImpulseEvent gap fix):
+    // tracks which of the 12 PersonStatId ordinals a PersonStat consequence
+    // hit this fire, so a stat nudged twice in one choice (e.g. +5 then −3)
+    // nets to a single post-batch publish instead of two. Pooled; every
+    // ApplyChoice call clears exactly the flags it set.
+    private readonly bool[] _touchedPersonStatOrdinals = new bool[PersonQueries.AdjustableStatCount];
+
     /// <summary>
     /// True (default, headless-safe): every fire — including the avatar's —
     /// resolves immediately via the weighted autopilot draw. False: an
@@ -193,10 +200,12 @@ public sealed class EventConsequenceApplier
         // (consequence skipped, §4) is decided on a consistent snapshot.
         bool needsTargets = false;
         bool endsPartnership = false;
+        bool needsPersonSnapshot = false;
         for (int i = 0; i < consequences.Length; i++)
         {
             needsTargets |= consequences[i].Kind == ConsequenceKind.Relationship;
             endsPartnership |= consequences[i].Kind == ConsequenceKind.EndPartnership;
+            needsPersonSnapshot |= consequences[i].Kind == ConsequenceKind.PersonStat;
         }
         if (needsTargets)
         {
@@ -207,6 +216,16 @@ public sealed class EventConsequenceApplier
         // graph the reclassification will hit — so the ex-history record
         // (below, inside the batch) and the graph write can never disagree.
         string? endedPartnerId = endsPartnership ? FindLivePartnerId(fired.SubjectPlayerId) : null;
+
+        // Pre-batch person-stat snapshot (the ApplySelfBuyTransportReward
+        // precedent): the ONLY way to learn AdjustStat's actual clamped
+        // movement is to read the row on both sides of the write, since the
+        // clamp happens in SQL. A missing row (dead in practice post-v11
+        // boot backfill) leaves hasPersonBefore false, and the post-batch
+        // side skips publishing rather than guess.
+        PersonRow personBefore = default;
+        bool hasPersonBefore = needsPersonSnapshot
+            && _persons.TryGet(fired.SubjectPlayerId, out personBefore);
 
         // Database consequences commit atomically in this handler's own batch.
         _absenceScratch.Clear();
@@ -241,6 +260,7 @@ public sealed class EventConsequenceApplier
                     case ConsequenceKind.PersonStat:
                         _persons.AdjustStat(
                             fired.SubjectPlayerId, (int)consequence.PersonStat, (int)Math.Round(consequence.Amount));
+                        _touchedPersonStatOrdinals[(int)consequence.PersonStat] = true;
                         break;
                     case ConsequenceKind.ChildDevelopment:
                         ApplyChildDevelopment(fired, in consequence);
@@ -274,7 +294,6 @@ public sealed class EventConsequenceApplier
         // In-memory / bus-routed consequences follow the committed batch, so a
         // subscriber reacting to an impulse always observes the DB state the
         // same fire produced.
-        bool simLeversMoved = false;
         for (int i = 0; i < consequences.Length; i++)
         {
             ref readonly EventConsequence consequence = ref consequences[i];
@@ -285,11 +304,6 @@ public sealed class EventConsequenceApplier
                     {
                         _bus.Publish(new FundsImpulseEvent(fired.SubjectPlayerId, consequence.Amount));
                     }
-                    break;
-                case ConsequenceKind.PersonStat:
-                    simLeversMoved |= consequence.Amount != 0
-                        && consequence.PersonStat is PersonStatId.Happiness
-                            or PersonStatId.Confidence or PersonStatId.Teamwork;
                     break;
                 case ConsequenceKind.Stress:
                     if (consequence.Amount != 0)
@@ -328,22 +342,75 @@ public sealed class EventConsequenceApplier
         }
         _absenceScratch.Clear();
 
-        // HS-6 follow-up (per-game person refresh): a person_stat consequence
-        // that moved a §6.2 sim lever re-announces the subject's COMMITTED
-        // lever values for the attended game's PersonLedger — read back AFTER
-        // the batch (the ledger only ever mirrors persisted rows), absolutes
-        // not deltas (AdjustStat clamps in SQL, so only the row knows what
-        // actually moved). One publish per fire, however many lever
-        // consequences the choice carried.
-        if (simLeversMoved && _persons.TryGet(fired.SubjectPlayerId, out PersonRow personRow))
+        // Person-stat impulses (closes the gritty→PersonStatImpulseEvent gap):
+        // every ordinal a PersonStat consequence touched publishes its ACTUAL
+        // clamped movement — before/after read around the committed batch,
+        // since AdjustStat clamps in SQL and only the row knows what really
+        // moved (the ItemService.ApplySelfBuyTransportReward precedent). This
+        // is the FundsImpulseEvent pattern, and it is what LifeSimManager's
+        // GPA-drift inputs (Intelligence/Discipline) and happiness reversion
+        // were missing — a gritty event nudging those never reached the Life
+        // sim's in-memory mirror before. Every set flag is cleared here
+        // whether or not a snapshot was available, so no fire ever leaks a
+        // stale touch into the next one.
+        PersonRow personAfter = default;
+        bool hasPersonAfter = needsPersonSnapshot
+            && _persons.TryGet(fired.SubjectPlayerId, out personAfter);
+        bool simLeversMoved = false;
+        for (int ordinal = 0; ordinal < PersonQueries.AdjustableStatCount; ordinal++)
+        {
+            if (!_touchedPersonStatOrdinals[ordinal])
+            {
+                continue;
+            }
+            _touchedPersonStatOrdinals[ordinal] = false;
+            if (!hasPersonBefore || !hasPersonAfter)
+            {
+                continue;
+            }
+            int delta = GetStatByOrdinal(in personAfter, ordinal) - GetStatByOrdinal(in personBefore, ordinal);
+            if (delta == 0)
+            {
+                continue;
+            }
+            _bus.Publish(new PersonStatImpulseEvent(fired.SubjectPlayerId, ordinal, delta));
+            simLeversMoved |= ordinal is (int)PersonStatId.Happiness
+                or (int)PersonStatId.Confidence or (int)PersonStatId.Teamwork;
+        }
+
+        // HS-6 follow-up (per-game person refresh): the §6.2 sim-lever trio
+        // additionally re-announces the subject's COMMITTED lever values for
+        // the attended-game PersonLedger — absolutes, not deltas, same as
+        // before this fix. Now driven by the actual-movement check above
+        // rather than the nominal nudge, so a consequence that couldn't
+        // actually move (already at the cap) no longer over-publishes.
+        if (simLeversMoved)
         {
             _bus.Publish(new PersonLeversChangedEvent(
                 fired.SubjectPlayerId,
-                (byte)personRow.Happiness, (byte)personRow.Confidence, (byte)personRow.Teamwork));
+                (byte)personAfter.Happiness, (byte)personAfter.Confidence, (byte)personAfter.Teamwork));
         }
 
         _bus.Publish(new GrittyEventResolvedEvent(fired.EventId, fired.SubjectPlayerId, choiceIndex, fired.Day));
     }
+
+    /// <summary>PersonRow field lookup by PersonStatId ordinal — mirrors PersonQueries.AdjustStatColumns' order exactly (SchemaValidator-pinned).</summary>
+    private static int GetStatByOrdinal(in PersonRow person, int ordinal) => ordinal switch
+    {
+        0 => person.Intelligence,
+        1 => person.Maturity,
+        2 => person.Happiness,
+        3 => person.Charisma,
+        4 => person.Confidence,
+        5 => person.Reputation,
+        6 => person.SocialStatus,
+        7 => person.Attractiveness,
+        8 => person.Teamwork,
+        9 => person.Morality,
+        10 => person.Discipline,
+        11 => person.WorkEthic,
+        _ => throw new ArgumentOutOfRangeException(nameof(ordinal), ordinal, null),
+    };
 
     /// <summary>
     /// The Phase 8c roster/availability mutation. An event fires during day
