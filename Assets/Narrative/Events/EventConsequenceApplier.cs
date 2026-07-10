@@ -559,11 +559,27 @@ public sealed class EventConsequenceApplier
             }
         }
 
+        // TeammateExOfPartner resolves the subject's current partner ONCE
+        // here — an unpartnered subject has an empty pool by construction,
+        // the same skip-by-design precedent as every other empty candidate
+        // set (this can legitimately race a poll-time prerequisite that saw
+        // a partner a day ago; see the selector's doc comment).
+        string? partnerId = null;
+        if (selector == RelationshipTargetSelector.TeammateExOfPartner)
+        {
+            partnerId = FindLivePartnerId(subjectId);
+            if (partnerId is null)
+            {
+                targetId = string.Empty;
+                return false;
+            }
+        }
+
         // Two passes (count, then k-th) — no candidate list allocation.
         int candidates = 0;
         for (int i = 0; i < _playerScratch.Count; i++)
         {
-            if (IsCandidate(_playerScratch[i], subjectId, subjectTeam, selector))
+            if (IsCandidate(_playerScratch[i], subjectId, subjectTeam, selector, partnerId))
             {
                 candidates++;
             }
@@ -577,7 +593,7 @@ public sealed class EventConsequenceApplier
         int pick = _rng.NextInt(candidates);
         for (int i = 0; i < _playerScratch.Count; i++)
         {
-            if (IsCandidate(_playerScratch[i], subjectId, subjectTeam, selector) && pick-- == 0)
+            if (IsCandidate(_playerScratch[i], subjectId, subjectTeam, selector, partnerId) && pick-- == 0)
             {
                 targetId = _playerScratch[i].PlayerId;
                 return true;
@@ -588,7 +604,7 @@ public sealed class EventConsequenceApplier
         return false;
     }
 
-    private static bool IsCandidate(in PlayerRow row, string subjectId, int? subjectTeam, RelationshipTargetSelector selector)
+    private bool IsCandidate(in PlayerRow row, string subjectId, int? subjectTeam, RelationshipTargetSelector selector, string? partnerId)
     {
         if (string.Equals(row.PlayerId, subjectId, StringComparison.Ordinal))
         {
@@ -601,6 +617,13 @@ public sealed class EventConsequenceApplier
             // rostered player counts as an opponent for them.
             RelationshipTargetSelector.Opponent => row.TeamId is not null && row.TeamId != subjectTeam,
             RelationshipTargetSelector.League => true,
+            // The real ex-teammate: same team as the subject, not the partner
+            // themselves, and a Relationship_History hit against the partner
+            // (schema v13) — never a random teammate pool draw.
+            RelationshipTargetSelector.TeammateExOfPartner =>
+                row.TeamId is not null && row.TeamId == subjectTeam
+                && !string.Equals(row.PlayerId, partnerId, StringComparison.Ordinal)
+                && _relationships.WasEverPartner(row.PlayerId, partnerId!),
             _ => throw new ArgumentOutOfRangeException(nameof(selector), selector, null),
         };
     }

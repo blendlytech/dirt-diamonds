@@ -28,7 +28,7 @@ internal static class Program
         "Teams", "Player_Ratings", "Pitcher_Roles", "Pitch_Arsenals", "Life_Needs", "Life_Stress", "Team_Tiers",
         "Player_Absences", "Player_Equipment", "Player_Potential",
         "Player_Person", "Family_Background", "Phone_State", "Player_Items", "Child_Development",
-        "Child_Rearing_Commitment",
+        "Child_Rearing_Commitment", "Relationship_History",
     };
 
     private static int Main(string[] args)
@@ -152,6 +152,15 @@ internal static class Program
             var rels = new List<RelationshipRow>();
             queries.LoadRelationshipsFor(players[1].PlayerId, rels);
             Check("relationship canonical-pair upsert", rels.Count == 1 && rels[0].AffinityScore == -95 && rels[0].Type == RelationshipType.Rival);
+
+            // Schema v13: Relationship_History is append-only and OR IGNORE —
+            // a reversed-pair re-insert and a straight re-insert both no-op.
+            queries.InsertRelationshipHistory(players[3].PlayerId, players[4].PlayerId);
+            queries.InsertRelationshipHistory(players[4].PlayerId, players[3].PlayerId); // reversed pair → same row
+            queries.InsertRelationshipHistory(players[3].PlayerId, players[4].PlayerId); // exact repeat → no-op
+            var history = new List<(string PlayerAId, string PlayerBId)>();
+            queries.LoadAllRelationshipHistory(history);
+            Check("relationship history is canonical-pair and OR-IGNORE idempotent", history.Count == 1);
 
             // --- Day-advance benchmark (before any deletions) ----------------
             stopwatch.Restart();
@@ -568,6 +577,10 @@ internal static class Program
         Check("index: Pitching_Stats(player_id…)", HasIndexPrefix(db, "Pitching_Stats", "player_id"));
         Check("index: Relationships(player_1_id…)", HasIndexPrefix(db, "Relationships", "player_1_id"));
         Check("index: Relationships(player_2_id…)", HasIndexPrefix(db, "Relationships", "player_2_id"));
+        // Schema v13: Relationship_History mirrors Relationships' index shape —
+        // the PK covers player_1_id, player_2_id needs its own for reverse walk.
+        Check("index: Relationship_History(player_1_id…)", HasIndexPrefix(db, "Relationship_History", "player_1_id"));
+        Check("index: Relationship_History(player_2_id…)", HasIndexPrefix(db, "Relationship_History", "player_2_id"));
         Check("index: Entity_Flags(player_id, flag_name)", HasIndexPrefix(db, "Entity_Flags", "player_id", "flag_name"));
         Check("index: Game_Logs(player_id…)", HasIndexPrefix(db, "Game_Logs", "player_id"));
         Check("index: Game_Logs(season_year, game_day)", HasIndexPrefix(db, "Game_Logs", "season_year", "game_day"));

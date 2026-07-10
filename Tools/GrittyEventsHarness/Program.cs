@@ -66,6 +66,7 @@ internal static class Program
             RunEndPartnershipChecks();
             RunRekindleChecks();
             RunStrictnessChecks();
+            RunTeammateExOfPartnerChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -1436,6 +1437,166 @@ internal static class Program
             world.Dispatcher.PollOnce();
             world.Bus.DispatchPending();
             Check("no Family_Background row COALESCEs to the neutral 50 — the gate never fires for a family-less save",
+                world.Fired.Count == 0, $"{world.Fired.Count} fires");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h2. SubjectField.TeammateExOfPartner (schema v13) — the graph-reaching
+    // prerequisite hs_clubhouse_cancer needed: "does a teammate have an ex
+    // who is my current partner," answered from the read-only poll DB via
+    // Relationship_History, never the main-thread RelationshipGraph.
+    // ------------------------------------------------------------------
+
+    private static RelationshipType ToDbType(RelationshipKind kind) => kind switch
+    {
+        RelationshipKind.Rival => RelationshipType.Rival,
+        RelationshipKind.Friend => RelationshipType.Friend,
+        RelationshipKind.Partner => RelationshipType.Partner,
+        RelationshipKind.Child => RelationshipType.Child,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    /// <summary>Mirrors GameManager.PersistRelationships exactly, so a test can arrange graph state and have the poll's DB view see it, same as a real day-tick flush.</summary>
+    private static void FlushRelationships(World world)
+    {
+        var edges = new List<RelationshipSeed>();
+        world.Graph.CollectDirty(edges);
+        foreach (RelationshipSeed edge in edges)
+        {
+            world.Players.UpsertRelationship(edge.PlayerAId, edge.PlayerBId, edge.Affinity, ToDbType(edge.Kind));
+        }
+        var history = new List<(string PlayerAId, string PlayerBId)>();
+        world.Graph.CollectDirtyHistory(history);
+        foreach ((string playerAId, string playerBId) in history)
+        {
+            world.Players.InsertRelationshipHistory(playerAId, playerBId);
+        }
+    }
+
+    private static void RunTeammateExOfPartnerChecks()
+    {
+        Console.WriteLine("--- SubjectField.TeammateExOfPartner (graph-reaching prerequisite) ---");
+
+        Check("loader accepts a teammate_ex_of_partner field prerequisite", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "prerequisites": [ { "field": "teammate_ex_of_partner", "op": ">=", "value": 1 } ], "choices": [ { "id": "a" } ] } ] }"""));
+        Check("loader accepts a teammate_ex_of_partner relationship target", !Throws(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "choices": [ { "id": "a", "consequences": [ { "type": "relationship", "kind": "rival", "affinity": -10, "target": "teammate_ex_of_partner" } ] } ] } ] }"""));
+
+        var flagged = new PollPlayerRow { PlayerId = "s", TeammateExOfPartner = true };
+        var clean = new PollPlayerRow { PlayerId = "n", TeammateExOfPartner = false };
+        var noFlags = new Dictionary<(string, string), long>();
+        Check("ConditionEvaluator compares the teammate_ex_of_partner field",
+            ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.TeammateExOfPartner, FieldComparison.GreaterOrEqual, 1), in flagged, noFlags, 1)
+            && !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.TeammateExOfPartner, FieldComparison.GreaterOrEqual, 1), in clean, noFlags, 1));
+
+        // RelationshipGraph: the ledger is monotonic (a reclassify away from
+        // Partner can't lose the fact) and its own dirty set flushes exactly
+        // once per newly-true pair, same shape as CollectDirty.
+        {
+            var graph = new RelationshipGraph();
+            graph.SetRelationship("x", "y", 50, RelationshipKind.Partner);
+            Check("a fresh Partner edge is recorded ever-partner", graph.WasEverPartner("x", "y"));
+
+            var dirty = new List<(string PlayerAId, string PlayerBId)>();
+            Check("the pair appears exactly once in the first history flush",
+                graph.CollectDirtyHistory(dirty) == 1 && dirty[0] == ("x", "y"));
+            Check("a second flush with no new history is empty", graph.CollectDirtyHistory(dirty) == 0);
+
+            graph.SetRelationship("x", "y", -25, RelationshipKind.Rival);
+            Check("reclassifying the edge away from Partner does not lose the ever-partner fact, and re-marks nothing",
+                graph.WasEverPartner("x", "y") && graph.CollectDirtyHistory(dirty) == 0);
+
+            var fresh = new RelationshipGraph();
+            fresh.SeedHistory(new List<(string PlayerAId, string PlayerBId)> { ("x", "y") });
+            Check("SeedHistory hydrates without dirtying (boot-time load, not a live write)",
+                fresh.WasEverPartner("x", "y") && fresh.CollectDirtyHistory(dirty) == 0);
+        }
+
+        // The shipped content actually uses the extension: the old hs_dating
+        // pacing gate is untouched, the new field gate sits alongside it, and
+        // the relationship consequences target the resolved ex, not a random
+        // teammate pool draw.
+        string shipped = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "hs_dating_events.json"));
+        GrittyEventLibrary shippedLibrary = GrittyEventJson.Parse(shipped);
+        bool gateAuthored = shippedLibrary.TryGetById("hs_clubhouse_cancer", out GrittyEventDefinition cancer)
+            && cancer.Prerequisites.Any(p =>
+                p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "hs_dating" && p.MinDaysSince == 21)
+            && cancer.Prerequisites.Any(p =>
+                p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.TeammateExOfPartner
+                && p.Comparison == FieldComparison.GreaterOrEqual && p.Value == 1)
+            && cancer.Choices.Any(c => c.Consequences.Any(cons =>
+                cons.Kind == ConsequenceKind.Relationship && cons.Target == RelationshipTargetSelector.TeammateExOfPartner));
+        Check("hs_clubhouse_cancer ships gated on teammate_ex_of_partner (hs_dating pacing intact) and targets it, not a random teammate", gateAuthored);
+
+        // End to end through the REAL poll join AND the applier: a teammate
+        // with Relationship_History against the current partner is the ONLY
+        // one who can be picked — never a random pool draw. FlushRelationships
+        // rides the exact graph-write paths (Partner mint, then an
+        // NpcAutonomyService-shaped breakup) production code takes, so this
+        // exercises the real SetRelationship history hook, not a DB shortcut.
+        {
+            using World world = World.Create("clubhouseCancer", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "cancer", "scope": "avatar", "weight": 1.0,
+                  "prerequisites": [ { "field": "teammate_ex_of_partner", "op": ">=", "value": 1 } ],
+                  "choices": [ { "id": "confront", "consequences": [
+                    { "type": "relationship", "kind": "rival", "affinity": -20, "target": "teammate_ex_of_partner" } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.AddPlayer("partner", age: 17, teamId: 2);
+            world.AddPlayer("ex_teammate", age: 17, teamId: 1);
+            world.AddPlayer("other_teammate", age: 17, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+
+            world.Graph.SetRelationship("hero", "partner", 50, RelationshipKind.Partner);
+            world.Graph.SetRelationship("partner", "ex_teammate", 30, RelationshipKind.Partner);
+            world.Graph.SetRelationship("partner", "ex_teammate", 10, RelationshipKind.Friend); // the breakup
+            FlushRelationships(world);
+
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var edges = new List<RelationshipEdge>();
+            world.Graph.GetEdgesFor("ex_teammate", edges);
+            bool targetedExTeammate = edges.Any(e => e.OtherId == "hero" && e.Kind == RelationshipKind.Rival && e.Affinity == -20);
+            world.Graph.GetEdgesFor("other_teammate", edges);
+            bool untouchedOther = edges.Count == 0;
+            Check("the event fires and its rival edge lands on the real teammate ex, never a random teammate",
+                world.Fired.Count == 1 && targetedExTeammate && untouchedOther,
+                $"{world.Fired.Count} fires, targeted={targetedExTeammate}, otherUntouched={untouchedOther}");
+        }
+
+        // The regression this whole feature closes: without any recorded ex
+        // history, the event must NOT fire even though the subject is dating
+        // someone and has teammates — flavor text is no longer enough.
+        {
+            using World world = World.Create("clubhouseNoHistory", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "cancer", "scope": "avatar", "weight": 1.0,
+                  "prerequisites": [ { "field": "teammate_ex_of_partner", "op": ">=", "value": 1 } ],
+                  "choices": [ { "id": "confront", "consequences": [
+                    { "type": "relationship", "kind": "rival", "affinity": -20, "target": "teammate_ex_of_partner" } ] } ] } ] }
+                """));
+            world.AddPlayer("hero", age: 17, teamId: 1);
+            world.AddPlayer("partner", age: 17, teamId: 2);
+            world.AddPlayer("teammate", age: 17, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+
+            world.Graph.SetRelationship("hero", "partner", 50, RelationshipKind.Partner);
+            FlushRelationships(world); // no Relationship_History row for partner/teammate — no ex exists
+
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            Check("no recorded ex-history ⇒ the event never fires, even with a partner and teammates present",
                 world.Fired.Count == 0, $"{world.Fired.Count} fires");
         }
     }

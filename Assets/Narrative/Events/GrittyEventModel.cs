@@ -27,7 +27,10 @@ public enum PrerequisiteKind : byte
 /// Players-row columns, plus — since HS-5 — Family_Background.strictness,
 /// which the poll snapshot LEFT JOINs in (COALESCEd to the neutral 50 for the
 /// no-row majority, so a strictness gate simply never fires for people
-/// without a generated family).
+/// without a generated family). TeammateExOfPartner (schema v13) is a
+/// boolean (0/1) computed the same way from a Relationships/
+/// Relationship_History self-join — the graph-reaching prerequisite
+/// hs_clubhouse_cancer gates on.
 /// </summary>
 public enum SubjectField : byte
 {
@@ -38,6 +41,7 @@ public enum SubjectField : byte
     DetectionRisk,
     BaseballInterest,
     Strictness,
+    TeammateExOfPartner,
 }
 
 public enum FieldComparison : byte
@@ -185,6 +189,15 @@ public enum RelationshipTargetSelector : byte
     Teammate,
     Opponent,
     League,
+
+    /// <summary>
+    /// The specific teammate who has a Relationship_History row with the
+    /// subject's CURRENT partner (schema v13) — never a random teammate pool
+    /// draw. Empty-pool skip (the existing precedent) when the subject isn't
+    /// partnered or no teammate has that history, e.g. a poll-to-apply race
+    /// on the live graph (gritty_event_framework.md §6 disclosed staleness).
+    /// </summary>
+    TeammateExOfPartner,
 }
 
 /// <summary>

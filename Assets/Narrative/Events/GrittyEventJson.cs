@@ -161,6 +161,7 @@ public static class GrittyEventJson
                 "detection_risk" => SubjectField.DetectionRisk,
                 "baseball_interest" => SubjectField.BaseballInterest,
                 "strictness" => SubjectField.Strictness,
+                "teammate_ex_of_partner" => SubjectField.TeammateExOfPartner,
                 _ => throw new FormatException($"Event '{eventId}': unknown prerequisite field '{fieldName}'."),
             };
 
@@ -314,6 +315,7 @@ public static class GrittyEventJson
                     "teammate" => RelationshipTargetSelector.Teammate,
                     "opponent" => RelationshipTargetSelector.Opponent,
                     "league" => RelationshipTargetSelector.League,
+                    "teammate_ex_of_partner" => RelationshipTargetSelector.TeammateExOfPartner,
                     _ => throw new FormatException(
                         $"Event '{eventId}' choice '{choiceId}': unknown relationship target '{targetText}'."),
                 };

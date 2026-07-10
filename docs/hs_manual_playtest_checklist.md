@@ -1,8 +1,8 @@
 # High School Arc — Manual Playtest Checklist (plan §Verification-5)
 
-The user-driven exit gate for the HS-0…HS-6 arc (`docs/design/high_school_person_layer.md`). Every automated gate is green (MC 345/345, GrittyEvents 190/190, SchemaValidator 106/106 @ v12, NeedsDecay 94/94, CoreLoop 22/22); this checklist covers what only human eyes can verify — screens rendering sensibly, flows feeling right, and the probability-gated content actually firing in live play.
+The user-driven exit gate for the HS-0…HS-6 arc (`docs/design/high_school_person_layer.md`). Every automated gate is green (MC 345/345, GrittyEvents 206/206, SchemaValidator 111/111 @ v13, NeedsDecay 94/94, CoreLoop 22/22); this checklist covers what only human eyes can verify — screens rendering sensibly, flows feeling right, and the probability-gated content actually firing in live play.
 
-**Setup:** build from a clean tree (`dotnet build DirtAndDiamonds.sln -c Debug`, expect 0/0). Sessions A–E want **fresh saves**; the existing real save (v12, day 99) works for B/C but has no child and mid-arc flags. Saves live under `%APPDATA%\Godot\app_userdata\Dirt & Diamonds\`. DB spot-checks (optional, marked 🗄) can run through the SQLite MCP or `sqlite3` against the save's `.db`.
+**Setup:** build from a clean tree (`dotnet build DirtAndDiamonds.sln -c Debug`, expect 0/0). Sessions A–E want **fresh saves**; the existing real save (v12, day 99) auto-migrates to v13 on next boot (purely additive — new `Relationship_History` table only, same pre-v12 no-row-fallback precedent) and works for B/C but has no child and mid-arc flags. Saves live under `%APPDATA%\Godot\app_userdata\Dirt & Diamonds\`. DB spot-checks (optional, marked 🗄) can run through the SQLite MCP or `sqlite3` against the save's `.db`.
 
 Tick items as they pass. Anything that fails or feels wrong: note the day number and what was on screen — day + save file is usually enough to reproduce.
 
@@ -76,7 +76,7 @@ These ride whatever save gets deepest — check at season rollovers rather than 
 - A jailed avatar credits default school attendance for those days (≤ a few days, ~0 GPA impact).
 - Mid-week saves reset the partial attendance/study accumulators (both sides together — the fraction stays fair).
 - Plan line renders "Idle 0h" for a zeroed free-time block — cosmetic.
-- `hs_hometown_anchor`'s "commit to long-distance" branch now bills 20 min/week via the family tick (closed 2026-07-09, Sonnet 5 — `FamilyService.IsCommittedLongDistance`, gated on `long_distance` + `hs_dating` both active so an ex from the "grow apart" branch is never billed; Wi-Fi bypasses it like any metered action). `hs_clubhouse_cancer` is still narrated, not verified against a real teammate-ex (open seam).
+- `hs_hometown_anchor`'s "commit to long-distance" branch now bills 20 min/week via the family tick (closed 2026-07-09, Sonnet 5 — `FamilyService.IsCommittedLongDistance`, gated on `long_distance` + `hs_dating` both active so an ex from the "grow apart" branch is never billed; Wi-Fi bypasses it like any metered action). `hs_clubhouse_cancer` now graph-reaches its premise (closed 2026-07-09, Sonnet 5 — schema v13 `Relationship_History`, `SubjectField.TeammateExOfPartner`, `RelationshipTargetSelector.TeammateExOfPartner`): it only fires when a real teammate has ex-history with the current partner, and its rival/friend consequence lands on that specific teammate, never a random pool draw.
 - Divorce while `expecting` → single-parent birth: supported by design.
 - Background league (macro tiers) picks up person-stat movement only at season rollover — season-stable by design; only attended games refresh per-game.
 
