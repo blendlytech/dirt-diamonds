@@ -13,7 +13,6 @@ Session-orientation file for the AI models. **Keep it lean:** at session end, ap
 - **Gate suite (all green as of Slice B `a7bd114`):** MonteCarlo **345/345** (MLB bit-identity guard PA 48384 / H 10969 / ER 5237, byte-exact), GrittyEvents **256/256** (79 events), CoreLoop **22/22**, NeedsDecay **102/102**, SchemaValidator **111/111** — schema **v13**.
 - **Live save:** a fresh day-1 avatar (the old day-119 checklist save is superseded).
 - ⚠ **Session hygiene:** an auto-committer is active AND parallel sessions occur — run `git status` + `git log` FIRST every session; never trust a stale "uncommitted" label.
-- ⚠ **Unverified commit:** `847d676` (parallel session — BaseballDashboard scouting/stat panels extracted into new `PlayerScreen`/`LeagueScreen` phone tabs, `Main.cs` touched) shipped with **no progress entry and no recorded gate run**. Next session must verify build 0/0 + headless boot before layering UI work on it.
 
 ### Standing workflow rules
 
@@ -46,19 +45,19 @@ Source: `docs/game-idas/GAME_IMPROVEMENTS.md` (user-refreshed 2026-07-11). Alrea
 
 ## VERY NEXT STEPS
 
-1. **Verify `847d676`** (whoever opens the next session, **Fable 5**): `git status`/`git log`, then build 0/0 + headless boot on the real save; append the missing gate record here.
-2. **User plays** (the only open exits, all user-driven):
-   - Consolidated UI + Slice B: top bar day+funds, phone Calendar tab + status-bar clock, school mandated-note row, Settings → Save Now shows "Saved ✓ — day N".
+1. **User plays** (the only open exits, all user-driven):
+   - Consolidated UI + Slice B: top bar day+funds, phone Calendar tab + status-bar clock, school mandated-note row, Settings → Save Now shows "Saved ✓ — day N". *(The `847d676` Player/League phone tabs are user-confirmed — layout renders correctly.)*
    - Checklist **Session A2** (`docs/hs_manual_playtest_checklist.md`): Events tab heads with categories (Baseball/Family/…), Mom's same-day text, Malone's next-day tryouts verdict; eyeball the feed auto-scroll-to-newest.
    - Calendar pacing: browse March 1 (season start) + a summer week; confirm ScheduleScreen's locked rows match CalendarScreen.
    - Longer-standing: checklist Sessions B–F; At-Bat §7.4 playtest.
-3. **First build slot after that:** Slice D audio (needs the Opus spec first) **or** the tutorial thread (needs the Opus outline first) — **user picks priority**. Slice G's Opus design doc can be commissioned any time; it blocks nothing else.
+2. **First build slot after that:** Slice D audio (needs the Opus spec first) **or** the tutorial thread (needs the Opus outline first) — **user picks priority**. Slice G's Opus design doc can be commissioned any time; it blocks nothing else.
 
 ---
 
 ## Session Log (compact — full detail in the archive)
 
-- **2026-07-11 — PlayerScreen/LeagueScreen extraction (`847d676`, parallel session):** dashboard scouting card + stat panels moved into self-contained phone tabs; **no gate run recorded — verification owed** (Very Next Step 1).
+- **2026-07-11 — `847d676` verification (Fable 5):** the owed gate record for the parallel-session PlayerScreen/LeagueScreen extraction. `git status` clean at `b68454f` (the doc/skill commit atop it), diff scope confirmed pure `Assets/UI/` + `Main.cs` wiring (no sim/schema touch ⇒ no MC re-run mandated). **Build 0/0** (game + all 6 harness projects), **live boot (godot MCP) on the real save clean:** schema v13, WAL, FK on, day 1 fresh avatar, 48 teams, 819 life-sim NPCs, 79 gritty events dispatcher polling, ~18 s run, **errors empty**. Known-benign: Steam DLL-absent notice (dev environment, pre-existing). **User eyeball same day: Player/League tab layout confirmed correct.** `847d676` is fully closed; UI work may layer on it.
+- **2026-07-11 — PlayerScreen/LeagueScreen extraction (`847d676`, parallel session):** dashboard scouting card + stat panels moved into self-contained phone tabs; shipped without a gate run — gate-verified AND user-confirmed live same day (entry above). **CLOSED.**
 - **2026-07-11 — Slice B Save+Options (`a7bd114`, Fable 5):** `GameManager.SaveNow()` checkpoint intent + phone Settings tab (Save Now, "Saved ✓ — day N", parked volume slider). All gates green; NeedsDecay 102/102.
 - **2026-07-11 — Travel-time checkpoint (`02177f1`, another session's build):** per-trip `TravelTime` + `DaySchedule.TravelHours` + planner forcing; gate-verified then committed pre-B (NeedsDecay 94→102).
 - **2026-07-11 — Slice A UI consolidation (`67c9f7b`, Fable 5):** TopBar day+funds, CalendarScreen → phone tab, phone status-bar clock, School slider → mandated note folded into the hours budget.
