@@ -2,7 +2,6 @@ using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.UI.Portraits;
-using DirtAndDiamonds.UI.Scouting;
 using Godot;
 
 namespace DirtAndDiamonds.UI;
@@ -21,6 +20,14 @@ namespace DirtAndDiamonds.UI;
 /// intent flows back through a <see cref="PlayerIntentBridge"/>. Node paths
 /// verified against BaseballDashboard.tscn via godot_scene_mapper before
 /// this script was written.
+///
+/// UI-reorg note: the Scouting Report / Development / Season Stats /
+/// Standings / League Leaders / Plan Today cards that used to fill this
+/// panel's MeRow/LeagueRow now live in the Burner Phone (see
+/// <see cref="PlayerScreen"/>'s and <see cref="LeagueScreen"/>'s "Player"
+/// and "League" tabs, and ScheduleScreen inside the phone's "Calendar" tab)
+/// — this panel is deliberately left mostly blank below the header/at-bat
+/// slot until contextual imagery/minigames replace the empty space.
 /// </summary>
 public sealed partial class BaseballDashboard : PanelContainer
 {
@@ -66,127 +73,6 @@ public sealed partial class BaseballDashboard : PanelContainer
     [Export]
     public string ArrestReasonText { get; set; } = "In custody";
 
-    // Phase 10c scouting report (presentation_layer_narrative.md §5) — the
-    // OFP/tier/tool text templates and the four role-relative tool names,
-    // per ui_conventions' "player-facing text on the scene, not in C#
-    // literals" convention (the OutcomeNamesCsv/AbsenceReasonText precedent).
-    [Export]
-    public string OfpFormat { get; set; } = "OFP: {0} ({1})";
-
-    [Export]
-    public string TierFormat { get; set; } = "{0}";
-
-    /// <summary>Comma-separated player-facing tier names, in LeagueTier enum order (HS…MLB).</summary>
-    [Export]
-    public string TierNamesCsv { get; set; } = "High School,College,Class A,Double-A,Triple-A,MLB";
-
-    /// <summary>How the tier chip reads for a High-School avatar: tier name + academic grade (e.g. "High School · Junior").</summary>
-    [Export]
-    public string TierWithGradeFormat { get; set; } = "{0} · {1}";
-
-    /// <summary>Comma-separated player-facing grade names, in SchoolGrade enum order (Freshman…Senior).</summary>
-    [Export]
-    public string SchoolGradeNamesCsv { get; set; } = "Freshman,Sophomore,Junior,Senior";
-
-    // '›' rather than '→': the vendored Barlow faces cover Latin punctuation
-    // but not the arrows block, and a tofu glyph here would ship on every
-    // scouting row.
-    [Export]
-    public string ToolGradeFormat { get; set; } = "{0} {1} › {2} {3}";
-
-    [Export]
-    public string DevFormat { get; set; } = "Season {0}: {1} players moved, +{2} / -{3} pts";
-
-    [Export]
-    public string DevNoneText { get; set; } = "No offseason development yet.";
-
-    // 12c-2 StatLineCard (surface_the_sim.md §4/§5) — role-aware avatar season
-    // line, sourced from BaseballQueries.TryGetBattingSeasonLine/
-    // TryGetPitchingSeasonLine. Same [Export]-template convention as the
-    // scouting/dev cards; StatLineNoneText covers both roles' "hasn't played
-    // this season yet" case (no row).
-    // SB and SV are deliberately absent: both flush sites hard-code them to 0
-    // (sv always 0 is a disclosed v4 artifact) — the card must not surface a
-    // column the sim never populates.
-    [Export]
-    public string StatLineBattingFormat { get; set; } =
-        "{0}-for-{1}, {2} HR, {3} RBI, {4} BB, {5} SO\nAVG {6:0.000} · OBP {7:0.000} · SLG {8:0.000} · OPS {9:0.000}";
-
-    [Export]
-    public string StatLinePitchingFormat { get; set; } =
-        "{0}-{1}, {2:0.0} IP, {3} SO, {4} BB\nERA {5:0.00} · WHIP {6:0.00}";
-
-    [Export]
-    public string StatLineNoneText { get; set; } = "No stats yet this season.";
-
-    // 12c-3 StandingsCard (surface_the_sim.md §4/§5) — tier standings, avatar's
-    // team marked with a plain-ASCII prefix (the NpcRivalryPaLineFormat
-    // precedent: a text marker, not a glyph, since the vendored Barlow faces
-    // don't cover every Unicode block — see ToolGradeFormat's note). Games
-    // behind is precomputed to a string in C# (always a multiple of 0.5 given
-    // integer W/L) so the row format never needs a decimal-format culture call.
-    [Export]
-    public string StandingRowFormat { get; set; } = "{0}. {1}  {2}-{3}  {4:0.000}  {5}";
-
-    [Export]
-    public string StandingsAvatarRowFormat { get; set; } = "* {0}";
-
-    [Export]
-    public string StandingsLeaderGamesBehindText { get; set; } = "-";
-
-    /// <summary>Wraps the GB of a team sitting ahead of the pct leader on the GB metric (reachable early-season, e.g. 3-1 under a 1-0 pct leader).</summary>
-    [Export]
-    public string StandingsAheadGamesBehindFormat { get; set; } = "+{0}";
-
-    // 12c-3 LeadersCard — role-aware (the isPitcher split every other card on
-    // this dashboard already branches on): a batter sees HR/AVG/OPS leaders,
-    // a pitcher sees ERA/W/SO. Three row formats cover the three value shapes
-    // (plain count, .000 rate, 0.00 ERA); the avatar's own row (if it ranks)
-    // gets the same plain-text marker as StandingsAvatarRowFormat.
-    [Export]
-    public string LeaderRowCountFormat { get; set; } = "{0}. {1} {2} — {3:0}";
-
-    [Export]
-    public string LeaderRowAvgFormat { get; set; } = "{0}. {1} {2} — {3:0.000}";
-
-    [Export]
-    public string LeaderRowEraFormat { get; set; } = "{0}. {1} {2} — {3:0.00}";
-
-    [Export]
-    public string LeaderAvatarRowFormat { get; set; } = "* {0}";
-
-    [Export]
-    public string LeaderNoneText { get; set; } = "No qualifying leaders yet.";
-
-    /// <summary>Comma-separated category headings shown for a batting avatar, in HR/AVG/OPS order.</summary>
-    [Export]
-    public string LeadersBattingCategoriesCsv { get; set; } = "Home Runs,Batting Avg,OPS";
-
-    /// <summary>Comma-separated category headings shown for a pitching avatar, in ERA/W/SO order.</summary>
-    [Export]
-    public string LeadersPitchingCategoriesCsv { get; set; } = "ERA,Wins,Strikeouts";
-
-    [Export]
-    public string BatPowerName { get; set; } = "Power";
-
-    [Export]
-    public string BatContactName { get; set; } = "Contact";
-
-    [Export]
-    public string BatDisciplineName { get; set; } = "Discipline";
-
-    [Export]
-    public string PitStuffName { get; set; } = "Stuff";
-
-    [Export]
-    public string PitControlName { get; set; } = "Control";
-
-    [Export]
-    public string PitStaminaName { get; set; } = "Stamina";
-
-    [Export]
-    public string FieldingName { get; set; } = "Fielding";
-
     private PortraitView _avatarPortrait = null!;
     private Button _playGameButton = null!;
     private Button _skipDayButton = null!;
@@ -196,46 +82,6 @@ public sealed partial class BaseballDashboard : PanelContainer
     private AtBatView _atBatView = null!;
     private PanelContainer _recapCard = null!;
     private Label _recapLabel = null!;
-
-    private PanelContainer _scoutingCard = null!;
-    private Label _ofpLabel = null!;
-    private Label _tierLabel = null!;
-    private readonly ToolRowRefs[] _toolRows = new ToolRowRefs[4];
-    private PanelContainer _devCard = null!;
-    private Label _devSummaryLabel = null!;
-    private PanelContainer _statLineCard = null!;
-    private Label _statLineLabel = null!;
-    private PanelContainer _standingsCard = null!;
-    private Label _standingsLabel = null!;
-    private PanelContainer _leadersCard = null!;
-    private Label _leadersLabel = null!;
-    private string[] _tierNames = Array.Empty<string>();
-    private string[] _gradeNames = Array.Empty<string>();
-
-    // Reusable query-result buffers for the 12c-3 league cards — cleared and
-    // refilled per call, the LoadRoster "destination" idiom, so the once-per-
-    // day-advance refresh doesn't allocate a fresh list per category.
-    private readonly List<TeamRow> _tierTeamsBuffer = new();
-    private readonly List<TeamRecordRow> _tierRecordsBuffer = new();
-    private readonly List<LeagueLeaderRow> _leadersBuffer = new();
-
-    private const int LeaderRowCount = 5;
-    private const int MinPaForRateLeaders = 10;
-    private const int MinOutsForEraLeaders = 15;
-
-    private readonly struct ToolRowRefs
-    {
-        public readonly Label NameLabel;
-        public readonly ProgressBar Bar;
-        public readonly Label GradeLabel;
-
-        public ToolRowRefs(Label nameLabel, ProgressBar bar, Label gradeLabel)
-        {
-            NameLabel = nameLabel;
-            Bar = bar;
-            GradeLabel = gradeLabel;
-        }
-    }
 
     private readonly PlayerIntentBridge _bridge = new();
     private Task<MicroGameResult>? _gameTask;
@@ -266,34 +112,12 @@ public sealed partial class BaseballDashboard : PanelContainer
         _recapCard = GetNode<PanelContainer>("Layout/CenterSlot/RecapCard");
         _recapLabel = GetNode<Label>("Layout/CenterSlot/RecapCard/RecapLayout/RecapLabel");
 
-        _scoutingCard = GetNode<PanelContainer>("Layout/MeRow/ScoutingCard");
-        _ofpLabel = GetNode<Label>("Layout/MeRow/ScoutingCard/ScoutingLayout/OfpRow/OfpLabel");
-        _tierLabel = GetNode<Label>("Layout/MeRow/ScoutingCard/ScoutingLayout/OfpRow/TierChip/TierLabel");
-        for (int i = 0; i < _toolRows.Length; i++)
-        {
-            string rowPath = $"Layout/MeRow/ScoutingCard/ScoutingLayout/ToolsList/ToolRow{i}";
-            _toolRows[i] = new ToolRowRefs(
-                GetNode<Label>($"{rowPath}/NameLabel"),
-                GetNode<ProgressBar>($"{rowPath}/Bar"),
-                GetNode<Label>($"{rowPath}/GradeLabel"));
-        }
-        _devCard = GetNode<PanelContainer>("Layout/MeRow/DevCard");
-        _devSummaryLabel = GetNode<Label>("Layout/MeRow/DevCard/DevLayout/DevSummaryLabel");
-        _statLineCard = GetNode<PanelContainer>("Layout/MeRow/StatLineCard");
-        _statLineLabel = GetNode<Label>("Layout/MeRow/StatLineCard/StatLineLayout/StatLineLabel");
-        _standingsCard = GetNode<PanelContainer>("Layout/LeagueRow/StandingsCard");
-        _standingsLabel = GetNode<Label>("Layout/LeagueRow/StandingsCard/StandingsLayout/StandingsLabel");
-        _leadersCard = GetNode<PanelContainer>("Layout/LeagueRow/LeadersCard");
-        _leadersLabel = GetNode<Label>("Layout/LeagueRow/LeadersCard/LeadersLayout/LeadersLabel");
-
         _playGameButton.Pressed += OnPlayGamePressed;
         _skipDayButton.Pressed += OnSkipDayPressed;
         _atBatView.ReadCommitted += OnReadCommitted;
 
         _outcomeNames = OutcomeNamesCsv.Split(',');
-        _tierNames = TierNamesCsv.Split(',');
-        _gradeNames = SchoolGradeNamesCsv.Split(',');
-        RefreshScoutingCard();
+        RefreshHeader();
         RefreshDayControlsEnabled();
     }
 
@@ -331,7 +155,7 @@ public sealed partial class BaseballDashboard : PanelContainer
                     _statusLabel.Text = NoGameText; // offseason day
                 }
             }
-            RefreshScoutingCard();
+            RefreshHeader();
         }
 
         if (_gameTask is null)
@@ -449,7 +273,7 @@ public sealed partial class BaseballDashboard : PanelContainer
             // so that recap is still the last completed game — put it back.
             _recapCard.Visible = _recapLabel.Text.Length > 0;
         }
-        RefreshScoutingCard();
+        RefreshHeader();
     }
 
     private void OnReadCommitted(int guessType, int guessCell, double approach) =>
@@ -475,289 +299,30 @@ public sealed partial class BaseballDashboard : PanelContainer
     }
 
     /// <summary>
-    /// Phase 10c (presentation_layer_narrative.md §5): the scouting report
-    /// card — present/future grades per role tool, the OFP headline off
-    /// <see cref="PromotionScore.Scouting"/>, tier standing, and the last
-    /// offseason's <see cref="DevelopmentManager.LastRun"/> movement. Called
-    /// at every day-advance settle point (day-advance is the only thing that
-    /// can move ratings — PED costs, the offseason development pass — so
-    /// that's the right refresh granularity per ui_conventions, not
-    /// per-frame).
+    /// The header band's portrait/identity — everything else the old
+    /// scouting/dev/stat-line/standings/leaders cards showed now lives in the
+    /// Burner Phone (PlayerScreen/LeagueScreen). Called at every day-advance
+    /// settle point, same cadence those cards used to ride.
     /// </summary>
-    private void RefreshScoutingCard()
+    private void RefreshHeader()
     {
         GameManager gm = GameManager.Instance!;
         CareerManager career = gm.Career;
         bool show = career.HasAvatar;
         _avatarPortrait.Visible = show;
-        _scoutingCard.Visible = show;
-        _devCard.Visible = show;
-        _statLineCard.Visible = show;
-        _standingsCard.Visible = show;
-        _leadersCard.Visible = show;
         if (!show)
         {
             // No avatar means no game lifecycle owns the recap — an orphaned
-            // "Last Game" card must not outlive the cards around it.
+            // "Last Game" card must not outlive the header around it.
             _recapCard.Visible = false;
             return;
         }
 
         string avatarId = career.AvatarPlayerId;
-        if (!gm.Players.TryGetById(avatarId, out PlayerRow player)
-            || !gm.Baseball.TryGetRatings(avatarId, out PlayerRatingsRow ratings)
-            || !gm.Baseball.TryGetPotential(avatarId, out PlayerPotentialRow potential))
+        if (gm.Players.TryGetById(avatarId, out PlayerRow player))
         {
-            return;
+            _avatarPortrait.SetIdentity(avatarId, $"{player.FirstName} {player.LastName}");
         }
-        _avatarPortrait.SetIdentity(avatarId, $"{player.FirstName} {player.LastName}");
-
-        bool isPitcher = ratings.IsPitcher;
-        var roster = new RosterPlayerRow
-        {
-            PlayerId = avatarId,
-            FirstName = player.FirstName,
-            LastName = player.LastName,
-            TeamId = player.TeamId ?? 0,
-            IsPitcher = isPitcher,
-            BatPower = ratings.BatPower,
-            BatContact = ratings.BatContact,
-            BatDiscipline = ratings.BatDiscipline,
-            PitStuff = ratings.PitStuff,
-            PitControl = ratings.PitControl,
-            PitStamina = ratings.PitStamina,
-            Fielding = ratings.Fielding,
-        };
-        int headroom = PromotionScore.Headroom(in roster, in potential, isPitcher);
-        int roleRatingSum = isPitcher
-            ? ratings.PitStuff + ratings.PitControl + ratings.PitStamina
-            : ratings.BatPower + ratings.BatContact + ratings.BatDiscipline;
-        int ofp = ScoutingGrade.OfpRating(roleRatingSum, player.Age, headroom);
-        _ofpLabel.Text = string.Format(OfpFormat, ScoutingGrade.Label(ofp), ofp);
-
-        bool tierKnown = gm.Baseball.TryGetTeamTier(player.TeamId ?? 0, out LeagueTier tier);
-        // A High-School avatar's chip carries its academic grade (freshman …
-        // senior), derived from age — the SchoolGrade the promotion gate reads.
-        string tierText = tierKnown
-            ? (tier == LeagueTier.HS
-                ? string.Format(TierWithGradeFormat, TierName(tier), GradeName(SchoolGrades.ForAge(player.Age)))
-                : TierName(tier))
-            : string.Empty;
-        _tierLabel.Text = string.Format(TierFormat, tierText);
-
-        if (isPitcher)
-        {
-            SetToolRow(0, PitStuffName, ratings.PitStuff, potential.PitStuff);
-            SetToolRow(1, PitControlName, ratings.PitControl, potential.PitControl);
-            SetToolRow(2, PitStaminaName, ratings.PitStamina, potential.PitStamina);
-        }
-        else
-        {
-            SetToolRow(0, BatPowerName, ratings.BatPower, potential.BatPower);
-            SetToolRow(1, BatContactName, ratings.BatContact, potential.BatContact);
-            SetToolRow(2, BatDisciplineName, ratings.BatDiscipline, potential.BatDiscipline);
-        }
-        SetToolRow(3, FieldingName, ratings.Fielding, potential.Fielding);
-
-        DevelopmentSummary dev = gm.Development.LastRun;
-        _devSummaryLabel.Text = dev.SeasonYear <= 0
-            ? DevNoneText
-            : string.Format(DevFormat, dev.SeasonYear, dev.PlayersChanged, dev.PointsUp, dev.PointsDown);
-
-        RefreshStatLineCard(gm, avatarId, isPitcher);
-        // The tier-scoped cards render only when the tier is actually known —
-        // a team-less avatar (retired to FA at lineage game-over) must not
-        // fall back to default(LeagueTier), which is High School's standings.
-        _standingsCard.Visible = tierKnown;
-        _leadersCard.Visible = tierKnown;
-        if (tierKnown)
-        {
-            RefreshStandingsCard(gm, tier, player.TeamId);
-            RefreshLeadersCard(gm, tier, isPitcher, avatarId);
-        }
-    }
-
-    /// <summary>
-    /// 12c-2 (surface_the_sim.md §4/§5): the avatar's current-season line,
-    /// role-aware off the same isPitcher split the scouting card branches on.
-    /// A missing row (avatar hasn't played this season yet) renders
-    /// <see cref="StatLineNoneText"/> rather than a blank/zeroed line.
-    /// </summary>
-    private void RefreshStatLineCard(GameManager gm, string avatarId, bool isPitcher)
-    {
-        int seasonYear = gm.State.SeasonYear;
-        if (isPitcher)
-        {
-            _statLineLabel.Text = gm.Baseball.TryGetPitchingSeasonLine(avatarId, seasonYear, out PitchingSeasonLine line)
-                ? string.Format(
-                    StatLinePitchingFormat, line.W, line.L, line.Ip, line.So, line.Bb, line.Era, line.Whip)
-                : StatLineNoneText;
-        }
-        else
-        {
-            _statLineLabel.Text = gm.Baseball.TryGetBattingSeasonLine(avatarId, seasonYear, out BattingSeasonLine line)
-                ? string.Format(
-                    StatLineBattingFormat, line.H, line.Ab, line.Hr, line.Rbi, line.Bb, line.So,
-                    line.Avg, line.Obp, line.Slg, line.Ops)
-                : StatLineNoneText;
-        }
-    }
-
-    /// <summary>
-    /// 12c-3 (surface_the_sim.md §3/§4/§5): the avatar's tier, teams ranked by
-    /// win pct — a new aggregation query (<see cref="BaseballQueries.LoadTeamRecords"/>)
-    /// merged in C# with <see cref="BaseballQueries.LoadTeamsByTier"/>'s names,
-    /// exactly the doc's prescribed split (no new storage, GB computed here).
-    /// Rides the same day-advance cadence as the rest of RefreshScoutingCard.
-    /// </summary>
-    private void RefreshStandingsCard(GameManager gm, LeagueTier tier, int? avatarTeamId)
-    {
-        int seasonYear = gm.State.SeasonYear;
-        gm.Baseball.LoadTeamsByTier(tier, _tierTeamsBuffer);
-        gm.Baseball.LoadTeamRecords(seasonYear, tier, _tierRecordsBuffer);
-
-        var rows = new (TeamRow Team, int Wins, int Losses)[_tierTeamsBuffer.Count];
-        for (int i = 0; i < _tierTeamsBuffer.Count; i++)
-        {
-            TeamRow team = _tierTeamsBuffer[i];
-            int wins = 0, losses = 0;
-            foreach (TeamRecordRow record in _tierRecordsBuffer)
-            {
-                if (record.TeamId == team.TeamId)
-                {
-                    wins = record.Wins;
-                    losses = record.Losses;
-                    break;
-                }
-            }
-            rows[i] = (team, wins, losses);
-        }
-        // Pct ties break on games above .500 (so the GB anchor among tied
-        // teams is the one everyone else trails), then TeamId — Array.Sort is
-        // unstable, and without a total order tied rows can swap between
-        // refreshes.
-        Array.Sort(rows, (a, b) =>
-        {
-            int byPct = WinPct(b.Wins, b.Losses).CompareTo(WinPct(a.Wins, a.Losses));
-            if (byPct != 0)
-            {
-                return byPct;
-            }
-            int byMargin = (b.Wins - b.Losses).CompareTo(a.Wins - a.Losses);
-            return byMargin != 0 ? byMargin : a.Team.TeamId.CompareTo(b.Team.TeamId);
-        });
-
-        if (rows.Length == 0)
-        {
-            _standingsLabel.Text = string.Empty;
-            return;
-        }
-
-        (int leaderWins, int leaderLosses) = (rows[0].Wins, rows[0].Losses);
-        var lines = new string[rows.Length];
-        for (int i = 0; i < rows.Length; i++)
-        {
-            (TeamRow team, int wins, int losses) = rows[i];
-            double pct = WinPct(wins, losses);
-            string gbText = i == 0
-                ? StandingsLeaderGamesBehindText
-                : FormatGamesBehind(GamesBehindNumerator(leaderWins, leaderLosses, wins, losses));
-            string line = string.Format(StandingRowFormat, i + 1, team.Abbreviation, wins, losses, pct, gbText);
-            lines[i] = avatarTeamId.HasValue && team.TeamId == avatarTeamId.Value
-                ? string.Format(StandingsAvatarRowFormat, line)
-                : line;
-        }
-        _standingsLabel.Text = string.Join("\n", lines);
-    }
-
-    private static double WinPct(int wins, int losses) => wins + losses > 0 ? (double)wins / (wins + losses) : 0.0;
-
-    /// <summary>surface_the_sim.md §5's GB formula, times 2 (an integer — W/L are integers, so GB is always a whole or half game).</summary>
-    private static int GamesBehindNumerator(int leaderWins, int leaderLosses, int teamWins, int teamLosses) =>
-        (leaderWins - teamWins) + (teamLosses - leaderLosses);
-
-    // The numerator goes negative when a team sits above the pct leader on
-    // the GB metric (1-0 leads 3-1 on pct, but 3-1 is half a game ahead by
-    // GB), and C# integer division truncates toward zero — so format the
-    // magnitude and render the sign explicitly.
-    private string FormatGamesBehind(int numerator)
-    {
-        int magnitude = Math.Abs(numerator);
-        string text = magnitude % 2 == 0 ? (magnitude / 2).ToString() : magnitude / 2 + ".5";
-        return numerator < 0 ? string.Format(StandingsAheadGamesBehindFormat, text) : text;
-    }
-
-    /// <summary>
-    /// 12c-3 (surface_the_sim.md §4/§5): top-N leaderboards, role-aware off the
-    /// same isPitcher split the scouting/stat-line cards branch on — a batter
-    /// sees HR/AVG/OPS, a pitcher sees ERA/W/SO. Each category is its own query
-    /// (LoadHrLeaders/LoadAvgLeaders/... — the ORDER BY column can't be bound),
-    /// rendered into one heading-plus-rows block per category and joined into
-    /// the single label, the DevSummaryLabel/StatLineLabel multi-line idiom.
-    /// </summary>
-    private void RefreshLeadersCard(GameManager gm, LeagueTier tier, bool isPitcher, string avatarId)
-    {
-        int seasonYear = gm.State.SeasonYear;
-        string[] categoryNames = (isPitcher ? LeadersPitchingCategoriesCsv : LeadersBattingCategoriesCsv).Split(',');
-        string block0, block1, block2;
-
-        if (isPitcher)
-        {
-            gm.Baseball.LoadEraLeaders(seasonYear, tier, MinOutsForEraLeaders, LeaderRowCount, _leadersBuffer);
-            block0 = FormatLeaderBlock(categoryNames[0], _leadersBuffer, LeaderRowEraFormat, avatarId);
-            gm.Baseball.LoadWinLeaders(seasonYear, tier, LeaderRowCount, _leadersBuffer);
-            block1 = FormatLeaderBlock(categoryNames[1], _leadersBuffer, LeaderRowCountFormat, avatarId);
-            gm.Baseball.LoadStrikeoutLeaders(seasonYear, tier, LeaderRowCount, _leadersBuffer);
-            block2 = FormatLeaderBlock(categoryNames[2], _leadersBuffer, LeaderRowCountFormat, avatarId);
-        }
-        else
-        {
-            gm.Baseball.LoadHrLeaders(seasonYear, tier, LeaderRowCount, _leadersBuffer);
-            block0 = FormatLeaderBlock(categoryNames[0], _leadersBuffer, LeaderRowCountFormat, avatarId);
-            gm.Baseball.LoadAvgLeaders(seasonYear, tier, MinPaForRateLeaders, LeaderRowCount, _leadersBuffer);
-            block1 = FormatLeaderBlock(categoryNames[1], _leadersBuffer, LeaderRowAvgFormat, avatarId);
-            gm.Baseball.LoadOpsLeaders(seasonYear, tier, MinPaForRateLeaders, LeaderRowCount, _leadersBuffer);
-            block2 = FormatLeaderBlock(categoryNames[2], _leadersBuffer, LeaderRowAvgFormat, avatarId);
-        }
-
-        _leadersLabel.Text = string.Join("\n\n", block0, block1, block2);
-    }
-
-    private string FormatLeaderBlock(string categoryName, List<LeagueLeaderRow> rows, string rowFormat, string avatarId)
-    {
-        if (rows.Count == 0)
-        {
-            return categoryName + "\n" + LeaderNoneText;
-        }
-        var lines = new string[rows.Count];
-        for (int i = 0; i < rows.Count; i++)
-        {
-            LeagueLeaderRow row = rows[i];
-            string line = string.Format(rowFormat, i + 1, row.FirstName, row.LastName, row.Value);
-            lines[i] = row.PlayerId == avatarId ? string.Format(LeaderAvatarRowFormat, line) : line;
-        }
-        return categoryName + "\n" + string.Join("\n", lines);
-    }
-
-    private void SetToolRow(int index, string toolName, int current, int potential)
-    {
-        ToolRowRefs row = _toolRows[index];
-        row.NameLabel.Text = toolName;
-        row.Bar.Value = current;
-        row.GradeLabel.Text = string.Format(
-            ToolGradeFormat, ScoutingGrade.Label(current), current, ScoutingGrade.Label(potential), potential);
-    }
-
-    private string TierName(LeagueTier tier)
-    {
-        int index = (int)tier;
-        return index >= 0 && index < _tierNames.Length ? _tierNames[index] : tier.ToString();
-    }
-
-    private string GradeName(SchoolGrade grade)
-    {
-        int index = (int)grade;
-        return index >= 0 && index < _gradeNames.Length ? _gradeNames[index] : grade.ToString();
     }
 
     /// <summary>

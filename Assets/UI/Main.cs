@@ -17,11 +17,13 @@ namespace DirtAndDiamonds.UI;
 /// EventChoiceScreen retired in Phase 10b — the Burner Phone's pending-choice
 /// thread renders it now (presentation_layer_narrative.md §4.4).
 /// 10d/12b: also bridges BurnerPhone's launch signals across subtrees —
-/// HustleLaunchRequested to ScheduleScreen.SelectWorkActivity (the Plan Today
-/// card now lives inside BaseballDashboard, still unreachable from the
-/// phone's subtree) and ShopOpenRequested to the EquipmentShopScreen modal (a
-/// direct child of Main) — so Main stays the shared ancestor that wires
-/// screens without any of them reaching into another's tree.
+/// HustleLaunchRequested to ScheduleScreen.SelectWorkActivity and
+/// ShopOpenRequested to the EquipmentShopScreen modal (a direct child of
+/// Main) — so Main stays the shared ancestor that wires screens without any
+/// of them reaching into another's tree. UI-reorg: the Plan Today card
+/// (ScheduleScreen) now lives inside the phone's Calendar tab, not the
+/// dashboard — Main still bridges the signal to it since it's the shared
+/// ancestor of both subtrees.
 /// </summary>
 public sealed partial class Main : Node
 {
@@ -90,10 +92,11 @@ public sealed partial class Main : Node
         {
             Node shell = TwoPanelShellScene.Instantiate();
             _screenContainer.AddChild(shell);
-            // The Plan Today card ships inside the dashboard (12b) but its
-            // launch seams stay bridged here, Main being the shared ancestor.
+            // The Plan Today card ships inside the phone's Calendar tab
+            // (UI-reorg) but its launch seams stay bridged here, Main being
+            // the shared ancestor of both the dashboard and the phone.
             _scheduleScreen = shell.GetNode<ScheduleScreen>(
-                "Margin/ShellLayout/Panels/BaseballDashboard/Layout/LeagueRow/ScheduleScreen");
+                "Margin/ShellLayout/Panels/BurnerPhone/Screen/ScreenLayout/PhoneTabs/Calendar/CalendarScroll/CalendarTabLayout/ScheduleScreen");
             var phone = shell.GetNode<BurnerPhone>("Margin/ShellLayout/Panels/BurnerPhone");
             phone.HustleLaunchRequested += OnHustleLaunchRequested;
             phone.ShopOpenRequested += OnShopOpenRequested;

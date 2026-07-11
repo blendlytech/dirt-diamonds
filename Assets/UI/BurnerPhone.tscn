@@ -1,8 +1,11 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BurnerPhone.cs" id="1_script"]
 [ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="2_portraitview"]
 [ext_resource type="PackedScene" path="res://Assets/UI/CalendarScreen.tscn" id="3_calendarscreen"]
+[ext_resource type="PackedScene" path="res://Assets/UI/ScheduleScreen.tscn" id="4_scheduleplan"]
+[ext_resource type="PackedScene" path="res://Assets/UI/PlayerScreen.tscn" id="5_playerscreen"]
+[ext_resource type="PackedScene" path="res://Assets/UI/LeagueScreen.tscn" id="6_leaguescreen"]
 
 [node name="BurnerPhone" type="PanelContainer"]
 script = ExtResource("1_script")
@@ -83,7 +86,46 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="CalendarScreen" parent="Screen/ScreenLayout/PhoneTabs/Calendar" instance=ExtResource("3_calendarscreen")]
+[node name="CalendarScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Calendar"]
+layout_mode = 2
+
+[node name="CalendarTabLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Calendar/CalendarScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="CalendarScreen" parent="Screen/ScreenLayout/PhoneTabs/Calendar/CalendarScroll/CalendarTabLayout" instance=ExtResource("3_calendarscreen")]
+layout_mode = 2
+
+[node name="ScheduleScreen" parent="Screen/ScreenLayout/PhoneTabs/Calendar/CalendarScroll/CalendarTabLayout" instance=ExtResource("4_scheduleplan")]
+layout_mode = 2
+
+[node name="Player" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="PlayerScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Player"]
+layout_mode = 2
+
+[node name="PlayerScreen" parent="Screen/ScreenLayout/PhoneTabs/Player/PlayerScroll" instance=ExtResource("5_playerscreen")]
+layout_mode = 2
+
+[node name="League" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="LeagueScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/League"]
+layout_mode = 2
+
+[node name="LeagueScreen" parent="Screen/ScreenLayout/PhoneTabs/League/LeagueScroll" instance=ExtResource("6_leaguescreen")]
 layout_mode = 2
 
 [node name="History" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
@@ -381,7 +423,7 @@ text = "Side Work"
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
-text = "Pre-fills today's \"Work as\" pick on the dashboard's Plan Today card — confirm the plan and advance the day to play it."
+text = "Pre-fills today's \"Work as\" pick on the Calendar tab's Plan Today card — confirm the plan and advance the day to play it."
 
 [node name="HustleButtonsRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout"]
 layout_mode = 2

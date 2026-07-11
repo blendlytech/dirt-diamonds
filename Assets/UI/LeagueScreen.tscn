@@ -1,0 +1,48 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/LeagueScreen.cs" id="1_leaguescreen"]
+
+[node name="LeagueScreen" type="PanelContainer"]
+visible = false
+theme_type_variation = &"Card"
+script = ExtResource("1_leaguescreen")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StandingsCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="StandingsLayout" type="VBoxContainer" parent="Layout/StandingsCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StandingsHeading" type="Label" parent="Layout/StandingsCard/StandingsLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Standings"
+
+[node name="StandingsLabel" type="Label" parent="Layout/StandingsCard/StandingsLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="LeadersCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="LeadersLayout" type="VBoxContainer" parent="Layout/LeadersCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LeadersHeading" type="Label" parent="Layout/LeadersCard/LeadersLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "League Leaders"
+
+[node name="LeadersLabel" type="Label" parent="Layout/LeadersCard/LeadersLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""

@@ -1,0 +1,164 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/PlayerScreen.cs" id="1_playerscreen"]
+
+[node name="PlayerScreen" type="PanelContainer"]
+visible = false
+theme_type_variation = &"Card"
+script = ExtResource("1_playerscreen")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ScoutingCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="ScoutingLayout" type="VBoxContainer" parent="Layout/ScoutingCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ScoutingHeading" type="Label" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Scouting Report"
+
+[node name="OfpRow" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="OfpLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/OfpRow"]
+layout_mode = 2
+theme_type_variation = &"MarqueeLabel"
+text = "OFP: —"
+
+[node name="TierChip" type="PanelContainer" parent="Layout/ScoutingCard/ScoutingLayout/OfpRow"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"TierChip"
+
+[node name="TierLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/OfpRow/TierChip"]
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "—"
+
+[node name="ToolsList" type="VBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ToolRow0" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow0"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— › —"
+
+[node name="ToolRow1" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow1"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— › —"
+
+[node name="ToolRow2" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow2"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— › —"
+
+[node name="ToolRow3" type="HBoxContainer" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+text = "Tool"
+
+[node name="Bar" type="ProgressBar" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 100.0
+show_percentage = false
+
+[node name="GradeLabel" type="Label" parent="Layout/ScoutingCard/ScoutingLayout/ToolsList/ToolRow3"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+text = "— › —"
+
+[node name="StatLineCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="StatLineLayout" type="VBoxContainer" parent="Layout/StatLineCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StatLineHeading" type="Label" parent="Layout/StatLineCard/StatLineLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Season Stats"
+
+[node name="StatLineLabel" type="Label" parent="Layout/StatLineCard/StatLineLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No stats yet this season."
+
+[node name="DevCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="DevLayout" type="VBoxContainer" parent="Layout/DevCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="DevHeading" type="Label" parent="Layout/DevCard/DevLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Development"
+
+[node name="DevSummaryLabel" type="Label" parent="Layout/DevCard/DevLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = "No offseason development yet."
