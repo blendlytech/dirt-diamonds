@@ -1196,43 +1196,83 @@ internal static class Program
         Check("person-stat impulse: moves the in-memory CURRENT value only (the DB already moved — unflushed stays 0); junk ordinals and unhydrated targets are ignored",
             mirroredStats.Discipline == 55f && mirroredDeltas.Discipline == 0f);
 
-        // --- §5.3 transport refund ---
+        // --- §5.3 (revised): travel cost replaces the flat refund ---
+
+        // Pure TravelTime.ComputeHours checks: trip counting + rounding.
+        Check("TravelTime: 1 trip (Work), no transport — 1.25h rounds to 1h",
+            TravelTime.ComputeHours(0, 0, 0, 2, 0, NpcActionId.Idle, 0f, out int oneTripWalkTrips) == 1
+            && oneTripWalkTrips == 1);
+        Check("TravelTime: 1 trip (Work), car (1.0 saved) — floors to the 0.25h minimum, rounds to 0h",
+            TravelTime.ComputeHours(0, 0, 0, 2, 0, NpcActionId.Idle, 1.0f, out _) == 0);
+        Check("TravelTime: School+Work+Hangout = 3 trips, no transport — 3.75h rounds to 4h",
+            TravelTime.ComputeHours(6, 0, 0, 2, 2, NpcActionId.Hangout, 0f, out int threeTripWalkTrips) == 4
+            && threeTripWalkTrips == 3);
+        Check("TravelTime: School+Work+Hangout = 3 trips, car (1.0 saved) — 0.75h rounds to 1h",
+            TravelTime.ComputeHours(6, 0, 0, 2, 2, NpcActionId.Hangout, 1.0f, out _) == 1);
+        Check("TravelTime: Practice AND Game the same day is still ONE team-facility trip",
+            TravelTime.ComputeHours(0, 2, 3, 0, 0, NpcActionId.Idle, 0f, out int practiceGameTrips) == 1
+            && practiceGameTrips == 1);
+        Check("TravelTime: Study free time stays home (0 trips) — VideoGames too, Hangout/Church travel",
+            TravelTime.ComputeHours(0, 0, 0, 0, 4, NpcActionId.Study, 0f, out int studyTrips) == 0 && studyTrips == 0
+            && TravelTime.ComputeHours(0, 0, 0, 0, 4, NpcActionId.VideoGames, 0f, out int gamesTrips) == 0 && gamesTrips == 0
+            && TravelTime.ComputeHours(0, 0, 0, 0, 4, NpcActionId.Church, 0f, out int churchTrips) == 1 && churchTrips == 1);
+        Check("TravelTime: zero trips is always zero hours, regardless of transport",
+            TravelTime.ComputeHours(0, 0, 0, 0, 0, NpcActionId.Idle, 0f, out _) == 0);
+
+        // DaySchedule.FreeHours: travel is a real allocated block now, not a
+        // bonus layered on top — a walker's Practice day has strictly fewer
+        // free hours than a driver's IDENTICAL Practice day. (Practice, not
+        // Work: Practice rides Idle's neutral definition with no meal-access
+        // buffering, isolating the travel effect from School/Work's restore.)
+        int walkerTravel = TravelTime.ComputeHours(0, 1, 0, 0, 0, NpcActionId.Idle, 0f, out _);
+        int driverTravel = TravelTime.ComputeHours(0, 1, 0, 0, 0, NpcActionId.Idle, 1.0f, out _);
+        var walkerDay = new DaySchedule(8, 0, 1, 0, 0, travelHours: walkerTravel);
+        var driverDay = new DaySchedule(8, 0, 1, 0, 0, travelHours: driverTravel);
+        Check("DaySchedule: a car's discounted trip leaves strictly MORE free hours than walking the same day",
+            driverDay.FreeHours > walkerDay.FreeHours
+            && walkerDay.FreeHours == DaySchedule.HoursPerDay - 8 - 1 - walkerTravel,
+            $"walker free {walkerDay.FreeHours}, driver free {driverDay.FreeHours}");
+
+        // Integration: since forced-Idle Travel hours and an autopilot's own
+        // Idle pick are decay-identical, a walker/driver pair only visibly
+        // diverges once a need has actually crossed a crossover threshold
+        // within the window — so seed Hunger just below the Eat crossover
+        // (59, per the sweep above) rather than leaving it to chance. A
+        // driver's extra autopilot-chooseable hour can act on it a full hour
+        // sooner than a walker's forced-Idle travel hour ever could.
+        var hungryNeeds = NeedsState.FullySatisfied();
+        hungryNeeds.Hunger = 55f;
         (LifeSimManager walker, EventBus walkerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
         (LifeSimManager driver, EventBus driverBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        walker.SetNeeds(AvatarId, hungryNeeds);
+        driver.SetNeeds(AvatarId, hungryNeeds);
         driver.AvatarTransportHoursSaved = 1.0f;
-        walker.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
-        driver.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        walker.SetTodaySchedule(walkerDay);
+        driver.SetTodaySchedule(driverDay);
         walkerBus.Publish(new DayAdvancedEvent(1, 2026, 1));
         walkerBus.DispatchPending();
         driverBus.Publish(new DayAdvancedEvent(1, 2026, 1));
         driverBus.DispatchPending();
-        Check("transport refund (car, 1.0): a planned day gains its extra evening hour immediately — traces diverge day 1, carry stays 0",
-            !PersonStateIdentical(walker, driver, AvatarId) && driver.TransportRefundCarry == 0f);
+        Check("travel cost: a planned Practice day with a car diverges from the same day on foot (an already-hungry avatar gets serviced a full hour sooner)",
+            !PersonStateIdentical(walker, driver, AvatarId));
 
-        (LifeSimManager strider, EventBus striderBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
-        (LifeSimManager cyclist, EventBus cyclistBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
-        cyclist.AvatarTransportHoursSaved = 0.5f;
-        strider.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
-        cyclist.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
-        striderBus.Publish(new DayAdvancedEvent(1, 2026, 1));
-        striderBus.DispatchPending();
-        cyclistBus.Publish(new DayAdvancedEvent(1, 2026, 1));
-        cyclistBus.DispatchPending();
-        bool bikeDayOneIdentical = PersonStateIdentical(strider, cyclist, AvatarId);
-        float bikeCarryAfterDayOne = cyclist.TransportRefundCarry;
-        strider.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
-        cyclist.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
-        striderBus.Publish(new DayAdvancedEvent(2, 2026, 2));
-        striderBus.DispatchPending();
-        cyclistBus.Publish(new DayAdvancedEvent(2, 2026, 2));
-        cyclistBus.DispatchPending();
-        Check("transport refund (bike, 0.5): fraction banks — day 1 identical (carry 0.5), day 2 pays the whole hour (carry back to 0)",
-            bikeDayOneIdentical && bikeCarryAfterDayOne == 0.5f
-            && !PersonStateIdentical(strider, cyclist, AvatarId) && cyclist.TransportRefundCarry == 0f,
-            $"carry after day 1 {bikeCarryAfterDayOne:F2}, after day 2 {cyclist.TransportRefundCarry:F2}");
+        // A schedule with no away-blocks (0 trips) costs nothing regardless
+        // of transport — the car's discount only ever matters if you go
+        // somewhere.
+        (LifeSimManager homebodyWalker, EventBus homebodyWalkerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        (LifeSimManager homebodyDriver, EventBus homebodyDriverBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
+        homebodyDriver.AvatarTransportHoursSaved = 1.0f;
+        homebodyWalker.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        homebodyDriver.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0));
+        homebodyWalkerBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        homebodyWalkerBus.DispatchPending();
+        homebodyDriverBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        homebodyDriverBus.DispatchPending();
+        Check("travel cost: a schedule with no away-blocks is transport-inert (bit-identical to a no-transport twin)",
+            PersonStateIdentical(homebodyWalker, homebodyDriver, AvatarId));
 
-        // Unplanned days never accrue or pay the refund (no schedule to
-        // refund) — an autopilot day stays the pre-HS-4 24 hours exactly.
+        // Unplanned days never touch DaySchedule/TravelHours at all — an
+        // autopilot day stays the pre-HS-4 24 hours exactly, transport or not.
         (LifeSimManager idleWalker, EventBus idleWalkerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
         (LifeSimManager idleDriver, EventBus idleDriverBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
         idleDriver.AvatarTransportHoursSaved = 1.0f;
@@ -1240,8 +1280,8 @@ internal static class Program
         idleWalkerBus.DispatchPending();
         idleDriverBus.Publish(new DayAdvancedEvent(1, 2026, 1));
         idleDriverBus.DispatchPending();
-        Check("transport refund: an UNPLANNED day is refund-inert (bit-identical to a no-transport twin, no carry accrual)",
-            PersonStateIdentical(idleWalker, idleDriver, AvatarId) && idleDriver.TransportRefundCarry == 0f);
+        Check("travel cost: an UNPLANNED day is travel-inert (bit-identical to a no-transport twin)",
+            PersonStateIdentical(idleWalker, idleDriver, AvatarId));
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

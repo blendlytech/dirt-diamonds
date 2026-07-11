@@ -16,7 +16,7 @@ Create **two avatars back-to-back**: one poorest background, one wealthiest (New
 - [ ] Avatar starts **age 16**, and the BaseballDashboard tier chip reads **FR** (freshman).
 - [ ] **Phone divergence:** open the BurnerPhone on each save — hardware tier, plan, and starting minutes differ by wealth (poor = low tier/tight minutes, wealthy = better).
 - [ ] **Allowance divergence:** funds trickle differs across the first few days between the two saves.
-- [ ] **Transport divergence:** the wealthy save starts with (or is auto-gifted) better transport; ScheduleScreen's Transport line reflects it ("Transport: X h/day saved") while the poor save shows the "none" fallback.
+- [ ] **Transport divergence:** the wealthy save starts with (or is auto-gifted) better transport; plan a day with an away-block (e.g. Work) on each save and confirm ScheduleScreen's Travel line shows fewer hours/trip on the wealthy save than the poor one.
 - [ ] 🗄 `Family_Background` row exists for the avatar; `strictness` populated; `Player_Person` row is present (neutral 50s + trait shifts).
 
 ## Session A2 — HS onboarding arc (Epic 5, the Act-1 fix)
@@ -38,14 +38,14 @@ Plan a full week via ScheduleScreen. Include School hours daily, and rotate the 
 - [ ] The GPA/person-stat line (GPA, Int, Disc, Happy) updates after day ticks — Video Games nudges Happiness up, Study nudges it down slightly.
 - [ ] **GPA moves on the weekly beat** (every 7th day), not daily. Full attendance + study hours → GPA up; it starts at 2.50.
 - [ ] **Truancy test:** plan one day with 0 School hours — next weekly tick shows the GPA drag.
-- [ ] Transport refund: with a bike/car owned, planned days show the extra evening hour(s) ("banked" carry for the bike's 0.5/day).
+- [ ] Travel cost: a School day (plus any Work/Hangout/Church hours) shows a "Travel today" line whose hours shrink once a bike/car is owned; a day with everything at home (e.g. Study free time, no Work) shows no Travel line at all.
 - [ ] 🗄 `Player_Person` after the week: gpa moved off 2.5; happiness/charisma/morality/discipline drifted in the directions above.
 
 ## Session C — Marketplace & the item economy
 
 - [ ] BurnerPhone → **Marketplace** tab lists the catalog with prices; buying deducts funds; owned items marked.
 - [ ] **Item buy → social_status:** buy a status item (designer clothes / jewelry tier) — the effective social_status buff registers (🗄 `Player_Items` row lands; dating/social events key off the buffed value).
-- [ ] Buying transport upgrades the ScheduleScreen Transport line immediately (event-driven re-projection, no restart needed).
+- [ ] Buying transport shrinks the ScheduleScreen Travel line immediately, with no restart needed (event-driven re-projection) — only visible on a plan with an away-block scheduled.
 - [ ] Parental autobuy (wealthy save): a gifted item appears without the avatar spending.
 
 ## Session D — Dating funnel → sneak-out → breakup/rekindle

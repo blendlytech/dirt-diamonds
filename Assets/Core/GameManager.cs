@@ -844,8 +844,12 @@ public sealed partial class GameManager : Node
     /// <see cref="AvatarScheduleLocked"/> uses) — the calendar drives those
     /// blocks, whatever the caller sent, so a stale or hand-crafted submission
     /// can never skip school or invent a game (defense in depth over the UI's
-    /// read-only rows). Throws the DaySchedule over-allocation error when the
-    /// caller's editable blocks don't leave room for the mandated ones.
+    /// read-only rows). Travel hours (§5.3, revised) are forced the same way,
+    /// from <see cref="TravelTime.ComputeHours"/> over the same forced
+    /// School/Practice/Game plus the caller's Work/FreeTime — a stale client
+    /// value can never under-charge the commute. Throws the DaySchedule
+    /// over-allocation error when the caller's editable blocks don't leave
+    /// room for the mandated ones.
     /// </summary>
     public void SubmitDaySchedule(in DaySchedule schedule, WorkActivity workActivity)
     {
@@ -854,15 +858,22 @@ public sealed partial class GameManager : Node
             return;
         }
         MandatoryBlocks blocks = GetMandatoryBlocksFor(State.CurrentDay + 1);
+        int practiceHours = blocks.PracticeGameLocked ? blocks.PracticeHours : schedule.PracticeHours;
+        int gameHours = blocks.PracticeGameLocked ? blocks.GameHours : schedule.GameHours;
+        int travelHours = TravelTime.ComputeHours(
+            blocks.SchoolHours, practiceHours, gameHours, schedule.WorkHours,
+            schedule.FreeTimeHours, schedule.FreeTimeActivity, LifeSim.AvatarTransportHoursSaved,
+            out _);
         var forced = new DaySchedule(
             schedule.SleepHours,
             blocks.SchoolHours,
-            blocks.PracticeGameLocked ? blocks.PracticeHours : schedule.PracticeHours,
-            blocks.PracticeGameLocked ? blocks.GameHours : schedule.GameHours,
+            practiceHours,
+            gameHours,
             schedule.WorkHours,
             schedule.FreeTimeHours,
             schedule.FreeTimeActivity,
-            schedule.FamilyHours);
+            schedule.FamilyHours,
+            travelHours);
         LifeSim.SetTodaySchedule(forced);
         LifeSim.AvatarWorkIsHustle = workActivity != WorkActivity.LegalWork;
         _plannedWorkActivity = workActivity;

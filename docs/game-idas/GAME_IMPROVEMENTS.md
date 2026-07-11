@@ -13,24 +13,6 @@ This document contains the game improvement ideas for the game Dirt & Diamonds.
 - Make the story line more interactive
 - Make the story line more replayable
 
-## Player Character
-
-- Add more personality traits
-- Add more back stories
-- Add more character development
-- Add more character relationships
-- Add more character interactions
-- Add more character development
-- Add more character development
-
-## NPC Character
-
-- Add more personality traits
-- Add more back stories
-- Add more character relationships
-- Add more character interactions
-- Add more character development
-
 ## Game UI
 
 - Calendar should be moved into cellphone
@@ -56,15 +38,19 @@ This document contains the game improvement ideas for the game Dirt & Diamonds.
 - Add a section on how to play the game in cellphone at the very start of the game to teach players the basics
 - Add more things to do in the game
 - Add more things to collect in the game
-- Add more things to craft in the game
-- Add more things to sell in the game
 - Add more things to buy in the game
 - Add more things to upgrade in the game
-- Add more things to customize in the game
-- Add more things to explore in the game
 - Add more things to discover in the game
-- Add more things to achieve in the game
 - Add more things to earn in the game
 - Add more things to lose in the game
-- Add more things to trade in the game
-- Add more things to barter in the game
+
+## Hustles
+
+- Make all jobs interactive ( instead of just clicking a button to get money )
+- Texas Holdem should be an actual full mini-game of Texas Holdem with different locations and stakes based on player progress.
+
+## Criminal Side Hustles
+
+- Drug dealing, should be series of progressive mini games with stages.
+- Fencing should be a series of progressive mini games with stages.
+- Make robberies more interactive ( instead of just clicking a button to rob )

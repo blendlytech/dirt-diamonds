@@ -26,9 +26,12 @@ namespace DirtAndDiamonds.UI;
 /// rides along silently after a tier change or an offseason day. Playing an
 /// attended game itself stays BaseballDashboard's flow — the Game slider
 /// only reserves the hours, it never launches the at-bat view. HS-4 also adds
-/// two read-only context lines above the blocks: the transport-refund rate
-/// (<see cref="LifeSimManager.AvatarTransportHoursSaved"/>) and the avatar's
-/// GPA/Intelligence/Discipline/Happiness readout
+/// two read-only context lines above the blocks: the day's Travel cost
+/// (<see cref="TravelTime.ComputeHours"/>, revised §5.3 — one round trip per
+/// distinct place the current slider values leave home for, discounted by
+/// <see cref="LifeSimManager.AvatarTransportHoursSaved"/> and folded into the
+/// same free-hours budget School's mandated note already occupies) and the
+/// avatar's GPA/Intelligence/Discipline/Happiness readout
 /// (<see cref="LifeSimManager.TryGetPersonStats"/>) — neither is editable
 /// here, they're context for the plan the player is about to make. Node paths
 /// verified against ScheduleScreen.tscn before this script was written.
@@ -37,7 +40,7 @@ public sealed partial class ScheduleScreen : PanelContainer
 {
     [Export]
     public string PlanSetFormat { get; set; } =
-        "Plan set — Sleep {0}h, School {1}h, Practice {2}h, Game {3}h, Work {4}h, {5} {6}h, Family {8}h, Free {7}h.";
+        "Plan set — Sleep {0}h, School {1}h, Practice {2}h, Game {3}h, Work {4}h, {5} {6}h, Family {8}h, Travel {9}h, Free {7}h.";
 
     [Export]
     public string NoPlanText { get; set; } = "No plan set — today runs on autopilot.";
@@ -53,11 +56,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         "In custody — day planning is locked until day {0}. Today runs on autopilot.";
 
     [Export]
-    public string TransportSavedFormat { get; set; } =
-        "Transport: {0}h/day saved off tonight's free hours (banked {1}h toward tomorrow).";
-
-    [Export]
-    public string NoTransportText { get; set; } = "Transport: none — walking costs the full day.";
+    public string TravelCostFormat { get; set; } = "Travel today: {0}h across {1} trip(s).";
 
     [Export]
     public string PersonStatsFormat { get; set; } =
@@ -122,11 +121,11 @@ public sealed partial class ScheduleScreen : PanelContainer
     private bool _shownLocked;
     private long _shownLockUntilDay;
 
-    // HS-4: the transport-refund readout — sentinels so the very first
-    // _Process call always formats once (a real saved/carry value is never
-    // negative).
-    private float _shownTransportSaved = -1f;
-    private float _shownTransportCarry = -1f;
+    // HS-4: the Travel-cost readout depends on the avatar's owned transport,
+    // which can change out from under an open screen (a marketplace buy) —
+    // sentinel so the very first _Process call always formats once (a real
+    // hours-saved value is never negative).
+    private float _shownTransportHoursSaved = -1f;
 
     // HS-4: the GPA/person-stat readout — same sentinel discipline.
     // Intelligence/Discipline/Happiness are displayed rounded to whole points
@@ -288,23 +287,20 @@ public sealed partial class ScheduleScreen : PanelContainer
                 ? string.Format(
                     PlanSetFormat, plan.SleepHours, plan.SchoolHours, plan.PracticeHours,
                     plan.GameHours, plan.WorkHours, FreeTimeActivityLabel(plan.FreeTimeActivity),
-                    plan.FreeTimeHours, plan.FreeHours, plan.FamilyHours)
+                    plan.FreeTimeHours, plan.FreeHours, plan.FamilyHours, plan.TravelHours)
                 : NoPlanText;
         }
 
-        // HS-4 §5.3: the transport-refund readout — daily rate plus the
-        // sub-hour carry banked toward tomorrow's evening (LifeSimManager's
-        // TickScheduledDay tail, one whole refund hour every Nth planned day
-        // for a fractional-rate item like the bike).
+        // HS-4 §5.3 (revised): the Travel-cost readout tracks the avatar's
+        // best owned transport — a marketplace buy while this screen is open
+        // must recompute the live preview even with no slider touched, so
+        // RefreshHoursLabels (which reads the sliders + this rate together)
+        // reruns whenever the rate itself moves.
         float transportSaved = lifeSim.AvatarTransportHoursSaved;
-        float transportCarry = lifeSim.TransportRefundCarry;
-        if (transportSaved != _shownTransportSaved || transportCarry != _shownTransportCarry)
+        if (transportSaved != _shownTransportHoursSaved)
         {
-            _shownTransportSaved = transportSaved;
-            _shownTransportCarry = transportCarry;
-            _transportLabel.Text = transportSaved > 0f
-                ? string.Format(TransportSavedFormat, transportSaved, transportCarry)
-                : NoTransportText;
+            _shownTransportHoursSaved = transportSaved;
+            RefreshHoursLabels();
         }
 
         // HS-4 §2.1/§2.2: the first GPA/person-stat readout. No-op (label left
@@ -356,7 +352,18 @@ public sealed partial class ScheduleScreen : PanelContainer
         a.SleepHours == b.SleepHours && a.SchoolHours == b.SchoolHours
         && a.PracticeHours == b.PracticeHours && a.GameHours == b.GameHours
         && a.WorkHours == b.WorkHours && a.FreeTimeHours == b.FreeTimeHours
-        && a.FreeTimeActivity == b.FreeTimeActivity && a.FamilyHours == b.FamilyHours;
+        && a.FreeTimeActivity == b.FreeTimeActivity && a.FamilyHours == b.FamilyHours
+        && a.TravelHours == b.TravelHours;
+
+    /// <summary>
+    /// The live Travel-cost preview for the sliders' current values — the
+    /// same formula <see cref="GameManager.SubmitDaySchedule"/> re-forces
+    /// server-side, so this preview and the confirmed plan never disagree.
+    /// </summary>
+    private int ComputeTravelHours(out int trips) => TravelTime.ComputeHours(
+        _mandatedSchoolHours, (int)_practiceSlider.Value, (int)_gameSlider.Value, (int)_workSlider.Value,
+        (int)_freeTimeSlider.Value, FreeTimeActivities[_freeTimeActivityOption.Selected],
+        Math.Max(_shownTransportHoursSaved, 0f), out trips);
 
     private void RefreshHoursLabels()
     {
@@ -367,12 +374,20 @@ public sealed partial class ScheduleScreen : PanelContainer
         _freeTimeValueLabel.Text = ((int)_freeTimeSlider.Value).ToString();
         _familyValueLabel.Text = ((int)_familySlider.Value).ToString();
 
+        int travelHours = ComputeTravelHours(out int trips);
+        _transportLabel.Visible = trips > 0;
+        if (trips > 0)
+        {
+            _transportLabel.Text = string.Format(TravelCostFormat, travelHours, trips);
+        }
+
         // Mandated school hours count against the day even without a slider —
         // otherwise a school day's budget would let the player silently
-        // over-allocate the six hours the calendar already spent.
+        // over-allocate the six hours the calendar already spent. Travel
+        // (§5.3, revised) competes for the same 24 hours the same way.
         int total = (int)_sleepSlider.Value + _mandatedSchoolHours + (int)_practiceSlider.Value
             + (int)_gameSlider.Value + (int)_workSlider.Value + (int)_freeTimeSlider.Value
-            + (int)_familySlider.Value;
+            + (int)_familySlider.Value + travelHours;
         int free = DaySchedule.HoursPerDay - total;
         bool overAllocated = free < 0;
         _freeHoursLabel.Text = string.Format(overAllocated ? OverAllocatedFormat : FreeHoursFormat, Math.Abs(free));
@@ -381,10 +396,11 @@ public sealed partial class ScheduleScreen : PanelContainer
 
     private void OnConfirmPressed()
     {
+        int travelHours = ComputeTravelHours(out _);
         var schedule = new DaySchedule(
             (int)_sleepSlider.Value, _mandatedSchoolHours, (int)_practiceSlider.Value,
             (int)_gameSlider.Value, (int)_workSlider.Value, (int)_freeTimeSlider.Value,
-            FreeTimeActivities[_freeTimeActivityOption.Selected], (int)_familySlider.Value);
+            FreeTimeActivities[_freeTimeActivityOption.Selected], (int)_familySlider.Value, travelHours);
         var workActivity = (WorkActivity)_workActivityOption.Selected;
         try
         {

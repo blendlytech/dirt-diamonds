@@ -127,12 +127,11 @@ public sealed class LifeSimManager
     private DaySchedule _todaySchedule;
     private bool _hasTodaySchedule;
 
-    // HS-4 §5.3 transport refund: fractional hours bank between planned days
-    // (a bike's 0.5 h/day pays out one whole evening hour every second
-    // planned day). In-memory pacing, not state — resets with the avatar
-    // pointer, the stress-cooldown precedent.
+    // HS-4 §5.3 (revised): hours saved per trip vs. walking, from the
+    // avatar's best owned Transport item — consumed by TravelTime.ComputeHours
+    // as a per-location discount, not a flat daily bonus. In-memory, not
+    // state — resets with the avatar pointer, the stress-cooldown precedent.
     private float _avatarTransportHoursSaved;
-    private float _transportRefundCarry;
     private readonly ActionWeights _weights;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
     private readonly Action<StressImpulseEvent> _onStressImpulse;
@@ -190,28 +189,22 @@ public sealed class LifeSimManager
         }
         _avatarPlayerId = playerId;
         _hasTodaySchedule = false;
-        // A succession heir starts with a fresh refund bank, same as the plan
-        // drop above — the retiree's half-banked bike hour never leaks.
-        _transportRefundCarry = 0f;
     }
 
     /// <summary>
-    /// HS-4 §5.3: daily schedule hours refunded by the avatar's best owned
-    /// Transport item (car ~1.0, bike ~0.5, none 0) — projected in by the
-    /// bridge from the item catalog (this assembly never sees Player_Items),
-    /// consumed as extra evening autopilot hours on PLANNED days only (an
-    /// unplanned day has no schedule to refund; the pre-HS-4 24-hour
-    /// autopilot day stays bit-identical). Fractions bank across planned
-    /// days via <see cref="TransportRefundCarry"/>.
+    /// HS-4 §5.3 (revised): hours saved per trip vs. walking, by the
+    /// avatar's best owned Transport item (car ~1.0, bike ~0.5, none 0) —
+    /// projected in by the bridge from the item catalog (this assembly
+    /// never sees Player_Items). Discounts each of <see cref="TravelTime"/>'s
+    /// per-location round trips on PLANNED days only; an unplanned day never
+    /// builds a <see cref="DaySchedule"/> at all, so it stays the pre-HS-4
+    /// 24-hour autopilot day bit-identical regardless of this value.
     /// </summary>
     public float AvatarTransportHoursSaved
     {
         get => _avatarTransportHoursSaved;
         set => _avatarTransportHoursSaved = Math.Max(0f, value);
     }
-
-    /// <summary>The banked sub-hour refund remainder (harness observability, like TrackedPlayerIds).</summary>
-    public float TransportRefundCarry => _transportRefundCarry;
 
     public bool HasTodaySchedule => _hasTodaySchedule;
 
@@ -624,10 +617,10 @@ public sealed class LifeSimManager
 
     /// <summary>
     /// One player-planned day in a fixed canonical day order: the daytime
-    /// blocks (School → Practice → Game → Work), then the HS-4 free-time
-    /// activity (the chosen evening), then the unallocated hours on the
-    /// standard autopilot — stretched by the §5.3 transport refund — then
-    /// Sleep as the night cap. Sleep MUST run last: run first, an avatar
+    /// blocks (School → Practice → Game → Work), the HS-4 free-time activity
+    /// (the chosen evening), the day's lumped Travel hours (§5.3, revised —
+    /// one bucket, not interleaved per trip), then the unallocated hours on
+    /// the standard autopilot, then Sleep as the night cap. Sleep MUST run last: run first, an avatar
     /// sleeping from a full meter wastes the whole restore against the
     /// 100-clamp and the meter drains all day anyway (harness-measured:
     /// 8h-sleep day ending at Sleep 33.5). Blocks are uninterruptible — the
@@ -683,15 +676,15 @@ public sealed class LifeSimManager
             person.FamilyHoursThisWeek += schedule.FamilyHours;
         }
 
-        // §5.3: the transport refund — hours not spent walking come back as
-        // extra evening autopilot hours. Whole hours only; the fractional
-        // remainder banks in the carry until it fills an hour (a bike pays
-        // out every second planned day).
-        _transportRefundCarry += _avatarTransportHoursSaved;
-        int refundHours = (int)_transportRefundCarry;
-        _transportRefundCarry -= refundHours;
+        // §5.3 (revised): the day's commute cost — TravelTime.ComputeHours
+        // already forced this into the schedule (GameManager.SubmitDaySchedule,
+        // like School), so it just ticks as one lumped inert bucket, same as
+        // Practice/Game/Family above. It competes for the same 24 hours as
+        // everything else, so a car's discount shows up as MORE free hours
+        // below, not a bonus layered on top.
+        TickBlockHours(npc, schedule.TravelHours, in ActionCatalog.Idle);
 
-        for (int hour = 0; hour < schedule.FreeHours + refundHours; hour++)
+        for (int hour = 0; hour < schedule.FreeHours; hour++)
         {
             TickHour(npc);
         }

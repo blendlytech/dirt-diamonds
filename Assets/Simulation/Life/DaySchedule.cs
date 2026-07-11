@@ -32,6 +32,14 @@ namespace DirtAndDiamonds.Simulation.Life;
 ///              move the Child_Development axes. Appended last, defaulted
 ///              to 0, so every pre-HS-5 call site (including scripted
 ///              harness schedules) stays source- and behavior-compatible.
+///   Travel   — the day's commute cost (see TravelTime.ComputeHours):
+///              one round trip per distinct place left home for (School,
+///              the Practice/Game facility, Work, an out-of-home FreeTime
+///              activity), discounted by the avatar's best owned Transport
+///              item. Forced server-side by GameManager.SubmitDaySchedule
+///              exactly like School — never player-edited directly. Inert
+///              like Practice/Game per hour. Appended last, defaulted to 0,
+///              same non-breaking precedent as FamilyHours.
 /// </summary>
 public readonly struct DaySchedule
 {
@@ -44,21 +52,24 @@ public readonly struct DaySchedule
     public readonly int WorkHours;
     public readonly int FreeTimeHours;
     public readonly int FamilyHours;
+    public readonly int TravelHours;
 
     /// <summary>The activity <see cref="FreeTimeHours"/> ticks under; Idle iff the block is empty.</summary>
     public readonly NpcActionId FreeTimeActivity;
 
     public DaySchedule(
         int sleepHours, int schoolHours, int practiceHours, int gameHours, int workHours,
-        int freeTimeHours = 0, NpcActionId freeTimeActivity = NpcActionId.Idle, int familyHours = 0)
+        int freeTimeHours = 0, NpcActionId freeTimeActivity = NpcActionId.Idle, int familyHours = 0,
+        int travelHours = 0)
     {
         if (sleepHours < 0 || schoolHours < 0 || practiceHours < 0 || gameHours < 0 || workHours < 0
-            || freeTimeHours < 0 || familyHours < 0)
+            || freeTimeHours < 0 || familyHours < 0 || travelHours < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(sleepHours), "Schedule block hours cannot be negative.");
         }
-        int total = sleepHours + schoolHours + practiceHours + gameHours + workHours + freeTimeHours + familyHours;
+        int total = sleepHours + schoolHours + practiceHours + gameHours + workHours + freeTimeHours
+            + familyHours + travelHours;
         if (total > HoursPerDay)
         {
             throw new ArgumentException(
@@ -76,13 +87,14 @@ public readonly struct DaySchedule
         WorkHours = workHours;
         FreeTimeHours = freeTimeHours;
         FamilyHours = familyHours;
+        TravelHours = travelHours;
         // Idle when empty, whatever the caller passed — an unused selection
         // must never make two otherwise-identical plans compare different.
         FreeTimeActivity = freeTimeHours > 0 ? freeTimeActivity : NpcActionId.Idle;
     }
 
     public int AllocatedHours =>
-        SleepHours + SchoolHours + PracticeHours + GameHours + WorkHours + FreeTimeHours + FamilyHours;
+        SleepHours + SchoolHours + PracticeHours + GameHours + WorkHours + FreeTimeHours + FamilyHours + TravelHours;
 
     /// <summary>Unallocated hours, ticked by the standard autopilot after the blocks run.</summary>
     public int FreeHours => HoursPerDay - AllocatedHours;

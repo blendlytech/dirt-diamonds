@@ -305,12 +305,23 @@ no re-band. This is the same clean separation equipment quality made, inverted:
 equipment buys ratings and never touches social stats; items buy social stats
 and never touch ratings.
 
-### 5.3 Transport hours
+### 5.3 Transport hours (revised: travel cost, not a refund)
 
-A Transport item's `transport_hours_saved` is refunded to the daily schedule by
-the Time Manager (HS-4) — the highest-value owned transport wins (a car
-supersedes a bike). This is the mechanical payoff of owning a car and the thing
-a parental car-gift or a self-buy actually delivers.
+Leaving home costs time — School, the Practice/Game facility, Work, and an
+out-of-home free-time activity (Hangout/Church; Study/VideoGames stay home)
+each cost one mode-dependent round trip, computed by `TravelTime.ComputeHours`
+and forced into the day's `DaySchedule.TravelHours` block by
+`GameManager.SubmitDaySchedule`, the same way School's calendar-mandated
+hours are forced. Walking is the baseline (`WalkRoundTripHoursPerTrip` =
+1.25h/trip); a Transport item's `transport_hours_saved` (the highest-value
+owned wins, a car supersedes a bike) discounts each trip, floored at
+`MinRoundTripHoursPerTrip` = 0.25h so even the best car never makes a trip
+free. Travel competes for the same 24 hours as every other block — a car
+doesn't grant bonus hours, it shrinks how much of the day commuting eats,
+leaving more of the 24 hours for everything else. This is the mechanical
+payoff of owning a car and the thing a parental car-gift or a self-buy
+actually delivers. A schedule with no away-blocks costs zero travel
+regardless of transport owned.
 
 ---
 
