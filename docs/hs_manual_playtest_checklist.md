@@ -1,6 +1,6 @@
 # High School Arc — Manual Playtest Checklist (plan §Verification-5)
 
-The user-driven exit gate for the HS-0…HS-6 arc (`docs/design/high_school_person_layer.md`) plus the Act-1 onboarding fix (`docs/design/hs_onboarding_events.md`). Every automated gate is green (MC 345/345, GrittyEvents **232/232** (66 events), SchemaValidator 111/111 @ v13, NeedsDecay 94/94, CoreLoop 22/22); this checklist covers what only human eyes can verify — screens rendering sensibly, flows feeling right, and the probability-gated content actually firing in live play.
+The user-driven exit gate for the HS-0…HS-6 arc (`docs/design/high_school_person_layer.md`) plus the Act-1 onboarding fix (`docs/design/hs_onboarding_events.md`). Every automated gate is green (MC 345/345, GrittyEvents **253/253** (79 events), SchemaValidator 111/111 @ v13, NeedsDecay 94/94, CoreLoop 22/22); this checklist covers what only human eyes can verify — screens rendering sensibly, flows feeling right, and the probability-gated content actually firing in live play.
 
 **Setup:** build from a clean tree (`dotnet build DirtAndDiamonds.sln -c Debug`, expect 0/0). Sessions A–E want **fresh saves**; the existing real save (v12, day 99) auto-migrates to v13 on next boot (purely additive — new `Relationship_History` table only, same pre-v12 no-row-fallback precedent) and works for B/C but has no child and mid-arc flags. Saves live under `%APPDATA%\Godot\app_userdata\Dirt & Diamonds\`. DB spot-checks (optional, marked 🗄) can run through the SQLite MCP or `sqlite3` against the save's `.db`.
 
@@ -28,6 +28,7 @@ Fresh save, either avatar from Session A. Let days tick (autopilot or light play
 - [ ] **Report card ~day 28** (three weeks after the first game): a *solid* report card from Mom (the typical case, GPA still at or above the 2.5 default) **or** a coach's eligibility warning from Coach Malone (only if the player has actively tanked their GPA below 2.5 by then). Exactly one of the two ever fires, never both.
 - [ ] Around day 21ish, a crosstown-rival text seed (a classmate showing you a rival shortstop running his mouth) may appear; around made-team+45 days, a homecoming beat.
 - [ ] 🗄 `Entity_Flags`: `hs_started` → `hs_met_coach` → `hs_made_team` → `hs_practiced` → `hs_debut_done` set in that order across the early days; `got_report_card` set once, around day 28.
+- [ ] **BurnerPhone "Events vs Messages" split:** the phone's FIRST tab is now **Events** — scene-prose cards (day/season, contact name, prompt, then a resolution line once you've answered) in one scrolling feed, oldest to newest. An unanswered choice (e.g. `hs_tryouts`) renders as the last card with reply-chip buttons underneath it, right there in the feed — no separate popup. **Messages** is the second tab and now holds ONLY real companion texts (no scene prose, no choice buttons): Mom's "Knock 'em dead today, kiddo." should land in Messages the same day `hs_first_day` resolves in Events; Coach Malone's tryouts verdict ("Roster's up. You're on it.") should NOT appear the moment you pick a tryouts choice — it lands in Messages the *next* day.
 
 ## Session B — A school week (either save, or the real save)
 

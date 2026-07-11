@@ -132,7 +132,23 @@ public static class GrittyEventJson
             ? contactElement.GetString() ?? UnknownContactId
             : UnknownContactId;
 
-        return new GrittyEventDefinition(id, scope, weight, cooldownDays, prompt, contactId, prerequisites, choices);
+        // Phone-split spec §1: an optional fire-time companion text. Present
+        // means non-empty — a malformed/blank string is a loud content error,
+        // never a silent no-text (the closed-vocabulary discipline every
+        // other optional field here follows).
+        string? textMessage = null;
+        if (element.TryGetProperty("text_message", out JsonElement textMessageElement))
+        {
+            if (textMessageElement.ValueKind != JsonValueKind.String
+                || string.IsNullOrEmpty(textMessageElement.GetString()))
+            {
+                throw new FormatException($"Event '{id}': 'text_message' must be a non-empty string.");
+            }
+            textMessage = textMessageElement.GetString();
+        }
+
+        return new GrittyEventDefinition(
+            id, scope, weight, cooldownDays, prompt, contactId, prerequisites, choices, textMessage);
     }
 
     /// <summary>Player-facing fallback for content that omits "prompt"/"label": snake_case id → Title Case words.</summary>
@@ -239,7 +255,68 @@ public static class GrittyEventJson
             ? labelElement.GetString() ?? Humanize(choiceId)
             : Humanize(choiceId);
 
-        return new EventChoice(choiceId, autopilotWeight, label, consequences);
+        // Amendment §2: the immediate narrative payoff. Present means
+        // non-empty; absent is the documented "You: <Label>" UI fallback,
+        // never a loader concern.
+        string? outcome = null;
+        if (element.TryGetProperty("outcome", out JsonElement outcomeElement))
+        {
+            if (outcomeElement.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(outcomeElement.GetString()))
+            {
+                throw new FormatException($"Event '{eventId}' choice '{choiceId}': 'outcome' must be a non-empty string.");
+            }
+            outcome = outcomeElement.GetString();
+        }
+
+        // Amendment §1: choice-level "text_message" is either a plain string
+        // (delay 0) or { "body": ..., "delay_days": N >= 0 } — two accepted
+        // shapes, both closed-vocabulary and both loudly rejected otherwise.
+        string? textMessageBody = null;
+        int textMessageDelayDays = 0;
+        if (element.TryGetProperty("text_message", out JsonElement choiceTextElement))
+        {
+            if (choiceTextElement.ValueKind == JsonValueKind.String)
+            {
+                if (string.IsNullOrEmpty(choiceTextElement.GetString()))
+                {
+                    throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': 'text_message' must be a non-empty string.");
+                }
+                textMessageBody = choiceTextElement.GetString();
+            }
+            else if (choiceTextElement.ValueKind == JsonValueKind.Object)
+            {
+                textMessageBody = RequireString(choiceTextElement, "body", eventId);
+                if (string.IsNullOrEmpty(textMessageBody))
+                {
+                    throw new FormatException(
+                        $"Event '{eventId}' choice '{choiceId}': 'text_message.body' must be a non-empty string.");
+                }
+                if (choiceTextElement.TryGetProperty("delay_days", out JsonElement delayElement))
+                {
+                    if (delayElement.ValueKind != JsonValueKind.Number)
+                    {
+                        throw new FormatException(
+                            $"Event '{eventId}' choice '{choiceId}': 'text_message.delay_days' must be a number.");
+                    }
+                    double delayRaw = delayElement.GetDouble();
+                    if (delayRaw < 0 || delayRaw != Math.Floor(delayRaw))
+                    {
+                        throw new FormatException(
+                            $"Event '{eventId}' choice '{choiceId}': 'text_message.delay_days' must be a whole number ≥ 0 (got {delayRaw}).");
+                    }
+                    textMessageDelayDays = (int)delayRaw;
+                }
+            }
+            else
+            {
+                throw new FormatException(
+                    $"Event '{eventId}' choice '{choiceId}': 'text_message' must be a string or an object with 'body'.");
+            }
+        }
+
+        return new EventChoice(
+            choiceId, autopilotWeight, label, consequences, outcome, textMessageBody, textMessageDelayDays);
     }
 
     private static EventConsequence ParseConsequence(

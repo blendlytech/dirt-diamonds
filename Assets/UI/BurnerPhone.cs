@@ -13,20 +13,23 @@ using Godot;
 namespace DirtAndDiamonds.UI;
 
 /// <summary>
-/// Phase 10b: the right panel of the two-panel shell. The Messages tab is the
-/// Burner Phone's threaded read-model over the narrative-log write
-/// (presentation_layer_narrative.md §4) — a contact list (most-recent-first,
-/// unread marker) and the selected contact's thread. When a gritty-event
-/// choice is pending for the avatar, the phone auto-opens that contact's
-/// thread, renders the prompt as one more (unanswered) incoming bubble, and
-/// renders the choices as reply-chip buttons — <see cref="EventChoiceScreen"/>'s
-/// exact <c>TryGetPendingChoice</c>/<c>ResolveChoice</c> seam and dirty-flag
-/// identity check, reskinned into the thread rather than a separate modal
-/// (EventChoiceScreen retires in this same phase). UI never touches the
+/// Phase 10b, split into Events/Messages tabs in the phone-split slice
+/// (docs/progress.md's two 2026-07-10 "Events vs Messages" entries): the
+/// right panel of the two-panel shell. The Events tab is a single
+/// chronological feed over the narrative-log's Event-kind rows — scene-prose
+/// cards (day/season, contact, prompt, resolution line), with the avatar's
+/// pending gritty-event choice rendered as the last (unanswered) card plus
+/// reply-chip buttons underneath (<see cref="EventConsequenceApplier.TryGetPendingChoice"/>
+/// /<see cref="EventConsequenceApplier.ResolveChoice"/>). The Messages tab is
+/// the companion-text read-model — a contact list (most-recent-first, unread
+/// marker) and the selected contact's thread of real texts (Text-kind rows
+/// only), never carrying event prose or the choice UI (§4.3: narrative never
+/// gates either tab — no minute cost, no tier lock). UI never touches the
 /// database directly: history comes from <see cref="GameManager.NarrativeLog"/>'s
-/// read-back, reloaded only on a pending-fire transition (never per-frame),
-/// matching BaseballDashboard's dirty-flag discipline. Node paths verified
-/// against BurnerPhone.tscn (authored alongside this script) via
+/// read-back, reloaded on a pending-fire transition OR a day change (never
+/// per-frame — a day change alone can deliver a previously-invisible delayed
+/// text), matching BaseballDashboard's dirty-flag discipline. Node paths
+/// verified against BurnerPhone.tscn (authored alongside this script) via
 /// godot_scene_mapper before wiring.
 /// </summary>
 public sealed partial class BurnerPhone : PanelContainer
@@ -63,6 +66,30 @@ public sealed partial class BurnerPhone : PanelContainer
 
     [Export]
     public string NoContactSelectedText { get; set; } = "Select a contact";
+
+    /// <summary>The Events feed's fallback resolution line when a choice ships no authored "outcome" — every pre-split event degrades to this.</summary>
+    [Export]
+    public string OutcomeFallbackFormat { get; set; } = "You: {0}";
+
+    /// <summary>
+    /// Closes the disclosed seam: the Events feed used to rebuild a Control
+    /// card for every Event-kind row ever logged, every reload (day-change
+    /// cadence) — harmless at playtest scale but unbounded node churn across
+    /// a long career. <see cref="ReloadMessages"/> now trims <c>_eventRows</c>
+    /// to the most recent <see cref="MaxEventCards"/> before
+    /// <see cref="RenderEventsFeed"/> ever sees it; the DB history itself is
+    /// untouched, only the rendered feed is bounded.
+    /// </summary>
+    [Export]
+    public int MaxEventCards { get; set; } = 200;
+
+    /// <summary>History tab: Event-kind rows fetched per "Load Older" click (or the tab's first visit), paging strictly backward from the newest logged event via <see cref="NarrativeLogQueries.LoadEventPageBefore"/>.</summary>
+    [Export]
+    public int HistoryPageSize { get; set; } = 50;
+
+    /// <summary>Shown in place of the "Load Older" button once paging has reached this player's very first logged event.</summary>
+    [Export]
+    public string HistoryBeginningText { get; set; } = "— beginning of your story —";
 
     [Export]
     public string FundsFormat { get; set; } = "${0:N0}";
@@ -179,11 +206,30 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string CommitmentValueFormat { get; set; } = "${0}";
 
+    private ScrollContainer _eventsScroll = null!;
+    private VBoxContainer _eventsContainer = null!;
+    private VBoxContainer _choicesContainer = null!;
+
+    private Button _loadOlderButton = null!;
+    private Label _historyStatusLabel = null!;
+    private ScrollContainer _historyScroll = null!;
+    private VBoxContainer _historyContainer = null!;
+    private int _historyTabIndex = -1;
+
+    // History tab paging state. The tab is a read-only archive (§ design:
+    // "History" follow-up to the disclosed feed-cap seam) — it never
+    // dirty-flag-refreshes per day like the live Events tab; it only changes
+    // on an explicit "Load Older" click (or the tab's first visit). The
+    // cursor starts at long.MaxValue (page backward from the newest logged
+    // event) and walks toward this player's oldest row one click at a time.
+    private long _historyCursor = long.MaxValue;
+    private bool _historyReachedBeginning;
+    private readonly List<NarrativeMessageRow> _historyPageScratch = new();
+
     private ItemList _contactList = null!;
     private PortraitView _threadPortrait = null!;
     private Label _threadHeaderLabel = null!;
     private VBoxContainer _threadContainer = null!;
-    private VBoxContainer _choicesContainer = null!;
 
     private Label _fundsValueLabel = null!;
     private Label _costOfLivingLabel = null!;
@@ -223,18 +269,35 @@ public sealed partial class BurnerPhone : PanelContainer
     private readonly HashSet<string> _ownedItemIds = new(StringComparer.Ordinal);
     private readonly List<PlayerItemRow> _ownedItemsScratch = new();
 
+    // Messages tab: Text-kind rows only, grouped by contact.
     private readonly Dictionary<string, List<NarrativeMessageRow>> _messagesByContact = new();
     private readonly Dictionary<string, int> _lastSeenCount = new();
     private readonly List<string> _orderedContactIds = new();
+
+    // Events tab: Event-kind rows only, one flat chronological feed (the
+    // read query already orders oldest-first across every contact).
+    private readonly List<NarrativeMessageRow> _eventRows = new();
+
     private readonly List<NarrativeMessageRow> _loadScratch = new();
 
     private string? _activeContactId;
-    private string? _shownFireIdentity;
+
+    // Dirty-flag identity for the Events/Messages reload: the pending fire's
+    // components plus the current day, compared raw (ui_conventions.md: no
+    // per-frame string formatting in _Process). The day is part of the
+    // identity so a delayed companion text that just crossed its delivery
+    // day gets picked up on the very day it becomes visible, even with no
+    // pending choice in play.
+    private bool _shownHasPending;
+    private string? _shownEventId;
+    private string? _shownSubjectId;
+    private long _shownFireDay = -1;
+    private long _shownDay = -1;
     private bool _initialized;
 
     // Dirty-flag identity for the Bank tab's polled labels/meters
     // (ui_conventions.md: no per-frame string formatting) — independent of
-    // the Messages tab's _shownFireIdentity above.
+    // the Events/Messages tabs' identity components above.
     private bool _bankInitialized;
     private double _shownFunds = double.NaN;
     private long _shownDaysUntilBill = -1;
@@ -270,11 +333,22 @@ public sealed partial class BurnerPhone : PanelContainer
 
     public override void _Ready()
     {
+        _eventsScroll = GetNode<ScrollContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll");
+        _eventsContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll/EventsContainer");
+        _choicesContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/ChoicesContainer");
+
+        Control historyTab = GetNode<Control>("Screen/ScreenLayout/PhoneTabs/History");
+        _historyTabIndex = historyTab.GetIndex();
+        _loadOlderButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/LoadOlderButton");
+        _historyStatusLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryStatusLabel");
+        _historyScroll = GetNode<ScrollContainer>("Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryScroll");
+        _historyContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryScroll/HistoryContainer");
+        _loadOlderButton.Pressed += OnLoadOlderPressed;
+
         _contactList = GetNode<ItemList>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ContactList");
         _threadPortrait = GetNode<PortraitView>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadPortrait");
         _threadHeaderLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadHeaderLabel");
         _threadContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll/ThreadContainer");
-        _choicesContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ChoicesContainer");
         _contactList.ItemSelected += OnContactSelected;
         _threadHeaderLabel.Text = NoContactSelectedText;
 
@@ -327,6 +401,7 @@ public sealed partial class BurnerPhone : PanelContainer
     public override void _ExitTree()
     {
         _contactList.ItemSelected -= OnContactSelected;
+        _loadOlderButton.Pressed -= OnLoadOlderPressed;
         _narcoticsButton.Pressed -= OnNarcoticsPressed;
         _fencingButton.Pressed -= OnFencingPressed;
         _pokerButton.Pressed -= OnPokerPressed;
@@ -391,36 +466,31 @@ public sealed partial class BurnerPhone : PanelContainer
         RefreshFamilyTab(gm);
 
         bool hasPending = gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending);
-        string? identity = hasPending
-            ? $"{pending.Fired.EventId}|{pending.Fired.SubjectPlayerId}|{pending.Fired.Day}"
-            : null;
-
-        if (_initialized && identity == _shownFireIdentity)
+        bool unchanged = _initialized
+            && gm.State.CurrentDay == _shownDay
+            && hasPending == _shownHasPending
+            && (!hasPending
+                || (pending.Fired.EventId == _shownEventId
+                    && pending.Fired.SubjectPlayerId == _shownSubjectId
+                    && pending.Fired.Day == _shownFireDay));
+        if (unchanged)
         {
             return;
         }
         _initialized = true;
-        _shownFireIdentity = identity;
+        _shownDay = gm.State.CurrentDay;
+        _shownHasPending = hasPending;
+        _shownEventId = hasPending ? pending.Fired.EventId : null;
+        _shownSubjectId = hasPending ? pending.Fired.SubjectPlayerId : null;
+        _shownFireDay = hasPending ? pending.Fired.Day : -1;
 
         ReloadMessages(gm);
-        string? pendingContactId = hasPending ? pending.Definition.ContactId : null;
+        RenderEventsFeed(gm, hasPending ? pending : null);
 
-        // Mark-read before the relabel below, so a freshly auto-opened
-        // pending thread's unread dot clears in the same pass instead of
-        // lingering until the next transition.
-        if (hasPending)
+        RefreshContactList(gm);
+        if (_activeContactId is not null)
         {
-            MarkRead(pendingContactId!, pendingContactId);
-        }
-        RefreshContactList(gm, pendingContactId);
-
-        if (hasPending)
-        {
-            RenderThread(gm, pendingContactId!, pending);
-        }
-        else if (_activeContactId is not null)
-        {
-            RenderThread(gm, _activeContactId, null);
+            RenderThread(gm, _activeContactId);
         }
     }
 
@@ -432,22 +502,27 @@ public sealed partial class BurnerPhone : PanelContainer
         }
         GameManager gm = GameManager.Instance!;
         string contactId = _orderedContactIds[(int)index];
-        bool hasPending = gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending);
-        string? pendingContactId = hasPending ? pending.Definition.ContactId : null;
 
-        MarkRead(contactId, pendingContactId);
-        RenderThread(gm, contactId, hasPending ? pending : null);
+        MarkRead(contactId);
+        RenderThread(gm, contactId);
         // Clearing the unread marker on the item just opened needs the list
         // relabeled; cheap at this scale (a handful of contacts).
-        RefreshContactList(gm, pendingContactId);
+        RefreshContactList(gm);
     }
 
+    /// <summary>Splits the read-back into the Events feed (Event-kind, one flat chronological list) and the Messages tab's per-contact Text-kind threads.</summary>
     private void ReloadMessages(GameManager gm)
     {
-        gm.NarrativeLog.LoadForPlayer(gm.Career.AvatarPlayerId, _loadScratch);
+        gm.NarrativeLog.LoadForPlayer(gm.Career.AvatarPlayerId, gm.State.CurrentDay, _loadScratch);
+        _eventRows.Clear();
         _messagesByContact.Clear();
         foreach (NarrativeMessageRow row in _loadScratch)
         {
+            if (row.Kind == NarrativeMessageKind.Event)
+            {
+                _eventRows.Add(row);
+                continue;
+            }
             if (!_messagesByContact.TryGetValue(row.ContactId, out List<NarrativeMessageRow>? thread))
             {
                 thread = new List<NarrativeMessageRow>();
@@ -455,26 +530,18 @@ public sealed partial class BurnerPhone : PanelContainer
             }
             thread.Add(row);
         }
+        if (_eventRows.Count > MaxEventCards)
+        {
+            _eventRows.RemoveRange(0, _eventRows.Count - MaxEventCards);
+        }
     }
 
-    private void RefreshContactList(GameManager gm, string? pendingContactId)
+    /// <summary>The Messages tab's contact list: most-recent-text-first, unread marker. Pending-choice sort-to-top no longer applies here — that lives on the Events tab now.</summary>
+    private void RefreshContactList(GameManager gm)
     {
         _orderedContactIds.Clear();
         _orderedContactIds.AddRange(_messagesByContact.Keys);
-        if (pendingContactId is not null && !_messagesByContact.ContainsKey(pendingContactId))
-        {
-            _orderedContactIds.Add(pendingContactId);
-        }
-        _orderedContactIds.Sort((a, b) =>
-        {
-            bool aPending = a == pendingContactId;
-            bool bPending = b == pendingContactId;
-            if (aPending != bPending)
-            {
-                return aPending ? -1 : 1;
-            }
-            return LastDayFor(b).CompareTo(LastDayFor(a));
-        });
+        _orderedContactIds.Sort((a, b) => LastDayFor(b).CompareTo(LastDayFor(a)));
 
         int selectedIndex = -1;
         _contactList.Clear();
@@ -482,7 +549,7 @@ public sealed partial class BurnerPhone : PanelContainer
         {
             string contactId = _orderedContactIds[i];
             ContactDefinition contact = gm.Contacts.Resolve(contactId);
-            bool unread = EffectiveCount(contactId, pendingContactId) > _lastSeenCount.GetValueOrDefault(contactId);
+            bool unread = MessageCount(contactId) > _lastSeenCount.GetValueOrDefault(contactId);
             _contactList.AddItem(unread ? UnreadMarker + contact.DisplayName : contact.DisplayName);
             if (contactId == _activeContactId)
             {
@@ -495,14 +562,16 @@ public sealed partial class BurnerPhone : PanelContainer
         }
     }
 
-    private void RenderThread(GameManager gm, string contactId, PendingGrittyChoice? pending)
+    /// <summary>
+    /// The Events tab: every past Event row as a resolved card, oldest first,
+    /// then — when the avatar has a pending choice — one more unresolved card
+    /// with the reply-chip buttons underneath (relocated from the old
+    /// Messages thread panel; §4.3 never-gates invariant unchanged, this tab
+    /// carries no minute cost or tier lock, same as Messages).
+    /// </summary>
+    private void RenderEventsFeed(GameManager gm, PendingGrittyChoice? pending)
     {
-        _activeContactId = contactId;
-        ContactDefinition contact = gm.Contacts.Resolve(contactId);
-        _threadHeaderLabel.Text = contact.DisplayName;
-        _threadPortrait.SetIdentity(contact.PortraitKey, contact.DisplayName);
-
-        foreach (Node child in _threadContainer.GetChildren())
+        foreach (Node child in _eventsContainer.GetChildren())
         {
             child.QueueFree();
         }
@@ -511,19 +580,20 @@ public sealed partial class BurnerPhone : PanelContainer
             child.QueueFree();
         }
 
-        if (_messagesByContact.TryGetValue(contactId, out List<NarrativeMessageRow>? thread))
+        foreach (NarrativeMessageRow row in _eventRows)
         {
-            foreach (NarrativeMessageRow row in thread)
-            {
-                int dayOfSeason = GlobalState.DayOfSeasonForDay(row.GameDay);
-                AddBubble(row.Prompt, incoming: true, string.Format(TimestampFormat, row.SeasonYear, dayOfSeason));
-                AddBubble(row.Choice, incoming: false, null);
-            }
+            string resolutionLine = string.IsNullOrEmpty(row.Outcome)
+                ? string.Format(OutcomeFallbackFormat, row.Choice)
+                : row.Outcome;
+            _eventsContainer.AddChild(BuildEventCard(gm, row.ContactId, row.Prompt, resolutionLine, row.GameDay, row.SeasonYear));
         }
 
-        if (pending is { } liveFire && liveFire.Definition.ContactId == contactId)
+        if (pending is { } liveFire)
         {
-            AddBubble(liveFire.Definition.Prompt, incoming: true, null);
+            GrittyEventFiredEvent fired = liveFire.Fired;
+            _eventsContainer.AddChild(BuildEventCard(gm, liveFire.Definition.ContactId, liveFire.Definition.Prompt, null,
+                fired.Day, gm.State.SeasonYearForDay(fired.Day)));
+
             EventChoice[] eventChoices = liveFire.Definition.Choices;
             for (int i = 0; i < eventChoices.Length; i++)
             {
@@ -535,6 +605,166 @@ public sealed partial class BurnerPhone : PanelContainer
                 };
                 button.Pressed += () => GameManager.Instance!.GrittyEventChoices.ResolveChoice(choiceIndex);
                 _choicesContainer.AddChild(button);
+            }
+        }
+
+        ScrollEventsToNewest();
+    }
+
+    /// <summary>
+    /// Snaps the Events feed to its newest card (the pending choice, when one
+    /// is live) after a re-render. The final scroll range only exists once
+    /// the QueueFree'd old cards are gone and the container has re-sorted —
+    /// both land over the next frames — so the snap waits two process frames
+    /// before reading it.
+    /// </summary>
+    private async void ScrollEventsToNewest()
+    {
+        SceneTree tree = GetTree();
+        await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        if (!IsInstanceValid(this) || !IsInsideTree())
+        {
+            return;
+        }
+        _eventsScroll.ScrollVertical = (int)_eventsScroll.GetVScrollBar().MaxValue;
+    }
+
+    /// <summary>One Events/History-feed card: contact + day/season caption, the scene prompt, and (when resolved) the resolution line. <paramref name="resolutionLine"/> is null for the live unresolved card. Returns the built card unparented — callers add it to whichever container owns it.</summary>
+    private PanelContainer BuildEventCard(GameManager gm, string contactId, string prompt, string? resolutionLine, long gameDay, int seasonYear)
+    {
+        ContactDefinition contact = gm.Contacts.Resolve(contactId);
+        int dayOfSeason = GlobalState.DayOfSeasonForDay(gameDay);
+
+        var layout = new VBoxContainer();
+        layout.AddThemeConstantOverride("separation", 4);
+
+        var metaRow = new HBoxContainer();
+        metaRow.AddChild(new Label
+        {
+            Text = contact.DisplayName,
+            ThemeTypeVariation = "HeadingLabel",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        });
+        metaRow.AddChild(new Label
+        {
+            Text = string.Format(TimestampFormat, seasonYear, dayOfSeason),
+            ThemeTypeVariation = "CaptionLabel",
+        });
+        layout.AddChild(metaRow);
+
+        layout.AddChild(new Label { Text = prompt, AutowrapMode = TextServer.AutowrapMode.WordSmart });
+
+        if (!string.IsNullOrEmpty(resolutionLine))
+        {
+            layout.AddChild(new Label
+            {
+                Text = resolutionLine,
+                ThemeTypeVariation = "CaptionLabel",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            });
+        }
+
+        var card = new PanelContainer { ThemeTypeVariation = "Card" };
+        card.AddChild(layout);
+        return card;
+    }
+
+    /// <summary>
+    /// The History tab: a read-only archive over Event-kind rows the live
+    /// Events feed no longer keeps once they age past <see cref="MaxEventCards"/>.
+    /// Unlike the Events/Messages tabs it never dirty-flag-refreshes in
+    /// <see cref="_Process"/> — it only grows when the player presses "Load
+    /// Older" (or on the tab's first visit, via <see cref="OnPhoneTabChanged"/>),
+    /// each click paging one <see cref="HistoryPageSize"/> batch further back
+    /// via <see cref="NarrativeLogQueries.LoadEventPageBefore"/> and prepending
+    /// it above whatever was already loaded.
+    /// </summary>
+    private void LoadOlderHistory(GameManager gm)
+    {
+        if (_historyReachedBeginning)
+        {
+            return;
+        }
+
+        gm.NarrativeLog.LoadEventPageBefore(
+            gm.Career.AvatarPlayerId, gm.State.CurrentDay, _historyCursor, HistoryPageSize,
+            _historyPageScratch, out bool reachedBeginning);
+        _historyReachedBeginning = reachedBeginning;
+
+        if (_historyPageScratch.Count > 0)
+        {
+            _historyCursor = _historyPageScratch[0].LogId; // oldest-first within the page; the next call continues strictly before this
+            int insertIndex = 0;
+            foreach (NarrativeMessageRow row in _historyPageScratch)
+            {
+                string resolutionLine = string.IsNullOrEmpty(row.Outcome)
+                    ? string.Format(OutcomeFallbackFormat, row.Choice)
+                    : row.Outcome;
+                Control card = BuildEventCard(gm, row.ContactId, row.Prompt, resolutionLine, row.GameDay, row.SeasonYear);
+                _historyContainer.AddChild(card);
+                _historyContainer.MoveChild(card, insertIndex);
+                insertIndex++;
+            }
+        }
+
+        _loadOlderButton.Visible = !_historyReachedBeginning;
+        _historyStatusLabel.Visible = _historyReachedBeginning;
+        if (_historyReachedBeginning)
+        {
+            _historyStatusLabel.Text = HistoryBeginningText;
+        }
+        ScrollHistoryToTop();
+    }
+
+    private void OnLoadOlderPressed()
+    {
+        GameManager gm = GameManager.Instance!;
+        if (!gm.Career.HasAvatar)
+        {
+            return;
+        }
+        LoadOlderHistory(gm);
+    }
+
+    /// <summary>
+    /// Snaps to the top of the scroll view after a "Load Older" prepend —
+    /// since new content always lands above whatever was already loaded,
+    /// scrolling to 0 always lands exactly on the top of the just-inserted
+    /// page. Same two-frame wait as <see cref="ScrollEventsToNewest"/> (the
+    /// new range only exists once the container has re-laid-out).
+    /// </summary>
+    private async void ScrollHistoryToTop()
+    {
+        SceneTree tree = GetTree();
+        await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        if (!IsInstanceValid(this) || !IsInsideTree())
+        {
+            return;
+        }
+        _historyScroll.ScrollVertical = 0;
+    }
+
+    /// <summary>The Messages tab's selected thread: Text-kind rows only, one incoming bubble per companion text (no player-reply bubble — a text has no in-place answer, unlike the old embedded event choices).</summary>
+    private void RenderThread(GameManager gm, string contactId)
+    {
+        _activeContactId = contactId;
+        ContactDefinition contact = gm.Contacts.Resolve(contactId);
+        _threadHeaderLabel.Text = contact.DisplayName;
+        _threadPortrait.SetIdentity(contact.PortraitKey, contact.DisplayName);
+
+        foreach (Node child in _threadContainer.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        if (_messagesByContact.TryGetValue(contactId, out List<NarrativeMessageRow>? thread))
+        {
+            foreach (NarrativeMessageRow row in thread)
+            {
+                int dayOfSeason = GlobalState.DayOfSeasonForDay(row.GameDay);
+                AddBubble(row.Body, incoming: true, string.Format(TimestampFormat, row.SeasonYear, dayOfSeason));
             }
         }
     }
@@ -580,14 +810,10 @@ public sealed partial class BurnerPhone : PanelContainer
             ? thread[^1].GameDay
             : long.MinValue;
 
-    private int EffectiveCount(string contactId, string? pendingContactId)
-    {
-        int count = _messagesByContact.TryGetValue(contactId, out List<NarrativeMessageRow>? thread) ? thread.Count : 0;
-        return contactId == pendingContactId ? count + 1 : count;
-    }
+    private int MessageCount(string contactId) =>
+        _messagesByContact.TryGetValue(contactId, out List<NarrativeMessageRow>? thread) ? thread.Count : 0;
 
-    private void MarkRead(string contactId, string? pendingContactId) =>
-        _lastSeenCount[contactId] = EffectiveCount(contactId, pendingContactId);
+    private void MarkRead(string contactId) => _lastSeenCount[contactId] = MessageCount(contactId);
 
     private void RefreshBankTab(GameManager gm)
     {
@@ -767,16 +993,28 @@ public sealed partial class BurnerPhone : PanelContainer
     /// spend itself applies every bypass (no row / Unlimited / Wi-Fi), so
     /// this only invalidates the snapshot when something could have been
     /// written. The Messages tab is deliberately absent here — §4.3: reading
-    /// and answering event threads never costs a minute.
+    /// and answering event threads never costs a minute. The History tab is
+    /// likewise free (§4.3 posture) — its own branch below just triggers the
+    /// first "Load Older" page on the tab's first visit, same no-minute-cost
+    /// footing as Events/Messages.
     /// </summary>
     private void OnPhoneTabChanged(long tabIndex)
     {
+        if ((int)tabIndex == _historyTabIndex)
+        {
+            GameManager gm = GameManager.Instance!;
+            if (gm.Career.HasAvatar && _historyContainer.GetChildCount() == 0)
+            {
+                LoadOlderHistory(gm);
+            }
+            return;
+        }
         if ((int)tabIndex != _marketplaceTabIndex || !_hasPhoneRow)
         {
             return;
         }
-        GameManager gm = GameManager.Instance!;
-        if (!gm.Career.HasAvatar)
+        GameManager marketplaceGm = GameManager.Instance!;
+        if (!marketplaceGm.Career.HasAvatar)
         {
             return;
         }
@@ -784,8 +1022,8 @@ public sealed partial class BurnerPhone : PanelContainer
         {
             return; // free browse, nothing written
         }
-        gm.Phone.TrySpendMinutes(
-            gm.Career.AvatarPlayerId, PhoneService.MarketplaceBrowseMinuteCost, onWifi: false, out _);
+        marketplaceGm.Phone.TrySpendMinutes(
+            marketplaceGm.Career.AvatarPlayerId, PhoneService.MarketplaceBrowseMinuteCost, onWifi: false, out _);
         _phoneLoadedDay = long.MinValue; // re-snapshot next frame
     }
 

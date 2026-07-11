@@ -286,9 +286,36 @@ public sealed class EventConsequenceApplier
             // actually happened, including choices the player never saw.
             // fired.Day (not "now") computes the season year: a forfeited
             // fire carries its ORIGINAL day, which can lag the live calendar.
+            EventChoice pickedChoice = definition.Choices[choiceIndex];
             _narrativeLog.Insert(
                 _state.SeasonYearForDay(fired.Day), fired.Day, fired.SubjectPlayerId,
-                definition.ContactId, definition.Prompt, definition.Choices[choiceIndex].Label, choiceIndex);
+                definition.ContactId, definition.Prompt, pickedChoice.Label, choiceIndex, pickedChoice.Outcome);
+
+            // Phone-split spec §1: the event's own fire-time companion text
+            // (Mom's "Knock 'em dead today, kiddo.") lands with the FIRE day
+            // regardless of which choice resolved it — same forfeit precedent
+            // as the event row above.
+            if (definition.TextMessage is not null)
+            {
+                _narrativeLog.InsertText(
+                    _state.SeasonYearForDay(fired.Day), fired.Day, fired.SubjectPlayerId,
+                    definition.ContactId, definition.TextMessage);
+            }
+
+            // Amendment §3: the choice's delayed REACTION text, dated
+            // resolution day + delay_days — "resolution day" is "today" as of
+            // THIS batch (GlobalState.CurrentDay), the day consequences
+            // actually land. For an immediate autopilot resolution that's the
+            // same as fired.Day; for a pending choice the player answers
+            // later, or a forfeit triggered by a later fire, it's the later
+            // day — "texts follow the decision," not the original fire.
+            if (pickedChoice.TextMessageBody is not null)
+            {
+                long deliveryDay = _state.CurrentDay + pickedChoice.TextMessageDelayDays;
+                _narrativeLog.InsertText(
+                    _state.SeasonYearForDay(deliveryDay), deliveryDay, fired.SubjectPlayerId,
+                    definition.ContactId, pickedChoice.TextMessageBody);
+            }
         });
 
         // In-memory / bus-routed consequences follow the committed batch, so a

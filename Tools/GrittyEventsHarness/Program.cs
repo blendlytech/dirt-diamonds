@@ -11,6 +11,7 @@ using DirtAndDiamonds.Narrative.Social;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.Simulation.Hustles;
 using DirtAndDiamonds.Simulation.Life;
+using Microsoft.Data.Sqlite;
 
 namespace DirtAndDiamonds.Tools.GrittyEventsHarness;
 
@@ -144,6 +145,50 @@ internal static class Program
                 """{ "events": [ { "id": "dup", "scope": "any", "weight": 0.1, "choices": [ { "id": "a" } ] } ] }""",
                 """{ "events": [ { "id": "dup", "scope": "any", "weight": 0.2, "choices": [ { "id": "b" } ] } ] }""",
             })));
+
+        // Phone-split spec §1 / amendment §1-2: event-level text_message,
+        // choice-level outcome, and choice-level text_message (both the
+        // plain-string and the { body, delay_days } shapes) round-trip onto
+        // the definitions — and every one of the four is loud on malformed
+        // input, the same closed-vocabulary discipline as every other
+        // optional field this loader accepts.
+        {
+            GrittyEventLibrary full = GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "x", "scope": "any", "weight": 0.5, "text_message": "Knock 'em dead.",
+                  "choices": [
+                    { "id": "a", "outcome": "You empty the tank.", "text_message": "Roster's up." },
+                    { "id": "b", "outcome": "You hang back.", "text_message": { "body": "Nice hustle.", "delay_days": 3 } },
+                    { "id": "c" }
+                  ] } ] }
+                """);
+            full.TryGetById("x", out GrittyEventDefinition def);
+            Check("event-level text_message and choice-level outcome/text_message (string shape) round-trip",
+                def.TextMessage == "Knock 'em dead."
+                && def.Choices[0].Outcome == "You empty the tank."
+                && def.Choices[0].TextMessageBody == "Roster's up." && def.Choices[0].TextMessageDelayDays == 0);
+            Check("choice-level text_message (object shape) round-trips body + delay_days",
+                def.Choices[1].TextMessageBody == "Nice hustle." && def.Choices[1].TextMessageDelayDays == 3);
+            Check("a choice that omits outcome/text_message parses with both null",
+                def.Choices[2].Outcome is null && def.Choices[2].TextMessageBody is null
+                && def.Choices[2].TextMessageDelayDays == 0);
+        }
+        Check("loader rejects an empty event-level text_message", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "text_message": "", "choices": [ { "id": "a" } ] } ] }"""));
+        Check("loader rejects a non-string event-level text_message", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "text_message": 5, "choices": [ { "id": "a" } ] } ] }"""));
+        Check("loader rejects an empty choice-level outcome", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "outcome": "" } ] } ] }"""));
+        Check("loader rejects an empty choice-level text_message string", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "text_message": "" } ] } ] }"""));
+        Check("loader rejects a choice-level text_message object missing 'body'", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "text_message": { "delay_days": 1 } } ] } ] }"""));
+        Check("loader rejects a negative choice-level delay_days", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "text_message": { "body": "x", "delay_days": -1 } } ] } ] }"""));
+        Check("loader rejects a fractional choice-level delay_days", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "text_message": { "body": "x", "delay_days": 1.5 } } ] } ] }"""));
+        Check("loader rejects a choice-level text_message that is neither a string nor an object", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "choices": [ { "id": "a", "text_message": 5 } ] } ] }"""));
 
         // check_event_graph_integrity §1: "Load the whole Content folder
         // together — cross-batch duplicate ids fail here." Until now this
@@ -322,10 +367,11 @@ internal static class Program
             world.Bus.DispatchPending();
 
             var rows = new List<NarrativeMessageRow>();
-            world.NarrativeLog.LoadForPlayer("p1", rows);
+            world.NarrativeLog.LoadForPlayer("p1", world.State.CurrentDay, rows);
             Check("resolved fire logs exactly one narrative_msg row with contact/prompt/choice/day/season",
                 rows.Count == 1 && rows[0].ContactId == "coach_reyes" && rows[0].Choice == "Take it in stride"
-                && rows[0].ChoiceIndex == 0 && rows[0].GameDay == 2 && rows[0].SeasonYear == 2026,
+                && rows[0].ChoiceIndex == 0 && rows[0].GameDay == 2 && rows[0].SeasonYear == 2026
+                && rows[0].Kind == NarrativeMessageKind.Event && rows[0].Outcome == "",
                 rows.Count == 1 ? $"contact={rows[0].ContactId} choice={rows[0].Choice} day={rows[0].GameDay} season={rows[0].SeasonYear}" : $"{rows.Count} rows");
         }
 
@@ -341,7 +387,7 @@ internal static class Program
             world.Bus.DispatchPending();
 
             var rows = new List<NarrativeMessageRow>();
-            world.NarrativeLog.LoadForPlayer("p1", rows);
+            world.NarrativeLog.LoadForPlayer("p1", world.State.CurrentDay, rows);
             Check("an untagged event's logged message defaults to the 'unknown' contact",
                 rows.Count == 1 && rows[0].ContactId == "unknown");
         }
@@ -377,7 +423,7 @@ internal static class Program
             world.Bus.DispatchPending();
 
             var rows = new List<NarrativeMessageRow>();
-            world.NarrativeLog.LoadForPlayer("hero", rows);
+            world.NarrativeLog.LoadForPlayer("hero", world.State.CurrentDay, rows);
             Check("a forfeited pending choice logs with its ORIGINAL fire day, not the bump day",
                 rows.Count == 1 && rows[0].ContactId == "agent_diaz" && rows[0].GameDay == 2,
                 rows.Count == 1 ? $"contact={rows[0].ContactId} day={rows[0].GameDay}" : $"{rows.Count} rows");
@@ -385,10 +431,156 @@ internal static class Program
             // The player answers choiceB — a second row lands, ordered after.
             world.Applier.ResolveChoice(0);
             world.Bus.DispatchPending();
-            world.NarrativeLog.LoadForPlayer("hero", rows);
+            world.NarrativeLog.LoadForPlayer("hero", world.State.CurrentDay, rows);
             Check("resolving the still-open choice appends a second row, oldest first",
                 rows.Count == 2 && rows[0].ContactId == "agent_diaz" && rows[1].ContactId == "girlfriend_jess"
                 && rows[1].GameDay == 3);
+        }
+
+        // Phone-split spec §1/§2: an event-level text_message writes a SECOND
+        // Text-kind row at the fire day, alongside the Event row — and an
+        // event that omits it still logs exactly one row. withoutText is
+        // gated behind withText's own one-shot flag so each gets its own day
+        // — the dispatcher's one-fire-per-subject-per-day rule means two
+        // ungated weight-1.0 "any" events can't both fire on the same day.
+        {
+            using World world = World.Create("narrativeLogEventText", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "withText", "scope": "any", "weight": 1.0, "contact": "family_mom", "text_message": "Knock 'em dead.",
+                    "prerequisites": [ { "flag_inactive": "text_done" } ],
+                    "choices": [ { "id": "only", "label": "Do it", "outcome": "You do it.",
+                      "consequences": [ { "type": "set_flag", "flag": "text_done" } ] } ] },
+                  { "id": "withoutText", "scope": "any", "weight": 1.0, "contact": "coach_reyes",
+                    "prerequisites": [ { "flag_active": "text_done" } ],
+                    "choices": [ { "id": "only", "label": "OK" } ] }
+                ] }
+                """));
+            world.AddPlayer("p1", age: 27, teamId: 1);
+            world.Dispatcher.PollOnce();
+            for (int day = 0; day < 2; day++)
+            {
+                world.Clock.AdvanceDay();
+                world.Bus.DispatchPending();
+                world.Dispatcher.PollOnce();
+                world.Bus.DispatchPending();
+            }
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("p1", world.State.CurrentDay, rows);
+            NarrativeMessageRow? eventRow = rows.FirstOrDefault(r => r.Kind == NarrativeMessageKind.Event && r.ContactId == "family_mom");
+            NarrativeMessageRow? textRow = rows.FirstOrDefault(r => r.Kind == NarrativeMessageKind.Text && r.ContactId == "family_mom");
+            Check("an event-level text_message writes a companion Text row at the fire day, alongside the Event row",
+                rows.Count(r => r.ContactId == "family_mom") == 2
+                && eventRow is { Outcome: "You do it." }
+                && textRow is { Body: "Knock 'em dead.", GameDay: 2 },
+                $"family_mom rows: {rows.Count(r => r.ContactId == "family_mom")}");
+            Check("an event without text_message logs exactly one row",
+                rows.Count(r => r.ContactId == "coach_reyes") == 1,
+                $"coach_reyes rows: {rows.Count(r => r.ContactId == "coach_reyes")}");
+        }
+
+        // Amendment §1/§3: a choice-level text_message (delay 0) writes a Text
+        // row dated the same resolution day, and the delay math (delay N)
+        // dates a delivery day the @today read filter hides until reached.
+        {
+            using World world = World.Create("narrativeLogChoiceText", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "verdict", "scope": "any", "weight": 1.0, "contact": "coach_hs",
+                  "choices": [ { "id": "only", "label": "Try out",
+                    "text_message": { "body": "Roster's up. You're on it.", "delay_days": 3 } } ] } ] }
+                """));
+            world.AddPlayer("p1", age: 27, teamId: 1);
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay(); // day 2: fires + resolves immediately (autopilot, "any" scope)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            // Delivery day = resolution day (2) + delay (3) = 5.
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("p1", 4, rows);
+            Check("a delayed choice text is invisible before its delivery day (today < resolution+delay)",
+                rows.All(r => r.Kind != NarrativeMessageKind.Text));
+
+            world.NarrativeLog.LoadForPlayer("p1", 5, rows);
+            NarrativeMessageRow? delayed = rows.FirstOrDefault(r => r.Kind == NarrativeMessageKind.Text);
+            Check("a delayed choice text becomes visible exactly on its delivery day (resolution day + delay_days)",
+                delayed is { Body: "Roster's up. You're on it.", GameDay: 5, ContactId: "coach_hs" },
+                delayed is { } d ? $"day={d.GameDay} body={d.Body}" : "not found");
+        }
+
+        // Amendment §3 forfeit clause: a forfeited choice's delayed text
+        // dates from the FORFEIT's resolution day (when the new fire evicts
+        // the stale pending choice), not the original fire day — "texts
+        // follow the decision."
+        {
+            using World world = World.Create("narrativeLogForfeitDelay", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "choiceA", "scope": "avatar", "weight": 1.0, "cooldown_days": 5, "contact": "agent_diaz",
+                    "choices": [ { "id": "a1", "autopilot_weight": 1,
+                      "text_message": { "body": "Following up.", "delay_days": 2 } } ] },
+                  { "id": "choiceB", "scope": "avatar", "weight": 1.0, "contact": "girlfriend_jess",
+                    "choices": [ { "id": "b1", "autopilot_weight": 1 } ] }
+                ] }
+                """));
+            world.Applier.AutopilotAvatarChoices = false;
+            world.AddPlayer("hero", age: 27, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce();
+
+            // Day 2: choiceA fires and pauses.
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            // Day 3: choiceB fires, forfeiting choiceA — its delayed text
+            // resolves against day 3 (the forfeit day), delivering on day 5,
+            // NOT day 4 (which day-2-fire-day + 2 would have produced).
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("hero", 4, rows);
+            Check("a forfeited choice's delayed text is NOT dated from the original fire day (+delay = day 4)",
+                rows.All(r => r.Kind != NarrativeMessageKind.Text));
+
+            world.NarrativeLog.LoadForPlayer("hero", 5, rows);
+            NarrativeMessageRow? delayed = rows.FirstOrDefault(r => r.Kind == NarrativeMessageKind.Text);
+            Check("a forfeited choice's delayed text IS dated from the forfeit's resolution day (day 3 + 2 = day 5)",
+                delayed is { GameDay: 5, ContactId: "agent_diaz", Body: "Following up." },
+                delayed is { } d ? $"day={d.GameDay}" : "not found");
+        }
+
+        // Old-payload compat: a row with no "kind" key at all (the exact
+        // pre-split shape) reads as Event with no crash, Prompt/Choice intact
+        // and Outcome defaulting to "".
+        {
+            using World world = World.Create("narrativeLogOldPayload", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "x", "scope": "any", "weight": 1.0, "choices": [ { "id": "a" } ] } ] }"""));
+            world.AddPlayer("p1", age: 27, teamId: 1);
+
+            SqliteCommand legacyInsert = world.Db.GetPooledCommand(
+                "INSERT INTO Game_Logs (season_year, game_day, player_id, event_type, payload) VALUES " +
+                "(2026, 1, 'p1', 'narrative_msg', @payload);");
+            if (legacyInsert.Parameters.Count == 0)
+            {
+                legacyInsert.Parameters.Add("@payload", SqliteType.Text);
+                legacyInsert.Prepare();
+            }
+            legacyInsert.Parameters["@payload"].Value =
+                """{"contact":"coach_reyes","prompt":"Old prompt.","choice":"Old choice.","choice_index":0}""";
+            world.Db.ExecuteNonQuery(legacyInsert);
+
+            var rows = new List<NarrativeMessageRow>();
+            world.NarrativeLog.LoadForPlayer("p1", 1, rows);
+            Check("a legacy row with no \"kind\" key reads as Event with Outcome defaulting to \"\"",
+                rows.Count == 1 && rows[0].Kind == NarrativeMessageKind.Event
+                && rows[0].Prompt == "Old prompt." && rows[0].Choice == "Old choice." && rows[0].Outcome == "");
         }
     }
 
@@ -1825,6 +2017,28 @@ internal static class Program
             }
             Check("all 11 onboarding events resolve, are avatar-scoped, carry the tier==0 gate, and ship exactly 3 choices",
                 onboardingOk == OnboardingEventIds.Length, $"{onboardingOk}/{OnboardingEventIds.Length}");
+
+            // Phone-split content pin (progress.md's two 2026-07-10 entries):
+            // hs_first_day ships an event-level fire-time text_message, every
+            // one of the 33 onboarding choices carries an authored outcome,
+            // and hs_tryouts' verdict moved to a choice-level delay-1 text
+            // (NOT an event-level one — the amendment superseded the
+            // original spec's placement).
+            int onboardingOutcomeCount = 0;
+            foreach (string id in OnboardingEventIds)
+            {
+                both.TryGetById(id, out GrittyEventDefinition e);
+                onboardingOutcomeCount += e.Choices.Count(c => !string.IsNullOrEmpty(c.Outcome));
+            }
+            both.TryGetById("hs_first_day", out GrittyEventDefinition hsFirstDay);
+            both.TryGetById("hs_tryouts", out GrittyEventDefinition hsTryouts);
+            Check("hs_first_day ships an event-level fire-time text_message",
+                hsFirstDay.TextMessage == "Knock 'em dead today, kiddo.");
+            Check("every one of the 33 onboarding choices carries an authored outcome",
+                onboardingOutcomeCount == 33, $"{onboardingOutcomeCount}/33");
+            Check("hs_tryouts carries no event-level text_message; all 3 choices carry the delay-1 Malone verdict instead",
+                hsTryouts.TextMessage is null
+                && hsTryouts.Choices.All(c => c.TextMessageBody == "Roster's up. You're on it." && c.TextMessageDelayDays == 1));
 
             int rookieOk = 0;
             foreach (string id in RookieBatchEventIds)

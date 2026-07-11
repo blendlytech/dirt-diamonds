@@ -39,7 +39,67 @@ text = "PREPAID · UNTRACED"
 layout_mode = 2
 size_flags_vertical = 3
 
+[node name="Events" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="EventsLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="EventsScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="EventsContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ChoicesContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="History" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="HistoryLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/History"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="LoadOlderButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
+layout_mode = 2
+text = "Load Older"
+
+[node name="HistoryStatusLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "— beginning of your story —"
+
+[node name="HistoryScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="HistoryContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
 [node name="Messages" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
 layout_mode = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 8
@@ -82,10 +142,6 @@ follow_focus = true
 [node name="ThreadContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 6
-
-[node name="ChoicesContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel"]
-layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="Bank" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]

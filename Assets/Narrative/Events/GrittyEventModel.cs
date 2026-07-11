@@ -361,12 +361,36 @@ public sealed class EventChoice
 
     public readonly EventConsequence[] Consequences;
 
-    public EventChoice(string id, int autopilotWeight, string label, EventConsequence[] consequences)
+    /// <summary>
+    /// The immediate narrative payoff (Events feed §2 of the phone-split
+    /// amendment): renders as the resolution of the event card the moment
+    /// this choice resolves. Content-authored, optional — null when the
+    /// batch omits "outcome", in which case the Events feed falls back to
+    /// "You: &lt;Label&gt;" so every pre-existing event degrades gracefully.
+    /// </summary>
+    public readonly string? Outcome;
+
+    /// <summary>
+    /// The REACTION text this choice's contact sends, in their voice, dated
+    /// resolution day + <see cref="TextMessageDelayDays"/> (§1 of the
+    /// amendment). Null when the batch omits choice-level "text_message".
+    /// </summary>
+    public readonly string? TextMessageBody;
+
+    /// <summary>Days after resolution the reaction text lands (0 = same day). Only meaningful when <see cref="TextMessageBody"/> is non-null.</summary>
+    public readonly int TextMessageDelayDays;
+
+    public EventChoice(
+        string id, int autopilotWeight, string label, EventConsequence[] consequences,
+        string? outcome = null, string? textMessageBody = null, int textMessageDelayDays = 0)
     {
         Id = id;
         AutopilotWeight = autopilotWeight;
         Label = label;
         Consequences = consequences;
+        Outcome = outcome;
+        TextMessageBody = textMessageBody;
+        TextMessageDelayDays = textMessageDelayDays;
     }
 }
 
@@ -397,9 +421,17 @@ public sealed class GrittyEventDefinition
     public readonly EventPrerequisite[] Prerequisites;
     public readonly EventChoice[] Choices;
 
+    /// <summary>
+    /// The fire-time companion text (phone-split spec §1): a REAL text the
+    /// contact sends the moment this event fires, in their voice, part of
+    /// the scene regardless of which choice the player eventually picks.
+    /// Content-authored, optional — null when the batch omits "text_message".
+    /// </summary>
+    public readonly string? TextMessage;
+
     public GrittyEventDefinition(
         string id, EventScope scope, double weight, int cooldownDays, string prompt, string contactId,
-        EventPrerequisite[] prerequisites, EventChoice[] choices)
+        EventPrerequisite[] prerequisites, EventChoice[] choices, string? textMessage = null)
     {
         Id = id;
         Scope = scope;
@@ -409,6 +441,7 @@ public sealed class GrittyEventDefinition
         ContactId = contactId;
         Prerequisites = prerequisites;
         Choices = choices;
+        TextMessage = textMessage;
     }
 }
 
