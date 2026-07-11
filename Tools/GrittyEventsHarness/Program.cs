@@ -161,8 +161,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 8
-            && wholeFolder.Count == 66
+            batchFiles.Length >= 9
+            && wholeFolder.Count == 79
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -217,7 +217,20 @@ internal static class Program
             && wholeFolder.TryGetById("hs_report_card_slipping", out _)
             && wholeFolder.TryGetById("hs_coach_checkin", out _)
             && wholeFolder.TryGetById("hs_crosstown_rival_seed", out _)
-            && wholeFolder.TryGetById("hs_homecoming", out _),
+            && wholeFolder.TryGetById("hs_homecoming", out _)
+            && wholeFolder.TryGetById("hs_exam_crunch", out _)
+            && wholeFolder.TryGetById("hs_cheating_fallout", out _)
+            && wholeFolder.TryGetById("hs_part_time_job", out _)
+            && wholeFolder.TryGetById("hs_payday", out _)
+            && wholeFolder.TryGetById("hs_job_vs_practice", out _)
+            && wholeFolder.TryGetById("hs_house_party", out _)
+            && wholeFolder.TryGetById("hs_party_grounded", out _)
+            && wholeFolder.TryGetById("hs_party_blows_over", out _)
+            && wholeFolder.TryGetById("hs_crosstown_showdown", out _)
+            && wholeFolder.TryGetById("hs_error_costs_the_game", out _)
+            && wholeFolder.TryGetById("hs_family_money_tight", out _)
+            && wholeFolder.TryGetById("hs_college_letter", out _)
+            && wholeFolder.TryGetById("hs_scout_in_stands", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -281,7 +294,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 66 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 79 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 

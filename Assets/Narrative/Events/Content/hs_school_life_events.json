@@ -1,0 +1,432 @@
+{
+  "//": "HS school-life texture batch (Sonnet-contract content, Fable 5). Fills the tier-0 gap between hs_onboarding_events.json (week-one chain + semester spine) and hs_dating_events.json (romance funnel): jobs, parties, academics, the rival-game payoff, recruiting, and family money -- the 'dirt' half of a HS career. All 13 events are scope:'avatar' and EVERY event carries { \"field\": \"tier\", \"op\": \"==\", \"value\": 0 } per the onboarding batch's 'gate all, not just entry' convention. PAYOFFS: this batch turns two of onboarding's write-only forward hooks into read flags -- hs_found_crew now gates hs_house_party, hs_rival_seeded now gates hs_crosstown_showdown (one-shot via hs_showdown_done). ARCS: (a) job -- hs_part_time_job sets hs_has_job (declining is cooldown-repaced, cd 45), hs_payday is the cooldown-paced recurring drip, hs_job_vs_practice is the conflict beat whose quit choice clears the flag (the arc's exit); (b) party -- hs_house_party's all-out choice sets hs_partied, resolved by EXACTLY ONE of hs_party_grounded (strictness >= 55) / hs_party_blows_over (strictness < 55) -- the report-card OR-is-two-events idiom on the strictness axis (COALESCE-50 default household lands on blows_over); every fallout choice clears hs_partied so a lingering flag can never double-bill one party; (c) cheating -- hs_exam_crunch (gpa < 2.8, the struggling-student gate) can set hs_cheated, hs_cheating_fallout reads it next-day+ and every choice clears it; (d) recruiting -- hs_college_letter (age >= 17, junior/senior) one-shots via hs_recruited, hs_scout_in_stands reads it 14d later as a recurring senior-texture pulse. hs_scouted is this batch's ONE deliberate write-only forward hook (college-phase content will read it; disclosed per check #3). PACING AUDIT: file sorts AFTER hs_onboarding_events.json (alphabetical load order), so the weight-1.0 week-one chain always evaluates first and the per-subject 1/day cap protects it; belt-and-braces, the three events keyed only on early flags (exam_crunch, part_time_job, house_party) also carry min_days_since 10-14 so nothing from this batch lands inside the onboarding week. No weight above 0.35, everything either cooldown-paced, one-shot-flagged, or clears its own trigger -- no unpaced loops. Contacts: all six threads reused from the registry (coach_hs, hs_friend, family_mom, family_dad x2 arcs, family_kid unused here), ZERO registry change. No new SubjectField/ConsequenceKind/schema anywhere -- pure content.",
+  "events": [
+    {
+      "id": "hs_exam_crunch",
+      "scope": "avatar",
+      "weight": 0.12,
+      "cooldown_days": 60,
+      "contact": "hs_friend",
+      "prompt": "Three tests Friday and you're behind in all of them. Marcus slides his homework across the table without a word. 'I'm just saying. It's right there.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "field": "gpa", "op": "<", "value": 2.8 },
+        { "flag_active": "hs_started", "min_days_since": 10 }
+      ],
+      "choices": [
+        { "id": "grind_it_out", "autopilot_weight": 2, "label": "Grind it out yourself, all week",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 3 },
+            { "type": "person_stat", "stat": "intelligence", "amount": 1 },
+            { "type": "stress", "amount": 4 }
+          ] },
+        { "id": "study_group", "autopilot_weight": 2, "label": "Rope the guys into a study group",
+          "consequences": [
+            { "type": "person_stat", "stat": "intelligence", "amount": 2 },
+            { "type": "person_stat", "stat": "teamwork", "amount": 1 },
+            { "type": "relationship", "kind": "friend", "affinity": 6, "target": "teammate" }
+          ] },
+        { "id": "copy_the_homework", "autopilot_weight": 1, "label": "Take the homework. Just this once.",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_cheated" },
+            { "type": "person_stat", "stat": "morality", "amount": -3 },
+            { "type": "stress", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_cheating_fallout",
+      "scope": "avatar",
+      "weight": 0.3,
+      "contact": "coach_hs",
+      "prompt": "Coach Malone shuts his office door behind you. 'Mrs. Alvarez says two identical homeworks landed on her desk. No pass, no play -- and I don't coach cheaters. Talk.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_cheated", "min_days_since": 1 }
+      ],
+      "choices": [
+        { "id": "own_it", "autopilot_weight": 2, "label": "Own it, take the zero",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_cheated" },
+            { "type": "person_stat", "stat": "morality", "amount": 3 },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": 3 }
+          ] },
+        { "id": "deny_everything", "autopilot_weight": 1, "label": "Deny everything",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_cheated" },
+            { "type": "person_stat", "stat": "morality", "amount": -2 },
+            { "type": "stress", "amount": 5 }
+          ] },
+        { "id": "let_your_buddy_take_the_heat", "autopilot_weight": 1, "label": "Let your buddy take the heat",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_cheated" },
+            { "type": "person_stat", "stat": "morality", "amount": -4 },
+            { "type": "relationship", "kind": "friend", "affinity": -12, "target": "teammate" },
+            { "type": "stress", "amount": -1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_part_time_job",
+      "scope": "avatar",
+      "weight": 0.1,
+      "cooldown_days": 45,
+      "contact": "family_dad",
+      "prompt": "Dad hangs up the phone. 'Ray down at the batting cages needs a weekend kid -- register, pick up balls, close up. It's yours if you want it. Money's money.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "field": "funds", "op": "<", "value": 300 },
+        { "flag_inactive": "hs_has_job" },
+        { "flag_active": "hs_started", "min_days_since": 14 }
+      ],
+      "choices": [
+        { "id": "take_the_job", "autopilot_weight": 2, "label": "Take the job",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_has_job" },
+            { "type": "funds", "amount": 60 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 }
+          ] },
+        { "id": "focus_on_ball", "autopilot_weight": 1, "label": "Pass -- ball comes first",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "interest", "amount": 1 }
+          ] },
+        { "id": "take_it_and_coast", "autopilot_weight": 1, "label": "Take it, plan to do the bare minimum",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_has_job" },
+            { "type": "funds", "amount": 60 },
+            { "type": "person_stat", "stat": "morality", "amount": -1 },
+            { "type": "person_stat", "stat": "happiness", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_payday",
+      "scope": "avatar",
+      "weight": 0.25,
+      "cooldown_days": 14,
+      "contact": "family_dad",
+      "prompt": "Payday at the cages. Ray counts the bills out slow like it hurts him. Dad asks at dinner what you're doing with it -- 'and don't say cards.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_has_job", "min_days_since": 7 }
+      ],
+      "choices": [
+        { "id": "bank_it", "autopilot_weight": 2, "label": "Bank it",
+          "consequences": [
+            { "type": "funds", "amount": 45 },
+            { "type": "person_stat", "stat": "discipline", "amount": 1 }
+          ] },
+        { "id": "treat_the_crew", "autopilot_weight": 1, "label": "Pizza on you after practice",
+          "consequences": [
+            { "type": "funds", "amount": 15 },
+            { "type": "person_stat", "stat": "social_status", "amount": 2 },
+            { "type": "relationship", "kind": "friend", "affinity": 5, "target": "teammate" }
+          ] },
+        { "id": "new_gear", "autopilot_weight": 1, "label": "Finally replace those cracked batting gloves",
+          "consequences": [
+            { "type": "funds", "amount": 5 },
+            { "type": "person_stat", "stat": "confidence", "amount": 1 },
+            { "type": "person_stat", "stat": "happiness", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_job_vs_practice",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 45,
+      "contact": "coach_hs",
+      "prompt": "Ray needs you Saturday. Coach called a Saturday scrimmage. Both of them said the exact same sentence: 'I'm counting on you.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_has_job" },
+        { "flag_active": "hs_made_team" }
+      ],
+      "choices": [
+        { "id": "come_clean_to_coach", "autopilot_weight": 2, "label": "Tell Coach straight, trade the shift away",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": 2 },
+            { "type": "funds", "amount": -20 }
+          ] },
+        { "id": "skip_the_scrimmage", "autopilot_weight": 1, "label": "Work the shift, skip the scrimmage",
+          "consequences": [
+            { "type": "funds", "amount": 40 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": -2 },
+            { "type": "person_stat", "stat": "teamwork", "amount": -2 }
+          ] },
+        { "id": "quit_on_the_spot", "autopilot_weight": 1, "label": "Quit the cages -- ball wins",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_has_job" },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "interest", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_house_party",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 45,
+      "contact": "hs_friend",
+      "prompt": "Marcus, breathless between classes: 'Kelsey's parents are GONE Saturday. Whole grade's going. Whole. Grade.' It's the kind of night people still talk about at reunions.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_found_crew", "min_days_since": 10 }
+      ],
+      "choices": [
+        { "id": "go_all_out", "autopilot_weight": 2, "label": "Go, and make it a night",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "social_status", "amount": 3 },
+            { "type": "person_stat", "stat": "happiness", "amount": 3 },
+            { "type": "person_stat", "stat": "morality", "amount": -1 },
+            { "type": "stress", "amount": -2 }
+          ] },
+        { "id": "show_face_then_dip", "autopilot_weight": 2, "label": "Show face, dip by ten",
+          "consequences": [
+            { "type": "person_stat", "stat": "social_status", "amount": 1 },
+            { "type": "person_stat", "stat": "discipline", "amount": 1 },
+            { "type": "person_stat", "stat": "happiness", "amount": 1 }
+          ] },
+        { "id": "stay_home", "autopilot_weight": 1, "label": "Stay home, morning cage session",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "person_stat", "stat": "social_status", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_party_grounded",
+      "scope": "avatar",
+      "weight": 0.35,
+      "contact": "family_dad",
+      "prompt": "Dad's in the kitchen with his arms crossed and your name in his mouth before the door's even shut. Somebody's mom saw you at Kelsey's. He knows everything.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_partied", "min_days_since": 1 },
+        { "field": "strictness", "op": ">=", "value": 55 }
+      ],
+      "choices": [
+        { "id": "take_the_grounding", "autopilot_weight": 2, "label": "Take the grounding, no argument",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "person_stat", "stat": "happiness", "amount": -2 },
+            { "type": "stress", "amount": 3 }
+          ] },
+        { "id": "argue_it_out", "autopilot_weight": 1, "label": "Argue -- everyone was there",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "maturity", "amount": -2 },
+            { "type": "stress", "amount": 5 }
+          ] },
+        { "id": "grounded_means_reps", "autopilot_weight": 1, "label": "Say nothing. Two weeks of nothing but the tee.",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 3 },
+            { "type": "person_stat", "stat": "discipline", "amount": 1 },
+            { "type": "stress", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_party_blows_over",
+      "scope": "avatar",
+      "weight": 0.35,
+      "contact": "family_mom",
+      "prompt": "Mom sets your breakfast down with a look. 'Heard Kelsey's was quite the scene.' She's not mad. She's barely hiding a grin. 'I was sixteen once, you know.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_partied", "min_days_since": 1 },
+        { "field": "strictness", "op": "<", "value": 55 }
+      ],
+      "choices": [
+        { "id": "tell_her_everything", "autopilot_weight": 2, "label": "Tell her everything over pancakes",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": -3 }
+          ] },
+        { "id": "just_nod", "autopilot_weight": 1, "label": "Nod, eat, say nothing",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "happiness", "amount": 1 }
+          ] },
+        { "id": "push_your_luck", "autopilot_weight": 1, "label": "'So... next one's at Trevor's.'",
+          "consequences": [
+            { "type": "clear_flag", "flag": "hs_partied" },
+            { "type": "person_stat", "stat": "morality", "amount": -1 },
+            { "type": "person_stat", "stat": "social_status", "amount": 1 },
+            { "type": "person_stat", "stat": "happiness", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_crosstown_showdown",
+      "scope": "avatar",
+      "weight": 0.25,
+      "contact": "coach_hs",
+      "prompt": "Schedule's on the locker room wall: Westbrook, Friday, home. The shortstop who said your name is hitting third. Coach taps the printout twice. 'Circle it.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_rival_seeded", "min_days_since": 7 },
+        { "flag_inactive": "hs_showdown_done" }
+      ],
+      "choices": [
+        { "id": "live_in_the_film_room", "autopilot_weight": 2, "label": "Live in the film room all week",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_showdown_done" },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 3 },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "stress", "amount": 2 }
+          ] },
+        { "id": "feed_the_hype", "autopilot_weight": 1, "label": "Feed the hype -- tell the school paper you're winning",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_showdown_done" },
+            { "type": "person_stat", "stat": "confidence", "amount": 3 },
+            { "type": "stress", "amount": 4 },
+            { "type": "relationship", "kind": "rival", "affinity": -12, "target": "opponent" }
+          ] },
+        { "id": "just_another_game", "autopilot_weight": 1, "label": "Treat it like any other game",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_showdown_done" },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 },
+            { "type": "person_stat", "stat": "discipline", "amount": 1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_error_costs_the_game",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 45,
+      "contact": "coach_hs",
+      "prompt": "Routine grounder, bottom of the seventh, right through your legs. Two runs score. Game over. The bus ride home is the quietest forty minutes of your life.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_debut_done" }
+      ],
+      "choices": [
+        { "id": "dawn_fielding_reps", "autopilot_weight": 2, "label": "Be at the field at dawn taking grounders",
+          "consequences": [
+            { "type": "person_stat", "stat": "work_ethic", "amount": 3 },
+            { "type": "person_stat", "stat": "confidence", "amount": 1 },
+            { "type": "stress", "amount": 2 }
+          ] },
+        { "id": "carry_it_quietly", "autopilot_weight": 1, "label": "Carry it quietly",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 1 },
+            { "type": "stress", "amount": 4 }
+          ] },
+        { "id": "snap_at_a_teammate", "autopilot_weight": 1, "label": "Snap at the guy who groaned loudest",
+          "consequences": [
+            { "type": "relationship", "kind": "friend", "affinity": -10, "target": "teammate" },
+            { "type": "person_stat", "stat": "teamwork", "amount": -2 },
+            { "type": "stress", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_family_money_tight",
+      "scope": "avatar",
+      "weight": 0.05,
+      "cooldown_days": 120,
+      "contact": "family_dad",
+      "prompt": "You hear it through the wall -- Dad's hours got cut, and Mom's doing the math out loud at the kitchen table. Twice. There's a shoebox under your bed they don't know about.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "field": "funds", "op": ">=", "value": 100 }
+      ],
+      "choices": [
+        { "id": "empty_the_shoebox", "autopilot_weight": 2, "label": "Put the shoebox on the kitchen table",
+          "consequences": [
+            { "type": "funds", "amount": -100 },
+            { "type": "person_stat", "stat": "morality", "amount": 3 },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 }
+          ] },
+        { "id": "offer_half", "autopilot_weight": 1, "label": "Slip Mom half of it, keep the rest",
+          "consequences": [
+            { "type": "funds", "amount": -50 },
+            { "type": "person_stat", "stat": "morality", "amount": 1 },
+            { "type": "person_stat", "stat": "maturity", "amount": 1 }
+          ] },
+        { "id": "keep_quiet", "autopilot_weight": 1, "label": "Keep quiet -- that's glove money",
+          "consequences": [
+            { "type": "person_stat", "stat": "morality", "amount": -2 },
+            { "type": "stress", "amount": 4 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_college_letter",
+      "scope": "avatar",
+      "weight": 0.15,
+      "contact": "family_mom",
+      "prompt": "Mom's waiting at the door holding an envelope like it's made of glass. A university crest in the corner. 'It's addressed to YOU,' she whispers. 'From the BASEBALL office.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "field": "age", "op": ">=", "value": 17 },
+        { "flag_active": "hs_made_team" },
+        { "flag_inactive": "hs_recruited" }
+      ],
+      "choices": [
+        { "id": "pin_it_above_your_bed", "autopilot_weight": 2, "label": "Pin it above your bed",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_recruited" },
+            { "type": "person_stat", "stat": "confidence", "amount": 3 },
+            { "type": "person_stat", "stat": "happiness", "amount": 2 },
+            { "type": "interest", "amount": 2 }
+          ] },
+        { "id": "stay_level", "autopilot_weight": 1, "label": "It's just a form letter. Stay level.",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_recruited" },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "interest", "amount": 1 }
+          ] },
+        { "id": "bring_it_to_coach", "autopilot_weight": 1, "label": "Bring it to Coach Malone before anyone else",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_recruited" },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 },
+            { "type": "person_stat", "stat": "discipline", "amount": 1 },
+            { "type": "interest", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_scout_in_stands",
+      "scope": "avatar",
+      "weight": 0.1,
+      "cooldown_days": 60,
+      "contact": "hs_friend",
+      "prompt": "Marcus elbows you in the on-deck circle. 'Third row. Polo shirt. RADAR GUN.' He's not wrong. The man has a clipboard and he's looking at you.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_recruited", "min_days_since": 14 }
+      ],
+      "choices": [
+        { "id": "play_your_game", "autopilot_weight": 2, "label": "Play your game. He'll see what he sees.",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_scouted" },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "person_stat", "stat": "confidence", "amount": 1 }
+          ] },
+        { "id": "press_too_hard", "autopilot_weight": 1, "label": "Swing for the fences every at-bat",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_scouted" },
+            { "type": "stress", "amount": 4 },
+            { "type": "person_stat", "stat": "confidence", "amount": -2 }
+          ] },
+        { "id": "show_out_for_the_gun", "autopilot_weight": 1, "label": "Show out -- uncork one from deep short just because",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_scouted" },
+            { "type": "person_stat", "stat": "confidence", "amount": 2 },
+            { "type": "person_stat", "stat": "social_status", "amount": 1 },
+            { "type": "person_stat", "stat": "teamwork", "amount": -2 }
+          ] }
+      ]
+    }
+  ]
+}
