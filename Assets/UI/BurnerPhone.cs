@@ -109,6 +109,14 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string ClockFormat { get; set; } = "{0} {1} {2}";
 
+    /// <summary>Settings tab: SaveStatusLabel text after a successful Save Now press ({0}=current day).</summary>
+    [Export]
+    public string SavedStatusFormat { get; set; } = "Saved ✓ — day {0}";
+
+    /// <summary>Settings tab: SaveStatusLabel text when GameManager.SaveNow reported it couldn't run.</summary>
+    [Export]
+    public string SaveFailedText { get; set; } = "Couldn't save just now — try again in a moment.";
+
     [Export]
     public string FundsFormat { get; set; } = "${0:N0}";
 
@@ -280,6 +288,11 @@ public sealed partial class BurnerPhone : PanelContainer
     private Label _commitmentValueLabel = null!;
     private Button _commitmentConfirmButton = null!;
 
+    // Settings tab: Save Now button + its status line (set only on press —
+    // event-driven, never per-frame).
+    private Button _saveButton = null!;
+    private Label _saveStatusLabel = null!;
+
     private PanelContainer _carrierCard = null!;
     private Label _phoneStatusLabel = null!;
     private Label _minutesLabel = null!;
@@ -420,6 +433,10 @@ public sealed partial class BurnerPhone : PanelContainer
         _commitmentConfirmButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/CommitmentCard/CommitmentCardLayout/CommitmentConfirmButton");
         _commitmentSlider.ValueChanged += _ => _commitmentValueLabel.Text = string.Format(CommitmentValueFormat, (int)_commitmentSlider.Value);
         _commitmentConfirmButton.Pressed += OnCommitmentConfirmPressed;
+
+        _saveButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout/SaveButton");
+        _saveStatusLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout/SaveStatusLabel");
+        _saveButton.Pressed += OnSavePressed;
     }
 
     public override void _ExitTree()
@@ -434,6 +451,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _upgradePhoneButton.Pressed -= OnUpgradePhonePressed;
         _phoneTabs.TabChanged -= OnPhoneTabChanged;
         _commitmentConfirmButton.Pressed -= OnCommitmentConfirmPressed;
+        _saveButton.Pressed -= OnSavePressed;
     }
 
     /// <summary>
@@ -1234,6 +1252,22 @@ public sealed partial class BurnerPhone : PanelContainer
             return;
         }
         gm.SetWeeklyChildFunding(gm.Career.AvatarPlayerId, (int)_commitmentSlider.Value);
+    }
+
+    /// <summary>
+    /// Settings tab: the Save Now intent — <see cref="GameManager.SaveNow"/>
+    /// flushes the live mirrors and folds the WAL into the single .db.
+    /// Persistence is already continuous (every mutation commits), so this is
+    /// player reassurance plus the mid-day accumulator flush.
+    /// </summary>
+    private void OnSavePressed()
+    {
+        GameManager gm = GameManager.Instance!;
+        bool saved = gm.SaveNow();
+        _saveStatusLabel.Visible = true;
+        _saveStatusLabel.Text = saved
+            ? string.Format(SavedStatusFormat, gm.State.CurrentDay)
+            : SaveFailedText;
     }
 
     private void OnBuyItemPressed(string itemId)

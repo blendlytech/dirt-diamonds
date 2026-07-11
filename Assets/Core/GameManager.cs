@@ -892,6 +892,43 @@ public sealed partial class GameManager : Node
     }
 
     /// <summary>
+    /// The phone Settings tab's Save button — a checkpoint intent, not a new
+    /// persistence path. Every mutation already commits as it happens
+    /// (database_rules.md); what a mid-day "save" can still trail on is the
+    /// in-memory life-sim accumulators and relationship dirt that normally
+    /// flush on the day tick (or <see cref="_ExitTree"/>), so this runs those
+    /// same two flushes, then folds the WAL into the single .db
+    /// (<see cref="DatabaseManager.CheckpointForSync"/>) — the exact
+    /// _ExitTree sequence, minus teardown. Returns false without touching
+    /// anything when a batch transaction is somehow open (RunInBatch scopes
+    /// never span a frame, so a button press can't land inside one today —
+    /// but a throwing Save button is worse than a no-op one). An incomplete
+    /// checkpoint (the gritty poll view reading across the truncate) is
+    /// still a successful save: the flushes committed and SQLite replays the
+    /// WAL on next open — only the single-file cloud snapshot trails, same
+    /// loud-not-fatal posture as _ExitTree's.
+    /// </summary>
+    public bool SaveNow()
+    {
+        if (_database is null || LifeSim is null || Relationships is null)
+        {
+            return false;
+        }
+        if (_database.IsBatchActive)
+        {
+            GD.PushWarning("[GameManager] SaveNow skipped — a batch transaction is active.");
+            return false;
+        }
+        PersistLifeSimState(default);
+        PersistRelationships(default);
+        if (!_database.CheckpointForSync())
+        {
+            GD.Print("[GameManager] SaveNow: WAL checkpoint incomplete — the save is consistent; only the single-file copy trails until the next checkpoint.");
+        }
+        return true;
+    }
+
+    /// <summary>
     /// HS-5 §7.1: BurnerPhone's Family-tab write path for the player's
     /// standing weekly funding commitment — a direct preference write (not
     /// day-tick math), read back by ChildRearingService's next tick. The one

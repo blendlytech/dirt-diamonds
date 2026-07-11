@@ -502,3 +502,84 @@ layout_mode = 2
 autowrap_mode = 2
 visible = false
 text = ""
+
+[node name="Settings" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="SettingsScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings"]
+layout_mode = 2
+
+[node name="SettingsLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="SaveCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="SaveCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SaveHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Save"
+
+[node name="AutosaveNoteLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = "Progress saves automatically after every action, message, and event."
+
+[node name="SaveButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout"]
+layout_mode = 2
+text = "Save Now"
+
+[node name="SaveStatusLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout"]
+visible = false
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="OptionsCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="OptionsCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="OptionsHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Options"
+
+[node name="VolumeRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout"]
+layout_mode = 2
+
+[node name="VolumeLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout/VolumeRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Volume"
+
+[node name="VolumeSlider" type="HSlider" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout/VolumeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0
+max_value = 100
+step = 1
+value = 100
+editable = false
+
+[node name="VolumeNoteLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = "Sound arrives in a later update."
