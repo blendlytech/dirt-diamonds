@@ -1,5 +1,6 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Family;
 using DirtAndDiamonds.Economy.Hustles;
@@ -76,6 +77,7 @@ internal static class Program
             RunHustleIntegrationChecks();
             RunEquipmentIntegrationChecks();
             RunItemCatalogChecks();
+            RunSchoolCatalogChecks();
             RunPhoneAndFamilyChecks();
             RunAbsenceChecks();
             RunThreadingCheck();
@@ -3268,6 +3270,93 @@ internal static class Program
             count == 3 && loaded.Count == 3, $"{count} rows");
         Check("boot audit passes over rows read back from the save",
             !ThrowsAny(() => catalog.ValidateOwnership(loaded)));
+    }
+
+    // ------------------------------------------------------------------
+    // School catalog (HS team branding — schools.json)
+    // ------------------------------------------------------------------
+
+    private static void RunSchoolCatalogChecks()
+    {
+        Console.WriteLine("--- School catalog (HS team branding) ---");
+
+        // The shipped file covers the 8-team HS tier (team_ids 101–108); every
+        // entry carries a non-empty display name, an image path, and a
+        // validated primary hex.
+        string shipped = File.ReadAllText(Path.Combine(_repoRoot, "Assets", "Data", "Schools", "schools.json"));
+        SchoolCatalog catalog = SchoolCatalogJson.Parse(shipped);
+        bool wellFormed = catalog.Count == 8;
+        foreach (SchoolDefinition s in catalog.Entries)
+        {
+            wellFormed &= s.TeamId is >= 101 and <= 108
+                && !string.IsNullOrWhiteSpace(s.DisplayName)
+                && !string.IsNullOrWhiteSpace(s.ImagePath)
+                && s.Primary.Hex.Length == 7 && s.Primary.Hex[0] == '#';
+        }
+        Check("shipped schools.json covers HS team_ids 101-108 with names, colors, images",
+            wellFormed, $"{catalog.Count} schools");
+
+        // The roster cross-check contract: the HS-tier (team_id, abbreviation)
+        // pairs LeagueGenerator seeds. Pinned as literals here because this
+        // harness deliberately does not compile the Baseball world-gen assembly
+        // (the item-catalog check's transport-gift precedent); GameManager's
+        // boot check is the live-roster mirror from the other side.
+        var roster = new List<TeamRow>
+        {
+            HsTeam(101, "CRW"), HsTeam(102, "LKS"), HsTeam(103, "FRV"), HsTeam(104, "OKR"),
+            HsTeam(105, "PNH"), HsTeam(106, "WSF"), HsTeam(107, "SMT"), HsTeam(108, "RVT"),
+        };
+        Check("ValidateAgainstRoster passes over the shipped HS roster",
+            !ThrowsAny(() => catalog.ValidateAgainstRoster(roster)));
+
+        // Each direction of the cross-check fails loudly.
+        var missingTeam = new List<TeamRow>(roster) { HsTeam(199, "XXX") };
+        Check("cross-check rejects an HS team with no school entry",
+            ThrowsAny(() => catalog.ValidateAgainstRoster(missingTeam)));
+
+        var wrongAbbr = new List<TeamRow>(roster) { [0] = HsTeam(101, "ZZZ") };
+        Check("cross-check rejects an abbreviation mismatch",
+            ThrowsAny(() => catalog.ValidateAgainstRoster(wrongAbbr)));
+
+        var orphan = new List<TeamRow>(roster);
+        orphan.RemoveAt(orphan.Count - 1); // roster lacks 108; catalog still has it
+        Check("cross-check rejects an orphaned school entry",
+            ThrowsAny(() => catalog.ValidateAgainstRoster(orphan)));
+
+        // Loader rejections — each malformed doc is loud and team-labelled. Every
+        // fixture is otherwise valid (image_path included) so the assertion
+        // isolates the one intended defect.
+        Check("loader rejects a bad hex", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#GG0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("loader rejects a missing colors object", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("loader rejects a missing school_name", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("loader rejects a missing image_path", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("loader rejects a non-integer team_id", SchoolParseThrows(
+            """{ "schools": [ { "team_id": "one", "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("catalog ctor rejects duplicate team_ids", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A", "mascot": "A", "image_path": "res://a.png", "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" }, { "team_id": 1, "abbreviation": "BBB", "school_name": "B", "mascot": "B", "image_path": "res://b.png", "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+    }
+
+    private static TeamRow HsTeam(int teamId, string abbreviation) => new()
+    {
+        TeamId = teamId, City = "Test", Name = "Team", Abbreviation = abbreviation,
+        League = "HS", Division = "East", Tier = LeagueTier.HS,
+    };
+
+    private static bool SchoolParseThrows(string json)
+    {
+        try
+        {
+            SchoolCatalogJson.Parse(json);
+            return false;
+        }
+        catch (FormatException)
+        {
+            return true;
+        }
     }
 
     // ------------------------------------------------------------------

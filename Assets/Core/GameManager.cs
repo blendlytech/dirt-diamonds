@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Family;
 using DirtAndDiamonds.Economy.Hustles;
@@ -42,6 +43,9 @@ public sealed partial class GameManager : Node
     // NOTE: same export-filter caveat again — items.json must join the Phase 9
     // export include filters alongside the .sql and the other content .json.
     private const string ItemsResourcePath = "res://Assets/Data/Items/items.json";
+    // NOTE: same export-filter caveat — schools.json (HS team branding) must
+    // join the Phase 9 export include filters like the other content .json.
+    private const string SchoolsResourcePath = "res://Assets/Data/Schools/schools.json";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -102,6 +106,9 @@ public sealed partial class GameManager : Node
 
     /// <summary>HS-3 Layer 2 orchestration — Marketplace purchase application over the catalog above.</summary>
     public ItemService ItemShop { get; private set; } = null!;
+
+    /// <summary>The loaded schools.json branding for the HS-tier teams (name/mascot/colors) — public like Items so the avatar-creation team picker and any team/scouting screen read one shared instance. Cross-checked against the live HS roster at boot; a missing/orphaned/mismatched entry fails the boot, never a render.</summary>
+    public SchoolCatalog Schools { get; private set; } = null!;
 
     /// <summary>HS-3 §4.2: the phone minutes economy (spend / carrier bundle / hardware upgrade). The §4.3 never-gates invariant is structural — nothing in Narrative references this service.</summary>
     public PhoneService Phone { get; private set; } = null!;
@@ -511,6 +518,22 @@ public sealed partial class GameManager : Node
         var ownedItemsAudit = new List<PlayerItemRow>();
         Persons.LoadAllItems(ownedItemsAudit);
         Items.ValidateOwnership(ownedItemsAudit);
+
+        // HS team branding (schools.json) — pure content like the item catalog
+        // above, then the loud boot-time cross-check against the live HS roster
+        // (seeded by EnsureTierLeagues earlier this boot): every HS team needs a
+        // school, abbreviations must agree, no orphan entries. A content edit
+        // that breaks the join fails here, never at the team picker.
+        string schoolsJson = FileAccess.GetFileAsString(SchoolsResourcePath);
+        if (string.IsNullOrWhiteSpace(schoolsJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{SchoolsResourcePath}' ({FileAccess.GetOpenError()}) — the school catalog is missing.");
+        }
+        Schools = SchoolCatalogJson.Parse(schoolsJson);
+        var hsRosterAudit = new List<TeamRow>();
+        Baseball.LoadTeamsByTier(LeagueTier.HS, hsRosterAudit);
+        Schools.ValidateAgainstRoster(hsRosterAudit);
 
         // HS-3: Marketplace purchase orchestration — the same request/response
         // shape as GearShop above, over Player_Items instead of

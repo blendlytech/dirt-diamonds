@@ -1,6 +1,7 @@
 using System;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Economy.Items;
 using DirtAndDiamonds.Simulation.Baseball;
 using Godot;
@@ -251,15 +252,53 @@ public sealed partial class NewGameScreen : Control
     private void PopulateTeams()
     {
         // Phase 9a: every career starts on the bottom rung — the picker offers
-        // only the HS tier's teams; the ladder above is 9c's promotion arc.
+        // only the HS tier's teams; the ladder above is 9c's promotion arc. The
+        // picker reads as "choose your high school": each HS team maps to a
+        // schools.json entry (name + mascot + colors), and GameManager's boot
+        // cross-check guarantees one for every HS team, so the roster-label
+        // fallback below is purely defensive.
         var teams = new System.Collections.Generic.List<TeamRow>();
-        GameManager.Instance!.Baseball.LoadTeamsByTier(LeagueTier.HS, teams);
+        GameManager gm = GameManager.Instance!;
+        gm.Baseball.LoadTeamsByTier(LeagueTier.HS, teams);
         for (int i = 0; i < teams.Count; i++)
         {
             TeamRow team = teams[i];
-            _teamOptionButton.AddItem($"{team.City} {team.Name} ({team.Abbreviation})");
+            if (gm.Schools.TryGet(team.TeamId, out SchoolDefinition school))
+            {
+                _teamOptionButton.AddItem(school.DisplayName);
+                _teamOptionButton.SetItemIcon(i, BuildSchoolSwatch(school));
+                _teamOptionButton.SetItemTooltip(i, school.PaletteDescription);
+            }
+            else
+            {
+                _teamOptionButton.AddItem($"{team.City} {team.Name} ({team.Abbreviation})");
+            }
             _teamOptionButton.SetItemMetadata(i, team.TeamId);
         }
+    }
+
+    // A tiny two-tone chip (primary field, secondary stripe, accent border) so
+    // each high school's colors read at a glance in the dropdown and on the
+    // button face. Built once per team at load — never in _Process — from the
+    // schools.json hex strings; Color.FromHtml is safe because the catalog
+    // validated every hex as #RRGGBB at parse.
+    private static ImageTexture BuildSchoolSwatch(SchoolDefinition school)
+    {
+        const int width = 28, height = 18, split = 17;
+        Color primary = Color.FromHtml(school.Primary.Hex);
+        Color secondary = Color.FromHtml(school.Secondary.Hex);
+        Color accent = Color.FromHtml(school.Accent.Hex);
+
+        var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                bool border = x == 0 || y == 0 || x == width - 1 || y == height - 1;
+                image.SetPixel(x, y, border ? accent : (x < split ? primary : secondary));
+            }
+        }
+        return ImageTexture.CreateFromImage(image);
     }
 
     private void OnRerollPressed() => RerollBackstory();

@@ -58,6 +58,13 @@
     -->
     <Compile Include="..\..\Assets\Economy\Items\*.cs" Link="Economy\Items\%(Filename)%(Extension)" />
     <!--
+      HS team branding (schools.json): the same Data-adjacent content surface as
+      the item catalog above — pure parse/validate over Data DTOs, no Godot type
+      (the UI converts hex to Godot.Color at render). Its parse + roster
+      cross-check acceptance lives here beside RunItemCatalogChecks.
+    -->
+    <Compile Include="..\..\Assets\Data\Schools\*.cs" Link="Data\Schools\%(Filename)%(Extension)" />
+    <!--
       HS-3 (high_school_person_layer.md §3.2/§4.2/§4.3): PhoneService and
       FamilyService are the same Data + Core orchestration shape as
       ItemService above — the minutes-economy arithmetic and the family tick
