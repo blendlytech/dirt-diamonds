@@ -105,6 +105,10 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string HistoryBeginningText { get; set; } = "— beginning of your story —";
 
+    /// <summary>Status-bar clock: {0}=weekday, {1}=month (both trimmed to three letters, uppercased to match the bar's other captions), {2}=day of month.</summary>
+    [Export]
+    public string ClockFormat { get; set; } = "{0} {1} {2}";
+
     [Export]
     public string FundsFormat { get; set; } = "${0:N0}";
 
@@ -259,6 +263,11 @@ public sealed partial class BurnerPhone : PanelContainer
     private Button _pokerButton = null!;
     private Button _proShopButton = null!;
 
+    // Status-bar clock: the human calendar date, complementing the shell
+    // top bar's sim day counter. Dirty-flagged on the day.
+    private Label _clockLabel = null!;
+    private long _shownClockDay = long.MinValue;
+
     private TabContainer _phoneTabs = null!;
     private Label _marketplaceFundsLabel = null!;
     private VBoxContainer _itemsContainer = null!;
@@ -347,6 +356,7 @@ public sealed partial class BurnerPhone : PanelContainer
 
     public override void _Ready()
     {
+        _clockLabel = GetNode<Label>("Screen/ScreenLayout/StatusBar/ClockLabel");
         _eventsScroll = GetNode<ScrollContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll");
         _eventsContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll/EventsContainer");
         _choicesContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/ChoicesContainer");
@@ -474,6 +484,7 @@ public sealed partial class BurnerPhone : PanelContainer
             return;
         }
 
+        RefreshClock(gm);
         RefreshPhoneSnapshot(gm);
         RefreshBankTab(gm);
         RefreshMarketplaceTab(gm);
@@ -506,6 +517,29 @@ public sealed partial class BurnerPhone : PanelContainer
         {
             RenderThread(gm, _activeContactId);
         }
+    }
+
+    /// <summary>
+    /// The status-bar clock: the human calendar date ("TUE APR 14"),
+    /// complementing the shell top bar's sim day counter. Formats only when
+    /// the day actually changes (ui_conventions.md: no per-frame formatting).
+    /// </summary>
+    private void RefreshClock(GameManager gm)
+    {
+        long currentDay = gm.State.CurrentDay;
+        if (currentDay == _shownClockDay)
+        {
+            return;
+        }
+        _shownClockDay = currentDay;
+        int dos = GlobalState.DayOfSeasonForDay(currentDay);
+        CalendarDate date = GameCalendar.DateForDayOfSeason(dos);
+        Weekday weekday = GameCalendar.WeekdayForDayOfSeason(dos);
+        _clockLabel.Text = string.Format(
+            ClockFormat,
+            GameCalendar.NameOf(weekday).Substring(0, 3).ToUpperInvariant(),
+            GameCalendar.MonthName(date.Month).Substring(0, 3).ToUpperInvariant(),
+            date.Day);
     }
 
     private void OnContactSelected(long index)

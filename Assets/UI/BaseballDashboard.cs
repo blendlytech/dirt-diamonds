@@ -27,9 +27,6 @@ public sealed partial class BaseballDashboard : PanelContainer
     // Player-facing text templates live on exported properties so the scene
     // (not compiled code) is the editing surface, per ui_conventions.
     [Export]
-    public string DayFormat { get; set; } = "Day {0} — Season {1} (day {2} of {3})";
-
-    [Export]
     public string NoGameText { get; set; } = "No game today.";
 
     [Export]
@@ -191,7 +188,6 @@ public sealed partial class BaseballDashboard : PanelContainer
     public string FieldingName { get; set; } = "Fielding";
 
     private PortraitView _avatarPortrait = null!;
-    private Label _dayLabel = null!;
     private Button _playGameButton = null!;
     private Button _skipDayButton = null!;
     private Label _statusLabel = null!;
@@ -261,7 +257,6 @@ public sealed partial class BaseballDashboard : PanelContainer
     public override void _Ready()
     {
         _avatarPortrait = GetNode<PortraitView>("Layout/HeaderBand/HeaderRow/AvatarPortrait");
-        _dayLabel = GetNode<Label>("Layout/HeaderBand/HeaderRow/HeaderText/DayLabel");
         _playGameButton = GetNode<Button>("Layout/HeaderBand/HeaderRow/PlayGameButton");
         _skipDayButton = GetNode<Button>("Layout/HeaderBand/HeaderRow/SkipDayButton");
         _statusLabel = GetNode<Label>("Layout/HeaderBand/HeaderRow/HeaderText/StatusLabel");
@@ -298,7 +293,6 @@ public sealed partial class BaseballDashboard : PanelContainer
         _outcomeNames = OutcomeNamesCsv.Split(',');
         _tierNames = TierNamesCsv.Split(',');
         _gradeNames = SchoolGradeNamesCsv.Split(',');
-        RefreshDayLabel();
         RefreshScoutingCard();
         RefreshDayControlsEnabled();
     }
@@ -337,7 +331,6 @@ public sealed partial class BaseballDashboard : PanelContainer
                     _statusLabel.Text = NoGameText; // offseason day
                 }
             }
-            RefreshDayLabel();
             RefreshScoutingCard();
         }
 
@@ -406,7 +399,6 @@ public sealed partial class BaseballDashboard : PanelContainer
         _refreshAfterDayTick = true;
         gm.Clock.AdvanceDay();
         _statusLabel.Text = string.Empty;
-        RefreshDayLabel(); // the clock itself advances synchronously; the cards wait for the pump
     }
 
     private void StartInteractiveGame(CareerManager career)
@@ -457,7 +449,6 @@ public sealed partial class BaseballDashboard : PanelContainer
             // so that recap is still the last completed game — put it back.
             _recapCard.Visible = _recapLabel.Text.Length > 0;
         }
-        RefreshDayLabel();
         RefreshScoutingCard();
     }
 
@@ -483,22 +474,15 @@ public sealed partial class BaseballDashboard : PanelContainer
         _skipDayButton.Disabled = blocked;
     }
 
-    private void RefreshDayLabel()
-    {
-        GlobalState state = GameManager.Instance!.State;
-        _dayLabel.Text = string.Format(
-            DayFormat, state.CurrentDay, state.SeasonYear, state.DayOfSeason, GlobalState.DaysPerSeason);
-    }
-
     /// <summary>
     /// Phase 10c (presentation_layer_narrative.md §5): the scouting report
     /// card — present/future grades per role tool, the OFP headline off
     /// <see cref="PromotionScore.Scouting"/>, tier standing, and the last
     /// offseason's <see cref="DevelopmentManager.LastRun"/> movement. Called
-    /// at every point <see cref="RefreshDayLabel"/> already is (day-advance
-    /// is the only thing that can move ratings — PED costs, the offseason
-    /// development pass — so that's the right refresh granularity per
-    /// ui_conventions, not per-frame).
+    /// at every day-advance settle point (day-advance is the only thing that
+    /// can move ratings — PED costs, the offseason development pass — so
+    /// that's the right refresh granularity per ui_conventions, not
+    /// per-frame).
     /// </summary>
     private void RefreshScoutingCard()
     {

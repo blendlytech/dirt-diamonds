@@ -57,26 +57,12 @@ layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
 text = "0"
 
-[node name="SchoolRow" type="HBoxContainer" parent="Layout"]
+[node name="SchoolNoteLabel" type="Label" parent="Layout"]
+visible = false
 layout_mode = 2
-
-[node name="SchoolLabel" type="Label" parent="Layout/SchoolRow"]
-layout_mode = 2
-custom_minimum_size = Vector2(70, 0)
-text = "School"
-
-[node name="SchoolSlider" type="HSlider" parent="Layout/SchoolRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-min_value = 0
-max_value = 24
-step = 1
-value = 0
-
-[node name="SchoolValueLabel" type="Label" parent="Layout/SchoolRow"]
-layout_mode = 2
-custom_minimum_size = Vector2(24, 0)
-text = "0"
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
 
 [node name="PracticeRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2

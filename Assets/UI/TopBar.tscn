@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/TopBar.cs" id="1_topbar"]
+
+[node name="TopBar" type="PanelContainer"]
+theme_type_variation = &"Card"
+script = ExtResource("1_topbar")
+
+[node name="BarRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DayLabel" type="Label" parent="BarRow"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Day 1"
+
+[node name="Spacer" type="Control" parent="BarRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FundsLabel" type="Label" parent="BarRow"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "$0"

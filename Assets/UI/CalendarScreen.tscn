@@ -11,11 +11,6 @@ script = ExtResource("1_calendarscreen")
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="TitleLabel" type="Label" parent="Layout"]
-theme_type_variation = &"HeadingLabel"
-layout_mode = 2
-text = "Calendar"
-
 [node name="HeaderRow" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 

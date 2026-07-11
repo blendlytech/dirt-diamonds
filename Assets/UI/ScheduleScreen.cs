@@ -17,10 +17,12 @@ namespace DirtAndDiamonds.UI;
 /// <see cref="LifeSimManager.SetTodaySchedule"/>. Not modal like
 /// SuccessionScreen (or the Burner Phone's pending-choice thread) — a plan is optional (an unset plan
 /// autopilots exactly as before 9b), so this never joins BaseballDashboard's
-/// day-advance gate. The School and Game rows are hidden — and their sliders
-/// zeroed — whenever they aren't schedulable
-/// (<see cref="LifeSimManager.AvatarSchoolAvailable"/>,
-/// <see cref="CareerManager.TryGetPendingGame"/>), so a stale hour never
+/// day-advance gate. School has no slider at all — its hours are
+/// calendar-forced (<see cref="GameManager.GetMandatoryBlocksFor"/>), so the
+/// card shows a read-only mandated-hours note and folds those hours into the
+/// free-hours budget; the Game row is hidden — and its slider zeroed —
+/// whenever it isn't schedulable
+/// (<see cref="CareerManager.TryGetPendingGame"/>), so a stale hour never
 /// rides along silently after a tier change or an offseason day. Playing an
 /// attended game itself stays BaseballDashboard's flow — the Game slider
 /// only reserves the hours, it never launches the at-bat view. HS-4 also adds
@@ -61,14 +63,15 @@ public sealed partial class ScheduleScreen : PanelContainer
     public string PersonStatsFormat { get; set; } =
         "GPA {0:F2}  •  Intelligence {1}  Discipline {2}  Happiness {3}";
 
-    private Control _schoolRow = null!;
+    [Export]
+    public string SchoolMandatedFormat { get; set; } = "School today: {0}h (mandatory)";
+
     private Control _gameRow = null!;
     private Control _familyRow = null!;
 
     private HSlider _sleepSlider = null!;
     private Label _sleepValueLabel = null!;
-    private HSlider _schoolSlider = null!;
-    private Label _schoolValueLabel = null!;
+    private Label _schoolNoteLabel = null!;
     private HSlider _practiceSlider = null!;
     private Label _practiceValueLabel = null!;
     private HSlider _gameSlider = null!;
@@ -141,16 +144,20 @@ public sealed partial class ScheduleScreen : PanelContainer
     // can flip true/false with no slider change involved).
     private bool _overAllocated;
 
+    // Calendar-mandated school hours for the day this plan will tick —
+    // school has no slider, so this is what RefreshHoursLabels folds into
+    // the free-hours budget and OnConfirmPressed submits as SchoolHours
+    // (SubmitDaySchedule re-forces it server-side either way).
+    private int _mandatedSchoolHours;
+
     public override void _Ready()
     {
-        _schoolRow = GetNode<Control>("Layout/SchoolRow");
         _gameRow = GetNode<Control>("Layout/GameRow");
         _familyRow = GetNode<Control>("Layout/FamilyRow");
 
         _sleepSlider = GetNode<HSlider>("Layout/SleepRow/SleepSlider");
         _sleepValueLabel = GetNode<Label>("Layout/SleepRow/SleepValueLabel");
-        _schoolSlider = GetNode<HSlider>("Layout/SchoolRow/SchoolSlider");
-        _schoolValueLabel = GetNode<Label>("Layout/SchoolRow/SchoolValueLabel");
+        _schoolNoteLabel = GetNode<Label>("Layout/SchoolNoteLabel");
         _practiceSlider = GetNode<HSlider>("Layout/PracticeRow/PracticeSlider");
         _practiceValueLabel = GetNode<Label>("Layout/PracticeRow/PracticeValueLabel");
         _gameSlider = GetNode<HSlider>("Layout/GameRow/GameSlider");
@@ -173,14 +180,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         _confirmButton = GetNode<Button>("Layout/ButtonsRow/ConfirmButton");
         _clearButton = GetNode<Button>("Layout/ButtonsRow/ClearButton");
 
-        // School hours are calendar-driven (SchoolCalendar via
-        // GameManager.GetMandatoryBlocksFor) — the slider is a read-only
-        // display everywhere school exists. Practice/Game lock per-frame on
-        // MandatoryBlocks.PracticeGameLocked (HS tier only, this pass).
-        _schoolSlider.Editable = false;
-
         _sleepSlider.ValueChanged += _ => RefreshHoursLabels();
-        _schoolSlider.ValueChanged += _ => RefreshHoursLabels();
         _practiceSlider.ValueChanged += _ => RefreshHoursLabels();
         _gameSlider.ValueChanged += _ => RefreshHoursLabels();
         _workSlider.ValueChanged += _ => RefreshHoursLabels();
@@ -222,12 +222,19 @@ public sealed partial class ScheduleScreen : PanelContainer
         MandatoryBlocks blocks = GameManager.Instance!.GetMandatoryBlocksFor(
             GameManager.Instance!.State.CurrentDay + 1);
 
-        bool schoolAvailable = lifeSim.AvatarSchoolAvailable;
-        _schoolRow.Visible = schoolAvailable;
-        double schoolTarget = schoolAvailable ? blocks.SchoolHours : 0;
-        if (_schoolSlider.Value != schoolTarget)
+        // School is not a slider (calendar-forced hours) — a read-only note
+        // plus the fold into the free-hours budget, refreshed only when the
+        // mandated value actually moves.
+        int schoolTarget = lifeSim.AvatarSchoolAvailable ? blocks.SchoolHours : 0;
+        if (schoolTarget != _mandatedSchoolHours)
         {
-            _schoolSlider.Value = schoolTarget; // fires ValueChanged -> RefreshHoursLabels
+            _mandatedSchoolHours = schoolTarget;
+            _schoolNoteLabel.Visible = schoolTarget > 0;
+            if (schoolTarget > 0)
+            {
+                _schoolNoteLabel.Text = string.Format(SchoolMandatedFormat, schoolTarget);
+            }
+            RefreshHoursLabels();
         }
 
         if (blocks.PracticeGameLocked)
@@ -354,14 +361,16 @@ public sealed partial class ScheduleScreen : PanelContainer
     private void RefreshHoursLabels()
     {
         _sleepValueLabel.Text = ((int)_sleepSlider.Value).ToString();
-        _schoolValueLabel.Text = ((int)_schoolSlider.Value).ToString();
         _practiceValueLabel.Text = ((int)_practiceSlider.Value).ToString();
         _gameValueLabel.Text = ((int)_gameSlider.Value).ToString();
         _workValueLabel.Text = ((int)_workSlider.Value).ToString();
         _freeTimeValueLabel.Text = ((int)_freeTimeSlider.Value).ToString();
         _familyValueLabel.Text = ((int)_familySlider.Value).ToString();
 
-        int total = (int)_sleepSlider.Value + (int)_schoolSlider.Value + (int)_practiceSlider.Value
+        // Mandated school hours count against the day even without a slider —
+        // otherwise a school day's budget would let the player silently
+        // over-allocate the six hours the calendar already spent.
+        int total = (int)_sleepSlider.Value + _mandatedSchoolHours + (int)_practiceSlider.Value
             + (int)_gameSlider.Value + (int)_workSlider.Value + (int)_freeTimeSlider.Value
             + (int)_familySlider.Value;
         int free = DaySchedule.HoursPerDay - total;
@@ -373,7 +382,7 @@ public sealed partial class ScheduleScreen : PanelContainer
     private void OnConfirmPressed()
     {
         var schedule = new DaySchedule(
-            (int)_sleepSlider.Value, (int)_schoolSlider.Value, (int)_practiceSlider.Value,
+            (int)_sleepSlider.Value, _mandatedSchoolHours, (int)_practiceSlider.Value,
             (int)_gameSlider.Value, (int)_workSlider.Value, (int)_freeTimeSlider.Value,
             FreeTimeActivities[_freeTimeActivityOption.Selected], (int)_familySlider.Value);
         var workActivity = (WorkActivity)_workActivityOption.Selected;

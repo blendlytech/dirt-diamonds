@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="PackedScene" path="res://Assets/UI/BaseballDashboard.tscn" id="1_dashboard"]
 [ext_resource type="PackedScene" path="res://Assets/UI/BurnerPhone.tscn" id="2_phone"]
+[ext_resource type="PackedScene" path="res://Assets/UI/TopBar.tscn" id="3_topbar"]
 
 [node name="TwoPanelShell" type="Control"]
 anchors_preset = 15
@@ -18,15 +19,23 @@ theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 14
 
-[node name="Panels" type="HBoxContainer" parent="Margin"]
+[node name="ShellLayout" type="VBoxContainer" parent="Margin"]
 layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" parent="Margin/ShellLayout" instance=ExtResource("3_topbar")]
+layout_mode = 2
+
+[node name="Panels" type="HBoxContainer" parent="Margin/ShellLayout"]
+layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="BaseballDashboard" parent="Margin/Panels" instance=ExtResource("1_dashboard")]
+[node name="BaseballDashboard" parent="Margin/ShellLayout/Panels" instance=ExtResource("1_dashboard")]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 2.0
 
-[node name="BurnerPhone" parent="Margin/Panels" instance=ExtResource("2_phone")]
+[node name="BurnerPhone" parent="Margin/ShellLayout/Panels" instance=ExtResource("2_phone")]
 layout_mode = 2
 size_flags_horizontal = 3

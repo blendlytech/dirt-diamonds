@@ -1,10 +1,9 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BaseballDashboard.cs" id="1_dashboard"]
 [ext_resource type="PackedScene" path="res://Assets/UI/AtBatView.tscn" id="2_atbatview"]
 [ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="3_portraitview"]
 [ext_resource type="PackedScene" path="res://Assets/UI/ScheduleScreen.tscn" id="4_scheduleplan"]
-[ext_resource type="PackedScene" path="res://Assets/UI/CalendarScreen.tscn" id="5_calendarscreen"]
 
 [sub_resource type="StyleBoxEmpty" id="sbe_root"]
 
@@ -36,11 +35,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_constants/separation = 2
-
-[node name="DayLabel" type="Label" parent="Layout/HeaderBand/HeaderRow/HeaderText"]
-layout_mode = 2
-theme_type_variation = &"HeadingLabel"
-text = "Day 1"
 
 [node name="StatusLabel" type="Label" parent="Layout/HeaderBand/HeaderRow/HeaderText"]
 layout_mode = 2
@@ -304,11 +298,6 @@ autowrap_mode = 2
 text = ""
 
 [node name="ScheduleScreen" parent="Layout/LeagueRow" instance=ExtResource("4_scheduleplan")]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 2.0
-
-[node name="CalendarScreen" parent="Layout/LeagueRow" instance=ExtResource("5_calendarscreen")]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 2.0

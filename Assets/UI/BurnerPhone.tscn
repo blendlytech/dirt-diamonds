@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BurnerPhone.cs" id="1_script"]
 [ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="2_portraitview"]
+[ext_resource type="PackedScene" path="res://Assets/UI/CalendarScreen.tscn" id="3_calendarscreen"]
 
 [node name="BurnerPhone" type="PanelContainer"]
 script = ExtResource("1_script")
@@ -27,6 +28,15 @@ theme_type_variation = &"CaptionLabel"
 text = "BURNER"
 
 [node name="StatusSpacer" type="Control" parent="Screen/ScreenLayout/StatusBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ClockLabel" type="Label" parent="Screen/ScreenLayout/StatusBar"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = ""
+
+[node name="StatusSpacer2" type="Control" parent="Screen/ScreenLayout/StatusBar"]
 layout_mode = 2
 size_flags_horizontal = 3
 
@@ -64,6 +74,17 @@ theme_override_constants/separation = 10
 [node name="ChoicesContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
 layout_mode = 2
 theme_override_constants/separation = 6
+
+[node name="Calendar" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="CalendarScreen" parent="Screen/ScreenLayout/PhoneTabs/Calendar" instance=ExtResource("3_calendarscreen")]
+layout_mode = 2
 
 [node name="History" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
