@@ -5,20 +5,19 @@ description: Launches the Dirt & Diamonds Godot project.
 
 # Launch Godot Game
 
-This skill launches the Dirt & Diamonds Godot project in the editor or runs the game.
+This skill provides instructions on how to launch the Dirt & Diamonds Godot project.
 
 ## Instructions
 
-1. To launch the Godot editor for this project, run the following command in the terminal from the project root (`c:\Users\DELL\dirt&diamonds`):
+**Important**: Because agents run their terminal commands in an isolated background session, any GUI app launched by an agent (like Godot) will be invisible to the user. **You cannot launch Godot directly for the user.**
 
-    ```powershell
-    godot -e .
-    ```
+Instead, instruct the user to run one of the provided batch scripts in their project folder.
 
-2. To launch the game directly (without the editor), run:
+1. **To play the game directly**, tell the user to run:
+   `.\launch_game.bat`
 
-    ```powershell
-    godot .
-    ```
+2. **To open the project in the Godot Editor**, tell the user to run:
+   `.\launch_editor.bat`
 
-**Note**: If `godot` is not recognized as a command, it means the Godot executable is not in the system's `PATH`. In this case, you may need to ask the user for the path to their Godot 4+ executable.
+If they prefer to run it from their own terminal, the absolute path to Godot is:
+`C:\Users\DELL\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine.Mono_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.7-stable_mono_win64\Godot_v4.7-stable_mono_win64.exe`
