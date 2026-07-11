@@ -7,6 +7,7 @@
       "weight": 0.15,
       "cooldown_days": 60,
       "contact": "unknown",
+      "category": "hustle",
       "prompt": "Defying the syndicate had consequences. Two men are waiting by your car, and they aren't here to talk baseball.",
       "prerequisites": [
         { "flag_active": "syndicate_marked", "min_days_since": 14 }
@@ -39,6 +40,7 @@
       "weight": 0.08,
       "cooldown_days": 30,
       "contact": "agent_diaz",
+      "category": "hustle",
       "prompt": "A tester with a clipboard is waiting outside the clubhouse, and this time the numbers don't lie. Word is already starting to leak.",
       "prerequisites": [
         { "field": "detection_risk", "op": ">", "value": 70 },
@@ -72,6 +74,7 @@
       "scope": "any",
       "weight": 0.05,
       "contact": "coach_reyes",
+      "category": "hustle",
       "prompt": "The scandal is old news now. A local charity asks if you'd host a youth clinic — a chance to start rewriting the story.",
       "prerequisites": [
         { "flag_active": "steroid_scandal_public", "min_days_since": 180 }
@@ -95,6 +98,7 @@
       "weight": 0.12,
       "cooldown_days": 45,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "Something in your body isn't right anymore. The trainer's face says it plainly, even if he won't.",
       "prerequisites": [
         { "field": "health_ceiling", "op": "<", "value": 40 }
@@ -126,6 +130,7 @@
       "weight": 0.04,
       "cooldown_days": 60,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "A rain delay strands the whole team at a roadside diner. Someone starts telling stories, and the night turns into one you'll all remember.",
       "prerequisites": [
         { "field": "age", "op": ">=", "value": 19 }
@@ -148,6 +153,7 @@
       "weight": 0.02,
       "cooldown_days": 200,
       "contact": "girlfriend_jess",
+      "category": "romance",
       "prompt": "Spring training has a way of loosening things up. Somewhere between the batting cages and the team cookout, a teammate catches your eye.",
       "prerequisites": [
         { "field": "age", "op": ">=", "value": 21 }
@@ -170,6 +176,7 @@
       "weight": 0.05,
       "cooldown_days": 45,
       "contact": "family_mom",
+      "category": "family",
       "prompt": "Practice starts in twenty minutes, but the controller is right there and the game is just getting good.",
       "prerequisites": [
         { "field": "age", "op": "<", "value": 16 },

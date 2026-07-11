@@ -7,6 +7,7 @@
       "weight": 0.3,
       "cooldown_days": 400,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "Coach Reyes walks you to an empty locker stall in the corner of the clubhouse. 'Welcome to the show, kid. Everybody starts here.'",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -40,6 +41,7 @@
       "weight": 0.2,
       "cooldown_days": 400,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "The veterans corner you after practice with a boombox and a very specific playlist. Rookie karaoke is apparently not optional.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -75,6 +77,7 @@
       "weight": 0.05,
       "cooldown_days": 45,
       "contact": "family_mom",
+      "category": "family",
       "prompt": "Another motel room, another town you can't quite place on a map. For a second all you want is your own bed and your mom's cooking.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -105,6 +108,7 @@
       "weight": 0.2,
       "cooldown_days": 400,
       "contact": "agent_diaz",
+      "category": "career",
       "prompt": "Direct deposit hits at midnight. It's not much by league standards, but it's the first real paycheck of your life -- and it's yours.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -143,6 +147,7 @@
       "weight": 0.1,
       "cooldown_days": 60,
       "contact": "agent_diaz",
+      "category": "career",
       "prompt": "Diaz forwards you a spreadsheet with a raised-eyebrow subject line: 'Where did the signing bonus go?' The balance is thinner than it should be.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -176,6 +181,7 @@
       "weight": 0.1,
       "cooldown_days": 400,
       "contact": "agent_diaz",
+      "category": "career",
       "prompt": "Diaz calls just to say it: your account actually has a cushion in it. 'Most rookies blow through this in a month. Keep doing what you're doing.'",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -201,6 +207,7 @@
       "weight": 0.05,
       "cooldown_days": 21,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "Reyes catches you by your locker before the game. 'Everybody in this room struggled at your age. Don't let one bad week convince you otherwise.'",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -231,6 +238,7 @@
       "weight": 0.06,
       "cooldown_days": 30,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "Nothing's falling. Every ball finds a glove, every close pitch goes against you. The kind of stretch that gets in your head if you let it.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -262,6 +270,7 @@
       "weight": 0.06,
       "cooldown_days": 30,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "You can't miss right now. Every read is right, every swing feels a half-second ahead of the game. The whole dugout has noticed.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -293,6 +302,7 @@
       "weight": 0.04,
       "cooldown_days": 45,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "You open your locker to find every piece of gear wrapped in athletic tape. The whole clubhouse is already watching for your reaction.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -325,6 +335,7 @@
       "weight": 0.05,
       "cooldown_days": 40,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "The road-trip roommate list goes up, and you're paired with someone new. Ten days on a bus is a long time to share a room with a stranger.",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },
@@ -356,6 +367,7 @@
       "weight": 0.05,
       "cooldown_days": 35,
       "contact": "coach_reyes",
+      "category": "baseball",
       "prompt": "A ten-year veteran pulls up a folding chair next to yours. 'You want to make it in this league? Here's what nobody tells you.'",
       "prerequisites": [
         { "field": "tier", "op": ">=", "value": 2 },

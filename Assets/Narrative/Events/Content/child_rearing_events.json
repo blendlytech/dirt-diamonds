@@ -7,6 +7,7 @@
       "weight": 0.06,
       "cooldown_days": 14,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "It's been a long day for both of you, but the kid won't settle down until you finish one more chapter.",
       "prerequisites": [
         { "flag_active": "hs_has_child" }
@@ -34,6 +35,7 @@
       "weight": 0.06,
       "cooldown_days": 14,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "The kid's got a glove two sizes too big and won't stop asking you to throw a few with them before it gets dark.",
       "prerequisites": [
         { "flag_active": "hs_has_child" }
@@ -62,6 +64,7 @@
       "weight": 0.05,
       "cooldown_days": 30,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "The travel-ball coach pulls you aside: your kid's got real potential, if you can cover the private lesson fees.",
       "prerequisites": [
         { "flag_active": "hs_has_child" }
@@ -90,6 +93,7 @@
       "weight": 0.05,
       "cooldown_days": 30,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "The recital started an hour ago. Practice ran long, and your phone is full of missed calls.",
       "prerequisites": [
         { "flag_active": "hs_has_child" }
@@ -121,6 +125,7 @@
       "weight": 0.05,
       "cooldown_days": 21,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "Everyone's actually home for once. The board games are still in the closet from last time.",
       "prerequisites": [
         { "flag_active": "hs_has_child" }
@@ -149,6 +154,7 @@
       "weight": 0.03,
       "cooldown_days": 60,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "Your kid got in trouble at school today. How you handle tonight's conversation is going to stick with them.",
       "prerequisites": [
         { "flag_active": "hs_has_child" }
@@ -178,6 +184,7 @@
       "weight": 0.04,
       "cooldown_days": 45,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "The school counselor is on the phone. She's noticed your kid slipping -- grades, mood, somebody picking them up late again and again.",
       "prerequisites": [
         { "flag_active": "hs_child_neglect_pattern", "min_days_since": 14 }
@@ -209,6 +216,7 @@
       "weight": 0.05,
       "cooldown_days": 30,
       "contact": "family_kid",
+      "category": "family",
       "prompt": "You've noticed it too -- the distance building between you and your kid. Tonight's as good a night as any to actually do something about it.",
       "prerequisites": [
         { "flag_active": "hs_child_neglect_pattern", "min_days_since": 21 }

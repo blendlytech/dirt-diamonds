@@ -7,6 +7,7 @@
       "weight": 0.06,
       "cooldown_days": 200,
       "contact": "unknown",
+      "category": "hustle",
       "prompt": "The knock this time isn't a rival or a bookie -- it's the police, warrant in hand. The watchlist finally caught up.",
       "prerequisites": [
         { "flag_active": "narc_watchlist", "min_days_since": 5 },
@@ -33,6 +34,7 @@
       "weight": 0.1,
       "cooldown_days": 150,
       "contact": "agent_diaz",
+      "category": "hustle",
       "prompt": "The league office doesn't send a letter this time -- they send a person. A third positive test means this one is out of your hands.",
       "prerequisites": [
         { "field": "detection_risk", "op": ">=", "value": 90 }
@@ -57,6 +59,7 @@
       "weight": 0.08,
       "cooldown_days": 110,
       "contact": "agent_diaz",
+      "category": "hustle",
       "prompt": "A certified letter from the league office: the test came back dirty again, and this time it comes with games attached.",
       "prerequisites": [
         { "field": "detection_risk", "op": ">=", "value": 80 }
@@ -81,6 +84,7 @@
       "weight": 0.05,
       "cooldown_days": 90,
       "contact": "agent_diaz",
+      "category": "hustle",
       "prompt": "A certified letter from the league office: the test came back dirty. It's your first one on record, so the ban is short -- but it's on the record now.",
       "prerequisites": [
         { "field": "detection_risk", "op": ">=", "value": 60 }
@@ -105,6 +109,7 @@
       "weight": 0.1,
       "cooldown_days": 60,
       "contact": "agent_diaz",
+      "category": "baseball",
       "prompt": "The imaging comes back and the trainer doesn't sugarcoat it -- this one needs real time, not a day off and some tape.",
       "prerequisites": [
         { "field": "health_ceiling", "op": "<", "value": 50 }

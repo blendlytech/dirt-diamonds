@@ -6,6 +6,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "family_mom",
+      "category": "school",
       "prompt": "First bell of freshman year. New building, a locker that won't open, a schedule you're pretty sure is wrong. Mom texts: 'Knock 'em dead today, kiddo.'",
       "text_message": "Knock 'em dead today, kiddo.",
       "prerequisites": [
@@ -40,6 +41,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "Coach Malone stops you in the hall. 'You're the freshman who can supposedly hit. Tryouts are Thursday. Don't make me regret knowing your name.'",
       "text_message": "Thursday. 3:30. Don't be late.",
       "prerequisites": [
@@ -75,6 +77,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "Tryouts. Forty kids, fifteen spots, a coach with a clipboard who hasn't smiled once. Your name gets called for the first round.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -113,6 +116,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "You made it. First official practice -- Coach Malone runs the team into the ground before anyone touches a ball. Around the tenth sprint, a few guys glance over to see if you'll break.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -148,6 +152,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "First game tomorrow. You're in the lineup. Tonight, staring at the ceiling, every version plays out -- the ones where you're a hero and the ones where you're not.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -184,6 +189,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "hs_friend",
+      "category": "school",
       "prompt": "Lunch, day three. Tray in hand, nowhere obvious to sit. A table of kids from your grade clocks you standing there -- one waves you over before it gets awkward.",
       "text_message": "Yo, same table tomorrow?",
       "prerequisites": [
@@ -221,6 +227,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "family_mom",
+      "category": "school",
       "prompt": "First report card of high school hits the mailbox. Mom reads it twice and sticks it on the fridge before you're even home. 'We are SO proud of you.'",
       "text_message": "Putting this on the fridge. So proud of you, kiddo.",
       "prerequisites": [
@@ -257,6 +264,7 @@
       "scope": "avatar",
       "weight": 1.0,
       "contact": "coach_hs",
+      "category": "school",
       "prompt": "Coach Malone drops a printout on the bench next to you -- your grades. 'No pass, no play. You want to keep that uniform, you fix this. I'm not asking.'",
       "text_message": "Fix it. I mean it.",
       "prerequisites": [
@@ -297,6 +305,7 @@
       "weight": 0.15,
       "cooldown_days": 30,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "Coach Malone catches you after the bell. 'How you holding up, kid? Season's long. School, ball, home -- a lot to carry at your age.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -327,6 +336,7 @@
       "scope": "avatar",
       "weight": 0.5,
       "contact": "hs_friend",
+      "category": "baseball",
       "prompt": "Your buddy shoves a phone in your face -- a clip of the shortstop from Westbrook, the crosstown school, running his mouth about your team. 'He said your name, man. By name.'",
       "text_message": "He's still talking. You seeing this?",
       "prerequisites": [
@@ -364,6 +374,7 @@
       "scope": "avatar",
       "weight": 0.4,
       "contact": "hs_friend",
+      "category": "school",
       "prompt": "Homecoming's this weekend. Half the school's going, tickets are twenty bucks, and your crew keeps asking if you're in. First real 'everyone's there' night of the year.",
       "text_message": "Tickets go fast. You in?",
       "prerequisites": [

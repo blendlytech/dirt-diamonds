@@ -132,6 +132,27 @@ public static class GrittyEventJson
             ? contactElement.GetString() ?? UnknownContactId
             : UnknownContactId;
 
+        // The Events feed's card heading (BurnerPhone playtest follow-up):
+        // additive like "contact" above — a batch that omits "category"
+        // routes to the reserved General fallback rather than failing load.
+        EventCategory category = EventCategory.General;
+        if (element.TryGetProperty("category", out JsonElement categoryElement))
+        {
+            string categoryText = categoryElement.GetString()
+                ?? throw new FormatException($"Event '{id}': 'category' must be a string.");
+            category = categoryText switch
+            {
+                "baseball" => EventCategory.Baseball,
+                "family" => EventCategory.Family,
+                "romance" => EventCategory.Romance,
+                "school" => EventCategory.School,
+                "hustle" => EventCategory.Hustle,
+                "career" => EventCategory.Career,
+                "general" => EventCategory.General,
+                _ => throw new FormatException($"Event '{id}': unknown category '{categoryText}'."),
+            };
+        }
+
         // Phone-split spec §1: an optional fire-time companion text. Present
         // means non-empty — a malformed/blank string is a loud content error,
         // never a silent no-text (the closed-vocabulary discipline every
@@ -148,7 +169,7 @@ public static class GrittyEventJson
         }
 
         return new GrittyEventDefinition(
-            id, scope, weight, cooldownDays, prompt, contactId, prerequisites, choices, textMessage);
+            id, scope, weight, cooldownDays, prompt, contactId, category, prerequisites, choices, textMessage);
     }
 
     /// <summary>Player-facing fallback for content that omits "prompt"/"label": snake_case id → Title Case words.</summary>

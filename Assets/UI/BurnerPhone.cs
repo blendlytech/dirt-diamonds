@@ -72,6 +72,20 @@ public sealed partial class BurnerPhone : PanelContainer
     public string OutcomeFallbackFormat { get; set; } = "You: {0}";
 
     /// <summary>
+    /// Events feed card headings, indexed by <see cref="EventCategory"/>'s
+    /// ordinal (the TierNames/PhoneTierNames convention already used
+    /// elsewhere in this file) — a scene category ("Baseball", "Family",
+    /// "Romance"...) instead of the contact's name, so an Events card reads
+    /// as a genuinely different surface than a Messages thread rather than
+    /// both showing "Mom"/"Coach Malone" as the heading.
+    /// </summary>
+    [Export]
+    public string[] CategoryLabels { get; set; } =
+    {
+        "Baseball", "Family", "Romance", "School", "Hustle", "Career", "General",
+    };
+
+    /// <summary>
     /// Closes the disclosed seam: the Events feed used to rebuild a Control
     /// card for every Event-kind row ever logged, every reload (day-change
     /// cadence) — harmless at playtest scale but unbounded node churn across
@@ -585,13 +599,13 @@ public sealed partial class BurnerPhone : PanelContainer
             string resolutionLine = string.IsNullOrEmpty(row.Outcome)
                 ? string.Format(OutcomeFallbackFormat, row.Choice)
                 : row.Outcome;
-            _eventsContainer.AddChild(BuildEventCard(gm, row.ContactId, row.Prompt, resolutionLine, row.GameDay, row.SeasonYear));
+            _eventsContainer.AddChild(BuildEventCard(EventCategoryCodec.FromWire(row.Category), row.Prompt, resolutionLine, row.GameDay, row.SeasonYear));
         }
 
         if (pending is { } liveFire)
         {
             GrittyEventFiredEvent fired = liveFire.Fired;
-            _eventsContainer.AddChild(BuildEventCard(gm, liveFire.Definition.ContactId, liveFire.Definition.Prompt, null,
+            _eventsContainer.AddChild(BuildEventCard(liveFire.Definition.Category, liveFire.Definition.Prompt, null,
                 fired.Day, gm.State.SeasonYearForDay(fired.Day)));
 
             EventChoice[] eventChoices = liveFire.Definition.Choices;
@@ -630,10 +644,9 @@ public sealed partial class BurnerPhone : PanelContainer
         _eventsScroll.ScrollVertical = (int)_eventsScroll.GetVScrollBar().MaxValue;
     }
 
-    /// <summary>One Events/History-feed card: contact + day/season caption, the scene prompt, and (when resolved) the resolution line. <paramref name="resolutionLine"/> is null for the live unresolved card. Returns the built card unparented — callers add it to whichever container owns it.</summary>
-    private PanelContainer BuildEventCard(GameManager gm, string contactId, string prompt, string? resolutionLine, long gameDay, int seasonYear)
+    /// <summary>One Events/History-feed card: category + day/season caption, the scene prompt, and (when resolved) the resolution line. <paramref name="resolutionLine"/> is null for the live unresolved card. Returns the built card unparented — callers add it to whichever container owns it.</summary>
+    private PanelContainer BuildEventCard(EventCategory category, string prompt, string? resolutionLine, long gameDay, int seasonYear)
     {
-        ContactDefinition contact = gm.Contacts.Resolve(contactId);
         int dayOfSeason = GlobalState.DayOfSeasonForDay(gameDay);
 
         var layout = new VBoxContainer();
@@ -642,7 +655,7 @@ public sealed partial class BurnerPhone : PanelContainer
         var metaRow = new HBoxContainer();
         metaRow.AddChild(new Label
         {
-            Text = contact.DisplayName,
+            Text = CategoryLabels[(int)category],
             ThemeTypeVariation = "HeadingLabel",
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
         });
@@ -701,7 +714,7 @@ public sealed partial class BurnerPhone : PanelContainer
                 string resolutionLine = string.IsNullOrEmpty(row.Outcome)
                     ? string.Format(OutcomeFallbackFormat, row.Choice)
                     : row.Outcome;
-                Control card = BuildEventCard(gm, row.ContactId, row.Prompt, resolutionLine, row.GameDay, row.SeasonYear);
+                Control card = BuildEventCard(EventCategoryCodec.FromWire(row.Category), row.Prompt, resolutionLine, row.GameDay, row.SeasonYear);
                 _historyContainer.AddChild(card);
                 _historyContainer.MoveChild(card, insertIndex);
                 insertIndex++;

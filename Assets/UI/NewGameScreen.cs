@@ -18,8 +18,10 @@ namespace DirtAndDiamonds.UI;
 /// on submit, which owns every side effect (teammate benching, household
 /// seeding, arsenal generation, sim re-init) — this screen only collects and
 /// validates input. UI never touches the database directly, per
-/// ui_conventions. Node paths verified against NewGameScreen.tscn via
-/// godot_scene_mapper before this script was written.
+/// ui_conventions. Scene is organized into themed section cards (Identity,
+/// Background, Traits, Career, Ratings) using the project theme's Card /
+/// HeadingLabel / CaptionLabel / TierChip variants; node paths cross-checked
+/// against NewGameScreen.tscn via godot_scene_mapper after the redesign.
 /// </summary>
 public sealed partial class NewGameScreen : Control
 {
@@ -27,28 +29,28 @@ public sealed partial class NewGameScreen : Control
     public delegate void AvatarCreatedEventHandler();
 
     [Export]
-    public string RemainingPointsFormat { get; set; } = "Points remaining: {0}";
+    public string RemainingPointsFormat { get; set; } = "{0}";
 
     [Export]
     public string NameRequiredText { get; set; } = "Enter a name before starting your career.";
 
     [Export]
-    public string WealthTierFormat { get; set; } = "Family: {0}";
+    public string WealthTierFormat { get; set; } = "{0}";
 
     [Export]
     public string WealthTierNamesCsv { get; set; } = "Destitute,Working-Class,Middle-Class,Comfortable,Wealthy";
 
     [Export]
-    public string HouseholdIncomeFormat { get; set; } = "Household income: ~${0:N0}/yr";
+    public string HouseholdIncomeFormat { get; set; } = "~${0:N0}/yr";
 
     [Export]
-    public string StartingFundsFormat { get; set; } = "Starting funds: ${0:N0}";
+    public string StartingFundsFormat { get; set; } = "${0:N0}";
 
     [Export]
-    public string AllowanceFormat { get; set; } = "Weekly allowance: ${0:N0}";
+    public string AllowanceFormat { get; set; } = "${0:N0}";
 
     [Export]
-    public string PhoneFormat { get; set; } = "Phone: {0}, {1} plan";
+    public string PhoneFormat { get; set; } = "{0}, {1} plan";
 
     [Export]
     public string PhoneTierNamesCsv { get; set; } = "Burner Phone,Mid-Tier Phone,Flagship Phone";
@@ -57,22 +59,22 @@ public sealed partial class NewGameScreen : Control
     public string PhonePlanNamesCsv { get; set; } = "Prepaid,Basic,Unlimited";
 
     [Export]
-    public string WifiYesText { get; set; } = "Home Wi-Fi: yes";
+    public string WifiYesText { get; set; } = "Yes";
 
     [Export]
-    public string WifiNoText { get; set; } = "Home Wi-Fi: no — you'll have to find it elsewhere";
+    public string WifiNoText { get; set; } = "No — you'll have to find it elsewhere";
 
     [Export]
-    public string TransportFormat { get; set; } = "Transport: {0}";
+    public string TransportFormat { get; set; } = "{0}";
 
     [Export]
     public string TransportNoneText { get; set; } = "none (you're on foot for now)";
 
     [Export]
-    public string StrictnessFormat { get; set; } = "Parental strictness: {0}/100";
+    public string StrictnessFormat { get; set; } = "{0}/100";
 
     [Export]
-    public string ParentsFormat { get; set; } = "Parents: {0} ({1}) & {2} ({3})";
+    public string ParentsFormat { get; set; } = "{0} ({1}) & {2} ({3})";
 
     [Export]
     public string TraitsHintFormat { get; set; } = "Choose up to {0} traits ({1} selected)";
@@ -141,6 +143,7 @@ public sealed partial class NewGameScreen : Control
     private HSlider _fieldingSlider = null!;
     private Label _fieldingValueLabel = null!;
     private Label _remainingPointsLabel = null!;
+    private Control _errorCard = null!;
     private Label _errorLabel = null!;
     private Button _createButton = null!;
 
@@ -149,51 +152,58 @@ public sealed partial class NewGameScreen : Control
 
     public override void _Ready()
     {
-        _nameLineEdit = GetNode<LineEdit>("Screen/NameRow/NameLineEdit");
-        _teamOptionButton = GetNode<OptionButton>("Screen/TeamRow/TeamOptionButton");
-        _wealthTierLabel = GetNode<Label>("Screen/BackgroundRow/WealthTierLabel");
-        _householdIncomeLabel = GetNode<Label>("Screen/BackgroundRow/HouseholdIncomeLabel");
-        _startingFundsLabel = GetNode<Label>("Screen/BackgroundRow/StartingFundsLabel");
-        _allowanceLabel = GetNode<Label>("Screen/BackgroundRow/AllowanceLabel");
-        _phoneLabel = GetNode<Label>("Screen/BackgroundRow/PhoneLabel");
-        _wifiLabel = GetNode<Label>("Screen/BackgroundRow/WifiLabel");
-        _transportLabel = GetNode<Label>("Screen/BackgroundRow/TransportLabel");
-        _strictnessLabel = GetNode<Label>("Screen/BackgroundRow/StrictnessLabel");
-        _parentsLabel = GetNode<Label>("Screen/BackgroundRow/ParentsLabel");
-        _rerollButton = GetNode<Button>("Screen/BackgroundRow/RerollButton");
-        _traitsHintLabel = GetNode<Label>("Screen/TraitsRow/TraitsHintLabel");
+        const string identity = "Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout";
+        const string background = "Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout";
+        const string traits = "Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout";
+        const string career = "Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout";
+        const string ratings = "Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout";
+
+        _nameLineEdit = GetNode<LineEdit>($"{identity}/NameRow/NameLineEdit");
+        _teamOptionButton = GetNode<OptionButton>($"{identity}/TeamRow/TeamOptionButton");
+        _wealthTierLabel = GetNode<Label>($"{background}/FamilyRow/WealthTierChip/WealthTierLabel");
+        _householdIncomeLabel = GetNode<Label>($"{background}/BackgroundGrid/HouseholdIncomeLabel");
+        _startingFundsLabel = GetNode<Label>($"{background}/BackgroundGrid/StartingFundsLabel");
+        _allowanceLabel = GetNode<Label>($"{background}/BackgroundGrid/AllowanceLabel");
+        _phoneLabel = GetNode<Label>($"{background}/BackgroundGrid/PhoneLabel");
+        _wifiLabel = GetNode<Label>($"{background}/BackgroundGrid/WifiLabel");
+        _transportLabel = GetNode<Label>($"{background}/BackgroundGrid/TransportLabel");
+        _strictnessLabel = GetNode<Label>($"{background}/BackgroundGrid/StrictnessLabel");
+        _parentsLabel = GetNode<Label>($"{background}/BackgroundGrid/ParentsLabel");
+        _rerollButton = GetNode<Button>($"{background}/BackgroundHeaderRow/RerollButton");
+        _traitsHintLabel = GetNode<Label>($"{traits}/TraitsHintLabel");
         _traitCheckBoxes = new[]
         {
-            GetNode<CheckBox>("Screen/TraitsRow/TraitsGrid/LeadershipCheck"),
-            GetNode<CheckBox>("Screen/TraitsRow/TraitsGrid/HumorCheck"),
-            GetNode<CheckBox>("Screen/TraitsRow/TraitsGrid/GenerosityCheck"),
-            GetNode<CheckBox>("Screen/TraitsRow/TraitsGrid/KindnessCheck"),
-            GetNode<CheckBox>("Screen/TraitsRow/TraitsGrid/PatienceCheck"),
-            GetNode<CheckBox>("Screen/TraitsRow/TraitsGrid/HumilityCheck"),
+            GetNode<CheckBox>($"{traits}/TraitsGrid/LeadershipCheck"),
+            GetNode<CheckBox>($"{traits}/TraitsGrid/HumorCheck"),
+            GetNode<CheckBox>($"{traits}/TraitsGrid/GenerosityCheck"),
+            GetNode<CheckBox>($"{traits}/TraitsGrid/KindnessCheck"),
+            GetNode<CheckBox>($"{traits}/TraitsGrid/PatienceCheck"),
+            GetNode<CheckBox>($"{traits}/TraitsGrid/HumilityCheck"),
         };
-        _batterButton = GetNode<Button>("Screen/CareerRow/BatterButton");
-        _pitcherButton = GetNode<Button>("Screen/CareerRow/PitcherButton");
-        _roleRow = GetNode<Control>("Screen/RoleRow");
-        _roleOptionButton = GetNode<OptionButton>("Screen/RoleRow/RoleOptionButton");
-        _batterRatings = GetNode<Control>("Screen/BatterRatings");
-        _powerSlider = GetNode<HSlider>("Screen/BatterRatings/PowerRow/PowerSlider");
-        _powerValueLabel = GetNode<Label>("Screen/BatterRatings/PowerRow/PowerValueLabel");
-        _contactSlider = GetNode<HSlider>("Screen/BatterRatings/ContactRow/ContactSlider");
-        _contactValueLabel = GetNode<Label>("Screen/BatterRatings/ContactRow/ContactValueLabel");
-        _disciplineSlider = GetNode<HSlider>("Screen/BatterRatings/DisciplineRow/DisciplineSlider");
-        _disciplineValueLabel = GetNode<Label>("Screen/BatterRatings/DisciplineRow/DisciplineValueLabel");
-        _pitcherRatings = GetNode<Control>("Screen/PitcherRatings");
-        _stuffSlider = GetNode<HSlider>("Screen/PitcherRatings/StuffRow/StuffSlider");
-        _stuffValueLabel = GetNode<Label>("Screen/PitcherRatings/StuffRow/StuffValueLabel");
-        _controlSlider = GetNode<HSlider>("Screen/PitcherRatings/ControlRow/ControlSlider");
-        _controlValueLabel = GetNode<Label>("Screen/PitcherRatings/ControlRow/ControlValueLabel");
-        _staminaSlider = GetNode<HSlider>("Screen/PitcherRatings/StaminaRow/StaminaSlider");
-        _staminaValueLabel = GetNode<Label>("Screen/PitcherRatings/StaminaRow/StaminaValueLabel");
-        _fieldingSlider = GetNode<HSlider>("Screen/FieldingRow/FieldingSlider");
-        _fieldingValueLabel = GetNode<Label>("Screen/FieldingRow/FieldingValueLabel");
-        _remainingPointsLabel = GetNode<Label>("Screen/RemainingPointsLabel");
-        _errorLabel = GetNode<Label>("Screen/ErrorLabel");
-        _createButton = GetNode<Button>("Screen/CreateButton");
+        _batterButton = GetNode<Button>($"{career}/CareerRow/BatterButton");
+        _pitcherButton = GetNode<Button>($"{career}/CareerRow/PitcherButton");
+        _roleRow = GetNode<Control>($"{career}/RoleRow");
+        _roleOptionButton = GetNode<OptionButton>($"{career}/RoleRow/RoleOptionButton");
+        _batterRatings = GetNode<Control>($"{ratings}/BatterRatings");
+        _powerSlider = GetNode<HSlider>($"{ratings}/BatterRatings/PowerRow/PowerSlider");
+        _powerValueLabel = GetNode<Label>($"{ratings}/BatterRatings/PowerRow/PowerValueLabel");
+        _contactSlider = GetNode<HSlider>($"{ratings}/BatterRatings/ContactRow/ContactSlider");
+        _contactValueLabel = GetNode<Label>($"{ratings}/BatterRatings/ContactRow/ContactValueLabel");
+        _disciplineSlider = GetNode<HSlider>($"{ratings}/BatterRatings/DisciplineRow/DisciplineSlider");
+        _disciplineValueLabel = GetNode<Label>($"{ratings}/BatterRatings/DisciplineRow/DisciplineValueLabel");
+        _pitcherRatings = GetNode<Control>($"{ratings}/PitcherRatings");
+        _stuffSlider = GetNode<HSlider>($"{ratings}/PitcherRatings/StuffRow/StuffSlider");
+        _stuffValueLabel = GetNode<Label>($"{ratings}/PitcherRatings/StuffRow/StuffValueLabel");
+        _controlSlider = GetNode<HSlider>($"{ratings}/PitcherRatings/ControlRow/ControlSlider");
+        _controlValueLabel = GetNode<Label>($"{ratings}/PitcherRatings/ControlRow/ControlValueLabel");
+        _staminaSlider = GetNode<HSlider>($"{ratings}/PitcherRatings/StaminaRow/StaminaSlider");
+        _staminaValueLabel = GetNode<Label>($"{ratings}/PitcherRatings/StaminaRow/StaminaValueLabel");
+        _fieldingSlider = GetNode<HSlider>($"{ratings}/FieldingRow/FieldingSlider");
+        _fieldingValueLabel = GetNode<Label>($"{ratings}/FieldingRow/FieldingValueLabel");
+        _remainingPointsLabel = GetNode<Label>($"{ratings}/RatingsHeaderRow/RemainingPointsLabel");
+        _errorCard = GetNode<Control>("Backdrop/Screen/ErrorCard");
+        _errorLabel = GetNode<Label>("Backdrop/Screen/ErrorCard/ErrorLabel");
+        _createButton = GetNode<Button>("Backdrop/Screen/CreateButton");
 
         PopulateTeams();
         _roleOptionButton.AddItem("Starter");
@@ -406,7 +416,7 @@ public sealed partial class NewGameScreen : Control
         _remainingPointsLabel.Text = string.Format(RemainingPointsFormat, remaining);
 
         bool nameValid = !string.IsNullOrWhiteSpace(_nameLineEdit.Text);
-        _errorLabel.Visible = !nameValid;
+        _errorCard.Visible = !nameValid;
         _errorLabel.Text = nameValid ? string.Empty : NameRequiredText;
         _createButton.Disabled = remaining != 0 || !nameValid;
     }
@@ -453,11 +463,11 @@ public sealed partial class NewGameScreen : Control
         catch (System.Exception ex)
         {
             _errorLabel.Text = ex.Message;
-            _errorLabel.Visible = true;
+            _errorCard.Visible = true;
             return;
         }
 
-        _errorLabel.Visible = false;
+        _errorCard.Visible = false;
         EmitSignal(SignalName.AvatarCreated);
     }
 }

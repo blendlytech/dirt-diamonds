@@ -128,8 +128,43 @@ internal static class Program
             && library.TryGetById("beanball_grudge", out _)
             && library.TryGetById("backyard_catch", out _)
             && shakedown.Prerequisites.Length == 1
-            && shakedown.Prerequisites[0].MinDaysSince == 365,
+            && shakedown.Prerequisites[0].MinDaysSince == 365
+            && shakedown.Category == EventCategory.Hustle,
             $"{library.Count} events");
+
+        // BurnerPhone playtest follow-up: the Events feed's category heading
+        // (EventCategory) is its own closed vocabulary, additive/optional
+        // like "contact" — omitted routes to the reserved General fallback,
+        // never a load failure.
+        {
+            GrittyEventLibrary categorized = GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "cat_baseball", "scope": "any", "weight": 0.1, "category": "baseball", "choices": [ { "id": "a" } ] },
+                  { "id": "cat_family", "scope": "any", "weight": 0.1, "category": "family", "choices": [ { "id": "a" } ] },
+                  { "id": "cat_romance", "scope": "any", "weight": 0.1, "category": "romance", "choices": [ { "id": "a" } ] },
+                  { "id": "cat_school", "scope": "any", "weight": 0.1, "category": "school", "choices": [ { "id": "a" } ] },
+                  { "id": "cat_hustle", "scope": "any", "weight": 0.1, "category": "hustle", "choices": [ { "id": "a" } ] },
+                  { "id": "cat_career", "scope": "any", "weight": 0.1, "category": "career", "choices": [ { "id": "a" } ] },
+                  { "id": "cat_untagged", "scope": "any", "weight": 0.1, "choices": [ { "id": "a" } ] }
+                ] }
+                """);
+            categorized.TryGetById("cat_baseball", out GrittyEventDefinition catBaseball);
+            categorized.TryGetById("cat_family", out GrittyEventDefinition catFamily);
+            categorized.TryGetById("cat_romance", out GrittyEventDefinition catRomance);
+            categorized.TryGetById("cat_school", out GrittyEventDefinition catSchool);
+            categorized.TryGetById("cat_hustle", out GrittyEventDefinition catHustle);
+            categorized.TryGetById("cat_career", out GrittyEventDefinition catCareer);
+            categorized.TryGetById("cat_untagged", out GrittyEventDefinition catUntagged);
+            Check("all six authored categories parse to their EventCategory value",
+                catBaseball.Category == EventCategory.Baseball && catFamily.Category == EventCategory.Family
+                && catRomance.Category == EventCategory.Romance && catSchool.Category == EventCategory.School
+                && catHustle.Category == EventCategory.Hustle && catCareer.Category == EventCategory.Career);
+            Check("an event that omits \"category\" defaults to EventCategory.General",
+                catUntagged.Category == EventCategory.General);
+        }
+        Check("loader rejects an unknown category", Throws(
+            """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "category": "vibes", "choices": [ { "id": "a" } ] } ] }"""));
 
         Check("loader rejects unknown comparison op", Throws(
             """{ "events": [ { "id": "x", "scope": "any", "weight": 0.5, "prerequisites": [ { "field": "funds", "op": "<>", "value": 1 } ], "choices": [ { "id": "a" } ] } ] }"""));
@@ -356,7 +391,7 @@ internal static class Program
         {
             using World world = World.Create("narrativeLog", GrittyEventJson.Parse(
                 """
-                { "events": [ { "id": "tagged", "scope": "any", "weight": 1.0, "contact": "coach_reyes",
+                { "events": [ { "id": "tagged", "scope": "any", "weight": 1.0, "contact": "coach_reyes", "category": "baseball",
                   "choices": [ { "id": "only", "label": "Take it in stride" } ] } ] }
                 """));
             world.AddPlayer("p1", age: 27, teamId: 1);
@@ -368,14 +403,16 @@ internal static class Program
 
             var rows = new List<NarrativeMessageRow>();
             world.NarrativeLog.LoadForPlayer("p1", world.State.CurrentDay, rows);
-            Check("resolved fire logs exactly one narrative_msg row with contact/prompt/choice/day/season",
-                rows.Count == 1 && rows[0].ContactId == "coach_reyes" && rows[0].Choice == "Take it in stride"
+            Check("resolved fire logs exactly one narrative_msg row with contact/category/prompt/choice/day/season",
+                rows.Count == 1 && rows[0].ContactId == "coach_reyes" && rows[0].Category == "baseball"
+                && rows[0].Choice == "Take it in stride"
                 && rows[0].ChoiceIndex == 0 && rows[0].GameDay == 2 && rows[0].SeasonYear == 2026
                 && rows[0].Kind == NarrativeMessageKind.Event && rows[0].Outcome == "",
-                rows.Count == 1 ? $"contact={rows[0].ContactId} choice={rows[0].Choice} day={rows[0].GameDay} season={rows[0].SeasonYear}" : $"{rows.Count} rows");
+                rows.Count == 1 ? $"contact={rows[0].ContactId} category={rows[0].Category} choice={rows[0].Choice} day={rows[0].GameDay} season={rows[0].SeasonYear}" : $"{rows.Count} rows");
         }
 
-        // An untagged event's fire logs against the reserved "unknown" contact.
+        // An untagged event's fire logs against the reserved "unknown" contact
+        // and the reserved General category.
         {
             using World world = World.Create("narrativeLogUnknown", GrittyEventJson.Parse(
                 """{ "events": [ { "id": "untagged", "scope": "any", "weight": 1.0, "choices": [ { "id": "only" } ] } ] }"""));
@@ -388,8 +425,8 @@ internal static class Program
 
             var rows = new List<NarrativeMessageRow>();
             world.NarrativeLog.LoadForPlayer("p1", world.State.CurrentDay, rows);
-            Check("an untagged event's logged message defaults to the 'unknown' contact",
-                rows.Count == 1 && rows[0].ContactId == "unknown");
+            Check("an untagged event's logged message defaults to the 'unknown' contact and the General category",
+                rows.Count == 1 && rows[0].ContactId == "unknown" && rows[0].Category == "general");
         }
 
         // A forfeited stale pending choice still logs — with ITS OWN fire day,
@@ -578,9 +615,10 @@ internal static class Program
 
             var rows = new List<NarrativeMessageRow>();
             world.NarrativeLog.LoadForPlayer("p1", 1, rows);
-            Check("a legacy row with no \"kind\" key reads as Event with Outcome defaulting to \"\"",
+            Check("a legacy row with no \"kind\"/\"category\" key reads as Event/General with Outcome defaulting to \"\"",
                 rows.Count == 1 && rows[0].Kind == NarrativeMessageKind.Event
-                && rows[0].Prompt == "Old prompt." && rows[0].Choice == "Old choice." && rows[0].Outcome == "");
+                && rows[0].Prompt == "Old prompt." && rows[0].Choice == "Old choice." && rows[0].Outcome == ""
+                && rows[0].Category == "general");
         }
     }
 

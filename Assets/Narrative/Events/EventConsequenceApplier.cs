@@ -289,7 +289,8 @@ public sealed class EventConsequenceApplier
             EventChoice pickedChoice = definition.Choices[choiceIndex];
             _narrativeLog.Insert(
                 _state.SeasonYearForDay(fired.Day), fired.Day, fired.SubjectPlayerId,
-                definition.ContactId, definition.Prompt, pickedChoice.Label, choiceIndex, pickedChoice.Outcome);
+                definition.ContactId, EventCategoryCodec.ToWire(definition.Category),
+                definition.Prompt, pickedChoice.Label, choiceIndex, pickedChoice.Outcome);
 
             // Phone-split spec §1: the event's own fire-time companion text
             // (Mom's "Knock 'em dead today, kiddo.") lands with the FIRE day

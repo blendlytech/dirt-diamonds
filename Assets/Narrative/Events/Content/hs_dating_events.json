@@ -7,6 +7,7 @@
       "weight": 0.05,
       "cooldown_days": 60,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "Somebody in your grade has started showing up in your thoughts between innings and homework -- a laugh across the cafeteria, a look that lingers half a second too long.",
       "prerequisites": [
         { "field": "age", "op": "<", "value": 20 },
@@ -36,6 +37,7 @@
       "scope": "avatar",
       "weight": 0.18,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "The moment is right there in front of you. All you have to do is say something.",
       "prerequisites": [
         { "flag_active": "hs_interest" }
@@ -69,6 +71,7 @@
       "weight": 0.06,
       "cooldown_days": 180,
       "contact": "family_dad",
+      "category": "family",
       "prompt": "Dad wants to know who's been texting you every night, and whether you're planning on introducing them any time soon.",
       "prerequisites": [
         { "flag_active": "hs_dating", "min_days_since": 7 },
@@ -98,6 +101,7 @@
       "weight": 0.05,
       "cooldown_days": 30,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "It's late, the house is quiet, and your phone just lit up with three words: \"You up? Come.\"",
       "prerequisites": [
         { "flag_active": "hs_dating" },
@@ -126,6 +130,7 @@
       "scope": "avatar",
       "weight": 0.35,
       "contact": "family_dad",
+      "category": "family",
       "prompt": "The porch light snaps on the second your foot hits the driveway. Busted.",
       "prerequisites": [
         { "flag_active": "snuck_out_recently" },
@@ -158,6 +163,7 @@
       "scope": "avatar",
       "weight": 0.6,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "You're back in bed before anyone stirs. Clean getaway.",
       "prerequisites": [
         { "flag_active": "snuck_out_recently" },
@@ -188,6 +194,7 @@
       "weight": 0.05,
       "cooldown_days": 90,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "It's been quiet between you two for a while now, and you both know what that usually means.",
       "prerequisites": [
         { "flag_active": "hs_dating", "min_days_since": 30 },
@@ -223,6 +230,7 @@
       "weight": 0.04,
       "cooldown_days": 90,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "A name you haven't let yourself think about shows up on your phone: \"saw the box score tonight. couldn't not say something.\"",
       "prerequisites": [
         { "flag_active": "hs_ex", "min_days_since": 30 },
@@ -257,6 +265,7 @@
       "weight": 0.015,
       "cooldown_days": 200,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "Two words in a text turn the whole world sideways: \"We're late.\"",
       "prerequisites": [
         { "flag_active": "hs_dating", "min_days_since": 14 },
@@ -288,6 +297,7 @@
       "scope": "avatar",
       "weight": 0.5,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "The test was real. Now comes the part nobody can decide for you.",
       "prerequisites": [
         { "flag_active": "hs_expecting", "min_days_since": 7 }
@@ -321,6 +331,7 @@
       "scope": "avatar",
       "weight": 0.3,
       "contact": "hs_sweetheart",
+      "category": "family",
       "prompt": "Nine months after a scare that turned into the biggest decision of your life, a hospital room in the middle of the night makes it real.",
       "prerequisites": [
         { "flag_active": "hs_expecting_confirmed", "min_days_since": 270 }
@@ -342,6 +353,7 @@
       "weight": 0.03,
       "cooldown_days": 150,
       "contact": "unknown",
+      "category": "romance",
       "prompt": "Word gets around the clubhouse fast: the person you've been seeing used to date one of your own teammates.",
       "prerequisites": [
         { "flag_active": "hs_dating", "min_days_since": 21 },
@@ -374,6 +386,7 @@
       "weight": 0.04,
       "cooldown_days": 200,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "Graduation is close enough to taste, and the two of you still haven't talked about what happens to \"us\" once the calendar runs out.",
       "prerequisites": [
         { "flag_active": "hs_dating", "min_days_since": 60 },
@@ -408,6 +421,7 @@
       "weight": 0.04,
       "cooldown_days": 120,
       "contact": "hs_sweetheart",
+      "category": "romance",
       "prompt": "Years of bus rides, box scores, and late-night calls later, they're still the first person you want to tell everything to. Maybe it's time to make it official.",
       "prerequisites": [
         { "field": "age", "op": ">", "value": 20 },

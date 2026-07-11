@@ -15,6 +15,63 @@ public enum EventScope : byte
     Avatar,
 }
 
+/// <summary>
+/// The Events feed's card heading (BurnerPhone "Events vs Messages" split,
+/// user playtest follow-up): a scene category, distinct from
+/// <see cref="GrittyEventDefinition.ContactId"/> — the contact is WHO
+/// texts about it (still drives the Messages tab), the category is WHAT KIND
+/// of beat it is, so the two tabs read as genuinely different surfaces
+/// instead of both labelling cards with a person's name. Closed like every
+/// other content-loader enum; <see cref="General"/> is the reserved fallback
+/// for a batch that omits "category" (the ContactRegistry "unknown" precedent),
+/// never something real content authors deliberately.
+/// </summary>
+public enum EventCategory : byte
+{
+    Baseball,
+    Family,
+    Romance,
+    School,
+    Hustle,
+    Career,
+    General,
+}
+
+/// <summary>
+/// Wire encoding for <see cref="EventCategory"/> — the persisted narrative-log
+/// payload (NarrativeLogQueries.cs, Data layer) stores the category as a plain
+/// string tag rather than this enum, the same "opaque tag, not the content
+/// type" posture <see cref="GrittyEventDefinition.ContactId"/> already has
+/// (CoreLoopHarness/MonteCarloHarness compile Data/Database in isolation,
+/// without Narrative/Events, so the Data layer can never reference this enum
+/// directly). This codec is the one place both sides agree on the strings.
+/// </summary>
+public static class EventCategoryCodec
+{
+    public static string ToWire(EventCategory category) => category switch
+    {
+        EventCategory.Baseball => "baseball",
+        EventCategory.Family => "family",
+        EventCategory.Romance => "romance",
+        EventCategory.School => "school",
+        EventCategory.Hustle => "hustle",
+        EventCategory.Career => "career",
+        _ => "general",
+    };
+
+    /// <summary>Absent/unrecognized reads as General — tolerant by design, unlike GrittyEventJson's loud content-authoring parse (this is an engine-internal read-back, not authored input).</summary>
+    public static EventCategory FromWire(string? wire) => wire switch
+    {
+        "baseball" => EventCategory.Baseball,
+        "family" => EventCategory.Family,
+        "romance" => EventCategory.Romance,
+        "school" => EventCategory.School,
+        "hustle" => EventCategory.Hustle,
+        "career" => EventCategory.Career,
+        _ => EventCategory.General,
+    };
+}
+
 public enum PrerequisiteKind : byte
 {
     Field,
@@ -418,6 +475,9 @@ public sealed class GrittyEventDefinition
     /// </summary>
     public readonly string ContactId;
 
+    /// <summary>The Events feed's card heading (see <see cref="EventCategory"/>) — content-authored via the JSON "category" field, "general" when a batch omits it.</summary>
+    public readonly EventCategory Category;
+
     public readonly EventPrerequisite[] Prerequisites;
     public readonly EventChoice[] Choices;
 
@@ -431,7 +491,7 @@ public sealed class GrittyEventDefinition
 
     public GrittyEventDefinition(
         string id, EventScope scope, double weight, int cooldownDays, string prompt, string contactId,
-        EventPrerequisite[] prerequisites, EventChoice[] choices, string? textMessage = null)
+        EventCategory category, EventPrerequisite[] prerequisites, EventChoice[] choices, string? textMessage = null)
     {
         Id = id;
         Scope = scope;
@@ -439,6 +499,7 @@ public sealed class GrittyEventDefinition
         CooldownDays = cooldownDays;
         Prompt = prompt;
         ContactId = contactId;
+        Category = category;
         Prerequisites = prerequisites;
         Choices = choices;
         TextMessage = textMessage;

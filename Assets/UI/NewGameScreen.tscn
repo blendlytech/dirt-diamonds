@@ -10,170 +10,344 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1_newgame")
 
-[node name="Screen" type="VBoxContainer" parent="."]
+[node name="Backdrop" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 24
 
-[node name="TitleLabel" type="Label" parent="Screen"]
-theme_type_variation = &"DisplayLabel"
+[node name="Screen" type="VBoxContainer" parent="Backdrop"]
 layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="Backdrop/Screen"]
+layout_mode = 2
+theme_type_variation = &"DisplayLabel"
 text = "Create Your Player"
 
-[node name="NameRow" type="HBoxContainer" parent="Screen"]
+[node name="SubtitleLabel" type="Label" parent="Backdrop/Screen"]
 layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Set the stage before your first at-bat — your background and build shape the whole career ahead."
+autowrap_mode = 2
 
-[node name="NameLabel" type="Label" parent="Screen/NameRow"]
+[node name="Scroll" type="ScrollContainer" parent="Backdrop/Screen"]
 layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="Backdrop/Screen/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="IdentityCard" type="PanelContainer" parent="Backdrop/Screen/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="IdentityLayout" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/IdentityCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="IdentityHeading" type="Label" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Player Identity"
+
+[node name="NameRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NameLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout/NameRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
 text = "Name"
 
-[node name="NameLineEdit" type="LineEdit" parent="Screen/NameRow"]
+[node name="NameLineEdit" type="LineEdit" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout/NameRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Enter your name"
 
-[node name="TeamRow" type="HBoxContainer" parent="Screen"]
+[node name="TeamRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="TeamLabel" type="Label" parent="Screen/TeamRow"]
+[node name="TeamLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout/TeamRow"]
 layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
 text = "Team"
 
-[node name="TeamOptionButton" type="OptionButton" parent="Screen/TeamRow"]
+[node name="TeamOptionButton" type="OptionButton" parent="Backdrop/Screen/Scroll/Content/IdentityCard/IdentityLayout/TeamRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="BackgroundRow" type="VBoxContainer" parent="Screen"]
+[node name="BackgroundCard" type="PanelContainer" parent="Backdrop/Screen/Scroll/Content"]
 layout_mode = 2
+theme_type_variation = &"Card"
 
-[node name="BackgroundTitleLabel" type="Label" parent="Screen/BackgroundRow"]
+[node name="BackgroundLayout" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/BackgroundCard"]
 layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackgroundHeaderRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="BackgroundTitleLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundHeaderRow"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
 text = "Your Background"
 
-[node name="WealthTierLabel" type="Label" parent="Screen/BackgroundRow"]
+[node name="HeaderSpacer" type="Control" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundHeaderRow"]
 layout_mode = 2
-text = "Family: Middle-Class"
+size_flags_horizontal = 3
 
-[node name="HouseholdIncomeLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Household income: ~$72,000/yr"
-
-[node name="StartingFundsLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Starting funds: $500"
-
-[node name="AllowanceLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Weekly allowance: $25"
-
-[node name="PhoneLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Phone: Mid-Tier Phone, Basic plan"
-
-[node name="WifiLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Home Wi-Fi: yes"
-
-[node name="TransportLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Transport: none"
-
-[node name="StrictnessLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Parental strictness: 50/100"
-
-[node name="ParentsLabel" type="Label" parent="Screen/BackgroundRow"]
-layout_mode = 2
-text = "Parents: —"
-
-[node name="RerollButton" type="Button" parent="Screen/BackgroundRow"]
+[node name="RerollButton" type="Button" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundHeaderRow"]
 layout_mode = 2
 text = "Re-roll Background"
 
-[node name="TraitsRow" type="VBoxContainer" parent="Screen"]
+[node name="FamilyRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="TraitsTitleLabel" type="Label" parent="Screen/TraitsRow"]
+[node name="FamilyKeyLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/FamilyRow"]
 layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Family"
+
+[node name="WealthTierChip" type="PanelContainer" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/FamilyRow"]
+layout_mode = 2
+theme_type_variation = &"TierChip"
+
+[node name="WealthTierLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/FamilyRow/WealthTierChip"]
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "Middle-Class"
+
+[node name="BackgroundGrid" type="GridContainer" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="HouseholdIncomeKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Household Income"
+
+[node name="HouseholdIncomeLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "~$72,000/yr"
+
+[node name="StartingFundsKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Starting Funds"
+
+[node name="StartingFundsLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "$500"
+
+[node name="AllowanceKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Weekly Allowance"
+
+[node name="AllowanceLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "$25"
+
+[node name="PhoneKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Phone"
+
+[node name="PhoneLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "Mid-Tier Phone, Basic plan"
+
+[node name="WifiKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Home Wi-Fi"
+
+[node name="WifiLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "Yes"
+
+[node name="TransportKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Transport"
+
+[node name="TransportLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "none"
+
+[node name="StrictnessKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Parental Strictness"
+
+[node name="StrictnessLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "50/100"
+
+[node name="ParentsKey" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Parents"
+
+[node name="ParentsLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/BackgroundCard/BackgroundLayout/BackgroundGrid"]
+layout_mode = 2
+text = "—"
+
+[node name="TraitsCard" type="PanelContainer" parent="Backdrop/Screen/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="TraitsLayout" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/TraitsCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TraitsTitleLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
 text = "Personality Traits"
 
-[node name="TraitsHintLabel" type="Label" parent="Screen/TraitsRow"]
+[node name="TraitsHintLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout"]
 layout_mode = 2
+theme_type_variation = &"CaptionLabel"
 text = "Choose up to 2 traits (0 selected)"
 
-[node name="TraitsGrid" type="GridContainer" parent="Screen/TraitsRow"]
+[node name="TraitsGrid" type="GridContainer" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout"]
 layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
 columns = 3
 
-[node name="LeadershipCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+[node name="LeadershipCheck" type="CheckBox" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout/TraitsGrid"]
 layout_mode = 2
 text = "Leadership"
 
-[node name="HumorCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+[node name="HumorCheck" type="CheckBox" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout/TraitsGrid"]
 layout_mode = 2
 text = "Humor"
 
-[node name="GenerosityCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+[node name="GenerosityCheck" type="CheckBox" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout/TraitsGrid"]
 layout_mode = 2
 text = "Generosity"
 
-[node name="KindnessCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+[node name="KindnessCheck" type="CheckBox" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout/TraitsGrid"]
 layout_mode = 2
 text = "Kindness"
 
-[node name="PatienceCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+[node name="PatienceCheck" type="CheckBox" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout/TraitsGrid"]
 layout_mode = 2
 text = "Patience"
 
-[node name="HumilityCheck" type="CheckBox" parent="Screen/TraitsRow/TraitsGrid"]
+[node name="HumilityCheck" type="CheckBox" parent="Backdrop/Screen/Scroll/Content/TraitsCard/TraitsLayout/TraitsGrid"]
 layout_mode = 2
 text = "Humility"
 
-[node name="CareerRow" type="HBoxContainer" parent="Screen"]
+[node name="CareerCard" type="PanelContainer" parent="Backdrop/Screen/Scroll/Content"]
 layout_mode = 2
+theme_type_variation = &"Card"
 
-[node name="CareerLabel" type="Label" parent="Screen/CareerRow"]
+[node name="CareerLayout" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/CareerCard"]
 layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CareerHeading" type="Label" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Career Path"
+
+[node name="CareerRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CareerLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout/CareerRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
 text = "Career"
 
-[node name="BatterButton" type="Button" parent="Screen/CareerRow"]
+[node name="BatterButton" type="Button" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout/CareerRow"]
 layout_mode = 2
 toggle_mode = true
 button_pressed = true
 button_group = SubResource("ButtonGroup_career")
 text = "Batter"
 
-[node name="PitcherButton" type="Button" parent="Screen/CareerRow"]
+[node name="PitcherButton" type="Button" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout/CareerRow"]
 layout_mode = 2
 toggle_mode = true
 button_group = SubResource("ButtonGroup_career")
 text = "Pitcher"
 
-[node name="RoleRow" type="HBoxContainer" parent="Screen"]
+[node name="RoleRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout"]
 layout_mode = 2
+theme_override_constants/separation = 10
 visible = false
 
-[node name="RoleLabel" type="Label" parent="Screen/RoleRow"]
+[node name="RoleLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout/RoleRow"]
 layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
 text = "Bullpen Role"
 
-[node name="RoleOptionButton" type="OptionButton" parent="Screen/RoleRow"]
+[node name="RoleOptionButton" type="OptionButton" parent="Backdrop/Screen/Scroll/Content/CareerCard/CareerLayout/RoleRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="BatterRatings" type="VBoxContainer" parent="Screen"]
+[node name="RatingsCard" type="PanelContainer" parent="Backdrop/Screen/Scroll/Content"]
 layout_mode = 2
+theme_type_variation = &"Card"
 
-[node name="PowerRow" type="HBoxContainer" parent="Screen/BatterRatings"]
+[node name="RatingsLayout" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="PowerLabel" type="Label" parent="Screen/BatterRatings/PowerRow"]
+[node name="RatingsHeaderRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="RatingsHeading" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/RatingsHeaderRow"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Attribute Allocation"
+
+[node name="RatingsHeaderSpacer" type="Control" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/RatingsHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RemainingPointsCaption" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/RatingsHeaderRow"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Points Remaining"
+
+[node name="RemainingPointsLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/RatingsHeaderRow"]
+layout_mode = 2
+theme_type_variation = &"StatValueLabel"
+text = "0"
+
+[node name="BatterRatings" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PowerRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PowerLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/PowerRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Power"
 
-[node name="PowerSlider" type="HSlider" parent="Screen/BatterRatings/PowerRow"]
+[node name="PowerSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/PowerRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -181,20 +355,21 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="PowerValueLabel" type="Label" parent="Screen/BatterRatings/PowerRow"]
+[node name="PowerValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/PowerRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="ContactRow" type="HBoxContainer" parent="Screen/BatterRatings"]
+[node name="ContactRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="ContactLabel" type="Label" parent="Screen/BatterRatings/ContactRow"]
+[node name="ContactLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/ContactRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Contact"
 
-[node name="ContactSlider" type="HSlider" parent="Screen/BatterRatings/ContactRow"]
+[node name="ContactSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/ContactRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -202,20 +377,21 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="ContactValueLabel" type="Label" parent="Screen/BatterRatings/ContactRow"]
+[node name="ContactValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/ContactRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="DisciplineRow" type="HBoxContainer" parent="Screen/BatterRatings"]
+[node name="DisciplineRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="DisciplineLabel" type="Label" parent="Screen/BatterRatings/DisciplineRow"]
+[node name="DisciplineLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/DisciplineRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Discipline"
 
-[node name="DisciplineSlider" type="HSlider" parent="Screen/BatterRatings/DisciplineRow"]
+[node name="DisciplineSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/DisciplineRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -223,24 +399,26 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="DisciplineValueLabel" type="Label" parent="Screen/BatterRatings/DisciplineRow"]
+[node name="DisciplineValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/BatterRatings/DisciplineRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="PitcherRatings" type="VBoxContainer" parent="Screen"]
+[node name="PitcherRatings" type="VBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout"]
 layout_mode = 2
+theme_override_constants/separation = 8
 visible = false
 
-[node name="StuffRow" type="HBoxContainer" parent="Screen/PitcherRatings"]
+[node name="StuffRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="StuffLabel" type="Label" parent="Screen/PitcherRatings/StuffRow"]
+[node name="StuffLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/StuffRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Stuff"
 
-[node name="StuffSlider" type="HSlider" parent="Screen/PitcherRatings/StuffRow"]
+[node name="StuffSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/StuffRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -248,20 +426,21 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="StuffValueLabel" type="Label" parent="Screen/PitcherRatings/StuffRow"]
+[node name="StuffValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/StuffRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="ControlRow" type="HBoxContainer" parent="Screen/PitcherRatings"]
+[node name="ControlRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="ControlLabel" type="Label" parent="Screen/PitcherRatings/ControlRow"]
+[node name="ControlLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/ControlRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Control"
 
-[node name="ControlSlider" type="HSlider" parent="Screen/PitcherRatings/ControlRow"]
+[node name="ControlSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/ControlRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -269,20 +448,21 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="ControlValueLabel" type="Label" parent="Screen/PitcherRatings/ControlRow"]
+[node name="ControlValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/ControlRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="StaminaRow" type="HBoxContainer" parent="Screen/PitcherRatings"]
+[node name="StaminaRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="StaminaLabel" type="Label" parent="Screen/PitcherRatings/StaminaRow"]
+[node name="StaminaLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/StaminaRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Stamina"
 
-[node name="StaminaSlider" type="HSlider" parent="Screen/PitcherRatings/StaminaRow"]
+[node name="StaminaSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/StaminaRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -290,20 +470,21 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="StaminaValueLabel" type="Label" parent="Screen/PitcherRatings/StaminaRow"]
+[node name="StaminaValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/PitcherRatings/StaminaRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="FieldingRow" type="HBoxContainer" parent="Screen"]
+[node name="FieldingRow" type="HBoxContainer" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="FieldingLabel" type="Label" parent="Screen/FieldingRow"]
+[node name="FieldingLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/FieldingRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 text = "Fielding"
 
-[node name="FieldingSlider" type="HSlider" parent="Screen/FieldingRow"]
+[node name="FieldingSlider" type="HSlider" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/FieldingRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 20
@@ -311,20 +492,23 @@ max_value = 90
 step = 1
 value = 50
 
-[node name="FieldingValueLabel" type="Label" parent="Screen/FieldingRow"]
+[node name="FieldingValueLabel" type="Label" parent="Backdrop/Screen/Scroll/Content/RatingsCard/RatingsLayout/FieldingRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(32, 0)
 text = "50"
 
-[node name="RemainingPointsLabel" type="Label" parent="Screen"]
-layout_mode = 2
-text = "Points remaining: 0"
-
-[node name="ErrorLabel" type="Label" parent="Screen"]
+[node name="ErrorCard" type="PanelContainer" parent="Backdrop/Screen"]
 layout_mode = 2
 visible = false
+theme_type_variation = &"WarningCard"
+
+[node name="ErrorLabel" type="Label" parent="Backdrop/Screen/ErrorCard"]
+layout_mode = 2
+autowrap_mode = 2
 text = ""
 
-[node name="CreateButton" type="Button" parent="Screen"]
+[node name="CreateButton" type="Button" parent="Backdrop/Screen"]
 layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+theme_type_variation = &"AccentButton"
 text = "Start Career"

@@ -34,6 +34,16 @@ public struct NarrativeMessageRow
 
     /// <summary>Kind=Text rows only: the companion text body. "" for Kind=Event rows.</summary>
     public string Body;
+
+    /// <summary>
+    /// Kind=Event rows only: the Events feed's card heading — the raw wire
+    /// string a Narrative.Events.EventCategory encodes to (this Data-layer
+    /// type stays enum-agnostic, same posture as <see cref="ContactId"/>
+    /// staying a plain string rather than a ContactDefinition). Persisted at
+    /// resolve time so history renders the category as-fired even if content
+    /// later changes it. "general" for a pre-category row or a Kind=Text row.
+    /// </summary>
+    public string Category;
 }
 
 /// <summary>
@@ -133,13 +143,15 @@ public sealed class NarrativeLogQueries
     /// is what makes that safe. <paramref name="outcome"/> is the amendment's
     /// per-choice immediate payoff; null/empty is the documented "You: &lt;Choice&gt;" UI fallback.
     /// </summary>
+    /// <param name="category">The wire string a Narrative.Events.EventCategory encodes to — this Data-layer method takes it as an opaque tag, same as <paramref name="contactId"/>, never referencing the enum type itself (kept out of this project's dependency graph; see CoreLoopHarness/MonteCarloHarness, which compile this folder without Narrative/Events).</param>
     public void Insert(
-        int seasonYear, long gameDay, string playerId, string contactId,
+        int seasonYear, long gameDay, string playerId, string contactId, string category,
         string prompt, string choiceLabel, int choiceIndex, string? outcome = null)
     {
         string payload = JsonSerializer.Serialize(new NarrativeMessagePayload
         {
             Contact = contactId,
+            Category = category,
             Prompt = prompt,
             Choice = choiceLabel,
             ChoiceIndex = choiceIndex,
@@ -282,6 +294,11 @@ public sealed class NarrativeLogQueries
             ChoiceIndex = payload.ChoiceIndex,
             Outcome = payload.Outcome ?? "",
             Body = payload.Kind == "text" ? payload.Prompt : "",
+            // Absent/empty reads as "general" — every row written before this
+            // field existed stays byte-compatible, same discipline as Kind's
+            // missing-means-Event rule. The actual enum mapping lives with
+            // Narrative.Events.EventCategory, not in this Data-layer file.
+            Category = string.IsNullOrEmpty(payload.Category) ? "general" : payload.Category,
         };
     }
 
@@ -294,6 +311,11 @@ public sealed class NarrativeLogQueries
 
         [JsonPropertyName("contact")]
         public string Contact { get; set; } = "";
+
+        /// <summary>Absent on every pre-category row — <see cref="ReadRow"/> defaults it to "general".</summary>
+        [JsonPropertyName("category")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Category { get; set; }
 
         [JsonPropertyName("prompt")]
         public string Prompt { get; set; } = "";

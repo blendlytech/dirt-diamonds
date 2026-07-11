@@ -7,6 +7,7 @@
       "weight": 0.12,
       "cooldown_days": 60,
       "contact": "hs_friend",
+      "category": "school",
       "prompt": "Three tests Friday and you're behind in all of them. Marcus slides his homework across the table without a word. 'I'm just saying. It's right there.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -39,6 +40,7 @@
       "scope": "avatar",
       "weight": 0.3,
       "contact": "coach_hs",
+      "category": "school",
       "prompt": "Coach Malone shuts his office door behind you. 'Mrs. Alvarez says two identical homeworks landed on her desk. No pass, no play -- and I don't coach cheaters. Talk.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -73,6 +75,7 @@
       "weight": 0.1,
       "cooldown_days": 45,
       "contact": "family_dad",
+      "category": "career",
       "prompt": "Dad hangs up the phone. 'Ray down at the batting cages needs a weekend kid -- register, pick up balls, close up. It's yours if you want it. Money's money.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -107,6 +110,7 @@
       "weight": 0.25,
       "cooldown_days": 14,
       "contact": "family_dad",
+      "category": "career",
       "prompt": "Payday at the cages. Ray counts the bills out slow like it hurts him. Dad asks at dinner what you're doing with it -- 'and don't say cards.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -138,6 +142,7 @@
       "weight": 0.08,
       "cooldown_days": 45,
       "contact": "coach_hs",
+      "category": "career",
       "prompt": "Ray needs you Saturday. Coach called a Saturday scrimmage. Both of them said the exact same sentence: 'I'm counting on you.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -171,6 +176,7 @@
       "weight": 0.08,
       "cooldown_days": 45,
       "contact": "hs_friend",
+      "category": "school",
       "prompt": "Marcus, breathless between classes: 'Kelsey's parents are GONE Saturday. Whole grade's going. Whole. Grade.' It's the kind of night people still talk about at reunions.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -203,6 +209,7 @@
       "scope": "avatar",
       "weight": 0.35,
       "contact": "family_dad",
+      "category": "family",
       "prompt": "Dad's in the kitchen with his arms crossed and your name in his mouth before the door's even shut. Somebody's mom saw you at Kelsey's. He knows everything.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -237,6 +244,7 @@
       "scope": "avatar",
       "weight": 0.35,
       "contact": "family_mom",
+      "category": "family",
       "prompt": "Mom sets your breakfast down with a look. 'Heard Kelsey's was quite the scene.' She's not mad. She's barely hiding a grin. 'I was sixteen once, you know.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -269,6 +277,7 @@
       "scope": "avatar",
       "weight": 0.25,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "Schedule's on the locker room wall: Westbrook, Friday, home. The shortstop who said your name is hitting third. Coach taps the printout twice. 'Circle it.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -304,6 +313,7 @@
       "weight": 0.06,
       "cooldown_days": 45,
       "contact": "coach_hs",
+      "category": "baseball",
       "prompt": "Routine grounder, bottom of the seventh, right through your legs. Two runs score. Game over. The bus ride home is the quietest forty minutes of your life.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -335,6 +345,7 @@
       "weight": 0.05,
       "cooldown_days": 120,
       "contact": "family_dad",
+      "category": "family",
       "prompt": "You hear it through the wall -- Dad's hours got cut, and Mom's doing the math out loud at the kitchen table. Twice. There's a shoebox under your bed they don't know about.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -365,6 +376,7 @@
       "scope": "avatar",
       "weight": 0.15,
       "contact": "family_mom",
+      "category": "baseball",
       "prompt": "Mom's waiting at the door holding an envelope like it's made of glass. A university crest in the corner. 'It's addressed to YOU,' she whispers. 'From the BASEBALL office.'",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
@@ -401,6 +413,7 @@
       "weight": 0.1,
       "cooldown_days": 60,
       "contact": "hs_friend",
+      "category": "baseball",
       "prompt": "Marcus elbows you in the on-deck circle. 'Third row. Polo shirt. RADAR GUN.' He's not wrong. The man has a clipboard and he's looking at you.",
       "prerequisites": [
         { "field": "tier", "op": "==", "value": 0 },
