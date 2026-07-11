@@ -1,0 +1,140 @@
+{
+  "//": "Day-1 phone tutorial (docs/design/day1_phone_tutorial.md, Opus 4.8 -> Sonnet 5 Stage 2). The mechanical 'how to play' thread -- orthogonal to hs_onboarding_events.json's STORY beats; this batch teaches the UI (phone tabs, Time bar, Plan Today, game days, Bank/needs, saving) and tells no story. 4 events, all scope:'avatar', weight 1.0, all carrying { field: tier, op: ==, value: 0 } (self-suppresses the moment an avatar graduates HS, same idiom as the onboarding arc), all contact:'getting_started', all category:'general'. File name sorts after core_events.json and before every hs_* batch, so once a beat is eligible it wins that day's one-fire-per-subject slot ahead of the narrative arc -- tut_welcome has no gate but tier==0+!tut_welcomed, so it wins day 2 outright and hs_first_day shifts to day 3 (design doc §2.3/§7); links 2-4 carry min_days_since:2 so the chain forces a one-day gap that alternates with the onboarding chain instead of monopolizing the slot (§7.2: tut_welcome@2, hs_first_day@3, tut_daily_loop@4, hs_meet_coach@5, tut_game_day@6, hs_tryouts@7, tut_wrap@8). Consequences are flags only -- deliberately no person_stat/funds/stress/relationship anywhere in this batch; a how-to-play tutorial must never reward or penalize reading it (§3.3), which keeps it trivially calibration-inert (no MC/Simulation touch, no re-band possible). Skip path: tut_welcome's third choice sets all four end-flags at once, short-circuiting the whole chain in one tap -- the sanctioned dismissal for veterans and re-exposed gen-2 heirs (a fresh tier-0 avatar re-qualifies per-flag; §6.4). New contact: 'getting_started' in contacts.json, role 'unknown' -- the design doc allowed role:'system' PENDING a check against ContactJson's role handling; that check found the loader's role switch is closed (throws FormatException on an unrecognized string, Assets/Narrative/Contacts/ContactRegistry.cs's ContactJson.ParseContact), so per the design doc's own contingency (§3.2) this ships on the existing 'unknown' role instead of adding a new enum member -- zero engine touch, exactly as promised. DEVIATION from the design doc's near-final copy (§5): the doc's authoring spec lists TWO delayed texts on one choice each of tut_welcome/tut_daily_loop/tut_game_day's first choice, but a choice's 'text_message' is a SINGULAR field in the engine (GrittyEventJson.cs ~L292-335: one string or one {body,delay_days} object per choice, no array) -- there is no shipped or engine precedent for multiple texts off one choice. Reconciled by merging each pair into one message body at delay_days:1 (keeps both sentences' content, keeps the 'fills in over the following day or two' spread the doc's own §8 constants table calls for, since the event-level fire-time text already lands day 0). All other choices carry the doc's copy verbatim.",
+  "events": [
+    {
+      "id": "tut_welcome",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "getting_started",
+      "category": "general",
+      "prompt": "New phone, new life. This thing is how you run all of it. Up top are your tabs — Events is where moments like this land, Messages is where your texts live (including these tips). Swipe around whenever you're lost.",
+      "text_message": "Welcome. I'll drop you a few tips here over the next couple days — this thread stays put if you want to reread it.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_inactive": "tut_welcomed" }
+      ],
+      "choices": [
+        { "id": "show_me_around", "autopilot_weight": 3, "label": "Show me around",
+          "outcome": "You thumb through the tabs. It's a lot, but it's all in one place.",
+          "text_message": { "body": "Events = story + choices. Messages = texts like this. Calendar shows your season; Bank is money, needs, and bills. No rush to master it — the next tip covers how a day actually moves.", "delay_days": 1 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_welcomed" }
+          ] },
+        { "id": "just_the_essentials", "autopilot_weight": 2, "label": "Just the essentials",
+          "outcome": "Fine — the short version it is.",
+          "text_message": { "body": "Two tabs matter most at first: Events (this kind of card) and Bank (your money and needs). We'll cover the rest as it comes up.", "delay_days": 0 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_welcomed" }
+          ] },
+        { "id": "skip_the_tips", "autopilot_weight": 1, "label": "I've played before — skip the tips",
+          "outcome": "Say no more. You know where everything is.",
+          "text_message": { "body": "You're all set. This thread's here if you ever want it.", "delay_days": 0 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_welcomed" },
+            { "type": "set_flag", "flag": "tut_daily_done" },
+            { "type": "set_flag", "flag": "tut_gameday_done" },
+            { "type": "set_flag", "flag": "tut_done" }
+          ] }
+      ]
+    },
+    {
+      "id": "tut_daily_loop",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "getting_started",
+      "category": "general",
+      "prompt": "Time moves on its own now. The bar up top runs the clock — Pause it, set Slow / Normal / Fast, or hit Skip Day to jump straight to tomorrow. Before a day rolls over, open Plan Today to decide how you spend it.",
+      "text_message": "The clock ticks in real time — Fast burns a day in a couple minutes, Skip Day ends it now.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "tut_welcomed", "min_days_since": 2 },
+        { "flag_inactive": "tut_daily_done" }
+      ],
+      "choices": [
+        { "id": "walk_me_through_planning", "autopilot_weight": 3, "label": "Walk me through planning a day",
+          "outcome": "You open Plan Today and slide the hours around until the day adds up.",
+          "text_message": { "body": "Plan Today splits your hours across Sleep, Practice, Work, and Free time. School hours are locked in on school days — the card folds them in for you. Watch the 'Free hours' line — if it says you're over, trim a block before you Confirm.", "delay_days": 1 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_daily_done" }
+          ] },
+        { "id": "just_the_clock", "autopilot_weight": 2, "label": "Just the clock, thanks",
+          "outcome": "You get the hang of the bar — pause, speed up, skip. Simple.",
+          "text_message": { "body": "Paused, the world holds. It also auto-pauses when something needs you — a choice, a game, a deal.", "delay_days": 0 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_daily_done" }
+          ] },
+        { "id": "daily_loop_got_it", "autopilot_weight": 1, "label": "Got it",
+          "outcome": "You've got the daily rhythm. Onward.",
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_daily_done" }
+          ] }
+      ]
+    },
+    {
+      "id": "tut_game_day",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "getting_started",
+      "category": "general",
+      "prompt": "Game days are marked on your Calendar. When one lands, the Time bar swaps in a Play Game button — tap it to step into the at-bat yourself, or Skip Day to let the team play it out. Afterward, League has the standings and Player has your stat line.",
+      "text_message": "Game day soon. Play it live for the at-bats, or skip and let it sim — your call every time.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "tut_daily_done", "min_days_since": 2 },
+        { "flag_inactive": "tut_gameday_done" }
+      ],
+      "choices": [
+        { "id": "how_does_atbat_work", "autopilot_weight": 3, "label": "How does the at-bat work?",
+          "outcome": "You picture stepping in — read the pitch, pick your moment.",
+          "text_message": { "body": "At the plate you read the pitch and choose how to attack it. Your ratings do the rest. It's optional every game — skipping just autopilots it. Check the Player tab after to see how the line moved, and League for where the team sits.", "delay_days": 1 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_gameday_done" }
+          ] },
+        { "id": "ill_just_sim_them", "autopilot_weight": 2, "label": "I'll just sim them for now",
+          "outcome": "You decide to let the team handle the games for a while. That's fine.",
+          "text_message": { "body": "Skip Day plays your games for you — no penalty. Jump in live whenever you want the bat.", "delay_days": 0 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_gameday_done" }
+          ] },
+        { "id": "game_day_got_it", "autopilot_weight": 1, "label": "Got it",
+          "outcome": "Game days, handled.",
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_gameday_done" }
+          ] }
+      ]
+    },
+    {
+      "id": "tut_wrap",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "getting_started",
+      "category": "general",
+      "prompt": "Last one. The Bank tab is your money, your five needs (keep them off the floor), and the weekly cost-of-living bill. Settings has Save Now, though the game saves itself as you go. That's the whole loop — now go live it.",
+      "text_message": "You're set. Keep your needs up, keep an eye on the bills, and the rest is your story to write.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "tut_gameday_done", "min_days_since": 2 },
+        { "flag_inactive": "tut_done" }
+      ],
+      "choices": [
+        { "id": "thanks_im_set", "autopilot_weight": 3, "label": "Thanks — I'm set",
+          "outcome": "You pocket the phone and get on with it.",
+          "text_message": { "body": "That's everything. This thread stays here if you need a refresher. Good luck out there.", "delay_days": 0 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_done" }
+          ] },
+        { "id": "what_if_a_need_bottoms_out", "autopilot_weight": 2, "label": "What happens if a need bottoms out?",
+          "outcome": "You make a mental note to keep an eye on the meters.",
+          "text_message": { "body": "Let a need crater and it starts dragging on everything else — eat, sleep, wash up, see people, stay fit. The Bank tab shows all five.", "delay_days": 0 },
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_done" }
+          ] },
+        { "id": "wrap_got_it_done", "autopilot_weight": 1, "label": "Got it — done",
+          "outcome": "Tutorial's behind you. Go play.",
+          "consequences": [
+            { "type": "set_flag", "flag": "tut_done" }
+          ] }
+      ]
+    }
+  ]
+}
