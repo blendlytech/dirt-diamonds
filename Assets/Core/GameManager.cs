@@ -80,6 +80,14 @@ public sealed partial class GameManager : Node
     /// <summary>Named Clock (not Time) to avoid shadowing the Godot.Time singleton.</summary>
     public TimeManager Clock { get; private set; } = null!;
 
+    /// <summary>
+    /// Slice G: the cosmetic intraday wall clock (real_time_clock_slice_g.md
+    /// §3.1/§5) — read-only time-of-day for any screen (dashboard bar, phone
+    /// status bar); the G-2 TimeControlBar becomes its sole driver. Distinct
+    /// from <see cref="Clock"/>, which remains the calendar authority.
+    /// </summary>
+    public GameClock TimeOfDay { get; private set; } = null!;
+
     /// <summary>Phase 8c roster availability — public like Relationships so the UI can render "out until day N".</summary>
     public AvailabilityLedger Absences { get; private set; } = null!;
 
@@ -232,6 +240,20 @@ public sealed partial class GameManager : Node
         Persons = new PersonQueries(_database);
         Clock = new TimeManager(_database, GameState, State, Events);
         Clock.Initialize(NewGameStartYear);
+
+        // Slice G-1 (real_time_clock_slice_g.md §3.4): seed the intraday wall
+        // clock from its two Game_State KV keys. Absent keys — any pre-G save
+        // — default to the canonical 08:00 wake at Normal speed; the G-2
+        // driver's checkpoint writes are what first create them. Reads happen
+        // exactly once, here.
+        TimeOfDay = new GameClock();
+        TimeOfDay.Restore(
+            GameState.TryGetInt64(GameStateKeys.TimeOfDayMinutes, out long bootMinute)
+                ? bootMinute
+                : GameClock.WakeMinute,
+            GameState.TryGetInt64(GameStateKeys.TimeSpeed, out long bootSpeed)
+                ? bootSpeed
+                : (long)TimeSpeed.Normal);
 
         // World-gen on first boot only; an existing save keeps its league.
         // In-game runs are not required to be replay-deterministic (that is
@@ -582,7 +604,8 @@ public sealed partial class GameManager : Node
             $"fk={(foreignKeys ? "on" : "OFF")}, day {State.CurrentDay} (season {State.SeasonYear}, day {State.DayOfSeason}), " +
             $"league {(newLeague ? "generated" : "loaded")} ({Baseball.CountTeams()} teams), " +
             $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}, " +
-            $"relationships {Relationships.EdgeCount}, gritty events {GrittyEvents.Count} (dispatcher polling).");
+            $"relationships {Relationships.EdgeCount}, gritty events {GrittyEvents.Count} (dispatcher polling), " +
+            $"clock {TimeOfDay.MinuteOfDay} min @ {TimeOfDay.Speed}.");
     }
 
     public override void _Process(double delta)
@@ -616,6 +639,9 @@ public sealed partial class GameManager : Node
         {
             PersistRelationships(default);
         }
+        // Slice G-2: the intraday clock's exact minute/pace ride every quit
+        // (§3.4) — before the WAL fold below so the single file carries them.
+        PersistTimeOfDay();
         // Phase 11c (steam_publishing_ship_it.md §5.3): fold the WAL into the
         // single .db before the handle releases, so the one file Steam
         // Auto-Cloud uploads after exit is the complete save. Runs after the
@@ -785,6 +811,63 @@ public sealed partial class GameManager : Node
     /// <summary>The Hustle screen calls this once its session resolves (deal/bust/walk/forfeit) to release the slot.</summary>
     public void ClearPendingHustleSession() => _hasPendingHustleSession = false;
 
+    // ------------------------------------------------------------------
+    // Slice G: the shared day-advance gate (real_time_clock_slice_g.md §4.1)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Set while the interactive at-bat's background task is running, by
+    /// whoever owns the launch (BaseballDashboard today; the G-2
+    /// TimeControlBar when the day-advance driver moves there) — the one
+    /// pending state <see cref="CanAdvanceDay"/> needs that lives outside
+    /// GameManager.
+    /// </summary>
+    public bool InteractiveGameInFlight { get; set; }
+
+    /// <summary>
+    /// THE day-advance gate (real_time_clock_slice_g.md §4.1): every driver —
+    /// the dashboard's Play/Skip today, the G-2 continuous clock next — must
+    /// consult this one predicate before <see cref="TimeManager.AdvanceDay"/>,
+    /// so the definition can never drift between surfaces. Aggregates only
+    /// the cross-cutting pending-decision states; a driver's own transient
+    /// in-progress-advance flags stay its own.
+    ///
+    /// <see cref="HasPendingHustleSession"/> is deliberately NOT gated here
+    /// (deviating from the design sketch): the hustle screens' shipped
+    /// contract is that advancing the day IS the no-deal forfeit
+    /// (NarcoticsHustleScreen's abandoned-run note), and a can't-afford
+    /// session's start panel has no other exit — hard-gating it would
+    /// soft-lock the game. The G-2 clock treats it as an auto-pause signal
+    /// (soft stop) instead, keeping Skip-to-forfeit reachable.
+    /// </summary>
+    public bool CanAdvanceDay =>
+        !InteractiveGameInFlight
+        && !GrittyEventChoices.HasPendingChoice
+        && !Career.HasPendingSuccessionChoice;
+
+    /// <summary>
+    /// Slice G-2 (real_time_clock_slice_g.md §3.4): checkpoint-writes the
+    /// intraday clock's two Game_State KV keys so a reload resumes the exact
+    /// minute and pace. Rides the existing save moments (<see cref="SaveNow"/>,
+    /// <see cref="_ExitTree"/>) plus the bar's manual pause/speed changes —
+    /// user-driven and infrequent, never per frame (database_rules.md). The
+    /// sanctioned write path for the TimeControlBar, like
+    /// <see cref="SetWeeklyChildFunding"/> is for the Family tab.
+    /// </summary>
+    public void PersistTimeOfDay()
+    {
+        if (_database is null || TimeOfDay is null)
+        {
+            return;
+        }
+        GameState.SetInt64(GameStateKeys.TimeOfDayMinutes, TimeOfDay.MinuteOfDay);
+        GameState.SetInt64(GameStateKeys.TimeSpeed, (long)TimeOfDay.Speed);
+        // Checkpoint cadence only (quit/SaveNow/pause/speed-change), so this
+        // print is rare — and it timestamps every clock-state write, which is
+        // the observability that pins down any spurious speed change.
+        GD.Print($"[GameManager] Clock persisted — {TimeOfDay.MinuteOfDay} min @ {TimeOfDay.Speed}.");
+    }
+
     /// <summary>
     /// True while the avatar will still be in jail when the next day ticks —
     /// an arrested player doesn't get to plan their day (the whole day
@@ -921,6 +1004,7 @@ public sealed partial class GameManager : Node
         }
         PersistLifeSimState(default);
         PersistRelationships(default);
+        PersistTimeOfDay();
         if (!_database.CheckpointForSync())
         {
             GD.Print("[GameManager] SaveNow: WAL checkpoint incomplete — the save is consistent; only the single-file copy trails until the next checkpoint.");

@@ -1,0 +1,57 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/TimeControlBar.cs" id="1_timecontrolbar"]
+
+[node name="TimeControlBar" type="HBoxContainer"]
+theme_override_constants/separation = 8
+script = ExtResource("1_timecontrolbar")
+
+[node name="PlayGameButton" type="Button" parent="."]
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"AccentButton"
+text = "Play Game"
+
+[node name="PauseButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_vertical = 4
+text = "Pause"
+
+[node name="SlowButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_vertical = 4
+toggle_mode = true
+text = "Slow"
+
+[node name="NormalButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_vertical = 4
+toggle_mode = true
+text = "Normal"
+
+[node name="FastButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_vertical = 4
+toggle_mode = true
+text = "Fast"
+
+[node name="SkipDayButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_vertical = 4
+text = "Skip Day"
+
+[node name="ReadoutBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 2
+
+[node name="ReadoutLabel" type="Label" parent="ReadoutBox"]
+layout_mode = 2
+text = ""
+
+[node name="StatusLabel" type="Label" parent="ReadoutBox"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = ""

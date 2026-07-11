@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://Assets/UI/BaseballDashboard.cs" id="1_dashboard"]
 [ext_resource type="PackedScene" path="res://Assets/UI/AtBatView.tscn" id="2_atbatview"]
 [ext_resource type="PackedScene" path="res://Assets/UI/Portraits/PortraitView.tscn" id="3_portraitview"]
+[ext_resource type="PackedScene" path="res://Assets/UI/TimeControlBar.tscn" id="4_timecontrolbar"]
 
 [sub_resource type="StyleBoxEmpty" id="sbe_root"]
 
@@ -41,16 +42,9 @@ theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
 text = ""
 
-[node name="PlayGameButton" type="Button" parent="Layout/HeaderBand/HeaderRow"]
+[node name="TimeControlBar" parent="Layout/HeaderBand/HeaderRow" instance=ExtResource("4_timecontrolbar")]
 layout_mode = 2
 size_flags_vertical = 4
-theme_type_variation = &"AccentButton"
-text = "Play Today's Game"
-
-[node name="SkipDayButton" type="Button" parent="Layout/HeaderBand/HeaderRow"]
-layout_mode = 2
-size_flags_vertical = 4
-text = "Skip Day"
 
 [node name="AvailabilityCard" type="PanelContainer" parent="Layout"]
 layout_mode = 2

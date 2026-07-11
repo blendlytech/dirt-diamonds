@@ -105,9 +105,15 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string HistoryBeginningText { get; set; } = "— beginning of your story —";
 
-    /// <summary>Status-bar clock: {0}=weekday, {1}=month (both trimmed to three letters, uppercased to match the bar's other captions), {2}=day of month.</summary>
+    /// <summary>Status-bar clock: {0}=weekday, {1}=month (both trimmed to three letters, uppercased to match the bar's other captions), {2}=day of month, {3}=hour (12h), {4}=minute, {5}=AM/PM.</summary>
     [Export]
-    public string ClockFormat { get; set; } = "{0} {1} {2}";
+    public string ClockFormat { get; set; } = "{0} {1} {2} · {3}:{4:D2} {5}";
+
+    [Export]
+    public string ClockAmText { get; set; } = "AM";
+
+    [Export]
+    public string ClockPmText { get; set; } = "PM";
 
     /// <summary>Settings tab: SaveStatusLabel text after a successful Save Now press ({0}=current day).</summary>
     [Export]
@@ -271,10 +277,13 @@ public sealed partial class BurnerPhone : PanelContainer
     private Button _pokerButton = null!;
     private Button _proShopButton = null!;
 
-    // Status-bar clock: the human calendar date, complementing the shell
-    // top bar's sim day counter. Dirty-flagged on the day.
+    // Status-bar clock: the human calendar date + live time-of-day (Slice
+    // G-3, read off the same GameManager.TimeOfDay the TimeControlBar
+    // drives), complementing the shell top bar's sim day counter.
+    // Dirty-flagged on the (day, minute) pair.
     private Label _clockLabel = null!;
     private long _shownClockDay = long.MinValue;
+    private int _shownClockMinute = -1;
 
     private TabContainer _phoneTabs = null!;
     private Label _marketplaceFundsLabel = null!;
@@ -538,26 +547,35 @@ public sealed partial class BurnerPhone : PanelContainer
     }
 
     /// <summary>
-    /// The status-bar clock: the human calendar date ("TUE APR 14"),
-    /// complementing the shell top bar's sim day counter. Formats only when
-    /// the day actually changes (ui_conventions.md: no per-frame formatting).
+    /// The status-bar clock: the human calendar date plus the live
+    /// time-of-day ("TUE APR 14 · 2:47 PM") — Slice G-3, a read-only view of
+    /// the same GameClock the TimeControlBar drives, so the phone ticks in
+    /// lockstep with the bar. Formats only when the day or displayed minute
+    /// actually changes (ui_conventions.md: no per-frame formatting).
     /// </summary>
     private void RefreshClock(GameManager gm)
     {
         long currentDay = gm.State.CurrentDay;
-        if (currentDay == _shownClockDay)
+        int minute = gm.TimeOfDay.MinuteOfDay;
+        if (currentDay == _shownClockDay && minute == _shownClockMinute)
         {
             return;
         }
         _shownClockDay = currentDay;
+        _shownClockMinute = minute;
         int dos = GlobalState.DayOfSeasonForDay(currentDay);
         CalendarDate date = GameCalendar.DateForDayOfSeason(dos);
         Weekday weekday = GameCalendar.WeekdayForDayOfSeason(dos);
+        int hour = minute / 60;
+        int hour12 = hour % 12 == 0 ? 12 : hour % 12;
         _clockLabel.Text = string.Format(
             ClockFormat,
             GameCalendar.NameOf(weekday).Substring(0, 3).ToUpperInvariant(),
             GameCalendar.MonthName(date.Month).Substring(0, 3).ToUpperInvariant(),
-            date.Day);
+            date.Day,
+            hour12,
+            minute % 60,
+            hour < 12 ? ClockAmText : ClockPmText);
     }
 
     private void OnContactSelected(long index)

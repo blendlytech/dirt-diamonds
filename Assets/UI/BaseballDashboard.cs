@@ -7,19 +7,21 @@ using Godot;
 namespace DirtAndDiamonds.UI;
 
 /// <summary>
-/// Phase 10a: the left panel of the two-panel shell. Absorbs the retired
-/// AttendedGameScreen's two roles verbatim — the day-advance clock (its
-/// Play/Skip buttons remain the only caller of TimeManager.AdvanceDay) and
-/// the attended at-bat launch through CareerManager.TryGetPendingGame /
-/// PlayPendingGame — reusing the identical seams and the identical
-/// day-advance gates: the day cannot advance while a game is in flight, a
-/// pending attended game is unresolved, a gritty-event choice is pending, or
-/// a succession choice is parked. The bridge/task/dirty-flag driver is the
-/// Phase 5 design unchanged: the game runs on a background task (never the
-/// UI thread), the view renders snapshot DTOs, and the player's swing/take
-/// intent flows back through a <see cref="PlayerIntentBridge"/>. Node paths
-/// verified against BaseballDashboard.tscn via godot_scene_mapper before
-/// this script was written.
+/// Phase 10a: the left panel of the two-panel shell. Since Slice G-2 the
+/// day-advance role lives in the header's <see cref="TimeControlBar"/> (the
+/// continuous clock + Pause/speed/Skip/contextual Play cluster, the sole
+/// caller of TimeManager.AdvanceDay); this panel keeps the attended at-bat
+/// machinery — CareerManager.TryGetPendingGame / PlayPendingGame — launched
+/// off the bar's PlayGameRequested signal, and refreshes its header off the
+/// bar's DaySettled. The cross-cutting day-advance gates live in the shared
+/// GameManager.CanAdvanceDay (G-1), which this panel feeds via
+/// InteractiveGameInFlight while the game task runs. The
+/// bridge/task/dirty-flag driver is the Phase 5 design unchanged: the game
+/// runs on a background task (never the UI thread), the view renders
+/// snapshot DTOs, and the player's swing/take intent flows back through a
+/// <see cref="PlayerIntentBridge"/>. Node paths verified against
+/// BaseballDashboard.tscn via godot_scene_mapper before this script was
+/// written.
 ///
 /// UI-reorg note: the Scouting Report / Development / Season Stats /
 /// Standings / League Leaders / Plan Today cards that used to fill this
@@ -33,9 +35,6 @@ public sealed partial class BaseballDashboard : PanelContainer
 {
     // Player-facing text templates live on exported properties so the scene
     // (not compiled code) is the editing surface, per ui_conventions.
-    [Export]
-    public string NoGameText { get; set; } = "No game today.";
-
     [Export]
     public string GameRunningText { get; set; } = "Game in progress — swing or take when the count shows.";
 
@@ -74,8 +73,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     public string ArrestReasonText { get; set; } = "In custody";
 
     private PortraitView _avatarPortrait = null!;
-    private Button _playGameButton = null!;
-    private Button _skipDayButton = null!;
+    private TimeControlBar _timeControlBar = null!;
     private Label _statusLabel = null!;
     private PanelContainer _availabilityCard = null!;
     private Label _availabilityLabel = null!;
@@ -86,12 +84,6 @@ public sealed partial class BaseballDashboard : PanelContainer
     private readonly PlayerIntentBridge _bridge = new();
     private Task<MicroGameResult>? _gameTask;
     private string[] _outcomeNames = Array.Empty<string>();
-    private bool _awaitingPendingGame;
-
-    // Skip Day's card refresh must wait for the day tick's deferred events to
-    // pump (same reason _awaitingPendingGame waits) — a synchronous refresh in
-    // the click handler reads the DB before the sims have played the day.
-    private bool _refreshAfterDayTick;
 
     // Dirty-flag identity for the availability label (ui_conventions.md: no
     // per-frame string formatting).
@@ -103,8 +95,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     public override void _Ready()
     {
         _avatarPortrait = GetNode<PortraitView>("Layout/HeaderBand/HeaderRow/AvatarPortrait");
-        _playGameButton = GetNode<Button>("Layout/HeaderBand/HeaderRow/PlayGameButton");
-        _skipDayButton = GetNode<Button>("Layout/HeaderBand/HeaderRow/SkipDayButton");
+        _timeControlBar = GetNode<TimeControlBar>("Layout/HeaderBand/HeaderRow/TimeControlBar");
         _statusLabel = GetNode<Label>("Layout/HeaderBand/HeaderRow/HeaderText/StatusLabel");
         _availabilityCard = GetNode<PanelContainer>("Layout/AvailabilityCard");
         _availabilityLabel = GetNode<Label>("Layout/AvailabilityCard/AvailabilityLabel");
@@ -112,22 +103,26 @@ public sealed partial class BaseballDashboard : PanelContainer
         _recapCard = GetNode<PanelContainer>("Layout/CenterSlot/RecapCard");
         _recapLabel = GetNode<Label>("Layout/CenterSlot/RecapCard/RecapLayout/RecapLabel");
 
-        _playGameButton.Pressed += OnPlayGamePressed;
-        _skipDayButton.Pressed += OnSkipDayPressed;
+        _timeControlBar.PlayGameRequested += OnPlayGameRequested;
+        _timeControlBar.DaySettled += OnDaySettled;
         _atBatView.ReadCommitted += OnReadCommitted;
 
         _outcomeNames = OutcomeNamesCsv.Split(',');
         RefreshHeader();
-        RefreshDayControlsEnabled();
     }
 
     public override void _ExitTree()
     {
         // Aborts any in-flight game; it unwinds unflushed and the career
-        // forfeits it to the autopilot on the next day tick.
+        // forfeits it to the autopilot on the next day tick. The shared gate
+        // must not stay latched by a game this panel is abandoning.
         _bridge.Cancel();
-        _playGameButton.Pressed -= OnPlayGamePressed;
-        _skipDayButton.Pressed -= OnSkipDayPressed;
+        if (_gameTask is not null && GameManager.Instance is { } gm)
+        {
+            gm.InteractiveGameInFlight = false;
+        }
+        _timeControlBar.PlayGameRequested -= OnPlayGameRequested;
+        _timeControlBar.DaySettled -= OnDaySettled;
         _atBatView.ReadCommitted -= OnReadCommitted;
     }
 
@@ -136,31 +131,12 @@ public sealed partial class BaseballDashboard : PanelContainer
         CareerManager career = GameManager.Instance!.Career;
         RefreshAvailabilityLabel(career);
 
-        // The day tick's events dispatch on GameManager._Process (earlier this
-        // frame, autoloads process first), so a requested game shows up here —
-        // and the Skip path's card refresh waits on the same drain.
-        if ((_awaitingPendingGame || _refreshAfterDayTick) && GameManager.Instance!.Events.PendingCount == 0)
-        {
-            bool startRequested = _awaitingPendingGame;
-            _awaitingPendingGame = false;
-            _refreshAfterDayTick = false;
-            if (startRequested)
-            {
-                if (career.HasPendingGame)
-                {
-                    StartInteractiveGame(career);
-                }
-                else
-                {
-                    _statusLabel.Text = NoGameText; // offseason day
-                }
-            }
-            RefreshHeader();
-        }
-
+        // Slice G-2: the post-advance settle wait (the old
+        // _awaitingPendingGame/_refreshAfterDayTick drain) now lives in the
+        // TimeControlBar, which owns every advance; this panel refreshes off
+        // its DaySettled signal and launches off PlayGameRequested.
         if (_gameTask is null)
         {
-            RefreshDayControlsEnabled();
             return;
         }
 
@@ -204,29 +180,40 @@ public sealed partial class BaseballDashboard : PanelContainer
         {
             FinishInteractiveGame();
         }
-        RefreshDayControlsEnabled();
     }
 
-    private void OnPlayGamePressed()
+    /// <summary>
+    /// Slice G-2: the bar's contextual Play press. The pending game already
+    /// exists (the day ticked with autopilot off and parked it), so this
+    /// launches the at-bat directly — no day advance, no settle wait. The
+    /// guard makes a stale press a no-op.
+    /// </summary>
+    private void OnPlayGameRequested()
     {
-        GameManager gm = GameManager.Instance!;
-        _statusLabel.Text = GameRunningText;
-        gm.Career.AutopilotAttendedGames = false;
-        _awaitingPendingGame = true;
-        gm.Clock.AdvanceDay();
+        CareerManager career = GameManager.Instance!.Career;
+        if (_gameTask is null && career.HasPendingGame)
+        {
+            _statusLabel.Text = GameRunningText;
+            StartInteractiveGame(career);
+        }
     }
 
-    private void OnSkipDayPressed()
+    /// <summary>
+    /// Slice G-2: a day advance (Skip or midnight roll) fully settled — the
+    /// old post-drain refresh, now signal-driven. Clearing the status line
+    /// here is the old Skip-click clear, one settled frame later.
+    /// </summary>
+    private void OnDaySettled()
     {
-        GameManager gm = GameManager.Instance!;
-        gm.Career.AutopilotAttendedGames = true;
-        _refreshAfterDayTick = true;
-        gm.Clock.AdvanceDay();
         _statusLabel.Text = string.Empty;
+        RefreshHeader();
     }
 
     private void StartInteractiveGame(CareerManager career)
     {
+        // Slice G-1: the shared gate must see the game the moment it exists,
+        // before any other driver's frame could consult CanAdvanceDay.
+        GameManager.Instance!.InteractiveGameInFlight = true;
         // 12c: the center slot's two occupants swap here — the at-bat view
         // takes over for the duration of the game, and the recap card (the
         // prior game's result, if any) steps aside until FinishInteractiveGame
@@ -250,6 +237,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     {
         Task<MicroGameResult> task = _gameTask!;
         _gameTask = null;
+        GameManager.Instance!.InteractiveGameInFlight = false;
         GameManager.Instance!.Career.FeedSink = null;
         _atBatView.Visible = false;
 
@@ -278,25 +266,6 @@ public sealed partial class BaseballDashboard : PanelContainer
 
     private void OnReadCommitted(int guessType, int guessCell, double approach) =>
         _bridge.SubmitRead((PitchType)guessType, (byte)guessCell, approach);
-
-    /// <summary>
-    /// Unified per-frame recomputation of the Play/Skip buttons' disabled
-    /// state — blocked while a game is in flight (the original invariant)
-    /// OR while either overlay (event choice / succession choice) has
-    /// something for the player to resolve, so a player literally cannot
-    /// advance the day out from under a pending decision. Called every
-    /// frame rather than at scattered transition points so it can never
-    /// drift out of sync with either overlay's own state.
-    /// </summary>
-    private void RefreshDayControlsEnabled()
-    {
-        GameManager gm = GameManager.Instance!;
-        bool blocked = _gameTask is not null || _awaitingPendingGame || _refreshAfterDayTick
-            || gm.GrittyEventChoices.HasPendingChoice
-            || gm.Career.HasPendingSuccessionChoice;
-        _playGameButton.Disabled = blocked;
-        _skipDayButton.Disabled = blocked;
-    }
 
     /// <summary>
     /// The header band's portrait/identity — everything else the old

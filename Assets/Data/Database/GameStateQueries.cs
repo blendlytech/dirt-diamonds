@@ -66,6 +66,23 @@ public static class GameStateKeys
     /// one inherited across a succession handoff, is a skip, never a mis-mint.
     /// </summary>
     public const string AvatarExPartnerId = "avatar_ex_partner_id";
+
+    /// <summary>
+    /// Slice G (real_time_clock_slice_g.md §3.4): the cosmetic intraday wall
+    /// clock's minutes-since-midnight (long, 0..1439). Checkpoint-written
+    /// only (SaveNow/_ExitTree/pause/speed-change — never per frame); absent
+    /// on any pre-G save, which boots the clock at the canonical 08:00 wake.
+    /// Cosmetic display state — the sim's calendar remains
+    /// <see cref="CurrentDay"/> alone.
+    /// </summary>
+    public const string TimeOfDayMinutes = "time_of_day_minutes";
+
+    /// <summary>
+    /// Slice G (§3.4): the chosen clock pace as a TimeSpeed enum ordinal
+    /// (long), persisted beside <see cref="TimeOfDayMinutes"/> so the pace
+    /// resumes across a reload. Absent → Normal.
+    /// </summary>
+    public const string TimeSpeed = "time_speed";
 }
 
 /// <summary>
