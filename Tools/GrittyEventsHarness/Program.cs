@@ -67,6 +67,8 @@ internal static class Program
             RunRekindleChecks();
             RunStrictnessChecks();
             RunTeammateExOfPartnerChecks();
+            RunTierGpaChecks();
+            RunHsOnboardingArcChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -159,8 +161,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 7
-            && wholeFolder.Count == 55
+            batchFiles.Length >= 8
+            && wholeFolder.Count == 66
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -204,7 +206,18 @@ internal static class Program
             && wholeFolder.TryGetById("hs_family_game_night", out _)
             && wholeFolder.TryGetById("hs_the_hard_conversation", out _)
             && wholeFolder.TryGetById("hs_school_calls_about_neglect", out _)
-            && wholeFolder.TryGetById("hs_course_correction", out _),
+            && wholeFolder.TryGetById("hs_course_correction", out _)
+            && wholeFolder.TryGetById("hs_first_day", out _)
+            && wholeFolder.TryGetById("hs_meet_coach", out _)
+            && wholeFolder.TryGetById("hs_tryouts", out _)
+            && wholeFolder.TryGetById("hs_first_practice", out _)
+            && wholeFolder.TryGetById("hs_first_game_nerves", out _)
+            && wholeFolder.TryGetById("hs_lunchroom", out _)
+            && wholeFolder.TryGetById("hs_first_report_card", out _)
+            && wholeFolder.TryGetById("hs_report_card_slipping", out _)
+            && wholeFolder.TryGetById("hs_coach_checkin", out _)
+            && wholeFolder.TryGetById("hs_crosstown_rival_seed", out _)
+            && wholeFolder.TryGetById("hs_homecoming", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -268,7 +281,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 55 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 66 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -509,6 +522,45 @@ internal static class Program
             world.Bus.DispatchPending();
             Check("avatar scope binds to avatar_player_id",
                 world.Fired.Count == 1 && world.Fired[0].SubjectPlayerId == "hero");
+        }
+
+        // Avatar starvation regression guard (Act-1 Stage-3 review fix). The
+        // live-save failure mode: the avatar's Players row is created after
+        // world generation, so it scans LAST in the poll; on a full league,
+        // scope:any NPC texture exhausted MaxFiresPerDay every single day
+        // (111/111 days at exactly 8 NPC fires, zero avatar fires ever) and
+        // the avatar never received an event in the save's life. The fix
+        // hoists the avatar to the front of the sweep — mirrored here with
+        // the avatar deliberately inserted last behind a cap-saturating NPC
+        // population.
+        {
+            using World world = World.Create("avatarStarvation", GrittyEventJson.Parse(
+                """
+                { "events": [
+                  { "id": "npc_texture", "scope": "any", "weight": 1.0,
+                    "prerequisites": [ { "field": "age", "op": ">=", "value": 21 } ],
+                    "choices": [ { "id": "a" } ] },
+                  { "id": "avatar_beat", "scope": "avatar", "weight": 1.0,
+                    "choices": [ { "id": "a" } ] }
+                ] }
+                """));
+            for (int i = 0; i < EventDispatcher.MaxFiresPerDay + 4; i++)
+            {
+                world.AddPlayer($"npc{i}", age: 27, teamId: 1);
+            }
+            world.AddPlayer("hero", age: 16, teamId: 1); // LAST row, the live shape
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce(); // record the boot day
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            int fired = world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("the avatar cannot be starved out of its day by cap-saturating NPC texture (evaluates first despite scanning last)",
+                world.Fired.Any(f => f.SubjectPlayerId == "hero" && f.EventId == "avatar_beat"),
+                string.Join(",", world.Fired.Select(f => f.SubjectPlayerId).Take(3)));
+            Check("the MaxFiresPerDay valve still holds with the avatar hoisted (8 total, avatar's fire among them)",
+                fired == EventDispatcher.MaxFiresPerDay && world.Fired.Count == EventDispatcher.MaxFiresPerDay,
+                $"{fired} fires");
         }
     }
 
@@ -1651,6 +1703,280 @@ internal static class Program
 
             Check("no recorded ex-history ⇒ the event never fires, even with a partner and teammates present",
                 world.Fired.Count == 0, $"{world.Fired.Count} fires");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h3. SubjectField.Tier / SubjectField.Gpa (HS onboarding arc,
+    // docs/design/hs_onboarding_events.md §1) — the load-bearing NULL-team
+    // sentinel and the gpa report-card partition.
+    // ------------------------------------------------------------------
+
+    private static void RunTierGpaChecks()
+    {
+        Console.WriteLine("--- SubjectField.Tier / SubjectField.Gpa ---");
+
+        GrittyEventLibrary tierField = GrittyEventJson.Parse(
+            """{ "events": [ { "id": "x", "scope": "avatar", "weight": 0.5, "prerequisites": [ { "field": "tier", "op": "==", "value": 0 } ], "choices": [ { "id": "a" } ] } ] }""");
+        Check("GrittyEventJson accepts the 'tier' prerequisite field",
+            tierField.TryGetById("x", out GrittyEventDefinition tx) && tx.Prerequisites.Length == 1
+            && tx.Prerequisites[0].Field == SubjectField.Tier && tx.Prerequisites[0].Comparison == FieldComparison.Equal
+            && tx.Prerequisites[0].Value == 0);
+
+        GrittyEventLibrary gpaField = GrittyEventJson.Parse(
+            """{ "events": [ { "id": "y", "scope": "avatar", "weight": 0.5, "prerequisites": [ { "field": "gpa", "op": ">=", "value": 2.5 } ], "choices": [ { "id": "a" } ] } ] }""");
+        Check("GrittyEventJson accepts the 'gpa' prerequisite field",
+            gpaField.TryGetById("y", out GrittyEventDefinition ty) && ty.Prerequisites[0].Field == SubjectField.Gpa
+            && ty.Prerequisites[0].Comparison == FieldComparison.GreaterOrEqual && ty.Prerequisites[0].Value == 2.5);
+
+        Check("GrittyEventJson still rejects an unrecognized prerequisite field name", ThrowsAny(() =>
+            GrittyEventJson.Parse(
+                """{ "events": [ { "id": "z", "scope": "avatar", "weight": 0.5, "prerequisites": [ { "field": "nonsense_field", "op": "==", "value": 0 } ], "choices": [ { "id": "a" } ] } ] }""")));
+
+        var noFlags = new Dictionary<(string, string), long>();
+        var hsSubject = new PollPlayerRow { PlayerId = "hs", Tier = 0, Gpa = 2.5 };
+        var proSubject = new PollPlayerRow { PlayerId = "pro", Tier = 5, Gpa = 2.5 };
+        var unrostered = new PollPlayerRow { PlayerId = "parent", Tier = -1, Gpa = 2.5 };
+        Check("tier==0 holds for an HS subject and not a pro subject",
+            ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Tier, FieldComparison.Equal, 0), in hsSubject, noFlags, 1)
+            && !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Tier, FieldComparison.Equal, 0), in proSubject, noFlags, 1));
+        // The sentinel defeats every >= and == gate this arc (or any shipped
+        // content) actually authors on tier -- both real gates are checked
+        // here (onboarding's ==0, the rookie batch's >=2). NOTE (disclosed,
+        // not a bug): a hypothetical "<" gate is NOT structurally defeated --
+        // -1 < N for any N >= 0, so a future "tier < 2" gate on a scope:any
+        // event would also match unrostered subjects. No shipped event uses
+        // "<" on tier; this is a caveat for future authors, not a regression.
+        Check("the NULL-team sentinel (-1) matches no real >= or == tier gate this arc authors",
+            !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Tier, FieldComparison.GreaterOrEqual, 2), in unrostered, noFlags, 1)
+            && !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Tier, FieldComparison.Equal, 0), in unrostered, noFlags, 1));
+
+        var solidGpa = new PollPlayerRow { PlayerId = "solid", Gpa = 2.5 };
+        var slippingGpa = new PollPlayerRow { PlayerId = "slipping", Gpa = 2.4 };
+        Check("gpa >= 2.5 / < 2.5 partitions exactly at the report-card boundary (the schema default 2.5 lands on the solid branch)",
+            ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Gpa, FieldComparison.GreaterOrEqual, 2.5), in solidGpa, noFlags, 1)
+            && !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Gpa, FieldComparison.Less, 2.5), in solidGpa, noFlags, 1)
+            && ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Gpa, FieldComparison.Less, 2.5), in slippingGpa, noFlags, 1)
+            && !ConditionEvaluator.Holds(EventPrerequisite.ForField(SubjectField.Gpa, FieldComparison.GreaterOrEqual, 2.5), in slippingGpa, noFlags, 1));
+    }
+
+    // ------------------------------------------------------------------
+    // 4h4. HS onboarding arc + rookie-batch tier gate (Act-1 fix,
+    // docs/design/hs_onboarding_events.md) — the shipped content batches
+    // loaded together, exactly as GameManager.LoadGrittyEventContent loads
+    // the whole Content folder, so the tier-gate interaction between the
+    // two files is proven against the REAL shipped JSON, not a mirror.
+    // ------------------------------------------------------------------
+
+    private static readonly string[] RookieBatchEventIds =
+    {
+        "clubhouse_welcome", "playbook_hazing", "homesick", "first_paycheck", "splurge_callback",
+        "frugal_callback", "coach_pep_talk", "in_a_slump", "on_a_heater", "clubhouse_prank",
+        "road_roommate", "rookie_advice_veteran",
+    };
+
+    private static readonly string[] OnboardingEventIds =
+    {
+        "hs_first_day", "hs_meet_coach", "hs_tryouts", "hs_first_practice", "hs_first_game_nerves",
+        "hs_lunchroom", "hs_first_report_card", "hs_report_card_slipping", "hs_coach_checkin",
+        "hs_crosstown_rival_seed", "hs_homecoming",
+    };
+
+    private static void RunHsOnboardingArcChecks()
+    {
+        Console.WriteLine("--- HS onboarding arc + rookie tier gate (shipped content) ---");
+
+        string onboardingJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "hs_onboarding_events.json"));
+        string rookieJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "rookie_season_events.json"));
+
+        // Stage-3 review pins (design contract §9.1/§4.2): the per-event
+        // shape of both shipped batches, so a future content edit can't
+        // silently drop the tier floor off one rookie event or shrink an
+        // onboarding beat below HIGH_SCHOOL.md's 3-choice rule. The World
+        // blocks below prove the BEHAVIOR; these pin the AUTHORED bytes.
+        {
+            GrittyEventLibrary both = GrittyEventJson.Parse(new[] { onboardingJson, rookieJson });
+            int onboardingOk = 0;
+            foreach (string id in OnboardingEventIds)
+            {
+                if (both.TryGetById(id, out GrittyEventDefinition e)
+                    && e.Scope == EventScope.Avatar
+                    && e.Choices.Length == 3
+                    && e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field
+                        && p.Field == SubjectField.Tier && p.Comparison == FieldComparison.Equal && p.Value == 0))
+                {
+                    onboardingOk++;
+                }
+            }
+            Check("all 11 onboarding events resolve, are avatar-scoped, carry the tier==0 gate, and ship exactly 3 choices",
+                onboardingOk == OnboardingEventIds.Length, $"{onboardingOk}/{OnboardingEventIds.Length}");
+
+            int rookieOk = 0;
+            foreach (string id in RookieBatchEventIds)
+            {
+                if (both.TryGetById(id, out GrittyEventDefinition e)
+                    && e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field
+                        && p.Field == SubjectField.Tier && p.Comparison == FieldComparison.GreaterOrEqual && p.Value == 2))
+                {
+                    rookieOk++;
+                }
+            }
+            Check("all 12 rookie events still resolve and every one carries the tier>=2 floor (no partial re-gate)",
+                rookieOk == RookieBatchEventIds.Length, $"{rookieOk}/{RookieBatchEventIds.Length}");
+        }
+
+        // (a) + (b), combined: a fresh age-16 HS avatar. The week-one chain
+        // fires on the EXACT pacing the design doc's flag graph (§4.1)
+        // predicts -- deterministic because every week-one event is weight
+        // 1.0 (never loses its roll) and each is gated behind the previous
+        // one's flag, so file order + min_days_since alone decide the winner
+        // every day. hs_first_report_card (also weight 1.0) becomes the
+        // first still-open event the moment hs_debut_done is 21 days old,
+        // so it fires on EXACTLY day 28 (7 + 21) regardless of RNG -- gpa
+        // stays at the neutral default 2.5, so hs_report_card_slipping's
+        // gpa<2.5 gate can never hold for this subject, making the solid
+        // branch's day-28 fire deterministic too. Loading the rookie batch
+        // in the SAME library proves the regression guard (b) for free: not
+        // one of its 12 tier>=2-gated events can ever win a subject-day slot
+        // for a tier-0 avatar.
+        {
+            using World world = World.Create("hsOnboardingChain", GrittyEventJson.Parse(new[] { onboardingJson, rookieJson }));
+            var baseball = new BaseballQueries(world.Db);
+            baseball.InsertTeam(new TeamRow { TeamId = 101, City = "Crestwood", Name = "Cardinals", Abbreviation = "CRC", League = "HS", Division = "A" });
+            baseball.UpsertTeamTier(101, LeagueTier.HS);
+
+            world.AddPlayer("hero", age: 16, teamId: 101);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Dispatcher.PollOnce(); // records the boot day (day 1, never evaluated)
+
+            for (int day = 2; day <= 28; day++)
+            {
+                world.Clock.AdvanceDay();
+                world.Bus.DispatchPending();
+                world.Dispatcher.PollOnce();
+                world.Bus.DispatchPending();
+            }
+
+            bool FiredOn(string eventId, long onDay) => world.Fired.Any(f => f.EventId == eventId && f.Day == onDay);
+            Check("hs_first_day fires on day 2 of a fresh HS save",
+                FiredOn("hs_first_day", 2));
+            Check("the week-one chain progresses one beat per day exactly on the flag graph's pacing (days 2-7)",
+                FiredOn("hs_first_day", 2) && FiredOn("hs_meet_coach", 3) && FiredOn("hs_tryouts", 4)
+                && FiredOn("hs_first_practice", 5) && FiredOn("hs_lunchroom", 6) && FiredOn("hs_first_game_nerves", 7),
+                string.Join(",", world.Fired.Take(6).Select(f => $"{f.EventId}@{f.Day}")));
+            Check("hs_first_report_card (solid branch, default gpa 2.5) fires deterministically on day 28 (debut+21), never the slipping branch",
+                FiredOn("hs_first_report_card", 28) && world.Fired.All(f => f.EventId != "hs_report_card_slipping"));
+            Check("not one rookie-batch event fires across the whole 28-day run despite sharing a library with a tier-0 avatar",
+                world.Fired.All(f => !RookieBatchEventIds.Contains(f.EventId)),
+                string.Join(",", world.Fired.Select(f => f.EventId).Where(id => RookieBatchEventIds.Contains(id))));
+        }
+
+        // (c) positive control: a tier>=2 (MinorA, the floor) avatar still
+        // gets the rookie batch -- the gate excludes HS/College, not
+        // professional tiers. Isolated to the rookie file alone (the
+        // onboarding file is irrelevant here: every one of its events
+        // requires tier==0, trivially false for this subject).
+        {
+            using World world = World.Create("rookiePositiveControl", GrittyEventJson.Parse(rookieJson));
+            var baseball = new BaseballQueries(world.Db);
+            baseball.InsertTeam(new TeamRow { TeamId = 201, City = "Rockford", Name = "River Cats", Abbreviation = "ROC", League = "MiLB", Division = "A" });
+            baseball.UpsertTeamTier(201, LeagueTier.MinorA);
+
+            world.AddPlayer("proHero", age: 20, teamId: 201);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "proHero");
+            world.Dispatcher.PollOnce();
+
+            for (int day = 2; day <= 60 && !world.Fired.Any(f => f.EventId == "clubhouse_welcome"); day++)
+            {
+                world.Clock.AdvanceDay();
+                world.Bus.DispatchPending();
+                world.Dispatcher.PollOnce();
+                world.Bus.DispatchPending();
+            }
+
+            Check("a tier>=2 (MinorA) avatar still fires clubhouse_welcome -- the rookie batch is NOT globally blocked, only HS/College",
+                world.Fired.Any(f => f.EventId == "clubhouse_welcome"),
+                $"{world.Fired.Count} fires");
+        }
+
+        // (d) contaminated-save guard: an HS-tier avatar with rookie_settled
+        // pre-set (the pre-fix live-save scenario the design doc worried
+        // about) still never fires a single rookie event -- the tier floor
+        // heals contamination with zero DB surgery -- while the onboarding
+        // chain fires normally regardless (contamination doesn't cross-block).
+        {
+            using World world = World.Create("contaminatedSaveGuard", GrittyEventJson.Parse(new[] { onboardingJson, rookieJson }));
+            var baseball = new BaseballQueries(world.Db);
+            baseball.InsertTeam(new TeamRow { TeamId = 102, City = "Riverton", Name = "Rams", Abbreviation = "RIV", League = "HS", Division = "A" });
+            baseball.UpsertTeamTier(102, LeagueTier.HS);
+
+            world.AddPlayer("contaminatedHero", age: 16, teamId: 102);
+            world.Players.SetFlag("contaminatedHero", "rookie_settled", true, 0);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "contaminatedHero");
+            world.Dispatcher.PollOnce();
+
+            for (int day = 2; day <= 10; day++)
+            {
+                world.Clock.AdvanceDay();
+                world.Bus.DispatchPending();
+                world.Dispatcher.PollOnce();
+                world.Bus.DispatchPending();
+            }
+
+            Check("a pre-contaminated HS avatar (rookie_settled already active) still never fires a rookie event -- the tier floor holds",
+                world.Fired.All(f => !RookieBatchEventIds.Contains(f.EventId)));
+            Check("the onboarding chain still starts normally on a contaminated save (hs_first_day fires day 2)",
+                world.Fired.Any(f => f.EventId == "hs_first_day" && f.Day == 2));
+        }
+
+        // (e) NULL-team subject + the real SQL join, end to end: an
+        // unrostered subject (the seeded parent NPCs' shape) polls the -1
+        // sentinel through NarrativePollQueries itself, not just the
+        // evaluator -- proving the CASE WHEN p.team_id IS NULL branch in the
+        // actual poll SQL, alongside a rostered HS/pro pair and a rostered
+        // team with NO Team_Tiers row (the v6->v7 COALESCE-to-MLB(5)
+        // backfill convention, still honored with the new join in place).
+        // Also proves gpa round-trips through the same join.
+        {
+            using World world = World.Create("tierPollJoin", GrittyEventJson.Parse(onboardingJson));
+            var baseball = new BaseballQueries(world.Db);
+            baseball.InsertTeam(new TeamRow { TeamId = 301, City = "Testville", Name = "HS Team", Abbreviation = "TVH", League = "HS", Division = "A" });
+            baseball.UpsertTeamTier(301, LeagueTier.HS);
+            baseball.InsertTeam(new TeamRow { TeamId = 302, City = "Testburg", Name = "Pro Team", Abbreviation = "TVP", League = "MLB", Division = "A" });
+            baseball.UpsertTeamTier(302, LeagueTier.MLB);
+            baseball.InsertTeam(new TeamRow { TeamId = 303, City = "Orphantown", Name = "No Tier Row", Abbreviation = "ORP", League = "MLB", Division = "A" });
+            // Deliberately no UpsertTeamTier(303, ...) -- proves the missing-row COALESCE(tt.tier, 5) branch.
+
+            world.AddPlayer("hsPlayer", age: 16, teamId: 301);
+            world.AddPlayer("proPlayer", age: 25, teamId: 302);
+            world.AddPlayer("untieredTeamPlayer", age: 25, teamId: 303);
+            world.AddPlayer("parent", age: 44, teamId: null);
+
+            PersonRow customGpa = PersonRow.Neutral("hsPlayer");
+            customGpa.Gpa = 3.8;
+            world.Persons.Upsert(customGpa);
+
+            var poll = new NarrativePollQueries(world.View);
+            var rows = new List<PollPlayerRow>();
+            poll.LoadPollPlayers(rows);
+
+            PollPlayerRow hsRow = rows.Single(r => r.PlayerId == "hsPlayer");
+            PollPlayerRow proRow = rows.Single(r => r.PlayerId == "proPlayer");
+            PollPlayerRow untieredRow = rows.Single(r => r.PlayerId == "untieredTeamPlayer");
+            PollPlayerRow parentRow = rows.Single(r => r.PlayerId == "parent");
+
+            Check("a rostered HS-tier subject polls tier 0 through the real Team_Tiers join",
+                hsRow.Tier == 0);
+            Check("a rostered MLB-tier subject polls tier 5",
+                proRow.Tier == 5);
+            Check("a rostered team missing its Team_Tiers row still COALESCEs to MLB(5) (the v6->v7 backfill convention, unbroken by the new join)",
+                untieredRow.Tier == 5);
+            Check("an UNROSTERED subject (NULL team_id, the seeded-parent shape) polls the -1 sentinel end to end through the real SQL, never MLB(5)",
+                parentRow.TeamId == null && parentRow.Tier == -1);
+            Check("gpa round-trips through the real Player_Person join",
+                Math.Abs(hsRow.Gpa - 3.8) < 1e-9);
         }
     }
 

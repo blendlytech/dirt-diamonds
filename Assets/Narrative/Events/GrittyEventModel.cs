@@ -31,6 +31,20 @@ public enum PrerequisiteKind : byte
 /// boolean (0/1) computed the same way from a Relationships/
 /// Relationship_History self-join — the graph-reaching prerequisite
 /// hs_clubhouse_cancer gates on.
+///
+/// Tier and Gpa (the HS onboarding arc, docs/design/hs_onboarding_events.md
+/// §1) follow the exact same poll-join shape: Tier LEFT JOINs Team_Tiers
+/// (COALESCEd to MLB(5) for a rostered team missing its row, the v6→v7
+/// backfill convention — but a NULL team_id reads as sentinel −1). The
+/// sentinel defeats every ">=" and "==" gate real content authors (both
+/// shipped gates — onboarding's tier==0, the rookie batch's tier>=2 — hold
+/// for 0–5 only, never −1), so unrostered subjects like seeded parent NPCs
+/// can never satisfy either. DISCLOSED CAVEAT: it does NOT defeat a "&lt;"
+/// gate — −1 &lt; N for any N ≥ 0, so a hypothetical future "tier &lt; 2" gate
+/// on a scope:any event would also match an unrostered subject. No shipped
+/// event uses "&lt;" on tier; a future one should prefer scope:avatar or an
+/// explicit lower bound. Gpa LEFT JOINs Player_Person (COALESCEd to the
+/// schema default 2.5).
 /// </summary>
 public enum SubjectField : byte
 {
@@ -42,6 +56,8 @@ public enum SubjectField : byte
     BaseballInterest,
     Strictness,
     TeammateExOfPartner,
+    Tier,
+    Gpa,
 }
 
 public enum FieldComparison : byte

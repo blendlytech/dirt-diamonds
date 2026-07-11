@@ -1,0 +1,358 @@
+{
+  "//": "HS onboarding arc (docs/design/hs_onboarding_events.md, Sonnet 5, Stage 2 of the Act-1 fix plan). Closes Epic 5 ('Narrative Event Generator / Tutorial', docs/game-idas/HIGH_SCHOOL.md), previously a one-line stub, and the actual bug it exposed: a fresh age-16 freshman had zero first-day content and instead fired rookie_season_events.json's pro-clubhouse cascade (see that file's rewritten header for the other half of this fix). 11 events, all scope:'avatar' -- a week-one chain (days ~2-9, a beat a day: hs_first_day -> hs_meet_coach -> hs_tryouts -> hs_first_practice -> hs_first_game_nerves, with hs_lunchroom running in parallel off hs_started) plus a semester spine (hs_first_report_card/hs_report_card_slipping at ~debut+21, hs_coach_checkin recurring, hs_crosstown_rival_seed at ~debut+14, hs_homecoming at ~made_team+45). EVERY event carries { \"field\": \"tier\", \"op\": \"==\", \"value\": 0 } -- not just the entry -- so the arc self-gates to the HS tier the moment an avatar graduates, and a gen-2 heir's own tier keeps the redundant guard honest with zero reasoning about flag lifetimes (the rookie batch's own 'gate all, not just entry' call, mirrored). Events 7/8 partition on the new gpa field (>=2.5 solid vs <2.5 slipping) and share flag_inactive got_report_card, so exactly one fires per avatar per HS career -- the OR-is-two-events idiom. hs_coach_checkin alone carries no one-shot flag (a genuine recurring pulse, cooldown-paced). Contacts: coach_hs (Coach Malone, the HS varsity coach -- deliberately distinct from coach_reyes, the pro clubhouse coach) and hs_friend (Marcus, a classmate) are new registry entries; events 1 and 7 reuse the existing family_mom thread. hs_crosstown_rival_seed's 'opponent' relationship target is best-effort: at HS tier the opponent pool may be empty on a given roll, and per the existing empty-pool skip precedent the relationship consequence is then a no-op while set_flag hs_rival_seeded still lands, so the beat always completes regardless. No new ConsequenceKind/RelationshipTargetSelector/schema change anywhere in this batch -- pure content + the two new SubjectFields (Tier, Gpa) shipped alongside it. Day-2 competition audit (design doc §5): the only other event that can hold on day 2 of a fresh HS save is hs_dating_events.json's hs_crush_forms at weight 0.05, loaded first by alphabetical file order -- an acceptable ~5%/day slip that time-shifts (never drops) a week-one beat, left as-is per the design doc's recommendation.",
+  "events": [
+    {
+      "id": "hs_first_day",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "family_mom",
+      "prompt": "First bell of freshman year. New building, a locker that won't open, a schedule you're pretty sure is wrong. Mom texts: 'Knock 'em dead today, kiddo.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_inactive": "hs_started" }
+      ],
+      "choices": [
+        { "id": "walk_in_like_you_own_it", "autopilot_weight": 2, "label": "Walk in like you own the place",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_started" },
+            { "type": "person_stat", "stat": "confidence", "amount": 3 },
+            { "type": "person_stat", "stat": "social_status", "amount": 2 }
+          ] },
+        { "id": "head_down_find_classes", "autopilot_weight": 2, "label": "Head down, find your classes",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_started" },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 }
+          ] },
+        { "id": "ask_mom_to_pick_up_early", "autopilot_weight": 1, "label": "Ask her to pick you up early",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_started" },
+            { "type": "stress", "amount": 4 },
+            { "type": "person_stat", "stat": "maturity", "amount": -1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_meet_coach",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "coach_hs",
+      "prompt": "Coach Malone stops you in the hall. 'You're the freshman who can supposedly hit. Tryouts are Thursday. Don't make me regret knowing your name.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_started", "min_days_since": 1 },
+        { "flag_inactive": "hs_met_coach" }
+      ],
+      "choices": [
+        { "id": "promise_early", "autopilot_weight": 2, "label": "Promise you'll be there early",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_met_coach" },
+            { "type": "person_stat", "stat": "confidence", "amount": 2 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 }
+          ] },
+        { "id": "play_it_humble", "autopilot_weight": 2, "label": "Play it humble",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_met_coach" },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 }
+          ] },
+        { "id": "tell_him_no_regrets", "autopilot_weight": 1, "label": "Tell him he won't regret it",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_met_coach" },
+            { "type": "person_stat", "stat": "confidence", "amount": 3 },
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_tryouts",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "coach_hs",
+      "prompt": "Tryouts. Forty kids, fifteen spots, a coach with a clipboard who hasn't smiled once. Your name gets called for the first round.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_met_coach", "min_days_since": 1 },
+        { "flag_inactive": "hs_made_team" }
+      ],
+      "choices": [
+        { "id": "leave_it_on_the_field", "autopilot_weight": 2, "label": "Leave it all on the field",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_made_team" },
+            { "type": "person_stat", "stat": "confidence", "amount": 3 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 },
+            { "type": "stress", "amount": 5 }
+          ] },
+        { "id": "play_smart", "autopilot_weight": 2, "label": "Play smart, don't force it",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_made_team" },
+            { "type": "person_stat", "stat": "discipline", "amount": 3 }
+          ] },
+        { "id": "hype_up_freshmen", "autopilot_weight": 1, "label": "Hype up the other freshmen to settle your nerves",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_made_team" },
+            { "type": "person_stat", "stat": "teamwork", "amount": 3 },
+            { "type": "relationship", "kind": "friend", "affinity": 8, "target": "teammate" }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_first_practice",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "coach_hs",
+      "prompt": "You made it. First official practice -- Coach Malone runs the team into the ground before anyone touches a ball. Around the tenth sprint, a few guys glance over to see if you'll break.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_made_team", "min_days_since": 1 },
+        { "flag_inactive": "hs_practiced" }
+      ],
+      "choices": [
+        { "id": "set_the_pace", "autopilot_weight": 2, "label": "Set the pace, don't break",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_practiced" },
+            { "type": "person_stat", "stat": "teamwork", "amount": 4 },
+            { "type": "person_stat", "stat": "confidence", "amount": 2 },
+            { "type": "stress", "amount": 4 }
+          ] },
+        { "id": "just_survive_it", "autopilot_weight": 2, "label": "Just survive it",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_practiced" },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 }
+          ] },
+        { "id": "crack_a_joke", "autopilot_weight": 1, "label": "Crack a joke to loosen everyone up",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_practiced" },
+            { "type": "person_stat", "stat": "charisma", "amount": 3 },
+            { "type": "relationship", "kind": "friend", "affinity": 10, "target": "teammate" }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_first_game_nerves",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "coach_hs",
+      "prompt": "First game tomorrow. You're in the lineup. Tonight, staring at the ceiling, every version plays out -- the ones where you're a hero and the ones where you're not.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_practiced", "min_days_since": 2 },
+        { "flag_inactive": "hs_debut_done" }
+      ],
+      "choices": [
+        { "id": "visualize_the_good_version", "autopilot_weight": 2, "label": "Visualize the good version until you fall asleep",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_debut_done" },
+            { "type": "person_stat", "stat": "confidence", "amount": 4 },
+            { "type": "stress", "amount": -5 }
+          ] },
+        { "id": "take_fifty_swings", "autopilot_weight": 1, "label": "Get up and take fifty swings in the garage",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_debut_done" },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 3 },
+            { "type": "stress", "amount": 2 }
+          ] },
+        { "id": "text_a_nervous_teammate", "autopilot_weight": 2, "label": "Text a teammate who's just as nervous",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_debut_done" },
+            { "type": "person_stat", "stat": "teamwork", "amount": 3 },
+            { "type": "relationship", "kind": "friend", "affinity": 8, "target": "teammate" },
+            { "type": "stress", "amount": -3 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_lunchroom",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "hs_friend",
+      "prompt": "Lunch, day three. Tray in hand, nowhere obvious to sit. A table of kids from your grade clocks you standing there -- one waves you over before it gets awkward.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_started", "min_days_since": 2 },
+        { "flag_inactive": "hs_found_crew" }
+      ],
+      "choices": [
+        { "id": "take_the_seat", "autopilot_weight": 2, "label": "Take the seat",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_found_crew" },
+            { "type": "person_stat", "stat": "social_status", "amount": 3 },
+            { "type": "relationship", "kind": "friend", "affinity": 8, "target": "teammate" },
+            { "type": "stress", "amount": -3 }
+          ] },
+        { "id": "sit_with_the_team", "autopilot_weight": 2, "label": "Sit with the team instead",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_found_crew" },
+            { "type": "person_stat", "stat": "teamwork", "amount": 3 },
+            { "type": "relationship", "kind": "friend", "affinity": 6, "target": "teammate" }
+          ] },
+        { "id": "eat_alone_scout_the_room", "autopilot_weight": 1, "label": "Eat alone and scout the room",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_found_crew" },
+            { "type": "person_stat", "stat": "intelligence", "amount": 2 },
+            { "type": "person_stat", "stat": "social_status", "amount": -1 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_first_report_card",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "family_mom",
+      "prompt": "First report card of high school hits the mailbox. Mom reads it twice and sticks it on the fridge before you're even home. 'We are SO proud of you.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_debut_done", "min_days_since": 21 },
+        { "flag_inactive": "got_report_card" },
+        { "field": "gpa", "op": ">=", "value": 2.5 }
+      ],
+      "choices": [
+        { "id": "let_yourself_enjoy_it", "autopilot_weight": 2, "label": "Let yourself enjoy it",
+          "consequences": [
+            { "type": "set_flag", "flag": "got_report_card" },
+            { "type": "person_stat", "stat": "happiness", "amount": 4 },
+            { "type": "person_stat", "stat": "confidence", "amount": 2 }
+          ] },
+        { "id": "set_sights_higher", "autopilot_weight": 1, "label": "Set your sights higher",
+          "consequences": [
+            { "type": "set_flag", "flag": "got_report_card" },
+            { "type": "person_stat", "stat": "discipline", "amount": 3 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 }
+          ] },
+        { "id": "downplay_keep_grinding", "autopilot_weight": 1, "label": "Downplay it, keep grinding",
+          "consequences": [
+            { "type": "set_flag", "flag": "got_report_card" },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_report_card_slipping",
+      "scope": "avatar",
+      "weight": 1.0,
+      "contact": "coach_hs",
+      "prompt": "Coach Malone drops a printout on the bench next to you -- your grades. 'No pass, no play. You want to keep that uniform, you fix this. I'm not asking.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_debut_done", "min_days_since": 21 },
+        { "flag_inactive": "got_report_card" },
+        { "field": "gpa", "op": "<", "value": 2.5 }
+      ],
+      "choices": [
+        { "id": "commit_to_turning_it_around", "autopilot_weight": 2, "label": "Commit to turning it around",
+          "consequences": [
+            { "type": "set_flag", "flag": "got_report_card" },
+            { "type": "person_stat", "stat": "discipline", "amount": 4 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": 3 },
+            { "type": "stress", "amount": 4 }
+          ] },
+        { "id": "ask_for_tutoring", "autopilot_weight": 1, "label": "Ask a classmate for tutoring",
+          "consequences": [
+            { "type": "set_flag", "flag": "got_report_card" },
+            { "type": "person_stat", "stat": "intelligence", "amount": 2 },
+            { "type": "relationship", "kind": "friend", "affinity": 6, "target": "teammate" },
+            { "type": "person_stat", "stat": "social_status", "amount": -1 }
+          ] },
+        { "id": "argue_grades_dont_matter", "autopilot_weight": 1, "label": "Argue grades don't matter if you can play",
+          "consequences": [
+            { "type": "set_flag", "flag": "got_report_card" },
+            { "type": "person_stat", "stat": "maturity", "amount": -3 },
+            { "type": "stress", "amount": 6 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_coach_checkin",
+      "scope": "avatar",
+      "weight": 0.15,
+      "cooldown_days": 30,
+      "contact": "coach_hs",
+      "prompt": "Coach Malone catches you after the bell. 'How you holding up, kid? Season's long. School, ball, home -- a lot to carry at your age.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_made_team" }
+      ],
+      "choices": [
+        { "id": "tell_him_the_truth", "autopilot_weight": 2, "label": "Tell him the truth",
+          "consequences": [
+            { "type": "stress", "amount": -6 },
+            { "type": "person_stat", "stat": "maturity", "amount": 1 }
+          ] },
+        { "id": "say_youre_fine", "autopilot_weight": 2, "label": "Say you're fine, keep moving",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 1 }
+          ] },
+        { "id": "ask_for_extra_reps", "autopilot_weight": 1, "label": "Ask him for extra reps",
+          "consequences": [
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 },
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_crosstown_rival_seed",
+      "scope": "avatar",
+      "weight": 0.5,
+      "contact": "hs_friend",
+      "prompt": "Your buddy shoves a phone in your face -- a clip of the shortstop from Westbrook, the crosstown school, running his mouth about your team. 'He said your name, man. By name.'",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_debut_done", "min_days_since": 14 },
+        { "flag_inactive": "hs_rival_seeded" }
+      ],
+      "choices": [
+        { "id": "let_your_game_talk", "autopilot_weight": 2, "label": "Let your game do the talking",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_rival_seeded" },
+            { "type": "person_stat", "stat": "discipline", "amount": 3 },
+            { "type": "relationship", "kind": "rival", "affinity": -15, "target": "opponent" }
+          ] },
+        { "id": "fire_back_online", "autopilot_weight": 1, "label": "Fire back online",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_rival_seeded" },
+            { "type": "person_stat", "stat": "confidence", "amount": 2 },
+            { "type": "stress", "amount": 3 },
+            { "type": "relationship", "kind": "rival", "affinity": -25, "target": "opponent" }
+          ] },
+        { "id": "laugh_it_off_screenshot", "autopilot_weight": 1, "label": "Laugh it off, screenshot it for later",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_rival_seeded" },
+            { "type": "person_stat", "stat": "charisma", "amount": 2 },
+            { "type": "relationship", "kind": "rival", "affinity": -8, "target": "opponent" }
+          ] }
+      ]
+    },
+    {
+      "id": "hs_homecoming",
+      "scope": "avatar",
+      "weight": 0.4,
+      "contact": "hs_friend",
+      "prompt": "Homecoming's this weekend. Half the school's going, tickets are twenty bucks, and your crew keeps asking if you're in. First real 'everyone's there' night of the year.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "flag_active": "hs_made_team", "min_days_since": 45 },
+        { "flag_inactive": "hs_homecoming_done" }
+      ],
+      "choices": [
+        { "id": "buy_a_ticket_go_all_in", "autopilot_weight": 2, "label": "Buy a ticket, go all in",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_homecoming_done" },
+            { "type": "funds", "amount": -20 },
+            { "type": "person_stat", "stat": "social_status", "amount": 4 },
+            { "type": "person_stat", "stat": "happiness", "amount": 3 },
+            { "type": "relationship", "kind": "friend", "affinity": 8, "target": "teammate" }
+          ] },
+        { "id": "go_keep_it_low_key", "autopilot_weight": 2, "label": "Go, keep it low-key",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_homecoming_done" },
+            { "type": "funds", "amount": -20 },
+            { "type": "person_stat", "stat": "happiness", "amount": 2 }
+          ] },
+        { "id": "skip_it_rest_for_the_game", "autopilot_weight": 1, "label": "Skip it, rest for the game",
+          "consequences": [
+            { "type": "set_flag", "flag": "hs_homecoming_done" },
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "person_stat", "stat": "social_status", "amount": -2 }
+          ] }
+      ]
+    }
+  ]
+}

@@ -162,6 +162,8 @@ public static class GrittyEventJson
                 "baseball_interest" => SubjectField.BaseballInterest,
                 "strictness" => SubjectField.Strictness,
                 "teammate_ex_of_partner" => SubjectField.TeammateExOfPartner,
+                "tier" => SubjectField.Tier,
+                "gpa" => SubjectField.Gpa,
                 _ => throw new FormatException($"Event '{eventId}': unknown prerequisite field '{fieldName}'."),
             };
 

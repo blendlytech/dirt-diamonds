@@ -164,6 +164,27 @@ public sealed class EventDispatcher : IDisposable
         _poll.LoadActiveFlags(_activeFlags);
         bool hasAvatar = _poll.TryGetStateText(GameStateKeys.AvatarPlayerId, out string avatarId);
 
+        // The avatar evaluates FIRST (Act-1 Stage-3 review fix). The poll
+        // scans Players in table order and the avatar row — created after
+        // world generation — is the LAST of 817, so on a full league the
+        // MaxFiresPerDay valve was exhausted by scope:any NPC texture before
+        // the sweep ever reached the avatar: live-save forensics showed all
+        // 111 evaluated days firing exactly 8 NPC events and the avatar
+        // receiving ZERO fires in the save's life. Hoisting preserves
+        // one-fire-per-subject and the valve's anti-spam purpose — the
+        // protagonist just can't be starved by background texture.
+        if (hasAvatar)
+        {
+            for (int i = 1; i < _players.Count; i++)
+            {
+                if (string.Equals(_players[i].PlayerId, avatarId, StringComparison.Ordinal))
+                {
+                    (_players[0], _players[i]) = (_players[i], _players[0]);
+                    break;
+                }
+            }
+        }
+
         IReadOnlyList<GrittyEventDefinition> events = _library.Events;
         int fired = 0;
 

@@ -1,5 +1,5 @@
 {
-  "//": "Rookie-season texture batch, Sonnet 5. Closes the gap Fable 5's Phase-12e review flagged: a fresh avatar (CareerManager.StartingAge 19, StartingFunds exactly 500, recklessness/detection_risk 0, health_ceiling 100, baseball_interest 100) satisfies zero prerequisites in core_events.json/career_arc_events.json/marriage_and_family_events.json for its first two full seasons -- every existing batch is either crime/PED-reactive (needs recklessness>75 or detection_risk thresholds only hustles raise) or age-gated past 20-21. This batch is the low-stakes clubhouse/coach/homesickness/paycheck content that gives that dead stretch a pulse. scope:'avatar' throughout (not 'any') is deliberate: it restricts evaluation to the single played character instead of diluting fire chances across every rostered NPC, the same call marriage_and_family_events.json already made for personal-arc content. rookie_settled (set once, weight 0.3, by clubhouse_welcome) is the entry gate every other event here reads -- nothing else in this batch can fire before it. cashed_first_check -> spent_the_check/frugal_rookie -> splurge_callback/frugal_callback is a two-step paycheck cascade, the same min_days_since-paced pattern as core_events.json's bribe->shakedown and marriage_and_family_events.json's married->expecting, just paced in weeks instead of years. Every set_flag here is read by at least one prerequisite (several self-referentially, the documented once-ever idiom) -- no orphans, no dead-end forward hooks, fully self-contained per check_event_graph_integrity #2/#3. Disclosed limitations: (1) in_a_slump/on_a_heater are flavor-only -- ConditionEvaluator has no read access to recent PA outcomes, so these fire on weight/cooldown, not actual performance; a real hot/cold streak field would need a new poll column. (2) No 'interest' consequences anywhere in this batch -- the avatar's baseball_interest starts at the 100 ceiling (CareerManager avatar creation), so any interest delta on an avatar-scope event clamps to a no-op; that writer stays reserved for the heir-interest content backyard_catch/benched_for_video_games already own.",
+  "//": "Rookie-season texture batch, Sonnet 5. Originally written against the stale StartingAge-19 premise -- EVERY event here now additionally requires { \"field\": \"tier\", \"op\": \">=\", \"value\": 2 } (MinorA and above), so this professional-clubhouse content is unreachable at HS (0) or College (1) tier regardless of rookie_settled. This is the fix for the bug the HS onboarding arc's design doc (docs/design/hs_onboarding_events.md) diagnosed: a 16-year-old freshman (CareerManager.StartingAge 16 since the grade-system pass) was receiving 'Welcome to the show, kid', rookie karaoke, a first pro paycheck, and motel road trips starting day 2, because clubhouse_welcome's only prerequisite was flag_inactive rookie_settled. rookie_settled remains the intra-batch entry gate, now AND-ed with the tier floor -- every event self-gates, not just the entry, so a save that already fired clubhouse_welcome pre-fix (rookie_settled active on an HS/College avatar) heals with zero DB surgery: a contaminated avatar below tier 2 simply never satisfies any rookie event again. The avatar only reaches tier 2 after graduating HS -> College -> signing a pro deal, at which point this batch's low-stakes clubhouse/coach/homesickness/paycheck content (originally: closes the gap Fable 5's Phase-12e review flagged, that a fresh pro avatar satisfied zero prerequisites in core_events.json/career_arc_events.json/marriage_and_family_events.json for its first two full seasons) resumes exactly as designed. scope:'avatar' throughout (not 'any') is deliberate: it restricts evaluation to the single played character instead of diluting fire chances across every rostered NPC, the same call marriage_and_family_events.json already made for personal-arc content. cashed_first_check -> spent_the_check/frugal_rookie -> splurge_callback/frugal_callback is a two-step paycheck cascade, the same min_days_since-paced pattern as core_events.json's bribe->shakedown and marriage_and_family_events.json's married->expecting, just paced in weeks instead of years. Every set_flag here is read by at least one prerequisite (several self-referentially, the documented once-ever idiom) -- no orphans, no dead-end forward hooks, fully self-contained per check_event_graph_integrity #2/#3. Disclosed limitations: (1) in_a_slump/on_a_heater are flavor-only -- ConditionEvaluator has no read access to recent PA outcomes, so these fire on weight/cooldown, not actual performance; a real hot/cold streak field would need a new poll column. (2) No 'interest' consequences anywhere in this batch -- the avatar's baseball_interest starts at the 100 ceiling (CareerManager avatar creation), so any interest delta on an avatar-scope event clamps to a no-op; that writer stays reserved for the heir-interest content backyard_catch/benched_for_video_games already own.",
   "events": [
     {
       "id": "clubhouse_welcome",
@@ -9,6 +9,7 @@
       "contact": "coach_reyes",
       "prompt": "Coach Reyes walks you to an empty locker stall in the corner of the clubhouse. 'Welcome to the show, kid. Everybody starts here.'",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_inactive": "rookie_settled" }
       ],
       "choices": [
@@ -41,6 +42,7 @@
       "contact": "coach_reyes",
       "prompt": "The veterans corner you after practice with a boombox and a very specific playlist. Rookie karaoke is apparently not optional.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled", "min_days_since": 3 },
         { "flag_inactive": "survived_hazing" }
       ],
@@ -75,6 +77,7 @@
       "contact": "family_mom",
       "prompt": "Another motel room, another town you can't quite place on a map. For a second all you want is your own bed and your mom's cooking.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [
@@ -104,6 +107,7 @@
       "contact": "agent_diaz",
       "prompt": "Direct deposit hits at midnight. It's not much by league standards, but it's the first real paycheck of your life -- and it's yours.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled", "min_days_since": 14 },
         { "flag_inactive": "cashed_first_check" }
       ],
@@ -141,6 +145,7 @@
       "contact": "agent_diaz",
       "prompt": "Diaz forwards you a spreadsheet with a raised-eyebrow subject line: 'Where did the signing bonus go?' The balance is thinner than it should be.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "spent_the_check", "min_days_since": 30 },
         { "flag_inactive": "learned_budgeting" }
       ],
@@ -173,6 +178,7 @@
       "contact": "agent_diaz",
       "prompt": "Diaz calls just to say it: your account actually has a cushion in it. 'Most rookies blow through this in a month. Keep doing what you're doing.'",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "frugal_rookie", "min_days_since": 30 },
         { "flag_inactive": "financially_savvy" }
       ],
@@ -197,6 +203,7 @@
       "contact": "coach_reyes",
       "prompt": "Reyes catches you by your locker before the game. 'Everybody in this room struggled at your age. Don't let one bad week convince you otherwise.'",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [
@@ -226,6 +233,7 @@
       "contact": "coach_reyes",
       "prompt": "Nothing's falling. Every ball finds a glove, every close pitch goes against you. The kind of stretch that gets in your head if you let it.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [
@@ -256,6 +264,7 @@
       "contact": "coach_reyes",
       "prompt": "You can't miss right now. Every read is right, every swing feels a half-second ahead of the game. The whole dugout has noticed.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [
@@ -286,6 +295,7 @@
       "contact": "coach_reyes",
       "prompt": "You open your locker to find every piece of gear wrapped in athletic tape. The whole clubhouse is already watching for your reaction.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [
@@ -317,6 +327,7 @@
       "contact": "coach_reyes",
       "prompt": "The road-trip roommate list goes up, and you're paired with someone new. Ten days on a bus is a long time to share a room with a stranger.",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [
@@ -347,6 +358,7 @@
       "contact": "coach_reyes",
       "prompt": "A ten-year veteran pulls up a folding chair next to yours. 'You want to make it in this league? Here's what nobody tells you.'",
       "prerequisites": [
+        { "field": "tier", "op": ">=", "value": 2 },
         { "flag_active": "rookie_settled" }
       ],
       "choices": [

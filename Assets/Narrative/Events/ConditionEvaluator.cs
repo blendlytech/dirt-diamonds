@@ -62,6 +62,8 @@ public static class ConditionEvaluator
         SubjectField.BaseballInterest => subject.BaseballInterest,
         SubjectField.Strictness => subject.Strictness,
         SubjectField.TeammateExOfPartner => subject.TeammateExOfPartner ? 1 : 0,
+        SubjectField.Tier => subject.Tier,
+        SubjectField.Gpa => subject.Gpa,
         _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
     };
 

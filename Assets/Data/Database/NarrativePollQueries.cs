@@ -16,6 +16,19 @@ namespace DirtAndDiamonds.Data;
 /// a teammate have an ex who is my current partner" is answerable from the
 /// poll thread's read-only DB view, never the main-thread RelationshipGraph
 /// (hs_clubhouse_cancer, high_school_person_layer.md §9 disclosure (2)).
+///
+/// Tier and Gpa (the HS onboarding arc, docs/design/hs_onboarding_events.md
+/// §1) are the third/fourth additions. Tier LEFT JOINs Team_Tiers: a
+/// rostered team missing its tier row COALESCEs to MLB(5) (the v6→v7
+/// backfill convention), but an UNROSTERED subject (NULL team_id — the
+/// seeded parent NPCs, a benched/displaced teammate) reads as the sentinel
+/// −1, which matches no real `>=`/`==` gate any shipped content authors
+/// (every real gate is 0–5) — this is the load-bearing safety keeping a
+/// `scope: any` tier-gated event from ever reaching an unrostered subject.
+/// DISCLOSED CAVEAT: the sentinel does NOT defeat a `&lt;` comparison
+/// (−1 &lt; N holds for any N ≥ 0); no shipped event gates tier with `&lt;`,
+/// but a future one should prefer `scope: avatar` or an explicit floor.
+/// Gpa LEFT JOINs Player_Person, COALESCEd to the schema default 2.5.
 /// </summary>
 public struct PollPlayerRow
 {
@@ -29,6 +42,8 @@ public struct PollPlayerRow
     public int DetectionRisk;
     public int Strictness;
     public bool TeammateExOfPartner;
+    public int Tier;
+    public double Gpa;
 }
 
 /// <summary>
@@ -59,6 +74,13 @@ public sealed class NarrativePollQueries
     // evaluated day over the whole poll, same cost class as the strictness
     // join — Relationships/Relationship_History are both small tables next
     // to Players.
+    //
+    // Tier + Gpa (schema unchanged — Team_Tiers since v7, Player_Person since
+    // v11 — MCP-validated against the live save 2026-07-10): tier's CASE
+    // reads a NULL p.team_id as sentinel −1 BEFORE the COALESCE-to-MLB(5)
+    // convention would otherwise apply, so an unrostered subject can never
+    // read as MLB tier (docs/design/hs_onboarding_events.md §1.1). gpa is a
+    // plain PK LEFT JOIN + COALESCE, the strictness precedent exactly.
     private const string SqlSelectPollPlayers =
         "WITH RelPairs AS (" +
         "  SELECT player_1_id AS pid, player_2_id AS other_id, type_enum FROM Relationships " +
@@ -77,8 +99,13 @@ public sealed class NarrativePollQueries
         "  JOIN Players teammate ON teammate.player_id = ex_hist.other_id " +
         "  WHERE partner_rel.pid = p.player_id AND partner_rel.type_enum = 'Partner' " +
         "    AND teammate.team_id = p.team_id AND teammate.player_id != p.player_id" +
-        ") THEN 1 ELSE 0 END " +
-        "FROM Players p LEFT JOIN Family_Background f ON f.player_id = p.player_id;";
+        ") THEN 1 ELSE 0 END, " +
+        "CASE WHEN p.team_id IS NULL THEN -1 ELSE COALESCE(tt.tier, 5) END, " +
+        "COALESCE(pp.gpa, 2.5) " +
+        "FROM Players p " +
+        "LEFT JOIN Family_Background f ON f.player_id = p.player_id " +
+        "LEFT JOIN Team_Tiers tt ON tt.team_id = p.team_id " +
+        "LEFT JOIN Player_Person pp ON pp.player_id = p.player_id;";
 
     // Rides idx_entity_flags_active_name (the v1 partial index built for the
     // event-dispatcher poll; plan re-verified via the sqlite MCP this session).
@@ -158,6 +185,8 @@ public sealed class NarrativePollQueries
                 DetectionRisk = reader.GetInt32(7),
                 Strictness = reader.GetInt32(8),
                 TeammateExOfPartner = reader.GetInt32(9) != 0,
+                Tier = reader.GetInt32(10),
+                Gpa = reader.GetDouble(11),
             });
         }
         return destination.Count;

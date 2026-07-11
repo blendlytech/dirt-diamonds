@@ -17,6 +17,9 @@ public enum ContactRole : byte
 
     /// <summary>HS-5's pre-marriage dating-funnel contact — gender-neutral, distinct from the pro-era Girlfriend role.</summary>
     Partner,
+
+    /// <summary>HS onboarding's classmate/buddy contact (hs_friend) — a platonic peer thread, distinct from Partner.</summary>
+    Friend,
 }
 
 /// <summary>One entry in the Burner Phone's contact registry — pure content, never referenced by the Baseball or Life sims.</summary>
@@ -118,6 +121,7 @@ public static class ContactJson
             "fixer" => ContactRole.Fixer,
             "family" => ContactRole.Family,
             "partner" => ContactRole.Partner,
+            "friend" => ContactRole.Friend,
             _ => throw new FormatException($"Contact '{id}': unknown role '{roleText}'."),
         };
 
