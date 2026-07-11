@@ -562,9 +562,13 @@ public sealed class LifeSimManager
 
             // HS-4 §2.2/§2.3: the person layer's end-of-day drift — a no-op
             // for everyone the bridge never hydrated (all NPCs this arc).
+            // Expected school hours are day-shaped (SchoolCalendar): 6 on an
+            // in-session weekday, 0 on weekends/breaks — so a planned summer
+            // or weekend day never reads as truancy.
             if (npc.Person is PersonRuntime person)
             {
-                TickPersonDay(npc, person, isAvatar, dayWasPlanned, costOfLivingDue);
+                TickPersonDay(npc, person, isAvatar, dayWasPlanned, costOfLivingDue,
+                    SchoolCalendar.HoursForDay(e.Day));
             }
         }
     }
@@ -575,24 +579,27 @@ public sealed class LifeSimManager
     /// happiness's weak daily reversion toward the setpoint, and — on the
     /// weekly beat the cost-of-living/family ticks already share — the GPA
     /// closed form. An UNPLANNED day credits full default attendance (an
-    /// autopiloted student goes to school; truancy is a deliberate plan with
-    /// 0 School hours), and both attendance accumulators add the exact same
-    /// per-day constant so an all-autopilot neutral week divides to
-    /// attendanceFrac == 1 bit-exactly — the §2.2 neutral identity. GPA
+    /// autopiloted student goes to school), and both attendance accumulators
+    /// add the exact same day-shaped value (<paramref name="expectedSchoolHoursToday"/>,
+    /// SchoolCalendar's 6-on-a-school-day / 0-on-weekends-and-breaks) so an
+    /// all-autopilot neutral week still divides to attendanceFrac == 1
+    /// bit-exactly — the §2.2 neutral identity, now landing on real school
+    /// days instead of smeared over 7. GPA
     /// drift is avatar-only (only the avatar has a schedule; NPC gpa stays
     /// static until HS-5 gives it an event mover) and gated on the 9b school
     /// gate (no drift in the pro tiers — GPA freezes at graduation). Stress
     /// drag samples the scalar AT the weekly tick (pinned, not averaged).
     /// </summary>
-    private void TickPersonDay(NpcRuntime npc, PersonRuntime person, bool isAvatar, bool dayWasPlanned, bool weeklyTickDue)
+    private void TickPersonDay(NpcRuntime npc, PersonRuntime person, bool isAvatar, bool dayWasPlanned, bool weeklyTickDue,
+        float expectedSchoolHoursToday)
     {
         ApplyPersonStatDelta(person, PersonStatId.Happiness,
             PersonDrift.HappinessDailyStep(person.Stats.Happiness, person.HappinessSetpoint));
 
-        person.ExpectedSchoolHoursThisWeek += PersonDrift.ExpectedSchoolHoursPerDay;
+        person.ExpectedSchoolHoursThisWeek += expectedSchoolHoursToday;
         if (!dayWasPlanned)
         {
-            person.SchoolHoursThisWeek += PersonDrift.ExpectedSchoolHoursPerDay;
+            person.SchoolHoursThisWeek += expectedSchoolHoursToday;
         }
 
         if (!weeklyTickDue)

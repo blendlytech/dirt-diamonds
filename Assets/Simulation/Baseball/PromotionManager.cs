@@ -25,6 +25,31 @@ public static class PromotionProfile
     public const double PitcherIpShrink = 40.0;
 
     /// <summary>
+    /// HS-tier batter shrinkage. HS plays HsSeasonCalendar's sparse spring
+    /// season (~26 games ⇒ a regular sees ~110 PA, not ~600), so the shared
+    /// <see cref="BatterPaShrink"/> would crush every HS line toward
+    /// league-average regardless of merit. Chosen so a full-season HS regular
+    /// keeps the same signal fraction a ~600-PA regular keeps under the
+    /// shared constant: 110/(110+35) ≈ 600/(600+200) ≈ 0.75.
+    /// </summary>
+    public const int HsBatterPaShrink = 35;
+
+    /// <summary>
+    /// HS-tier pitcher shrinkage, same reasoning: an HS starter throws ~5
+    /// complete-game starts ≈ 47 IP (vs ~280 under daily play);
+    /// 47/(47+7) ≈ 280/(280+40) ≈ 0.87.
+    /// </summary>
+    public const double HsPitcherIpShrink = 7.0;
+
+    /// <summary>The tier's batter PA-shrink constant — HS's short season gets its own calibration.</summary>
+    public static int BatterPaShrinkFor(LeagueTier tier) =>
+        tier == LeagueTier.HS ? HsBatterPaShrink : BatterPaShrink;
+
+    /// <summary>The tier's pitcher IP-shrink constant — HS's short season gets its own calibration.</summary>
+    public static double PitcherIpShrinkFor(LeagueTier tier) =>
+        tier == LeagueTier.HS ? HsPitcherIpShrink : PitcherIpShrink;
+
+    /// <summary>
     /// §2.1 guard on the raw performance ratio: one season can argue you are
     /// at most this many times league-average. Without it a 1-out 0.00-ERA
     /// scrap of relief work produces an unbounded ratio that no shrinkage
@@ -123,12 +148,16 @@ public static class PromotionScore
     /// PA/(PA+k). No line (or no league season) reads exactly 100 — a fresh
     /// intake or a shadow call-up's discard fragment can never top a cohort.
     /// </summary>
-    public static double BatterPerformance(in SeasonBattingLine line, double leagueOps)
+    public static double BatterPerformance(in SeasonBattingLine line, double leagueOps) =>
+        BatterPerformance(in line, leagueOps, PromotionProfile.BatterPaShrink);
+
+    /// <summary>Shrink-parameterized form — the sweep passes the tier's own constant (<see cref="PromotionProfile.BatterPaShrinkFor"/>).</summary>
+    public static double BatterPerformance(in SeasonBattingLine line, double leagueOps, int paShrink)
     {
         double rawP = line.Pa > 0 && leagueOps > Epsilon
             ? Math.Clamp(Ops(in line) / leagueOps, 0.0, PromotionProfile.PerformanceRatioCap)
             : 1.0;
-        double w = line.Pa / (double)(line.Pa + PromotionProfile.BatterPaShrink);
+        double w = line.Pa / (double)(line.Pa + paShrink);
         return 100.0 * (1.0 + w * (rawP - 1.0));
     }
 
@@ -137,7 +166,11 @@ public static class PromotionScore
     /// lower ERA scores higher), capped and reliability-shrunk by IP/(IP+k).
     /// WHIP is a disclosed first-pass-unused secondary.
     /// </summary>
-    public static double PitcherPerformance(int outsRecorded, int er, double leagueEra)
+    public static double PitcherPerformance(int outsRecorded, int er, double leagueEra) =>
+        PitcherPerformance(outsRecorded, er, leagueEra, PromotionProfile.PitcherIpShrink);
+
+    /// <summary>Shrink-parameterized form — the sweep passes the tier's own constant (<see cref="PromotionProfile.PitcherIpShrinkFor"/>).</summary>
+    public static double PitcherPerformance(int outsRecorded, int er, double leagueEra, double ipShrink)
     {
         double rawP = 1.0;
         if (outsRecorded > 0 && leagueEra > Epsilon)
@@ -146,7 +179,7 @@ public static class PromotionScore
             rawP = Math.Clamp(leagueEra / Math.Max(era, Epsilon), 0.0, PromotionProfile.PerformanceRatioCap);
         }
         double ip = outsRecorded / 3.0;
-        double w = ip / (ip + PromotionProfile.PitcherIpShrink);
+        double w = ip / (ip + ipShrink);
         return 100.0 * (1.0 + w * (rawP - 1.0));
     }
 
@@ -630,12 +663,16 @@ public sealed class PromotionManager
             if (isPitcher)
             {
                 pitById.TryGetValue(row.PlayerId, out SeasonPitchingLine pit);
-                p = PromotionScore.PitcherPerformance(pit.OutsRecorded, pit.Er, leagueEra[tier]);
+                p = PromotionScore.PitcherPerformance(
+                    pit.OutsRecorded, pit.Er, leagueEra[tier],
+                    PromotionProfile.PitcherIpShrinkFor((LeagueTier)tier));
             }
             else
             {
                 batById.TryGetValue(row.PlayerId, out SeasonBattingLine bat);
-                p = PromotionScore.BatterPerformance(in bat, leagueOps[tier]);
+                p = PromotionScore.BatterPerformance(
+                    in bat, leagueOps[tier],
+                    PromotionProfile.BatterPaShrinkFor((LeagueTier)tier));
             }
             pools[tier].Add(new Candidate
             {

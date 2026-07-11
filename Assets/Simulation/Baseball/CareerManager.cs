@@ -191,6 +191,12 @@ public sealed class CareerManager
     private int _avatarTeamIndex = -1;
     private int _avatarSlot = MicroGame.NoHuman;
 
+    // The avatar's league tier, cached by ActivateAvatar (every avatar-pointing
+    // path — boot, creation, succession, promotion — funnels through it).
+    // Drives the tier-aware game calendar: an HS avatar only has games on
+    // HsSeasonCalendar's sparse spring schedule.
+    private LeagueTier _avatarTier;
+
     private PendingAttendedGame _pending;
     private bool _hasPending;
     private volatile bool _gameInFlight;
@@ -773,6 +779,7 @@ public sealed class CareerManager
         }
         _avatarPlayerId = avatarId;
         _avatarTeamId = teamId;
+        _avatarTier = league.Tier;
         league.SetAttendedTeam(teamId);
 
         // 9b: announce the activation so the Life-sim bridge can re-point the
@@ -1408,7 +1415,16 @@ public sealed class CareerManager
         {
             return; // offseason
         }
-        if (!LeagueSchedule.TryGetPairingFor(e.DayOfSeason, _avatarTeamIndex, out SchedulePairing pairing))
+        // Same tier-aware seam the macro sim uses: an HS avatar only has a
+        // game on HsSeasonCalendar's sparse days (scheduleDay = the game's
+        // ordinal); every other tier maps identity. Keeping the two call
+        // sites on ONE mapping is what guarantees the attended-team skip in
+        // the HS macro sim lines up with the game claimed here.
+        if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, e.DayOfSeason, out int scheduleDay))
+        {
+            return;
+        }
+        if (!LeagueSchedule.TryGetPairingFor(scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
         {
             return;
         }
@@ -1434,6 +1450,36 @@ public sealed class CareerManager
     {
         pending = _pending;
         return _hasPending;
+    }
+
+    /// <summary>
+    /// The avatar team's scheduled pairing on an arbitrary absolute day —
+    /// pure math over the same tier-aware seam <see cref="OnDayAdvanced"/>
+    /// claims games through, so a browsable calendar UI can look ahead at
+    /// future matchups without touching any pending-game state. False on
+    /// off days, offseason days, and when no avatar exists.
+    /// </summary>
+    public bool TryGetScheduledGameFor(long day, out int homeTeamId, out int awayTeamId)
+    {
+        homeTeamId = 0;
+        awayTeamId = 0;
+        if (!HasAvatar)
+        {
+            return false;
+        }
+        int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
+        if (dayOfSeason > LeagueSimulator.RegularSeasonDays)
+        {
+            return false;
+        }
+        if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, dayOfSeason, out int scheduleDay)
+            || !LeagueSchedule.TryGetPairingFor(scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
+        {
+            return false;
+        }
+        homeTeamId = _teamIds[pairing.HomeTeam];
+        awayTeamId = _teamIds[pairing.AwayTeam];
+        return true;
     }
 
     /// <summary>

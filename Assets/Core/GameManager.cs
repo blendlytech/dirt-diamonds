@@ -150,6 +150,14 @@ public sealed partial class GameManager : Node
     /// <summary>Whether the avatar has at least one living child — gates ScheduleScreen's Family row and BurnerPhone's Family tab.</summary>
     public bool AvatarHasChildren => _avatarHasChildren;
 
+    // Calendar bridge: the avatar's league tier, cached at every avatar sync
+    // (creation/succession/load/promotion all funnel through SyncLifeSimAvatar)
+    // so the daily mandatory-blocks projection never queries the DB. False
+    // when no tier row resolved (scratch saves) — the projection then mandates
+    // nothing beyond school availability, which is gated separately.
+    private LeagueTier _avatarTier;
+    private bool _avatarTierKnown;
+
     // HS-5 §8: the weekly autonomy projection's pooled buffers — a full
     // Players + Player_Person read once per tick week, never per day.
     private readonly List<PlayerRow> _autonomyPlayersScratch = new(900);
@@ -692,9 +700,10 @@ public sealed partial class GameManager : Node
             LifeSim.Seed(new[] { new NpcSeed(avatarId, row.Funds) });
         }
         LifeSim.SetAvatar(avatarId);
+        _avatarTierKnown = Baseball.TryGetTeamTier(teamId, out LeagueTier tier);
+        _avatarTier = tier;
         LifeSim.AvatarSchoolAvailable =
-            Baseball.TryGetTeamTier(teamId, out LeagueTier tier)
-            && tier is LeagueTier.HS or LeagueTier.College;
+            _avatarTierKnown && tier is LeagueTier.HS or LeagueTier.College;
 
         // HS-5 §7.1: covers a loaded save whose avatar already has children
         // from a prior session — OnChildBorn keeps this live for a birth that
@@ -798,12 +807,45 @@ public sealed partial class GameManager : Node
     }
 
     /// <summary>
+    /// The calendar-mandated School/Practice/Game blocks for an absolute day —
+    /// the projection both the ScheduleScreen (read-only rows) and the
+    /// CalendarScreen (browsable week view) render, and the values
+    /// <see cref="SubmitDaySchedule"/> enforces server-side. School follows
+    /// SchoolCalendar whenever the 9b school gate is open (HS/College);
+    /// Practice/Game are calendar-locked only in the HS tier
+    /// (HsSeasonCalendar's sparse spring season) — College/pro tiers keep the
+    /// legacy player-reserved sliders until they grow calendars of their own,
+    /// which <see cref="MandatoryBlocks.PracticeGameLocked"/> tells the UI.
+    /// </summary>
+    public MandatoryBlocks GetMandatoryBlocksFor(long day)
+    {
+        int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
+        int schoolHours = LifeSim.AvatarSchoolAvailable ? SchoolCalendar.HoursForDayOfSeason(dayOfSeason) : 0;
+        if (!_avatarTierKnown || _avatarTier != LeagueTier.HS)
+        {
+            return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
+        }
+        return new MandatoryBlocks(
+            schoolHours,
+            HsSeasonCalendar.IsPracticeDay(dayOfSeason) ? HsSeasonCalendar.PracticeHours : 0,
+            HsSeasonCalendar.IsGameDay(dayOfSeason) ? HsSeasonCalendar.GameHours : 0,
+            practiceGameLocked: true);
+    }
+
+    /// <summary>
     /// The ScheduleScreen's Confirm path: submits the day's block allocation
     /// AND which Work activity to run under it in one call, so the two are
     /// always captured together (§2) — LifeSim only ever learns whether
     /// today's Work block should use the HustleWork definition, never which
     /// named hustle, keeping the Life↔Baseball/Economy wall intact.
     /// A jailed avatar's submission is dropped outright (8c).
+    /// School/Practice/Game are FORCED from <see cref="GetMandatoryBlocksFor"/>
+    /// for the day the plan will tick (CurrentDay + 1, the same convention
+    /// <see cref="AvatarScheduleLocked"/> uses) — the calendar drives those
+    /// blocks, whatever the caller sent, so a stale or hand-crafted submission
+    /// can never skip school or invent a game (defense in depth over the UI's
+    /// read-only rows). Throws the DaySchedule over-allocation error when the
+    /// caller's editable blocks don't leave room for the mandated ones.
     /// </summary>
     public void SubmitDaySchedule(in DaySchedule schedule, WorkActivity workActivity)
     {
@@ -811,11 +853,21 @@ public sealed partial class GameManager : Node
         {
             return;
         }
-        LifeSim.SetTodaySchedule(schedule);
+        MandatoryBlocks blocks = GetMandatoryBlocksFor(State.CurrentDay + 1);
+        var forced = new DaySchedule(
+            schedule.SleepHours,
+            blocks.SchoolHours,
+            blocks.PracticeGameLocked ? blocks.PracticeHours : schedule.PracticeHours,
+            blocks.PracticeGameLocked ? blocks.GameHours : schedule.GameHours,
+            schedule.WorkHours,
+            schedule.FreeTimeHours,
+            schedule.FreeTimeActivity,
+            schedule.FamilyHours);
+        LifeSim.SetTodaySchedule(forced);
         LifeSim.AvatarWorkIsHustle = workActivity != WorkActivity.LegalWork;
         _plannedWorkActivity = workActivity;
-        _plannedWorkHadHours = schedule.WorkHours > 0;
-        _plannedPracticeHours = schedule.PracticeHours;
+        _plannedWorkHadHours = forced.WorkHours > 0;
+        _plannedPracticeHours = forced.PracticeHours;
     }
 
     /// <summary>The ScheduleScreen's Clear path — drops the plan AND the activity selection together, so a stale selection can never arm a session for a day that ends up autopiloted.</summary>
@@ -871,13 +923,31 @@ public sealed partial class GameManager : Node
     /// replaced before the tick updated the mirror with it). Atomic in SQL
     /// (AdjustInt64), one-shot like the Work-activity intent above.
     /// </summary>
-    private void OnPracticeDayAdvanced(DayAdvancedEvent _)
+    private void OnPracticeDayAdvanced(DayAdvancedEvent e)
     {
-        if (_plannedPracticeHours > 0)
-        {
-            GameState.AdjustInt64(GameStateKeys.AvatarPracticeCredit, _plannedPracticeHours);
-        }
+        int hours = _plannedPracticeHours;
         _plannedPracticeHours = 0;
+
+        // Calendar top-up: mandatory HS team practice happens whether or not
+        // the player planned the day — an unplanned (autopiloted/skipped)
+        // practice day still banks the mandated hours, so multi-day skips no
+        // longer zero the development lever now that Practice is
+        // calendar-locked rather than a free slider. Only when the avatar
+        // actually showed up: an absent day (jail, injury, suspension) banks
+        // nothing. A planned day arrives here with the same forced value, so
+        // both paths credit identically.
+        if (hours == 0 && Career.HasAvatar && !Career.IsAvatarAbsentOn(e.Day))
+        {
+            MandatoryBlocks blocks = GetMandatoryBlocksFor(e.Day);
+            if (blocks.PracticeGameLocked)
+            {
+                hours = blocks.PracticeHours;
+            }
+        }
+        if (hours > 0)
+        {
+            GameState.AdjustInt64(GameStateKeys.AvatarPracticeCredit, hours);
+        }
     }
 
     /// <summary>
@@ -1148,4 +1218,29 @@ public sealed partial class GameManager : Node
         RelationshipKind.Child => RelationshipType.Child,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
+}
+
+/// <summary>
+/// The calendar-mandated blocks of one day — <see cref="GameManager.GetMandatoryBlocksFor"/>'s
+/// projection. When <see cref="PracticeGameLocked"/> is false (non-HS tiers,
+/// this pass), Practice/Game stay legacy player-reserved sliders and only
+/// School is calendar-driven.
+/// </summary>
+public readonly struct MandatoryBlocks
+{
+    public readonly int SchoolHours;
+    public readonly int PracticeHours;
+    public readonly int GameHours;
+    public readonly bool PracticeGameLocked;
+
+    public MandatoryBlocks(int schoolHours, int practiceHours, int gameHours, bool practiceGameLocked)
+    {
+        SchoolHours = schoolHours;
+        PracticeHours = practiceHours;
+        GameHours = gameHours;
+        PracticeGameLocked = practiceGameLocked;
+    }
+
+    /// <summary>Total mandated hours — what the editable blocks must leave room for.</summary>
+    public int TotalHours => SchoolHours + PracticeHours + GameHours;
 }

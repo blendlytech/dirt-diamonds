@@ -173,6 +173,12 @@ public sealed partial class ScheduleScreen : PanelContainer
         _confirmButton = GetNode<Button>("Layout/ButtonsRow/ConfirmButton");
         _clearButton = GetNode<Button>("Layout/ButtonsRow/ClearButton");
 
+        // School hours are calendar-driven (SchoolCalendar via
+        // GameManager.GetMandatoryBlocksFor) — the slider is a read-only
+        // display everywhere school exists. Practice/Game lock per-frame on
+        // MandatoryBlocks.PracticeGameLocked (HS tier only, this pass).
+        _schoolSlider.Editable = false;
+
         _sleepSlider.ValueChanged += _ => RefreshHoursLabels();
         _schoolSlider.ValueChanged += _ => RefreshHoursLabels();
         _practiceSlider.ValueChanged += _ => RefreshHoursLabels();
@@ -210,18 +216,49 @@ public sealed partial class ScheduleScreen : PanelContainer
         Visible = true;
         LifeSimManager lifeSim = GameManager.Instance!.LifeSim;
 
+        // Calendar-mandated blocks for the day this plan will tick
+        // (CurrentDay + 1 — SubmitDaySchedule's own convention; it re-forces
+        // these server-side, so the sliders here are display, not authority).
+        MandatoryBlocks blocks = GameManager.Instance!.GetMandatoryBlocksFor(
+            GameManager.Instance!.State.CurrentDay + 1);
+
         bool schoolAvailable = lifeSim.AvatarSchoolAvailable;
         _schoolRow.Visible = schoolAvailable;
-        if (!schoolAvailable && _schoolSlider.Value != 0)
+        double schoolTarget = schoolAvailable ? blocks.SchoolHours : 0;
+        if (_schoolSlider.Value != schoolTarget)
         {
-            _schoolSlider.Value = 0; // fires ValueChanged -> RefreshHoursLabels
+            _schoolSlider.Value = schoolTarget; // fires ValueChanged -> RefreshHoursLabels
         }
 
-        bool hasPendingGame = career.TryGetPendingGame(out _);
-        _gameRow.Visible = hasPendingGame;
-        if (!hasPendingGame && _gameSlider.Value != 0)
+        if (blocks.PracticeGameLocked)
         {
-            _gameSlider.Value = 0;
+            // HS: team practice and games land on HsSeasonCalendar's days —
+            // the rows show what the calendar mandates (0 = off day) and the
+            // Game row appears only on game days.
+            _practiceSlider.Editable = false;
+            if (_practiceSlider.Value != blocks.PracticeHours)
+            {
+                _practiceSlider.Value = blocks.PracticeHours;
+            }
+            _gameRow.Visible = blocks.GameHours > 0;
+            _gameSlider.Editable = false;
+            if (_gameSlider.Value != blocks.GameHours)
+            {
+                _gameSlider.Value = blocks.GameHours;
+            }
+        }
+        else
+        {
+            // Legacy (College/pro this pass): Practice is a free slider and
+            // Game reserves hours only when an attended game is pending.
+            _practiceSlider.Editable = true;
+            _gameSlider.Editable = true;
+            bool hasPendingGame = career.TryGetPendingGame(out _);
+            _gameRow.Visible = hasPendingGame;
+            if (!hasPendingGame && _gameSlider.Value != 0)
+            {
+                _gameSlider.Value = 0;
+            }
         }
 
         // HS-5 §7.1: the Family row only makes sense once the avatar has a

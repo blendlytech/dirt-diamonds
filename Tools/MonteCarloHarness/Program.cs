@@ -5084,7 +5084,9 @@ internal static class Program
         // RECOVERY, not an exact count.
         LeaguePitchingTotals hsSenior = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
         LeaguePitchingTotals hsSeason2 = baseball.LoadLeaguePitchingTotals(StartYear + 2, LeagueTier.HS);
-        int fullHsGs = LeagueSimulator.RegularSeasonDays * LeagueSimulator.TeamCount;
+        // HS plays HsSeasonCalendar's sparse spring schedule: GamesPerSeason
+        // game days × TeamCount starts (2 starters × TeamCount/2 pairings).
+        int fullHsGs = HsSeasonCalendar.GamesPerSeason * LeagueSimulator.TeamCount;
         Check("origin sim released: after the avatar graduates, the HS macro reclaims its old team — the post-graduation season recovers to near-full GS, versus the attended senior season that ran short (no stale attended-team claim)",
             hsSenior.Gs < fullHsGs && hsSeason2.Gs > hsSenior.Gs
             && hsSeason2.Gs >= fullHsGs - LeagueSimulator.TeamCount,

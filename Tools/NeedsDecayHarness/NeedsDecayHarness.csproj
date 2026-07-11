@@ -22,5 +22,13 @@
     -->
     <Compile Include="..\..\Assets\Core\EventBus.cs" Link="Core\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Core\CoreEvents.cs" Link="Core\%(Filename)%(Extension)" />
+    <!--
+      The day-shaped school expectation (TickPersonDay) reads SchoolCalendar,
+      which is pure math over GameCalendar + GlobalState's day ordinals — all
+      three engine-free and Data-free, so the no-Sqlite posture above holds.
+    -->
+    <Compile Include="..\..\Assets\Core\GlobalState.cs" Link="Core\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Core\GameCalendar.cs" Link="Core\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Core\SchoolCalendar.cs" Link="Core\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

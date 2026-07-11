@@ -407,14 +407,22 @@ public sealed class LeagueSimulator
             return; // offseason
         }
 
-        RefreshAvailability(e.Day);
-        SimulateGameDay(e.DayOfSeason);
-        _unflushedSeasonYear = e.SeasonYear;
+        // HS plays a realistic sparse spring schedule (HsSeasonCalendar);
+        // every other tier maps identity (scheduleDay == dayOfSeason), so
+        // their rng draw order stays bit-for-bit what it always was.
+        if (HsSeasonCalendar.TryGetLeagueScheduleDay(Tier, e.DayOfSeason, out int scheduleDay))
+        {
+            RefreshAvailability(e.Day);
+            SimulateGameDay(scheduleDay);
+            _unflushedSeasonYear = e.SeasonYear;
+        }
 
         // Flush at the end of every 7-day round-robin cycle (RegularSeasonDays
         // is a multiple of RoundsPerCycle, so day 154 is covered). Keeping the
         // database at most a cycle stale matters once the player's own stats
-        // are on the line; additive upserts make the cadence safe.
+        // are on the line; additive upserts make the cadence safe. Runs on
+        // HS off days too — FlushAccumulated row-guards on Pa/G > 0, so an
+        // empty flush writes nothing.
         if (e.DayOfSeason % RoundsPerCycle == 0)
         {
             FlushAccumulated(e.SeasonYear);
