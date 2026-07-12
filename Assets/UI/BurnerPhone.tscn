@@ -9,6 +9,7 @@
 
 [node name="BurnerPhone" type="PanelContainer"]
 script = ExtResource("1_script")
+PortraitViewScene = ExtResource("2_portraitview")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -47,6 +48,12 @@ size_flags_horizontal = 3
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 text = "PREPAID · UNTRACED"
+
+[node name="AttentionBanner" type="Button" parent="Screen/ScreenLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = ""
 
 [node name="PhoneTabs" type="TabContainer" parent="Screen/ScreenLayout"]
 layout_mode = 2

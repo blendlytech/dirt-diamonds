@@ -65,6 +65,16 @@ public sealed partial class BurnerPhone : PanelContainer
     [Signal]
     public delegate void TutorialReplayRequestedEventHandler();
 
+    /// <summary>
+    /// Prominence pass (event_choice_prominence_pass.md §4.5): the live
+    /// pending card's contact portrait is built at runtime (one per card
+    /// rebuild, unlike the Messages tab's static ThreadPortrait node), so the
+    /// scene itself is wired here the same way Main.cs wires its screen
+    /// PackedScenes.
+    /// </summary>
+    [Export]
+    public PackedScene PortraitViewScene { get; set; } = null!;
+
     [Export]
     public string TimestampFormat { get; set; } = "Season {0}, day {1}";
 
@@ -79,6 +89,14 @@ public sealed partial class BurnerPhone : PanelContainer
     /// <summary>The Events feed's fallback resolution line when a choice ships no authored "outcome" — every pre-split event degrades to this.</summary>
     [Export]
     public string OutcomeFallbackFormat { get; set; } = "You: {0}";
+
+    /// <summary>Prominence pass §4.3: the non-blocking cross-tab banner announcing an owed decision. {0} = the firing contact's display name. Tapping it focuses the Events tab; it never auto-switches.</summary>
+    [Export]
+    public string AttentionBannerFormat { get; set; } = "{0} needs an answer";
+
+    /// <summary>Prominence pass §4.5: the live pending card's companion-text line (the contact's own words), shown only when the firing event authored one. {0} = the message body.</summary>
+    [Export]
+    public string PendingCompanionTextFormat { get; set; } = "\"{0}\"";
 
     /// <summary>
     /// Events feed card headings, indexed by <see cref="EventCategory"/>'s
@@ -262,6 +280,15 @@ public sealed partial class BurnerPhone : PanelContainer
     private VBoxContainer _eventsContainer = null!;
     private VBoxContainer _choicesContainer = null!;
 
+    // Prominence pass (event_choice_prominence_pass.md): the cross-tab
+    // attention cues for an owed avatar choice, driven off the same
+    // hasPending/identity check _Process already computes — §4.2's Events-tab
+    // badge and §4.3's non-blocking banner. Neither auto-switches the tab
+    // (the locked §5 decision); the banner press is the only tab change.
+    private Button _attentionBanner = null!;
+    private int _eventsTabIndex = -1;
+    private string _eventsTabPlainTitle = string.Empty;
+
     private Button _loadOlderButton = null!;
     private Label _historyStatusLabel = null!;
     private ScrollContainer _historyScroll = null!;
@@ -430,6 +457,11 @@ public sealed partial class BurnerPhone : PanelContainer
         _eventsContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll/EventsContainer");
         _choicesContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/ChoicesContainer");
 
+        _attentionBanner = GetNode<Button>("Screen/ScreenLayout/AttentionBanner");
+        _attentionBanner.Pressed += OnAttentionBannerPressed;
+        Control eventsTab = GetNode<Control>("Screen/ScreenLayout/PhoneTabs/Events");
+        _eventsTabIndex = eventsTab.GetIndex();
+
         Control historyTab = GetNode<Control>("Screen/ScreenLayout/PhoneTabs/History");
         _historyTabIndex = historyTab.GetIndex();
         _loadOlderButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/LoadOlderButton");
@@ -491,6 +523,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _upgradePhoneButton.Pressed += OnUpgradePhonePressed;
 
         _phoneTabs = GetNode<TabContainer>("Screen/ScreenLayout/PhoneTabs");
+        _eventsTabPlainTitle = _phoneTabs.GetTabTitle(_eventsTabIndex);
         Control marketplaceTab = GetNode<Control>("Screen/ScreenLayout/PhoneTabs/Marketplace");
         _marketplaceTabIndex = marketplaceTab.GetIndex();
         _marketplaceFundsLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Marketplace/MarketplaceScroll/MarketplaceLayout/MarketplaceCard/MarketplaceCardLayout/MarketplaceFundsLabel");
@@ -527,6 +560,7 @@ public sealed partial class BurnerPhone : PanelContainer
 
     public override void _ExitTree()
     {
+        _attentionBanner.Pressed -= OnAttentionBannerPressed;
         _contactList.ItemSelected -= OnContactSelected;
         _loadOlderButton.Pressed -= OnLoadOlderPressed;
         _narcoticsButton.Pressed -= OnNarcoticsPressed;
@@ -633,6 +667,8 @@ public sealed partial class BurnerPhone : PanelContainer
         _shownSubjectId = hasPending ? pending.Fired.SubjectPlayerId : null;
         _shownFireDay = hasPending ? pending.Fired.Day : -1;
 
+        RefreshDecisionAttentionCues(gm, hasPending, pending);
+
         ReloadMessages(gm);
         RenderEventsFeed(gm, hasPending ? pending : null);
 
@@ -674,6 +710,13 @@ public sealed partial class BurnerPhone : PanelContainer
             minute % 60,
             hour < 12 ? ClockAmText : ClockPmText);
     }
+
+    /// <summary>
+    /// Prominence pass §4.3/§5: the ONLY tab switch this slice performs, and
+    /// only on an explicit player tap — a new fire never auto-switches (the
+    /// locked §5 decision honors the player's own tab choice).
+    /// </summary>
+    private void OnAttentionBannerPressed() => _phoneTabs.CurrentTab = _eventsTabIndex;
 
     private void OnContactSelected(long index)
     {
@@ -744,6 +787,26 @@ public sealed partial class BurnerPhone : PanelContainer
     }
 
     /// <summary>
+    /// Prominence pass §4.2/§4.3: the cross-tab cues for an owed avatar
+    /// choice — the Events tab's standing "•" badge (the Messages tab's own
+    /// unread-dot vocabulary) and the non-blocking banner naming the firing
+    /// contact. Both are levels (visible for as long as a choice is pending),
+    /// not one-shot pulses — rides the same identity-changed gate as the rest
+    /// of this dirty-flag block, so it only runs on a real transition.
+    /// </summary>
+    private void RefreshDecisionAttentionCues(GameManager gm, bool hasPending, PendingGrittyChoice pending)
+    {
+        _phoneTabs.SetTabTitle(_eventsTabIndex, hasPending ? UnreadMarker + _eventsTabPlainTitle : _eventsTabPlainTitle);
+
+        _attentionBanner.Visible = hasPending;
+        if (hasPending)
+        {
+            ContactDefinition contact = gm.Contacts.Resolve(pending.Definition.ContactId);
+            _attentionBanner.Text = string.Format(AttentionBannerFormat, contact.DisplayName);
+        }
+    }
+
+    /// <summary>
     /// The Events tab: every past Event row as a resolved card, oldest first,
     /// then — when the avatar has a pending choice — one more unresolved card
     /// with the reply-chip buttons underneath (relocated from the old
@@ -772,8 +835,7 @@ public sealed partial class BurnerPhone : PanelContainer
         if (pending is { } liveFire)
         {
             GrittyEventFiredEvent fired = liveFire.Fired;
-            _eventsContainer.AddChild(BuildEventCard(liveFire.Definition.Category, liveFire.Definition.Prompt, null,
-                fired.Day, gm.State.SeasonYearForDay(fired.Day)));
+            _eventsContainer.AddChild(BuildPendingEventCard(gm, liveFire));
 
             EventChoice[] eventChoices = liveFire.Definition.Choices;
             for (int i = 0; i < eventChoices.Length; i++)
@@ -811,8 +873,81 @@ public sealed partial class BurnerPhone : PanelContainer
         _eventsScroll.ScrollVertical = (int)_eventsScroll.GetVScrollBar().MaxValue;
     }
 
-    /// <summary>One Events/History-feed card: category + day/season caption, the scene prompt, and (when resolved) the resolution line. <paramref name="resolutionLine"/> is null for the live unresolved card. Returns the built card unparented — callers add it to whichever container owns it.</summary>
-    private PanelContainer BuildEventCard(EventCategory category, string prompt, string? resolutionLine, long gameDay, int seasonYear)
+    /// <summary>
+    /// Prominence pass §4.5: the ONE live, unresolved card gets an identity
+    /// row (portrait + contact name) above the prompt — resolved/history
+    /// cards (<see cref="BuildEventCard"/>) are untouched, so this never grows
+    /// the per-row cost of a long career's Events feed. When the firing event
+    /// authored a fire-time companion text, it renders as one more line in the
+    /// contact's own words — the ONLY place the player sees it before
+    /// deciding, since <see cref="EventConsequenceApplier"/> only writes it to
+    /// the Messages thread once the choice actually resolves.
+    /// </summary>
+    private PanelContainer BuildPendingEventCard(GameManager gm, PendingGrittyChoice pending)
+    {
+        GrittyEventDefinition definition = pending.Definition;
+        GrittyEventFiredEvent fired = pending.Fired;
+        ContactDefinition contact = gm.Contacts.Resolve(definition.ContactId);
+        int dayOfSeason = GlobalState.DayOfSeasonForDay(fired.Day);
+
+        var layout = new VBoxContainer();
+        layout.AddThemeConstantOverride("separation", 4);
+
+        var metaRow = new HBoxContainer();
+        metaRow.AddChild(new Label
+        {
+            Text = CategoryLabels[(int)definition.Category],
+            ThemeTypeVariation = "HeadingLabel",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        });
+        metaRow.AddChild(new Label
+        {
+            Text = string.Format(TimestampFormat, gm.State.SeasonYearForDay(fired.Day), dayOfSeason),
+            ThemeTypeVariation = "CaptionLabel",
+        });
+        layout.AddChild(metaRow);
+
+        var identityRow = new HBoxContainer();
+        identityRow.AddThemeConstantOverride("separation", 8);
+        var portrait = (PortraitView)PortraitViewScene.Instantiate();
+        portrait.CustomMinimumSize = new Vector2(40, 40);
+        identityRow.AddChild(portrait);
+        portrait.SetIdentity(contact.PortraitKey, contact.DisplayName);
+        identityRow.AddChild(new Label
+        {
+            Text = contact.DisplayName,
+            ThemeTypeVariation = "HeadingLabel",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+        });
+        layout.AddChild(identityRow);
+
+        layout.AddChild(new Label { Text = definition.Prompt, AutowrapMode = TextServer.AutowrapMode.WordSmart });
+
+        if (definition.TextMessage is not null)
+        {
+            layout.AddChild(new Label
+            {
+                Text = string.Format(PendingCompanionTextFormat, definition.TextMessage),
+                ThemeTypeVariation = "CaptionLabel",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            });
+        }
+
+        var card = new PanelContainer { ThemeTypeVariation = "Card" };
+        card.AddChild(layout);
+        return card;
+    }
+
+    /// <summary>
+    /// One Events/History-feed RESOLVED card: category + day/season caption,
+    /// the scene prompt, and the resolution line. The live unresolved card is
+    /// <see cref="BuildPendingEventCard"/> now (prominence pass split — it
+    /// carries an identity row and optional companion text this simpler card
+    /// never needed). Returns the built card unparented — callers add it to
+    /// whichever container owns it.
+    /// </summary>
+    private PanelContainer BuildEventCard(EventCategory category, string prompt, string resolutionLine, long gameDay, int seasonYear)
     {
         int dayOfSeason = GlobalState.DayOfSeasonForDay(gameDay);
 
@@ -834,16 +969,12 @@ public sealed partial class BurnerPhone : PanelContainer
         layout.AddChild(metaRow);
 
         layout.AddChild(new Label { Text = prompt, AutowrapMode = TextServer.AutowrapMode.WordSmart });
-
-        if (!string.IsNullOrEmpty(resolutionLine))
+        layout.AddChild(new Label
         {
-            layout.AddChild(new Label
-            {
-                Text = resolutionLine,
-                ThemeTypeVariation = "CaptionLabel",
-                AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            });
-        }
+            Text = resolutionLine,
+            ThemeTypeVariation = "CaptionLabel",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        });
 
         var card = new PanelContainer { ThemeTypeVariation = "Card" };
         card.AddChild(layout);

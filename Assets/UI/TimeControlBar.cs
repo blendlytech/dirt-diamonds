@@ -252,6 +252,18 @@ public sealed partial class TimeControlBar : HBoxContainer
                 _ => string.Empty,
             };
             _statusLabel.Visible = face is not (BarFace.Flowing or BarFace.Dormant);
+            // Prominence pass (event_choice_prominence_pass.md §4.4): an owed
+            // choice is the one face that should read as urgent, not merely
+            // informational — same danger accent the Needs card uses for a
+            // critical need.
+            if (face == BarFace.DecisionNeeded)
+            {
+                _statusLabel.AddThemeColorOverride("font_color", UiColors.Danger);
+            }
+            else
+            {
+                _statusLabel.RemoveThemeColorOverride("font_color");
+            }
         }
     }
 

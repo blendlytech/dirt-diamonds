@@ -130,6 +130,15 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
+[node name="RunTallyLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ReUpButton" type="Button" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+text = "Re-up & Run Again"
+
 [node name="DoneButton" type="Button" parent="Panel/Layout/ResultPanel"]
 layout_mode = 2
 text = "Done"

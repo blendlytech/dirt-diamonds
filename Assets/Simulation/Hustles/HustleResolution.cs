@@ -36,11 +36,14 @@ public readonly struct HustleResolution
     /// <summary>Hold'em only (docs/design/hustles_texas_holdem.md §9/§11) — set on a raid, the poker analogue of Fencing's sting flag ("gambling_bust").</summary>
     public readonly bool SetGamblingBustFlag;
 
+    /// <summary>Robbery only (docs/design/hustle_minigames_depth_pass.md §5.2) — set on a botched execute/getaway, the robbery analogue of the sting/raid flags ("robbery_bust"). The R-2 <see cref="Economy.Hustles.HustleService"/> apply path consumes it; leaving it defaulted keeps every other hustle a no-op, exactly like the four flags above.</summary>
+    public readonly bool SetRobberyBustFlag;
+
     public HustleResolution(
         double fundsDelta, int detectionRiskDelta, int healthCeilingDelta, int recklessnessDelta, double stressDelta,
         int supplierTrustDelta, int crewStandingDelta,
         bool setWatchlistFlag, bool setBadProductFlag, bool setSpoiledGoodsFlag, bool setControlsTurfFlag,
-        bool setGamblingBustFlag = false)
+        bool setGamblingBustFlag = false, bool setRobberyBustFlag = false)
     {
         FundsDelta = fundsDelta;
         DetectionRiskDelta = detectionRiskDelta;
@@ -54,5 +57,6 @@ public readonly struct HustleResolution
         SetSpoiledGoodsFlag = setSpoiledGoodsFlag;
         SetControlsTurfFlag = setControlsTurfFlag;
         SetGamblingBustFlag = setGamblingBustFlag;
+        SetRobberyBustFlag = setRobberyBustFlag;
     }
 }

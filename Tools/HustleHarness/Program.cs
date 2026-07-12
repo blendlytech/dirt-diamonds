@@ -25,6 +25,7 @@ internal static class Program
         RunStage3Checks();
         RunEvBandChecks();
         RunFencingChecks();
+        RunRobberyChecks();
         RunDeterminismChecks();
         RunZeroAllocChecks();
 
@@ -477,6 +478,285 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
+    // Check R — Robbery (docs/design/hustle_minigames_depth_pass.md §5, slice R-1)
+    // ------------------------------------------------------------------
+
+    private static RobberyContext RobberyCtx(double funds = 5000, double heat = 0.20, double reck = 0.5, bool hasCrew = true) =>
+        new(funds, heat, reck, hasCrew);
+
+    /// <summary>
+    /// Drives one full robbery run under a fixed policy: pick/case → approach →
+    /// execute → (press or bail per <paramref name="alwaysPress"/>) → getaway.
+    /// The cautious neutral policy (§5.3) is (ConvenienceStore, cased, SoloQuiet,
+    /// never press) — <see cref="RobberyHustle.NeutralPressLuckDecision"/>.
+    /// </summary>
+    private static RobberyState RunRobberyPolicy(
+        in RobberyContext ctx, RobberyTarget target, bool caseIt, RobberyApproach approach, bool alwaysPress, ref RngState rng)
+    {
+        RobberyState state = RobberyHustle.CaseTarget(in ctx, target, caseIt);
+        state = RobberyHustle.ChooseApproach(in state, in ctx, approach);
+        state = RobberyHustle.Execute(in state, in ctx, ref rng);
+        if (state.Stage == RobberyStage.Busted)
+        {
+            return state;
+        }
+        bool press = alwaysPress || RobberyHustle.NeutralPressLuckDecision(in state);
+        state = press
+            ? RobberyHustle.PressLuck(in state, in ctx, ref rng)
+            : RobberyHustle.GrabAndRun(in state);
+        if (state.Stage == RobberyStage.Busted)
+        {
+            return state;
+        }
+        return RobberyHustle.Getaway(in state, in ctx, ref rng);
+    }
+
+    private static void RunRobberyChecks()
+    {
+        RobberyContext ctx = RobberyCtx();
+
+        // --- state-machine legality -----------------------------------
+        RobberyState cased = RobberyHustle.CaseTarget(in ctx, RobberyTarget.BookieStash, caseIt: true);
+        Check("robbery: CaseTarget lands Cased and books the casing heat cost",
+            cased.Stage == RobberyStage.Cased && cased.Cased
+            && cased.DetectionRiskDelta == RobberyHustle.RobberyProfile.CaseHeatCost,
+            $"stage={cased.Stage} detect={cased.DetectionRiskDelta}");
+
+        RobberyState uncased = RobberyHustle.CaseTarget(in ctx, RobberyTarget.BookieStash, caseIt: false);
+        Check("robbery: skipping the casing beat costs no heat", uncased.DetectionRiskDelta == 0);
+
+        RobberyContext noCrew = RobberyCtx(hasCrew: false);
+        Check("robbery: crew approach without a crew rep throws",
+            ThrowsOn(() => RobberyHustle.ChooseApproach(in cased, in noCrew, RobberyApproach.Crew)));
+
+        RobberyState approached = RobberyHustle.ChooseApproach(in cased, in ctx, RobberyApproach.SoloQuiet);
+        Check("robbery: ChooseApproach lands Approached (solo-quiet keeps the base score)",
+            approached.Stage == RobberyStage.Approached && approached.FullScore == cased.FullScore);
+
+        RobberyState strongArm = RobberyHustle.ChooseApproach(in cased, in ctx, RobberyApproach.StrongArm);
+        RobberyState crewJob = RobberyHustle.ChooseApproach(in cased, in ctx, RobberyApproach.Crew);
+        Check("robbery: approach score multipliers order SoloQuiet < StrongArm < Crew",
+            approached.FullScore < strongArm.FullScore && strongArm.FullScore < crewJob.FullScore,
+            $"solo={approached.FullScore:F0} strong={strongArm.FullScore:F0} crew={crewJob.FullScore:F0}");
+
+        bool executeLandsLegal = true;
+        for (ulong s = 1; s <= 200; s++)
+        {
+            var rng = new RngState(s);
+            RobberyState result = RobberyHustle.Execute(in approached, in ctx, ref rng);
+            if (result.Stage is not (RobberyStage.Grabbed or RobberyStage.Busted))
+            {
+                executeLandsLegal = false;
+                break;
+            }
+        }
+        Check("robbery: Execute always lands Grabbed or Busted", executeLandsLegal);
+
+        ulong grabSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.Execute(in approached, in ctx, ref rng).Stage == RobberyStage.Grabbed;
+        });
+        var grabRng = new RngState(grabSeed);
+        RobberyState grabbed = RobberyHustle.Execute(in approached, in ctx, ref grabRng);
+        Check("robbery: a successful execute secures exactly the partial fraction of the full score",
+            grabbed.PartialTake == approached.FullScore * RobberyHustle.RobberyProfile.GrabPartialFrac,
+            $"partial={grabbed.PartialTake:F0} full={approached.FullScore:F0}");
+
+        RobberyState bailed = RobberyHustle.GrabAndRun(in grabbed);
+        Check("robbery: GrabAndRun locks the partial and lands Escaping (no RNG)",
+            bailed.Stage == RobberyStage.Escaping && bailed.PartialTake == grabbed.PartialTake);
+
+        ulong pressWinSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.PressLuck(in grabbed, in ctx, ref rng).Stage == RobberyStage.Escaping;
+        });
+        var pressWinRng = new RngState(pressWinSeed);
+        RobberyState pressed = RobberyHustle.PressLuck(in grabbed, in ctx, ref pressWinRng);
+        Check("robbery: a won press-your-luck upgrades the take to the full score",
+            pressed.PartialTake == grabbed.FullScore, $"take={pressed.PartialTake:F0} full={grabbed.FullScore:F0}");
+
+        ulong pressBustSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.PressLuck(in grabbed, in ctx, ref rng).Stage == RobberyStage.Busted;
+        });
+        var pressBustRng = new RngState(pressBustSeed);
+        RobberyState pressBusted = RobberyHustle.PressLuck(in grabbed, in ctx, ref pressBustRng);
+        double bookieLegalCost = RobberyHustle.RobberyProfile.BustLegalCostFrac * 900; // BookieStash base score
+        Check("robbery: a lost press-your-luck wipes the whole take and writes the bust bundle incl. legal fees",
+            pressBusted.Stage == RobberyStage.Busted && pressBusted.PartialTake == 0
+            && pressBusted.FundsDelta == -bookieLegalCost
+            && pressBusted.RobberyBustFlag && !pressBusted.HotGoodsFlag
+            && pressBusted.DetectionRiskDelta == RobberyHustle.RobberyProfile.CaseHeatCost + RobberyHustle.RobberyProfile.BustDetectionSpike,
+            $"take={pressBusted.PartialTake} funds={pressBusted.FundsDelta} (want {-bookieLegalCost}) detect={pressBusted.DetectionRiskDelta}");
+
+        // The bail hit is bounded by funds on hand — a bust zeroes you out, never indebts you.
+        RobberyContext brokeCtx = RobberyCtx(funds: 100);
+        var brokeBustRng = new RngState(pressBustSeed);
+        RobberyState brokeBusted = RobberyHustle.PressLuck(in grabbed, in brokeCtx, ref brokeBustRng);
+        Check("robbery: the bust's legal fees clamp to funds on hand (never indebts)",
+            brokeBusted.FundsDelta == -100, $"funds={brokeBusted.FundsDelta} (want -100)");
+
+        ulong cleanGetawaySeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            RobberyState g = RobberyHustle.Getaway(in bailed, in ctx, ref rng);
+            return g.FundsDelta == bailed.PartialTake; // full take banked ⇒ no botch
+        });
+        var cleanRng = new RngState(cleanGetawaySeed);
+        RobberyState cleanDone = RobberyHustle.Getaway(in bailed, in ctx, ref cleanRng);
+        Check("robbery: a clean getaway banks the secured take, adds the target heat, and arms hot_goods",
+            cleanDone.Stage == RobberyStage.Resolved && cleanDone.HotGoodsFlag && !cleanDone.RobberyBustFlag
+            && cleanDone.DetectionRiskDelta == RobberyHustle.RobberyProfile.CaseHeatCost + 6, // BookieStash baseHeat
+            $"stage={cleanDone.Stage} detect={cleanDone.DetectionRiskDelta} funds={cleanDone.FundsDelta:F0}");
+        Check("robbery: ToResolution projects the bust flag and only robbery-shaped deltas",
+            !cleanDone.ToResolution().SetRobberyBustFlag && pressBusted.ToResolution().SetRobberyBustFlag
+            && cleanDone.ToResolution().SupplierTrustDelta == 0 && !cleanDone.ToResolution().SetWatchlistFlag);
+
+        ulong botchSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            RobberyState g = RobberyHustle.Getaway(in bailed, in ctx, ref rng);
+            return g.FundsDelta < bailed.PartialTake;
+        });
+        var botchRng = new RngState(botchSeed);
+        RobberyState botched = RobberyHustle.Getaway(in bailed, in ctx, ref botchRng);
+        Check("robbery: a botched getaway converts the take down and spikes heat but is not itself a bust",
+            botched.Stage == RobberyStage.Resolved && !botched.RobberyBustFlag
+            && botched.FundsDelta == bailed.PartialTake * RobberyHustle.RobberyProfile.BotchedGetawayFrac
+            && botched.DetectionRiskDelta == RobberyHustle.RobberyProfile.CaseHeatCost + 6 + RobberyHustle.RobberyProfile.BotchedGetawayDetection,
+            $"funds={botched.FundsDelta:F0} (want {bailed.PartialTake * RobberyHustle.RobberyProfile.BotchedGetawayFrac:F0}), detect={botched.DetectionRiskDelta}");
+
+        // Crew split: the same clean-getaway seed banks only the crew share and nudges standing.
+        RobberyState crewApproached = RobberyHustle.ChooseApproach(in cased, in ctx, RobberyApproach.Crew);
+        ulong crewGrabSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.Execute(in crewApproached, in ctx, ref rng).Stage == RobberyStage.Grabbed;
+        });
+        var crewRng = new RngState(crewGrabSeed);
+        RobberyState crewBailed = RobberyHustle.GrabAndRun(RobberyHustle.Execute(in crewApproached, in ctx, ref crewRng));
+        ulong crewCleanSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            RobberyState g = RobberyHustle.Getaway(in crewBailed, in ctx, ref rng);
+            return g.DetectionRiskDelta == RobberyHustle.RobberyProfile.CaseHeatCost + 6; // no botch detection
+        });
+        var crewCleanRng = new RngState(crewCleanSeed);
+        RobberyState crewDone = RobberyHustle.Getaway(in crewBailed, in ctx, ref crewCleanRng);
+        Check("robbery: a crew job splits the take and nudges crew standing",
+            crewDone.FundsDelta == crewBailed.PartialTake * 0.60 && crewDone.CrewStandingDelta == 3,
+            $"funds={crewDone.FundsDelta:F0} (secured {crewBailed.PartialTake:F0}), crew={crewDone.CrewStandingDelta}");
+
+        // Strong-arm bust risks the body; solo-quiet never does.
+        RobberyState strongArmed = RobberyHustle.ChooseApproach(in cased, in ctx, RobberyApproach.StrongArm);
+        ulong strongBustSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.Execute(in strongArmed, in ctx, ref rng).Stage == RobberyStage.Busted;
+        });
+        var strongBustRng = new RngState(strongBustSeed);
+        RobberyState strongBusted = RobberyHustle.Execute(in strongArmed, in ctx, ref strongBustRng);
+        ulong soloBustSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.Execute(in approached, in ctx, ref rng).Stage == RobberyStage.Busted;
+        });
+        var soloBustRng = new RngState(soloBustSeed);
+        RobberyState soloBusted = RobberyHustle.Execute(in approached, in ctx, ref soloBustRng);
+        Check("robbery: a strong-arm bust costs health_ceiling; a solo-quiet bust does not",
+            strongBusted.HealthCeilingDelta < 0 && soloBusted.HealthCeilingDelta == 0,
+            $"strongArm={strongBusted.HealthCeilingDelta} solo={soloBusted.HealthCeilingDelta}");
+
+        // Absorbing terminals + wrong-stage calls throw.
+        bool terminalAbsorbing =
+            ThrowsOn(() => RobberyHustle.ChooseApproach(in cleanDone, in ctx, RobberyApproach.SoloQuiet))
+            && ThrowsOn(() => { var r = new RngState(7); RobberyHustle.Execute(in cleanDone, in ctx, ref r); })
+            && ThrowsOn(() => { var r = new RngState(7); RobberyHustle.PressLuck(in pressBusted, in ctx, ref r); })
+            && ThrowsOn(() => RobberyHustle.GrabAndRun(in pressBusted))
+            && ThrowsOn(() => { var r = new RngState(7); RobberyHustle.Getaway(in cleanDone, in ctx, ref r); });
+        Check("robbery: Resolved/Busted are absorbing (every further call throws)", terminalAbsorbing);
+        bool wrongStageThrows =
+            ThrowsOn(() => { var r = new RngState(7); RobberyHustle.Execute(in cased, in ctx, ref r); })
+            && ThrowsOn(() => { var r = new RngState(7); RobberyHustle.PressLuck(in approached, in ctx, ref r); })
+            && ThrowsOn(() => { var r = new RngState(7); RobberyHustle.Getaway(in grabbed, in ctx, ref r); });
+        Check("robbery: calling a stage's method from the wrong stage throws", wrongStageThrows);
+
+        // --- skill monotonicity ----------------------------------------
+        RobberyState casedRun = RobberyHustle.ChooseApproach(
+            RobberyHustle.CaseTarget(in ctx, RobberyTarget.BookieStash, caseIt: true), in ctx, RobberyApproach.SoloQuiet);
+        RobberyState uncasedRun = RobberyHustle.ChooseApproach(
+            RobberyHustle.CaseTarget(in ctx, RobberyTarget.BookieStash, caseIt: false), in ctx, RobberyApproach.SoloQuiet);
+        Check("robbery: casing raises the execute success probability",
+            RobberyHustle.ComputeExecuteSuccessProbability(in casedRun, in ctx)
+                > RobberyHustle.ComputeExecuteSuccessProbability(in uncasedRun, in ctx));
+
+        RobberyState easyMark = RobberyHustle.ChooseApproach(
+            RobberyHustle.CaseTarget(in ctx, RobberyTarget.ConvenienceStore, caseIt: false), in ctx, RobberyApproach.SoloQuiet);
+        RobberyState hardMark = RobberyHustle.ChooseApproach(
+            RobberyHustle.CaseTarget(in ctx, RobberyTarget.Warehouse, caseIt: false), in ctx, RobberyApproach.SoloQuiet);
+        Check("robbery: harder marks are likelier to go wrong (and pay more)",
+            RobberyHustle.ComputeExecuteSuccessProbability(in easyMark, in ctx)
+                > RobberyHustle.ComputeExecuteSuccessProbability(in hardMark, in ctx)
+            && hardMark.FullScore > easyMark.FullScore);
+
+        RobberyContext hotCtx = RobberyCtx(heat: 0.8);
+        Check("robbery: accumulated heat makes every job harder",
+            RobberyHustle.ComputeExecuteSuccessProbability(in casedRun, in hotCtx)
+                < RobberyHustle.ComputeExecuteSuccessProbability(in casedRun, in ctx));
+
+        // --- EV & tail band (the §9 skill-sensible gate) ----------------
+        const int trials = 20_000;
+        (double MeanFunds, double BustRate, double MeanDetect) Band(
+            RobberyTarget target, bool caseIt, RobberyApproach approach, bool alwaysPress, ulong seedBase)
+        {
+            double funds = 0, detect = 0;
+            int busts = 0;
+            for (int i = 0; i < trials; i++)
+            {
+                var rng = new RngState(seedBase + (ulong)i * 7919UL + 1UL);
+                RobberyState result = RunRobberyPolicy(in ctx, target, caseIt, approach, alwaysPress, ref rng);
+                funds += result.FundsDelta;
+                detect += result.DetectionRiskDelta;
+                if (result.Stage == RobberyStage.Busted)
+                {
+                    busts++;
+                }
+            }
+            return (funds / trials, (double)busts / trials, detect / trials);
+        }
+
+        var cautious = Band(RobberyTarget.ConvenienceStore, caseIt: true, RobberyApproach.SoloQuiet, alwaysPress: false, 10_000_000UL);
+        var moderate = Band(RobberyTarget.BookieStash, caseIt: true, RobberyApproach.SoloQuiet, alwaysPress: true, 20_000_000UL);
+        var reckless = Band(RobberyTarget.Warehouse, caseIt: false, RobberyApproach.StrongArm, alwaysPress: true, 30_000_000UL);
+
+        Console.WriteLine("--- Robbery policy bands (mid-career avatar, N=20,000/policy) ---");
+        Console.WriteLine($"  Cautious (store, cased, quiet, bail):     mean={cautious.MeanFunds,7:F1}  bust={cautious.BustRate:P1}  detect={cautious.MeanDetect:F1}");
+        Console.WriteLine($"  Moderate (bookie, cased, quiet, press):   mean={moderate.MeanFunds,7:F1}  bust={moderate.BustRate:P1}  detect={moderate.MeanDetect:F1}");
+        Console.WriteLine($"  Reckless (warehouse, blind, arm, press):  mean={reckless.MeanFunds,7:F1}  bust={reckless.BustRate:P1}  detect={reckless.MeanDetect:F1}\n");
+
+        Check("robbery EV band: the cautious neutral policy is +EV with a genuinely low bust rate",
+            cautious.MeanFunds > 0 && cautious.BustRate < 0.10,
+            $"mean={cautious.MeanFunds:F1} bust={cautious.BustRate:P1}");
+        Check("robbery EV band: pushing deeper pays more (cautious < moderate mean)",
+            cautious.MeanFunds < moderate.MeanFunds,
+            $"cautious={cautious.MeanFunds:F1} moderate={moderate.MeanFunds:F1}");
+        Check("robbery EV band: tail risk strictly rises cautious < moderate < reckless (INV-2)",
+            cautious.BustRate < moderate.BustRate && moderate.BustRate < reckless.BustRate,
+            $"bust: cautious={cautious.BustRate:P1} moderate={moderate.BustRate:P1} reckless={reckless.BustRate:P1}");
+        Check("robbery EV band: the reckless policy carries a career-real bust rate (>30%)",
+            reckless.BustRate > 0.30, $"bust={reckless.BustRate:P1}");
+        Check("robbery EV band: busts are a real financial loss — the reckless policy's legal fees eat its upside (reckless mean < moderate mean)",
+            reckless.MeanFunds < moderate.MeanFunds,
+            $"reckless={reckless.MeanFunds:F1} moderate={moderate.MeanFunds:F1}");
+        Check("robbery EV band: mean detection accrual rises with recklessness of policy",
+            cautious.MeanDetect < moderate.MeanDetect && moderate.MeanDetect < reckless.MeanDetect,
+            $"detect: cautious={cautious.MeanDetect:F1} moderate={moderate.MeanDetect:F1} reckless={reckless.MeanDetect:F1}");
+    }
+
+    // ------------------------------------------------------------------
     // Check 7 — determinism
     // ------------------------------------------------------------------
 
@@ -515,6 +795,17 @@ internal static class Program
 
         Check("determinism: same seed ⇒ identical Fencing negotiation",
             RunFencing(seed).Equals(RunFencing(seed)));
+
+        RobberyContext robberyCtx = RobberyCtx();
+        RobberyState RunRobbery(ulong s)
+        {
+            var rng = new RngState(s);
+            return RunRobberyPolicy(in robberyCtx, RobberyTarget.BookieStash, caseIt: true,
+                RobberyApproach.SoloQuiet, alwaysPress: true, ref rng);
+        }
+
+        Check("determinism: same seed ⇒ identical Robbery run",
+            RunRobbery(seed).Equals(RunRobbery(seed)));
     }
 
     // ------------------------------------------------------------------
@@ -550,11 +841,21 @@ internal static class Program
             _ = state.ToResolution();
         }
 
+        RobberyContext robberyCtx = RobberyCtx();
+        void OneRobberyRun(ulong seed)
+        {
+            var rng = new RngState(seed);
+            RobberyState state = RunRobberyPolicy(in robberyCtx, RobberyTarget.BookieStash, caseIt: true,
+                RobberyApproach.SoloQuiet, alwaysPress: false, ref rng);
+            _ = state.ToResolution();
+        }
+
         // Warm-up: JIT everything before measuring.
         for (ulong i = 1; i <= 50; i++)
         {
             OneNarcoticsRun(i);
             OneFencingRun(i);
+            OneRobberyRun(i);
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -570,14 +871,23 @@ internal static class Program
         }
         long afterFencing = GC.GetAllocatedBytesForCurrentThread();
 
+        for (ulong i = 1000; i <= 1200; i++)
+        {
+            OneRobberyRun(i);
+        }
+        long afterRobbery = GC.GetAllocatedBytesForCurrentThread();
+
         double narcoticsPerRun = (afterNarcotics - before) / 201.0;
         double fencingPerRun = (afterFencing - afterNarcotics) / 201.0;
+        double robberyPerRun = (afterRobbery - afterFencing) / 201.0;
 
-        Console.WriteLine($"--- zero-alloc: {narcoticsPerRun:F1} B/Narcotics-run, {fencingPerRun:F1} B/Fencing-run ---\n");
+        Console.WriteLine($"--- zero-alloc: {narcoticsPerRun:F1} B/Narcotics-run, {fencingPerRun:F1} B/Fencing-run, {robberyPerRun:F1} B/Robbery-run ---\n");
 
         Check("zero-alloc: a warm resolved Narcotics run allocates ~0 B", narcoticsPerRun < 16,
             $"{narcoticsPerRun:F1} B/run");
         Check("zero-alloc: a warm completed Fencing negotiation allocates ~0 B", fencingPerRun < 16,
             $"{fencingPerRun:F1} B/run");
+        Check("zero-alloc: a warm completed Robbery run allocates ~0 B", robberyPerRun < 16,
+            $"{robberyPerRun:F1} B/run");
     }
 }

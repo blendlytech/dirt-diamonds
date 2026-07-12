@@ -11,7 +11,10 @@ namespace DirtAndDiamonds.UI.Portraits;
 /// no missing-image box ever renders. Lazy: <see cref="SetIdentity"/> is a
 /// no-op unless the key actually changed, so callers can invoke it from
 /// their own dirty-flag refresh points every time without rebuilding
-/// per-frame. Node paths verified against PortraitView.tscn (authored
+/// per-frame. Safe pre-tree too: callers that instantiate this scene and set
+/// the identity before parenting it (the phone's pending event card) get the
+/// apply deferred to <see cref="_Ready"/> instead of a null-node crash.
+/// Node paths verified against PortraitView.tscn (authored
 /// alongside this script) via godot_scene_mapper before wiring.
 /// </summary>
 public sealed partial class PortraitView : PanelContainer
@@ -35,14 +38,19 @@ public sealed partial class PortraitView : PanelContainer
     private TextureRect _textureRect = null!;
     private Label _initialsLabel = null!;
     private string? _shownKey;
+    private string _shownName = string.Empty;
 
     public override void _Ready()
     {
         _textureRect = GetNode<TextureRect>("TextureRect");
         _initialsLabel = GetNode<Label>("InitialsCenter/InitialsLabel");
+        if (_shownKey is not null)
+        {
+            Apply(_shownKey, _shownName);
+        }
     }
 
-    /// <summary>Shows <paramref name="key"/>'s portrait (real art if authored, else the procedural fallback). No-op if <paramref name="key"/> is unchanged since the last call.</summary>
+    /// <summary>Shows <paramref name="key"/>'s portrait (real art if authored, else the procedural fallback). No-op if <paramref name="key"/> is unchanged since the last call. Callable before the node enters the tree — the apply then waits for <see cref="_Ready"/>.</summary>
     public void SetIdentity(string key, string displayName)
     {
         if (key == _shownKey)
@@ -50,7 +58,15 @@ public sealed partial class PortraitView : PanelContainer
             return;
         }
         _shownKey = key;
+        _shownName = displayName;
+        if (IsNodeReady())
+        {
+            Apply(key, displayName);
+        }
+    }
 
+    private void Apply(string key, string displayName)
+    {
         if (PortraitLibrary.TryLoad(key, out Texture2D texture))
         {
             _textureRect.Texture = texture;
