@@ -2364,6 +2364,39 @@ internal static class Program
         Check("every flag DIRT-1 sets is read by at least one prerequisite in the batch (no orphaned flag)",
             flagsRead == readFlags.Length, $"{flagsRead}/{readFlags.Length}");
 
+        // Doc §5.3 (review fix, Fable 5): no DIRT-1 gate may hold on day 1–2
+        // of a fresh save — dirt_underworld_events.json sorts alphabetically
+        // BEFORE hs_onboarding_events.json, and the dispatcher fires the
+        // first satisfied definition in file order, so any dirt gate that
+        // holds on day 2 gets a weighted roll at stealing the avatar's
+        // one-fire-per-day slot from the weight-1.0 hs_first_day. Evaluated
+        // with the real ConditionEvaluator against the WORST-CASE fresh
+        // avatar: the Destitute backstory floor ($50 — the roll that made
+        // dirt_sticky_fingers's bare funds<200 gate live on day 2 before its
+        // hs_started+14 anchor), recklessness 0, tier 0, no flags yet.
+        {
+            var freshWorstCase = new PollPlayerRow
+            {
+                PlayerId = "freshDay2",
+                Age = 16,
+                TeamId = 1,
+                Funds = 50,
+                HealthCeiling = 100,
+                Recklessness = 0,
+                BaseballInterest = 100,
+                DetectionRisk = 0,
+                Strictness = 50,
+                TeammateExOfPartner = false,
+                Tier = 0,
+                Gpa = 2.5,
+            };
+            var noFlags = new Dictionary<(string PlayerId, string FlagName), long>();
+            int holdableOnDay2 = dirt.Events.Count(e =>
+                ConditionEvaluator.AllHold(e.Prerequisites, in freshWorstCase, noFlags, currentDay: 2));
+            Check("no DIRT-1 gate can hold on day 1–2 of a fresh save, even at the Destitute funds floor (doc §5.3 — the onboarding day-2 slot is safe)",
+                holdableOnDay2 == 0, $"{holdableOnDay2} gate(s) holdable");
+        }
+
         // Check #8: the_bookie resolves in the registry added in this same change.
         string contactsPath = Path.Combine(_repoRoot, "Assets", "Narrative", "Contacts", "contacts.json");
         ContactRegistry registry = ContactJson.Parse(File.ReadAllText(contactsPath));
