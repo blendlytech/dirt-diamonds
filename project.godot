@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.7", "C#")
 [autoload]
 
 GameManager="*res://Assets/Core/GameManager.cs"
+UiSfx="*res://Assets/UI/UiSfx.cs"
 
 [display]
 

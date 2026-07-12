@@ -337,6 +337,11 @@ public sealed partial class BurnerPhone : PanelContainer
     // via Main's bridge (TutorialReplayRequested).
     private Button _replayButton = null!;
 
+    // Settings tab (Slice D-1): SFX volume — a read/write view of
+    // UiSfx.Volume. ValueChanged applies to the bus live while dragging;
+    // the ConfigFile write debounces to DragEnded.
+    private HSlider _volumeSlider = null!;
+
     private PanelContainer _carrierCard = null!;
     private Label _phoneStatusLabel = null!;
     private Label _minutesLabel = null!;
@@ -513,6 +518,11 @@ public sealed partial class BurnerPhone : PanelContainer
 
         _replayButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/ReplayCard/ReplayCardLayout/ReplayButton");
         _replayButton.Pressed += OnReplayPressed;
+
+        _volumeSlider = GetNode<HSlider>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout/VolumeRow/VolumeSlider");
+        _volumeSlider.SetValueNoSignal(UiSfx.Instance.Volume);
+        _volumeSlider.ValueChanged += OnVolumeChanged;
+        _volumeSlider.DragEnded += OnVolumeDragEnded;
     }
 
     public override void _ExitTree()
@@ -531,6 +541,23 @@ public sealed partial class BurnerPhone : PanelContainer
         _quitButton.Pressed -= OnQuitPressed;
         _quitConfirmDialog.Confirmed -= OnQuitConfirmed;
         _replayButton.Pressed -= OnReplayPressed;
+        _volumeSlider.ValueChanged -= OnVolumeChanged;
+        _volumeSlider.DragEnded -= OnVolumeDragEnded;
+    }
+
+    private static void OnVolumeChanged(double value)
+    {
+        UiSfx.Instance.SetVolume((float)value);
+    }
+
+    private static void OnVolumeDragEnded(bool valueChanged)
+    {
+        UiSfx.Instance.SaveVolume();
+        if (valueChanged)
+        {
+            // Volume preview: hear the chosen level at the moment it's set.
+            UiSfx.Instance.Play(UiSound.Tap);
+        }
     }
 
     /// <summary>

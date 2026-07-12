@@ -721,13 +721,12 @@ min_value = 0
 max_value = 100
 step = 1
 value = 100
-editable = false
 
 [node name="VolumeNoteLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/OptionsCard/OptionsCardLayout"]
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
-text = "Sound arrives in a later update."
+text = "Sound effects volume."
 
 [node name="QuitCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout"]
 layout_mode = 2
