@@ -848,6 +848,18 @@ public sealed partial class GameManager : Node
     public bool InteractiveGameInFlight { get; set; }
 
     /// <summary>
+    /// Set while the day-1 onboarding walkthrough is on screen
+    /// (TutorialOverlay.Open/Close). A soft stop like
+    /// <see cref="HasPendingHustleSession"/>, deliberately NOT part of
+    /// <see cref="CanAdvanceDay"/>: the TimeControlBar holds the clock while
+    /// the player reads (onboarding_tutorial_overlay.md §7 assumes a paused
+    /// surface) without disturbing their chosen Speed, and Skip Day stays
+    /// reachable — the overlay is day-agnostic and resumes across any
+    /// advance.
+    /// </summary>
+    public bool TutorialOverlayOpen { get; set; }
+
+    /// <summary>
     /// THE day-advance gate (real_time_clock_slice_g.md §4.1): every driver —
     /// the dashboard's Play/Skip today, the G-2 continuous clock next — must
     /// consult this one predicate before <see cref="TimeManager.AdvanceDay"/>,

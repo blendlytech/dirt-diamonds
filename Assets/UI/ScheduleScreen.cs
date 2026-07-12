@@ -46,10 +46,26 @@ public sealed partial class ScheduleScreen : PanelContainer
     public string NoPlanText { get; set; } = "No plan set — today runs on autopilot.";
 
     [Export]
-    public string FreeHoursFormat { get; set; } = "Free hours: {0}";
+    public string FreeHoursFormat { get; set; } =
+        "Free hours: {0} — your player eats, washes, rests and sees people in these.";
+
+    [Export]
+    public string LowFreeHoursFormat { get; set; } =
+        "Free hours: {0} — tight. That may not be enough to eat AND wash AND rest.";
+
+    [Export]
+    public string NoFreeHoursText { get; set; } =
+        "No free hours — nobody eats today. Your needs will all fall and none will recover.";
 
     [Export]
     public string OverAllocatedFormat { get; set; } = "Over by {0}h — reduce a block before confirming.";
+
+    // Upper bound of the "tight" free-hours band (onboarding-overlay doc §4.2).
+    // Harness-sourced, not the doc's first-pass 3: simulate_utility_decay's
+    // scripted-week fixture still bottoms Hunger at 0 on its worst day with
+    // 5 free hours, so comfort starts at 5 — warn across 1..4.
+    [Export]
+    public int LowFreeHoursMax { get; set; } = 4;
 
     [Export]
     public string JailLockFormat { get; set; } =
@@ -388,9 +404,33 @@ public sealed partial class ScheduleScreen : PanelContainer
         int total = (int)_sleepSlider.Value + _mandatedSchoolHours + (int)_practiceSlider.Value
             + (int)_gameSlider.Value + (int)_workSlider.Value + (int)_freeTimeSlider.Value
             + (int)_familySlider.Value + travelHours;
+        // Onboarding-overlay doc §4.2: free hours are when the autopilot keeps
+        // the avatar alive (LifeSimManager runs the utility AI once per free
+        // hour), so the line has to say so — three severity states, with the
+        // zero-hours case loud enough to prevent the silent "booked all 24
+        // hours and nobody ate" death.
         int free = DaySchedule.HoursPerDay - total;
         bool overAllocated = free < 0;
-        _freeHoursLabel.Text = string.Format(overAllocated ? OverAllocatedFormat : FreeHoursFormat, Math.Abs(free));
+        if (overAllocated)
+        {
+            _freeHoursLabel.Text = string.Format(OverAllocatedFormat, -free);
+            _freeHoursLabel.RemoveThemeColorOverride("font_color");
+        }
+        else if (free == 0)
+        {
+            _freeHoursLabel.Text = NoFreeHoursText;
+            _freeHoursLabel.AddThemeColorOverride("font_color", UiColors.Danger);
+        }
+        else if (free <= LowFreeHoursMax)
+        {
+            _freeHoursLabel.Text = string.Format(LowFreeHoursFormat, free);
+            _freeHoursLabel.AddThemeColorOverride("font_color", UiColors.Warning);
+        }
+        else
+        {
+            _freeHoursLabel.Text = string.Format(FreeHoursFormat, free);
+            _freeHoursLabel.RemoveThemeColorOverride("font_color");
+        }
         _overAllocated = overAllocated;
     }
 

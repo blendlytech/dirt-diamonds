@@ -63,6 +63,9 @@ public sealed partial class TimeControlBar : HBoxContainer
     public string HustleWaitingText { get; set; } = "Paused — hustle session waiting";
 
     [Export]
+    public string TutorialOpenText { get; set; } = "Paused — tutorial open";
+
+    [Export]
     public string GameInProgressText { get; set; } = "Game in progress";
 
     private Button _playGameButton = null!;
@@ -101,6 +104,7 @@ public sealed partial class TimeControlBar : HBoxContainer
         GameInProgress,
         DecisionNeeded,
         HustleWaiting,
+        TutorialOpen,
     }
 
     public override void _Ready()
@@ -160,8 +164,11 @@ public sealed partial class TimeControlBar : HBoxContainer
         bool canAdvance = hasAvatar && !_advanceSettling && gm.CanAdvanceDay;
         // §4.1/§4.4: time flows only while nothing is owed. gameReady and a
         // pending hustle hold the clock but leave Skip enabled — advancing
-        // past them is their designed autopilot/no-deal forfeit.
-        bool timeFlows = canAdvance && !gameReady && !gm.HasPendingHustleSession && !_clock.IsPaused;
+        // past them is their designed autopilot/no-deal forfeit. The open
+        // tutorial overlay is the same soft-stop shape: the clock holds
+        // while the player reads, their chosen Speed undisturbed.
+        bool timeFlows = canAdvance && !gameReady && !gm.HasPendingHustleSession
+            && !gm.TutorialOverlayOpen && !_clock.IsPaused;
 
         if (timeFlows)
         {
@@ -241,6 +248,7 @@ public sealed partial class TimeControlBar : HBoxContainer
                 BarFace.GameInProgress => GameInProgressText,
                 BarFace.DecisionNeeded => DecisionNeededText,
                 BarFace.HustleWaiting => HustleWaitingText,
+                BarFace.TutorialOpen => TutorialOpenText,
                 _ => string.Empty,
             };
             _statusLabel.Visible = face is not (BarFace.Flowing or BarFace.Dormant);
@@ -256,6 +264,10 @@ public sealed partial class TimeControlBar : HBoxContainer
         if (gm.InteractiveGameInFlight)
         {
             return BarFace.GameInProgress;
+        }
+        if (gm.TutorialOverlayOpen)
+        {
+            return BarFace.TutorialOpen;
         }
         if (gameReady)
         {

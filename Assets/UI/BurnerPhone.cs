@@ -56,6 +56,15 @@ public sealed partial class BurnerPhone : PanelContainer
     [Signal]
     public delegate void ShopOpenRequestedEventHandler();
 
+    /// <summary>
+    /// Onboarding-2 T-2: emitted when the Settings tab's "Replay tutorial"
+    /// button is pressed. Main bridges it to TutorialOverlay.Open(0) — same
+    /// shared-ancestor seam as ShopOpenRequested, since the overlay is a
+    /// permanent sibling outside the phone's subtree.
+    /// </summary>
+    [Signal]
+    public delegate void TutorialReplayRequestedEventHandler();
+
     [Export]
     public string TimestampFormat { get; set; } = "Season {0}, day {1}";
 
@@ -128,6 +137,17 @@ public sealed partial class BurnerPhone : PanelContainer
 
     [Export]
     public string CostOfLivingFormat { get; set; } = "Cost of living: ${0:F0}/wk — next bill in {1}d";
+
+    // Onboarding-overlay doc §4.1: the caption naming which need(s) crossed
+    // NeedsEngine.CriticalThreshold — the literal behavior of the sim's
+    // crisis branch, surfaced instead of invisible.
+    [Export]
+    public string NeedCriticalFormat { get; set; } =
+        "{0} is critical — your player will drop what he's doing to fix it.";
+
+    [Export]
+    public string NeedsCriticalPluralFormat { get; set; } =
+        "{0} are critical — your player will drop what he's doing to fix them.";
 
     /// <summary>Tier display names indexed by quality 0–3, mirroring EquipmentShopScreen's own copy.</summary>
     [Export]
@@ -272,6 +292,12 @@ public sealed partial class BurnerPhone : PanelContainer
     private ProgressBar _hygieneBar = null!;
     private ProgressBar _socialBar = null!;
     private ProgressBar _fitnessBar = null!;
+    private Label _hungerLabel = null!;
+    private Label _sleepLabel = null!;
+    private Label _hygieneLabel = null!;
+    private Label _socialLabel = null!;
+    private Label _fitnessLabel = null!;
+    private Label _needsCriticalCaptionLabel = null!;
     private Button _narcoticsButton = null!;
     private Button _fencingButton = null!;
     private Button _pokerButton = null!;
@@ -301,6 +327,15 @@ public sealed partial class BurnerPhone : PanelContainer
     // event-driven, never per-frame).
     private Button _saveButton = null!;
     private Label _saveStatusLabel = null!;
+
+    // Settings tab: Quit to Desktop, gated behind a confirmation dialog so a
+    // stray click can't drop the player out of their session.
+    private Button _quitButton = null!;
+    private ConfirmationDialog _quitConfirmDialog = null!;
+
+    // Settings tab: Replay tutorial — reopens TutorialOverlay from step 0
+    // via Main's bridge (TutorialReplayRequested).
+    private Button _replayButton = null!;
 
     private PanelContainer _carrierCard = null!;
     private Label _phoneStatusLabel = null!;
@@ -348,6 +383,13 @@ public sealed partial class BurnerPhone : PanelContainer
     private long _shownDaysUntilBill = -1;
     private int _shownEquipmentQuality = -1;
     private NeedsState _shownNeeds;
+
+    // Critical-needs presentation identity (onboarding-overlay doc §4.1):
+    // one bit per need at/under CriticalThreshold, so the label recolors and
+    // the caption rebuild happen only when a need actually crosses the line,
+    // not on every hourly needs tick.
+    private int _shownCriticalMask = -1;
+    private readonly List<string> _criticalNamesScratch = new(5);
 
     // Dirty-flag identity for the Marketplace tab — independent of the Bank
     // tab's above since either can move without the other (funds move for
@@ -407,6 +449,23 @@ public sealed partial class BurnerPhone : PanelContainer
         _hygieneBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneBar");
         _socialBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialBar");
         _fitnessBar = GetNode<ProgressBar>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessBar");
+        _hungerLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow/HungerLabel");
+        _sleepLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow/SleepLabel");
+        _hygieneLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneLabel");
+        _socialLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialLabel");
+        _fitnessLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessLabel");
+        _needsCriticalCaptionLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/NeedsCriticalCaptionLabel");
+
+        // The 20-line markers are authored at anchor 0.2 in the scene;
+        // re-derived here from the live constant so a CriticalThreshold
+        // retune can't leave the scene lying about where the crisis
+        // branch fires.
+        float criticalAnchor = NeedsEngine.CriticalThreshold / NeedsEngine.MaxNeed;
+        SetCriticalMarkAnchor(GetNode<ColorRect>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow/HungerBar/HungerCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow/SleepBar/SleepCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneBar/HygieneCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialBar/SocialCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessBar/FitnessCriticalMark"), criticalAnchor);
         _narcoticsButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/NarcoticsButton");
         _fencingButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/FencingButton");
         _pokerButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/PokerButton");
@@ -446,6 +505,14 @@ public sealed partial class BurnerPhone : PanelContainer
         _saveButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout/SaveButton");
         _saveStatusLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard/SaveCardLayout/SaveStatusLabel");
         _saveButton.Pressed += OnSavePressed;
+
+        _quitButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/QuitCard/QuitCardLayout/QuitButton");
+        _quitConfirmDialog = GetNode<ConfirmationDialog>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/QuitCard/QuitCardLayout/QuitConfirmDialog");
+        _quitButton.Pressed += OnQuitPressed;
+        _quitConfirmDialog.Confirmed += OnQuitConfirmed;
+
+        _replayButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/ReplayCard/ReplayCardLayout/ReplayButton");
+        _replayButton.Pressed += OnReplayPressed;
     }
 
     public override void _ExitTree()
@@ -461,6 +528,9 @@ public sealed partial class BurnerPhone : PanelContainer
         _phoneTabs.TabChanged -= OnPhoneTabChanged;
         _commitmentConfirmButton.Pressed -= OnCommitmentConfirmPressed;
         _saveButton.Pressed -= OnSavePressed;
+        _quitButton.Pressed -= OnQuitPressed;
+        _quitConfirmDialog.Confirmed -= OnQuitConfirmed;
+        _replayButton.Pressed -= OnReplayPressed;
     }
 
     /// <summary>
@@ -940,6 +1010,7 @@ public sealed partial class BurnerPhone : PanelContainer
             _hygieneBar.Value = needs.Hygiene;
             _socialBar.Value = needs.Social;
             _fitnessBar.Value = needs.Fitness;
+            RefreshCriticalNeeds(needs);
         }
 
         RefreshCarrierCard(funds);
@@ -1113,6 +1184,73 @@ public sealed partial class BurnerPhone : PanelContainer
     private static bool NeedsEqual(in NeedsState a, in NeedsState b) =>
         a.Hunger == b.Hunger && a.Sleep == b.Sleep && a.Hygiene == b.Hygiene
         && a.Social == b.Social && a.Fitness == b.Fitness;
+
+    private static void SetCriticalMarkAnchor(ColorRect mark, float anchor)
+    {
+        mark.AnchorLeft = anchor;
+        mark.AnchorRight = anchor;
+    }
+
+    /// <summary>
+    /// Onboarding-overlay doc §4.1: the moment a need is at/under
+    /// <see cref="NeedsEngine.CriticalThreshold"/> the sim overrides the
+    /// player's plan (LifeSimManager's crisis branch) — this makes that state
+    /// loud: the row label goes danger-red and the caption under the card
+    /// names the need(s). Mask-dirty-flagged so the recolor and the caption
+    /// string rebuild happen only when a need crosses the line.
+    /// </summary>
+    private void RefreshCriticalNeeds(in NeedsState needs)
+    {
+        int mask = (needs.Hunger <= NeedsEngine.CriticalThreshold ? 1 : 0)
+            | (needs.Sleep <= NeedsEngine.CriticalThreshold ? 2 : 0)
+            | (needs.Hygiene <= NeedsEngine.CriticalThreshold ? 4 : 0)
+            | (needs.Social <= NeedsEngine.CriticalThreshold ? 8 : 0)
+            | (needs.Fitness <= NeedsEngine.CriticalThreshold ? 16 : 0);
+        if (mask == _shownCriticalMask)
+        {
+            return;
+        }
+        _shownCriticalMask = mask;
+
+        ApplyCriticalColor(_hungerLabel, (mask & 1) != 0);
+        ApplyCriticalColor(_sleepLabel, (mask & 2) != 0);
+        ApplyCriticalColor(_hygieneLabel, (mask & 4) != 0);
+        ApplyCriticalColor(_socialLabel, (mask & 8) != 0);
+        ApplyCriticalColor(_fitnessLabel, (mask & 16) != 0);
+
+        _needsCriticalCaptionLabel.Visible = mask != 0;
+        if (mask == 0)
+        {
+            return;
+        }
+
+        // The row labels' text IS each need's display name — reused here so
+        // the caption can never disagree with the rows.
+        _criticalNamesScratch.Clear();
+        if ((mask & 1) != 0) _criticalNamesScratch.Add(_hungerLabel.Text);
+        if ((mask & 2) != 0) _criticalNamesScratch.Add(_sleepLabel.Text);
+        if ((mask & 4) != 0) _criticalNamesScratch.Add(_hygieneLabel.Text);
+        if ((mask & 8) != 0) _criticalNamesScratch.Add(_socialLabel.Text);
+        if ((mask & 16) != 0) _criticalNamesScratch.Add(_fitnessLabel.Text);
+        string names = _criticalNamesScratch.Count == 1
+            ? _criticalNamesScratch[0]
+            : string.Join(", ", _criticalNamesScratch.GetRange(0, _criticalNamesScratch.Count - 1))
+                + " and " + _criticalNamesScratch[^1];
+        _needsCriticalCaptionLabel.Text = string.Format(
+            _criticalNamesScratch.Count == 1 ? NeedCriticalFormat : NeedsCriticalPluralFormat, names);
+    }
+
+    private static void ApplyCriticalColor(Label label, bool critical)
+    {
+        if (critical)
+        {
+            label.AddThemeColorOverride("font_color", UiColors.Danger);
+        }
+        else
+        {
+            label.RemoveThemeColorOverride("font_color");
+        }
+    }
 
     /// <summary>
     /// §4.1 tier gating + §4.2 minutes gating: the tab itself stays visible
@@ -1288,6 +1426,15 @@ public sealed partial class BurnerPhone : PanelContainer
             : SaveFailedText;
     }
 
+    private void OnQuitPressed() => _quitConfirmDialog.PopupCentered();
+
+    /// <summary>Flushes the same save path as "Save Now" before handing off to the engine — belt-and-suspenders on top of the already-continuous autosave.</summary>
+    private void OnQuitConfirmed()
+    {
+        GameManager.Instance!.SaveNow();
+        GetTree().Quit();
+    }
+
     private void OnBuyItemPressed(string itemId)
     {
         GameManager gm = GameManager.Instance!;
@@ -1333,4 +1480,6 @@ public sealed partial class BurnerPhone : PanelContainer
     private void OnPokerPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Poker);
 
     private void OnProShopPressed() => EmitSignal(SignalName.ShopOpenRequested);
+
+    private void OnReplayPressed() => EmitSignal(SignalName.TutorialReplayRequested);
 }

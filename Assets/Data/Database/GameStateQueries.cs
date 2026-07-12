@@ -83,6 +83,17 @@ public static class GameStateKeys
     /// resumes across a reload. Absent → Normal.
     /// </summary>
     public const string TimeSpeed = "time_speed";
+
+    /// <summary>
+    /// Onboarding overlay progress (long): absent/0 = not yet shown, 1..N =
+    /// the next step index to present (so a quit mid-tutorial resumes on the
+    /// same step), -1 = finished or skipped (onboarding_tutorial_overlay.md
+    /// §3.3). Written on every step advance, not just completion. A save
+    /// that predates this slice has no row for this key — Main's boot guard
+    /// treats an absent key on a save already past day 2 as "done" so a
+    /// veteran mid-career save is never ambushed by the walkthrough.
+    /// </summary>
+    public const string TutorialStep = "tutorial_step";
 }
 
 /// <summary>

@@ -52,32 +52,6 @@ text = "PREPAID · UNTRACED"
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Events" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
-layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="EventsLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 6
-
-[node name="EventsScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
-layout_mode = 2
-size_flags_vertical = 3
-follow_focus = true
-
-[node name="EventsContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 10
-
-[node name="ChoicesContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
 [node name="Calendar" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
 layout_mode = 2
@@ -99,67 +73,6 @@ layout_mode = 2
 
 [node name="ScheduleScreen" parent="Screen/ScreenLayout/PhoneTabs/Calendar/CalendarScroll/CalendarTabLayout" instance=ExtResource("4_scheduleplan")]
 layout_mode = 2
-
-[node name="Player" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
-visible = false
-layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="PlayerScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Player"]
-layout_mode = 2
-
-[node name="PlayerScreen" parent="Screen/ScreenLayout/PhoneTabs/Player/PlayerScroll" instance=ExtResource("5_playerscreen")]
-layout_mode = 2
-
-[node name="League" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
-visible = false
-layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="LeagueScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/League"]
-layout_mode = 2
-
-[node name="LeagueScreen" parent="Screen/ScreenLayout/PhoneTabs/League/LeagueScroll" instance=ExtResource("6_leaguescreen")]
-layout_mode = 2
-
-[node name="History" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
-visible = false
-layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="HistoryLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/History"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 6
-
-[node name="LoadOlderButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
-layout_mode = 2
-text = "Load Older"
-
-[node name="HistoryStatusLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
-visible = false
-layout_mode = 2
-theme_type_variation = &"CaptionLabel"
-text = "— beginning of your story —"
-
-[node name="HistoryScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
-layout_mode = 2
-size_flags_vertical = 3
-follow_focus = true
-
-[node name="HistoryContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 10
 
 [node name="Messages" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
@@ -205,6 +118,32 @@ follow_focus = true
 [node name="ThreadContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="Events" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="EventsLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="EventsScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="EventsContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/EventsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ChoicesContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
+layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="Bank" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
@@ -336,8 +275,15 @@ layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Needs"
 
+[node name="NeedsOrderCaptionLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = "Listed fastest-draining first."
+
 [node name="HungerRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
+tooltip_text = "Drains fastest of the five — critical in about 16h of neglect. Your player eats in Free hours; a meal costs $12 and restores 45."
 
 [node name="HungerLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow"]
 layout_mode = 2
@@ -348,10 +294,22 @@ text = "Hunger"
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+mouse_filter = 1
 value = 100
+
+[node name="HungerCriticalMark" type="ColorRect" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HungerRow/HungerBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
 
 [node name="SleepRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
+tooltip_text = "Second-fastest. A planned Sleep block restores 80 over 8 hours. Work and hustle shifts drain it at double rate."
 
 [node name="SleepLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow"]
 layout_mode = 2
@@ -362,10 +320,22 @@ text = "Sleep"
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+mouse_filter = 1
 value = 100
+
+[node name="SleepCriticalMark" type="ColorRect" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SleepRow/SleepBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
 
 [node name="HygieneRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
+tooltip_text = "Slow but steady. A shower restores 60 and costs nothing but an hour of Free time."
 
 [node name="HygieneLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow"]
 layout_mode = 2
@@ -376,10 +346,22 @@ text = "Hygiene"
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+mouse_filter = 1
 value = 100
+
+[node name="HygieneCriticalMark" type="ColorRect" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/HygieneRow/HygieneBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
 
 [node name="SocialRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
+tooltip_text = "Slow. A night out restores 35 and costs $40; hanging out is free but weaker. Let it crater and it drags on everything."
 
 [node name="SocialLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow"]
 layout_mode = 2
@@ -390,10 +372,22 @@ text = "Social"
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+mouse_filter = 1
 value = 100
+
+[node name="SocialCriticalMark" type="ColorRect" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/SocialRow/SocialBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
 
 [node name="FitnessRow" type="HBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
 layout_mode = 2
+tooltip_text = "Slowest to fall, slowest to rebuild. A workout restores 30 for $10 — but it makes you hungrier and more tired while you do it."
 
 [node name="FitnessLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow"]
 layout_mode = 2
@@ -404,7 +398,32 @@ text = "Fitness"
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+mouse_filter = 1
 value = 100
+
+[node name="FitnessCriticalMark" type="ColorRect" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout/FitnessRow/FitnessBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
+
+[node name="NeedsCriticalCaptionLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
+autowrap_mode = 2
+text = ""
+
+[node name="NeedsDecayCaptionLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard/NeedsCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = "All five fall faster the emptier they get. Stress makes everything fall faster still — up to 2½× in a bad stretch."
 
 [node name="HustlesCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout"]
 layout_mode = 2
@@ -503,6 +522,34 @@ text = "$0"
 layout_mode = 2
 text = "Set Commitment"
 
+[node name="Player" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="PlayerScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Player"]
+layout_mode = 2
+
+[node name="PlayerScreen" parent="Screen/ScreenLayout/PhoneTabs/Player/PlayerScroll" instance=ExtResource("5_playerscreen")]
+layout_mode = 2
+
+[node name="League" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="LeagueScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/League"]
+layout_mode = 2
+
+[node name="LeagueScreen" parent="Screen/ScreenLayout/PhoneTabs/League/LeagueScroll" instance=ExtResource("6_leaguescreen")]
+layout_mode = 2
+
 [node name="Marketplace" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
 layout_mode = 2
@@ -544,6 +591,39 @@ layout_mode = 2
 autowrap_mode = 2
 visible = false
 text = ""
+
+[node name="History" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="HistoryLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/History"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="LoadOlderButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
+layout_mode = 2
+text = "Load Older"
+
+[node name="HistoryStatusLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "— beginning of your story —"
+
+[node name="HistoryScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="HistoryContainer" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
 
 [node name="Settings" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
@@ -590,6 +670,29 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
+[node name="ReplayCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="ReplayCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/ReplayCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ReplayHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/ReplayCard/ReplayCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Tutorial"
+
+[node name="ReplayNoteLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/ReplayCard/ReplayCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = "Revisit the day-one walkthrough any time."
+
+[node name="ReplayButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/ReplayCard/ReplayCardLayout"]
+layout_mode = 2
+text = "Replay tutorial"
+
 [node name="OptionsCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout"]
 layout_mode = 2
 theme_type_variation = &"Card"
@@ -625,3 +728,24 @@ layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 2
 text = "Sound arrives in a later update."
+
+[node name="QuitCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="QuitCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/QuitCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="QuitHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/QuitCard/QuitCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Quit"
+
+[node name="QuitButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/QuitCard/QuitCardLayout"]
+layout_mode = 2
+text = "Quit to Desktop"
+
+[node name="QuitConfirmDialog" type="ConfirmationDialog" parent="Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/QuitCard/QuitCardLayout"]
+title = "Quit to Desktop"
+dialog_text = "Progress is saved automatically — quit now?"

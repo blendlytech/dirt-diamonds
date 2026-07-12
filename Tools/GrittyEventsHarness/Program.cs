@@ -71,7 +71,6 @@ internal static class Program
             RunTeammateExOfPartnerChecks();
             RunTierGpaChecks();
             RunHsOnboardingArcChecks();
-            RunTutorialArcChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -244,8 +243,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 10
-            && wholeFolder.Count == 83
+            batchFiles.Length >= 9
+            && wholeFolder.Count == 79
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -313,11 +312,7 @@ internal static class Program
             && wholeFolder.TryGetById("hs_error_costs_the_game", out _)
             && wholeFolder.TryGetById("hs_family_money_tight", out _)
             && wholeFolder.TryGetById("hs_college_letter", out _)
-            && wholeFolder.TryGetById("hs_scout_in_stands", out _)
-            && wholeFolder.TryGetById("tut_welcome", out _)
-            && wholeFolder.TryGetById("tut_daily_loop", out _)
-            && wholeFolder.TryGetById("tut_game_day", out _)
-            && wholeFolder.TryGetById("tut_wrap", out _),
+            && wholeFolder.TryGetById("hs_scout_in_stands", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -381,7 +376,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 83 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 79 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -2249,206 +2244,6 @@ internal static class Program
                 parentRow.TeamId == null && parentRow.Tier == -1);
             Check("gpa round-trips through the real Player_Person join",
                 Math.Abs(hsRow.Gpa - 3.8) < 1e-9);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // 3z. Day-1 phone tutorial arc (docs/design/day1_phone_tutorial.md,
-    // Stage 2, shipped content) -- the mechanical "how to play" thread,
-    // orthogonal to the narrative onboarding arc above. Mirrors
-    // RunHsOnboardingArcChecks' shape: content pins, then a World
-    // integration block loading both files together (the real interleave
-    // surface), then the skip/veteran/tier controls.
-    // ------------------------------------------------------------------
-
-    private static readonly string[] TutorialEventIds =
-    {
-        "tut_welcome", "tut_daily_loop", "tut_game_day", "tut_wrap",
-    };
-
-    private static void RunTutorialArcChecks()
-    {
-        Console.WriteLine("--- Day-1 phone tutorial arc (shipped content) ---");
-
-        string tutorialJson = File.ReadAllText(Path.Combine(
-            _repoRoot, "Assets", "Narrative", "Events", "Content", "getting_started_events.json"));
-        string onboardingJson = File.ReadAllText(Path.Combine(
-            _repoRoot, "Assets", "Narrative", "Events", "Content", "hs_onboarding_events.json"));
-
-        // Content pins (design doc §9.1's loader-accept contract): all 4
-        // tutorial events resolve, avatar-scoped, weight 1.0, tagged
-        // 'getting_started', carry the tier==0 gate + a fire-time
-        // text_message, and ship exactly 3 choices each with an authored
-        // outcome.
-        {
-            GrittyEventLibrary tutorial = GrittyEventJson.Parse(tutorialJson);
-            int ok = 0;
-            int outcomeCount = 0;
-            foreach (string id in TutorialEventIds)
-            {
-                if (tutorial.TryGetById(id, out GrittyEventDefinition e)
-                    && e.Scope == EventScope.Avatar
-                    && e.Weight == 1.0
-                    && e.ContactId == "getting_started"
-                    && e.Choices.Length == 3
-                    && !string.IsNullOrEmpty(e.TextMessage)
-                    && e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field
-                        && p.Field == SubjectField.Tier && p.Comparison == FieldComparison.Equal && p.Value == 0))
-                {
-                    ok++;
-                    outcomeCount += e.Choices.Count(c => !string.IsNullOrEmpty(c.Outcome));
-                }
-            }
-            Check("all 4 tutorial events resolve, avatar-scoped, weight 1.0, tagged 'getting_started', carry the tier==0 gate + a fire-time text_message, and ship exactly 3 choices",
-                ok == TutorialEventIds.Length, $"{ok}/{TutorialEventIds.Length}");
-            Check("every one of the 12 tutorial choices carries an authored outcome",
-                outcomeCount == 12, $"{outcomeCount}/12");
-        }
-
-        // (a) welcome-first ordering + (b) alternation + (c) no double-fire:
-        // a fresh tier-0 avatar, both files loaded together -- the real
-        // interleave surface. tut_welcome holds on nothing but
-        // tier==0+!tut_welcomed and sorts before every hs_* batch
-        // alphabetically, so it wins day 2 outright and hs_first_day shifts
-        // to day 3; the min_days_since:2 links then force the one-beat-a-day
-        // alternation the design doc's §7.2 table predicts. Every beat in
-        // both chains is weight 1.0, so file order + prerequisite timing
-        // alone decide the winner each day -- deterministic, no RNG.
-        {
-            using World world = World.Create("tutorialArc", GrittyEventJson.Parse(new[] { tutorialJson, onboardingJson }));
-            var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 401, City = "Fairview", Name = "Foxes", Abbreviation = "FVF", League = "HS", Division = "A" });
-            baseball.UpsertTeamTier(401, LeagueTier.HS);
-
-            world.AddPlayer("hero", age: 16, teamId: 401);
-            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
-            world.Dispatcher.PollOnce(); // records the boot day (day 1, never evaluated)
-
-            for (int day = 2; day <= 8; day++)
-            {
-                world.Clock.AdvanceDay();
-                world.Bus.DispatchPending();
-                world.Dispatcher.PollOnce();
-                world.Bus.DispatchPending();
-            }
-
-            bool FiredOn(string eventId, long onDay) => world.Fired.Any(f => f.EventId == eventId && f.Day == onDay);
-            Check("tut_welcome fires day 2, preempting hs_first_day, which shifts to day 3",
-                FiredOn("tut_welcome", 2) && FiredOn("hs_first_day", 3));
-            Check("days 2-8 alternate exactly per the design doc's §7.2 schedule (tutorial, story, tutorial, story, ...)",
-                FiredOn("tut_welcome", 2) && FiredOn("hs_first_day", 3) && FiredOn("tut_daily_loop", 4)
-                && FiredOn("hs_meet_coach", 5) && FiredOn("tut_game_day", 6) && FiredOn("hs_tryouts", 7)
-                && FiredOn("tut_wrap", 8),
-                string.Join(",", world.Fired.Take(7).Select(f => $"{f.EventId}@{f.Day}")));
-            Check("no tutorial event id fires twice across the run",
-                TutorialEventIds.All(id => world.Fired.Count(f => f.EventId == id) <= 1),
-                string.Join(",", TutorialEventIds.Select(id => $"{id}={world.Fired.Count(f => f.EventId == id)}")));
-        }
-
-        // (d) skip path: force tut_welcome's third choice (index 2, "I've
-        // played before -- skip the tips") via a paused avatar choice --
-        // proves the whole chain short-circuits in one tap, the sanctioned
-        // dismissal for veterans/heirs (design doc §6.4).
-        {
-            using World world = World.Create("tutorialSkip", GrittyEventJson.Parse(tutorialJson));
-            world.Applier.AutopilotAvatarChoices = false;
-            var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 402, City = "Millbrook", Name = "Millers", Abbreviation = "MBM", League = "HS", Division = "A" });
-            baseball.UpsertTeamTier(402, LeagueTier.HS);
-
-            world.AddPlayer("skipper", age: 16, teamId: 402);
-            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "skipper");
-            world.Dispatcher.PollOnce();
-
-            world.Clock.AdvanceDay(); // day 2: tut_welcome fires and pauses
-            world.Bus.DispatchPending();
-            world.Dispatcher.PollOnce();
-            world.Bus.DispatchPending();
-
-            bool paused = world.Applier.HasPendingChoice
-                && world.Applier.TryGetPendingChoice(out PendingGrittyChoice pending)
-                && pending.Fired.EventId == "tut_welcome";
-            Check("tut_welcome pauses for the player with autopilot off", paused);
-
-            world.Applier.ResolveChoice(2); // "I've played before -- skip the tips"
-            world.Bus.DispatchPending();
-
-            for (int day = 3; day <= 12; day++)
-            {
-                world.Clock.AdvanceDay();
-                world.Bus.DispatchPending();
-                world.Dispatcher.PollOnce();
-                world.Bus.DispatchPending();
-            }
-
-            Check("the skip choice short-circuits the whole chain -- no later tutorial event ever fires",
-                world.Fired.All(f => f.EventId != "tut_daily_loop" && f.EventId != "tut_game_day" && f.EventId != "tut_wrap"),
-                string.Join(",", world.Fired.Select(f => f.EventId)));
-
-            var flagRows = new List<EntityFlagRow>();
-            world.Players.LoadActiveFlags("skipper", flagRows);
-            Check("the skip choice sets all four end-flags immediately",
-                flagRows.Any(f => f.FlagName == "tut_welcomed") && flagRows.Any(f => f.FlagName == "tut_daily_done")
-                && flagRows.Any(f => f.FlagName == "tut_gameday_done") && flagRows.Any(f => f.FlagName == "tut_done"),
-                string.Join(",", flagRows.Select(f => f.FlagName)));
-        }
-
-        // (e) veteran suppression: a save that already completed the whole
-        // chain (all four flags set -- the only reachable real-gameplay
-        // shape, since each link only gates on its OWN predecessor flag, not
-        // the terminal tut_done) never fires a single tutorial event again.
-        {
-            using World world = World.Create("tutorialVeteran", GrittyEventJson.Parse(tutorialJson));
-            var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 403, City = "Oldtown", Name = "Veterans", Abbreviation = "OTV", League = "HS", Division = "A" });
-            baseball.UpsertTeamTier(403, LeagueTier.HS);
-
-            world.AddPlayer("veteran", age: 16, teamId: 403);
-            world.Players.SetFlag("veteran", "tut_welcomed", true, 0);
-            world.Players.SetFlag("veteran", "tut_daily_done", true, 0);
-            world.Players.SetFlag("veteran", "tut_gameday_done", true, 0);
-            world.Players.SetFlag("veteran", "tut_done", true, 0);
-            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "veteran");
-            world.Dispatcher.PollOnce();
-
-            for (int day = 2; day <= 10; day++)
-            {
-                world.Clock.AdvanceDay();
-                world.Bus.DispatchPending();
-                world.Dispatcher.PollOnce();
-                world.Bus.DispatchPending();
-            }
-
-            Check("a save pre-seeded with tut_done never fires a tutorial event",
-                world.Fired.All(f => !TutorialEventIds.Contains(f.EventId)),
-                $"{world.Fired.Count} fires");
-        }
-
-        // (f) tier suppression: a post-HS (College, tier 1) avatar never
-        // fires a tutorial event even with hs_started already set -- the
-        // tier==0 gate holds regardless of narrative-arc progress.
-        {
-            using World world = World.Create("tutorialTierGate", GrittyEventJson.Parse(tutorialJson));
-            var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 404, City = "Collegetown", Name = "Scholars", Abbreviation = "CTS", League = "College", Division = "A" });
-            baseball.UpsertTeamTier(404, LeagueTier.College);
-
-            world.AddPlayer("collegian", age: 19, teamId: 404);
-            world.Players.SetFlag("collegian", "hs_started", true, 0);
-            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "collegian");
-            world.Dispatcher.PollOnce();
-
-            for (int day = 2; day <= 10; day++)
-            {
-                world.Clock.AdvanceDay();
-                world.Bus.DispatchPending();
-                world.Dispatcher.PollOnce();
-                world.Bus.DispatchPending();
-            }
-
-            Check("a tier>=1 (College) avatar never fires a tutorial event, even with hs_started set",
-                world.Fired.All(f => !TutorialEventIds.Contains(f.EventId)),
-                $"{world.Fired.Count} fires");
         }
     }
 

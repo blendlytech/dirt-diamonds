@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Simulation.Life;
 using Godot;
 
 namespace DirtAndDiamonds.UI;
@@ -23,14 +24,26 @@ public sealed partial class TopBar : PanelContainer
 
     private Label _dayLabel = null!;
     private Label _fundsLabel = null!;
+    private ProgressBar _hungerBar = null!;
+    private ProgressBar _sleepBar = null!;
+    private ProgressBar _hygieneBar = null!;
+    private ProgressBar _socialBar = null!;
+    private ProgressBar _fitnessBar = null!;
 
     private long _shownDay = long.MinValue;
     private double _shownFunds = double.NaN;
+    private NeedsState _shownNeeds;
+    private bool _needsInitialized;
 
     public override void _Ready()
     {
-        _dayLabel = GetNode<Label>("BarRow/DayLabel");
-        _fundsLabel = GetNode<Label>("BarRow/FundsLabel");
+        _dayLabel = GetNode<Label>("TopBarLayout/BarRow/DayLabel");
+        _fundsLabel = GetNode<Label>("TopBarLayout/BarRow/FundsLabel");
+        _hungerBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/HungerRow/HungerBar");
+        _sleepBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/SleepRow/SleepBar");
+        _hygieneBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/HygieneRow/HygieneBar");
+        _socialBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/SocialRow/SocialBar");
+        _fitnessBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/FitnessRow/FitnessBar");
     }
 
     public override void _Process(double delta)
@@ -60,5 +73,24 @@ public sealed partial class TopBar : PanelContainer
             _shownFunds = funds;
             _fundsLabel.Text = string.Format(FundsFormat, funds);
         }
+
+        if (!gm.LifeSim.TryGetNeeds(gm.Career.AvatarPlayerId, out NeedsState needs))
+        {
+            needs = NeedsState.FullySatisfied();
+        }
+        if (!_needsInitialized || !NeedsEqual(needs, _shownNeeds))
+        {
+            _needsInitialized = true;
+            _shownNeeds = needs;
+            _hungerBar.Value = needs.Hunger;
+            _sleepBar.Value = needs.Sleep;
+            _hygieneBar.Value = needs.Hygiene;
+            _socialBar.Value = needs.Social;
+            _fitnessBar.Value = needs.Fitness;
+        }
     }
+
+    private static bool NeedsEqual(in NeedsState a, in NeedsState b) =>
+        a.Hunger == b.Hunger && a.Sleep == b.Sleep && a.Hygiene == b.Hygiene
+        && a.Social == b.Social && a.Fitness == b.Fitness;
 }

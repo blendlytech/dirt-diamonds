@@ -6,20 +6,108 @@
 theme_type_variation = &"Card"
 script = ExtResource("1_topbar")
 
-[node name="BarRow" type="HBoxContainer" parent="."]
+[node name="TopBarLayout" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BarRow" type="HBoxContainer" parent="TopBarLayout"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="DayLabel" type="Label" parent="BarRow"]
+[node name="DayLabel" type="Label" parent="TopBarLayout/BarRow"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Day 1"
 
-[node name="Spacer" type="Control" parent="BarRow"]
+[node name="Spacer" type="Control" parent="TopBarLayout/BarRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="FundsLabel" type="Label" parent="BarRow"]
+[node name="FundsLabel" type="Label" parent="TopBarLayout/BarRow"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "$0"
+
+[node name="NeedsRow" type="HBoxContainer" parent="TopBarLayout"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HungerRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HungerLabel" type="Label" parent="TopBarLayout/NeedsRow/HungerRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+theme_type_variation = &"CaptionLabel"
+text = "Hunger"
+
+[node name="HungerBar" type="ProgressBar" parent="TopBarLayout/NeedsRow/HungerRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 100
+
+[node name="SleepRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SleepLabel" type="Label" parent="TopBarLayout/NeedsRow/SleepRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+theme_type_variation = &"CaptionLabel"
+text = "Sleep"
+
+[node name="SleepBar" type="ProgressBar" parent="TopBarLayout/NeedsRow/SleepRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 100
+
+[node name="HygieneRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HygieneLabel" type="Label" parent="TopBarLayout/NeedsRow/HygieneRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+theme_type_variation = &"CaptionLabel"
+text = "Hygiene"
+
+[node name="HygieneBar" type="ProgressBar" parent="TopBarLayout/NeedsRow/HygieneRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 100
+
+[node name="SocialRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SocialLabel" type="Label" parent="TopBarLayout/NeedsRow/SocialRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+theme_type_variation = &"CaptionLabel"
+text = "Social"
+
+[node name="SocialBar" type="ProgressBar" parent="TopBarLayout/NeedsRow/SocialRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 100
+
+[node name="FitnessRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FitnessLabel" type="Label" parent="TopBarLayout/NeedsRow/FitnessRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+theme_type_variation = &"CaptionLabel"
+text = "Fitness"
+
+[node name="FitnessBar" type="ProgressBar" parent="TopBarLayout/NeedsRow/FitnessRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 100

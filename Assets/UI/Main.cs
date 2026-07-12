@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Economy.Hustles;
 using Godot;
 
@@ -24,6 +25,14 @@ namespace DirtAndDiamonds.UI;
 /// (ScheduleScreen) now lives inside the phone's Calendar tab, not the
 /// dashboard — Main still bridges the signal to it since it's the shared
 /// ancestor of both subtrees.
+/// Onboarding-2 T-2: TutorialOverlay is the same permanent-sibling pattern as
+/// EquipmentShopScreen. Main is also the rect-resolution bridge for its
+/// spotlight (onboarding_tutorial_overlay.md §3.2) — the overlay never
+/// resolves a BurnerPhone/BaseballDashboard node itself, it asks Main via
+/// TargetRectRequested and Main answers with GetGlobalRect() (or an empty
+/// Rect2 if the target isn't currently visible, e.g. the phone is on another
+/// tab), and BurnerPhone's Settings tab bridges its Replay button the same
+/// way ShopOpenRequested does.
 /// </summary>
 public sealed partial class Main : Node
 {
@@ -36,11 +45,16 @@ public sealed partial class Main : Node
     private Node _screenContainer = null!;
     private ScheduleScreen? _scheduleScreen;
     private EquipmentShopScreen _equipmentShop = null!;
+    private TutorialOverlay _tutorialOverlay = null!;
+    private BurnerPhone? _burnerPhone;
+    private BaseballDashboard? _baseballDashboard;
 
     public override void _Ready()
     {
         _screenContainer = GetNode<Node>("ScreenContainer");
         _equipmentShop = GetNode<EquipmentShopScreen>("EquipmentShopScreen");
+        _tutorialOverlay = GetNode<TutorialOverlay>("TutorialOverlay");
+        _tutorialOverlay.TargetRectRequested += OnTutorialTargetRectRequested;
         WarnIfProjectThemeMissing();
         ShowAppropriateScreen();
     }
@@ -100,10 +114,16 @@ public sealed partial class Main : Node
             var phone = shell.GetNode<BurnerPhone>("Margin/ShellLayout/Panels/BurnerPhone");
             phone.HustleLaunchRequested += OnHustleLaunchRequested;
             phone.ShopOpenRequested += OnShopOpenRequested;
+            phone.TutorialReplayRequested += OnTutorialReplayRequested;
+            _burnerPhone = phone;
+            _baseballDashboard = shell.GetNode<BaseballDashboard>("Margin/ShellLayout/Panels/BaseballDashboard");
+            TryOpenTutorial();
         }
         else
         {
             _scheduleScreen = null;
+            _burnerPhone = null;
+            _baseballDashboard = null;
             var newGameScreen = (NewGameScreen)NewGameScreenScene.Instantiate();
             newGameScreen.AvatarCreated += OnAvatarCreated;
             _screenContainer.AddChild(newGameScreen);
@@ -116,4 +136,70 @@ public sealed partial class Main : Node
         _scheduleScreen?.SelectWorkActivity((WorkActivity)workActivity);
 
     private void OnShopOpenRequested() => _equipmentShop.Open();
+
+    private void OnTutorialReplayRequested() => _tutorialOverlay.Open(0);
+
+    /// <summary>
+    /// onboarding_tutorial_overlay.md §3.3/§7 risk 2: opens the walkthrough
+    /// only after the shell exists and only on the HasAvatar branch — this is
+    /// reached from both spec call sites (the tail of _Ready when an avatar
+    /// already exists, and the tail of OnAvatarCreated for a brand-new one),
+    /// since both funnel through this single HasAvatar branch of
+    /// ShowAppropriateScreen. Save-compat guard: an absent tutorial_step key
+    /// on a save already past day 2 is a pre-slice save, not an unstarted
+    /// tutorial — mark it done and never show the overlay to a veteran
+    /// mid-career.
+    /// </summary>
+    private void TryOpenTutorial()
+    {
+        GameManager gm = GameManager.Instance!;
+        bool present = gm.GameState.TryGetInt64(GameStateKeys.TutorialStep, out long step);
+        if (!present)
+        {
+            if (gm.State.CurrentDay > 2)
+            {
+                gm.GameState.SetInt64(GameStateKeys.TutorialStep, -1);
+                return;
+            }
+            step = 0;
+        }
+        if (step < 0)
+        {
+            return;
+        }
+        // Persisted value is 1-based (GameStateKeys.TutorialStep: "1..N = the
+        // next step index to present"), matching the overlay's 1-based "Step
+        // N of 8" display; Open() takes a 0-based array index, so translate
+        // at this boundary. step == 0 (never shown) yields -1, which Open()
+        // clamps back to 0 — the same first-step landing as a fresh save.
+        _tutorialOverlay.Open((int)step - 1);
+    }
+
+    /// <summary>
+    /// The overlay's spotlight bridge (§3.2): resolves the requested target
+    /// against the dashboard/phone subtrees Main already owns and answers
+    /// with its current screen rect, or an empty Rect2 if the target isn't
+    /// resolvable right now (wrong phone tab, avatar lost mid-tutorial) so
+    /// the overlay degrades to a centered, unhighlighted card.
+    /// </summary>
+    private void OnTutorialTargetRectRequested(int target)
+    {
+        Control? resolved = (TutorialTarget)target switch
+        {
+            TutorialTarget.TimeBar =>
+                _baseballDashboard?.GetNodeOrNull<Control>("Layout/HeaderBand/HeaderRow/TimeControlBar"),
+            TutorialTarget.PhoneTabs =>
+                _burnerPhone?.GetNodeOrNull<Control>("Screen/ScreenLayout/PhoneTabs"),
+            TutorialTarget.PlanToday => _scheduleScreen,
+            TutorialTarget.NeedsCard =>
+                _burnerPhone?.GetNodeOrNull<Control>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/NeedsCard"),
+            TutorialTarget.BankFunds =>
+                _burnerPhone?.GetNodeOrNull<Control>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/FundsCard"),
+            TutorialTarget.SettingsSave =>
+                _burnerPhone?.GetNodeOrNull<Control>("Screen/ScreenLayout/PhoneTabs/Settings/SettingsScroll/SettingsLayout/SaveCard"),
+            _ => null,
+        };
+        Rect2 rect = resolved is not null && resolved.IsVisibleInTree() ? resolved.GetGlobalRect() : default;
+        _tutorialOverlay.SetTargetRect(rect);
+    }
 }
