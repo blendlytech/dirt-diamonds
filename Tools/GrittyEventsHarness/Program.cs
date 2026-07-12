@@ -71,6 +71,7 @@ internal static class Program
             RunTeammateExOfPartnerChecks();
             RunTierGpaChecks();
             RunHsOnboardingArcChecks();
+            RunDirtUnderworldArcChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -243,8 +244,8 @@ internal static class Program
         }
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
-            batchFiles.Length >= 9
-            && wholeFolder.Count == 79
+            batchFiles.Length >= 10
+            && wholeFolder.Count == 90
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -312,7 +313,18 @@ internal static class Program
             && wholeFolder.TryGetById("hs_error_costs_the_game", out _)
             && wholeFolder.TryGetById("hs_family_money_tight", out _)
             && wholeFolder.TryGetById("hs_college_letter", out _)
-            && wholeFolder.TryGetById("hs_scout_in_stands", out _),
+            && wholeFolder.TryGetById("hs_scout_in_stands", out _)
+            && wholeFolder.TryGetById("dirt_high_stakes_game", out _)
+            && wholeFolder.TryGetById("dirt_the_marker", out _)
+            && wholeFolder.TryGetById("dirt_debt_sold", out _)
+            && wholeFolder.TryGetById("dirt_run_the_package", out _)
+            && wholeFolder.TryGetById("dirt_lookout", out _)
+            && wholeFolder.TryGetById("dirt_sticky_fingers", out _)
+            && wholeFolder.TryGetById("dirt_busted", out _)
+            && wholeFolder.TryGetById("dirt_family_finds_out", out _)
+            && wholeFolder.TryGetById("dirt_hot_merch", out _)
+            && wholeFolder.TryGetById("dirt_street_rep", out _)
+            && wholeFolder.TryGetById("dirt_clean_break", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -376,7 +388,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 79 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 90 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -2244,6 +2256,267 @@ internal static class Program
                 parentRow.TeamId == null && parentRow.Tier == -1);
             Check("gpa round-trips through the real Player_Person join",
                 Math.Abs(hsRow.Gpa - 3.8) < 1e-9);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h5. DIRT-1 underworld arc (criminal_underworld_content_arc.md §5-7)
+    // ------------------------------------------------------------------
+
+    private static readonly string[] DirtUnderworldEventIds =
+    {
+        "dirt_high_stakes_game", "dirt_the_marker", "dirt_debt_sold", "dirt_run_the_package",
+        "dirt_lookout", "dirt_sticky_fingers", "dirt_busted", "dirt_family_finds_out",
+        "dirt_hot_merch", "dirt_street_rep", "dirt_clean_break",
+    };
+
+    private static void RunDirtUnderworldArcChecks()
+    {
+        Console.WriteLine("--- DIRT-1 underworld arc (criminal_underworld_content_arc.md) ---");
+
+        string dirtJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "dirt_underworld_events.json"));
+        GrittyEventLibrary dirt = GrittyEventJson.Parse(dirtJson);
+
+        static bool SetsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.SetFlag && k.FlagName == flag);
+        static bool ClearsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.ClearFlag && k.FlagName == flag);
+        static bool ReadsFlagActive(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == flag);
+        static bool ReadsFlagInactive(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagInactive && p.FlagName == flag);
+
+        // §5.1's review pins: all 11 events resolve and are avatar-scoped —
+        // the authoring contract §4.3 call that sidesteps the scope:any
+        // weight-blast-radius hazard and the NULL-team tier-leak class for
+        // free (check_event_graph_integrity #6/#7).
+        int avatarScopedCount = 0;
+        foreach (string id in DirtUnderworldEventIds)
+        {
+            if (dirt.TryGetById(id, out GrittyEventDefinition e) && e.Scope == EventScope.Avatar)
+            {
+                avatarScopedCount++;
+            }
+        }
+        Check("all 11 DIRT-1 events resolve and are avatar-scoped",
+            avatarScopedCount == DirtUnderworldEventIds.Length, $"{avatarScopedCount}/{DirtUnderworldEventIds.Length}");
+
+        // Design doc §2 collision #1: DIRT-* tracks legal jeopardy with
+        // boolean flags only — detection_risk (the PED meter) is never read
+        // or written anywhere in this batch.
+        bool touchesDetectionRisk = dirt.Events.Any(e =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.DetectionRisk)
+            || e.Choices.Any(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.DetectionRisk)));
+        Check("DIRT-1 never reads or writes detection_risk (the PED meter, not a general heat gauge — §2 collision #1)",
+            !touchesDetectionRisk);
+
+        // §5.1's flag lifecycle table, pinned choice by choice.
+        dirt.TryGetById("dirt_high_stakes_game", out GrittyEventDefinition highStakes);
+        dirt.TryGetById("dirt_the_marker", out GrittyEventDefinition marker);
+        dirt.TryGetById("dirt_debt_sold", out GrittyEventDefinition debtSold);
+        dirt.TryGetById("dirt_run_the_package", out GrittyEventDefinition runPackage);
+        dirt.TryGetById("dirt_sticky_fingers", out GrittyEventDefinition stickyFingers);
+        dirt.TryGetById("dirt_busted", out GrittyEventDefinition busted);
+        dirt.TryGetById("dirt_clean_break", out GrittyEventDefinition cleanBreak);
+
+        EventChoice chase = highStakes.Choices.Single(c => c.Id == "chase_the_pot");
+        Check("owes_the_book: set by dirt_high_stakes_game's chase_the_pot, read by dirt_the_marker",
+            SetsFlag(chase, "owes_the_book") && ReadsFlagActive(marker, "owes_the_book"));
+
+        EventChoice pay = marker.Choices.Single(c => c.Id == "pay_the_marker");
+        EventChoice workItOff = marker.Choices.Single(c => c.Id == "work_it_off");
+        EventChoice duck = marker.Choices.Single(c => c.Id == "duck_the_call");
+        Check("owes_the_book cleared by dirt_the_marker's pay_the_marker",
+            ClearsFlag(pay, "owes_the_book"));
+        Check("running_errands set by dirt_the_marker's work_it_off, read by dirt_run_the_package",
+            SetsFlag(workItOff, "running_errands") && ReadsFlagActive(runPackage, "running_errands"));
+        Check("dodging_debt set by dirt_the_marker's duck_the_call, read by dirt_debt_sold",
+            SetsFlag(duck, "dodging_debt") && ReadsFlagActive(debtSold, "dodging_debt"));
+
+        Check("dirt_debt_sold gates on flag_inactive compromised_syndicate and EVERY choice converges into the shipped syndicate spine: sets compromised_syndicate + in_the_life, clears dodging_debt + owes_the_book",
+            ReadsFlagInactive(debtSold, "compromised_syndicate")
+            && debtSold.Choices.All(c =>
+                SetsFlag(c, "compromised_syndicate") && SetsFlag(c, "in_the_life")
+                && ClearsFlag(c, "dodging_debt") && ClearsFlag(c, "owes_the_book")));
+
+        EventChoice cleanRun = runPackage.Choices.Single(c => c.Id == "clean_run");
+        Check("dirt_run_the_package's clean_run clears running_errands AND owes_the_book, sets in_the_life",
+            ClearsFlag(cleanRun, "running_errands") && ClearsFlag(cleanRun, "owes_the_book") && SetsFlag(cleanRun, "in_the_life"));
+
+        EventChoice grabIt = stickyFingers.Choices.Single(c => c.Id == "grab_it_and_go");
+        EventChoice takePlea = busted.Choices.Single(c => c.Id == "take_the_plea");
+        Check("been_lifting: set by dirt_sticky_fingers's grab_it_and_go, read by dirt_busted, cleared by take_the_plea",
+            SetsFlag(grabIt, "been_lifting") && ReadsFlagActive(busted, "been_lifting") && ClearsFlag(takePlea, "been_lifting"));
+        Check("dirt_busted's take_the_plea produces an arrest absence",
+            takePlea.Consequences.Any(k => k.Kind == ConsequenceKind.Absence && k.AbsenceReason == AbsenceReason.Arrest && k.Amount >= 1));
+
+        EventChoice getOutClean = cleanBreak.Choices.Single(c => c.Id == "get_out_clean");
+        Check("dirt_clean_break's get_out_clean clears in_the_life AND been_lifting — the arc's one true exit",
+            ClearsFlag(getOutClean, "in_the_life") && ClearsFlag(getOutClean, "been_lifting"));
+
+        // check_event_graph_integrity #2/#3: every flag this batch sets is
+        // read by at least one prerequisite in the batch — no orphans, no
+        // dead ends (in_the_life is a disclosed DIRT-2 forward hook, but it's
+        // already read three times within this file alone).
+        string[] readFlags = { "owes_the_book", "dodging_debt", "running_errands", "been_lifting", "in_the_life", "compromised_syndicate" };
+        int flagsRead = readFlags.Count(flag => dirt.Events.Any(e => ReadsFlagActive(e, flag) || ReadsFlagInactive(e, flag)));
+        Check("every flag DIRT-1 sets is read by at least one prerequisite in the batch (no orphaned flag)",
+            flagsRead == readFlags.Length, $"{flagsRead}/{readFlags.Length}");
+
+        // Check #8: the_bookie resolves in the registry added in this same change.
+        string contactsPath = Path.Combine(_repoRoot, "Assets", "Narrative", "Contacts", "contacts.json");
+        ContactRegistry registry = ContactJson.Parse(File.ReadAllText(contactsPath));
+        Check("the_bookie resolves in the contact registry as 'Sal'",
+            registry.Contains("the_bookie") && registry.Resolve("the_bookie").DisplayName == "Sal");
+        Check("dirt_high_stakes_game/dirt_the_marker/dirt_run_the_package are tagged the_bookie",
+            highStakes.ContactId == "the_bookie" && marker.ContactId == "the_bookie" && runPackage.ContactId == "the_bookie");
+
+        // §7.3 gate 1a: the shipped bribe on-ramp still reaches syndicate_shakedown
+        // at exactly +365 — a deterministic weight-1.0 mirror of the shipped
+        // core_events.json pair (the same technique RunCascadeAndWriterChecks
+        // uses), re-affirmed here alongside its debt-path sibling below so
+        // "both on-ramps converge" is proven by one arc-specific check.
+        {
+            const string bribeMirrorJson =
+                """
+                { "events": [
+                  { "id": "bribe_mirror", "scope": "any", "weight": 1.0,
+                    "prerequisites": [
+                      { "field": "funds", "op": "<", "value": 500 },
+                      { "field": "recklessness", "op": ">", "value": 75 },
+                      { "flag_inactive": "compromised_syndicate" } ],
+                    "choices": [ { "id": "take", "consequences": [
+                      { "type": "set_flag", "flag": "compromised_syndicate" } ] } ] },
+                  { "id": "shakedown_mirror", "scope": "any", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "compromised_syndicate", "min_days_since": 365 } ],
+                    "choices": [ { "id": "pay", "consequences": [ { "type": "funds", "amount": -1 } ] } ] }
+                ] }
+                """;
+            using World world = World.Create("dirtBribePath", GrittyEventJson.Parse(bribeMirrorJson));
+            world.AddPlayer("bribeMark", age: 27, teamId: 1, funds: 100, recklessness: 90);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: bribe fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDays(365); // day 367 = 2 + 365
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            Check("BOTH on-ramps converge (1/2 — bribe path): back_alley_bribe's shape reaches syndicate_shakedown at exactly +365",
+                world.Fired.Any(f => f.EventId == "bribe_mirror" && f.Day == 2)
+                && world.Fired.Any(f => f.EventId == "shakedown_mirror" && f.Day == 367));
+        }
+
+        // §7.3 gate 1b: the NEW debt spiral on-ramp — chase_the_pot ->
+        // duck_the_call -> the grim debt_sold choice — reaches the SAME
+        // shakedown shape at exactly +365 from the day compromised_syndicate
+        // is planted (not from the day the game was played). Weight-1.0
+        // avatar-scope mirrors of the real gate/consequence shapes; the
+        // high_stakes_mirror carries a long test-only cooldown so it cannot
+        // re-fire after debt_sold_mirror clears owes_the_book and re-opens
+        // its gate, which would otherwise re-run the whole chain during the
+        // 365-day catch-up sweep and risk colliding with shakedown_mirror's
+        // own day (definition-order-wins same-subject-same-day rule).
+        // marker_mirror carries an extra flag_inactive:dodging_debt gate
+        // (stricter than the real dirt_the_marker, which paces refires with
+        // only a 14-day cooldown) so THIS deterministic single-choice mirror
+        // can't refire "duck" every 14 days and keep resetting dodging_debt's
+        // own clock, which would starve debt_sold_mirror's min_days_since:30
+        // window forever -- a single-choice mirror always re-picks the same
+        // branch, unlike the real content's weighted 3-choice autopilot draw
+        // (pay/work/duck), which converges away from repeat-ducking almost
+        // every real playthrough.
+        {
+            const string debtMirrorJson =
+                """
+                { "events": [
+                  { "id": "high_stakes_mirror", "scope": "avatar", "weight": 1.0, "cooldown_days": 500,
+                    "prerequisites": [
+                      { "field": "recklessness", "op": ">", "value": 45 },
+                      { "flag_inactive": "owes_the_book" } ],
+                    "choices": [ { "id": "chase", "consequences": [
+                      { "type": "set_flag", "flag": "owes_the_book" } ] } ] },
+                  { "id": "marker_mirror", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [
+                      { "flag_active": "owes_the_book", "min_days_since": 10 },
+                      { "flag_inactive": "dodging_debt" } ],
+                    "choices": [ { "id": "duck", "consequences": [
+                      { "type": "set_flag", "flag": "dodging_debt" } ] } ] },
+                  { "id": "debt_sold_mirror", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [
+                      { "flag_active": "dodging_debt", "min_days_since": 30 },
+                      { "flag_inactive": "compromised_syndicate" } ],
+                    "choices": [ { "id": "sold", "consequences": [
+                      { "type": "set_flag", "flag": "compromised_syndicate" },
+                      { "type": "set_flag", "flag": "in_the_life" },
+                      { "type": "clear_flag", "flag": "dodging_debt" },
+                      { "type": "clear_flag", "flag": "owes_the_book" } ] } ] },
+                  { "id": "shakedown_mirror", "scope": "any", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "compromised_syndicate", "min_days_since": 365 } ],
+                    "choices": [ { "id": "pay", "consequences": [ { "type": "funds", "amount": -1 } ] } ] }
+                ] }
+                """;
+            using World world = World.Create("dirtDebtPath", GrittyEventJson.Parse(debtMirrorJson));
+            world.AddPlayer("debtHero", age: 22, teamId: 1, funds: 5000, recklessness: 60);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "debtHero");
+            world.Dispatcher.PollOnce(); // records the boot day (day 1)
+
+            world.Clock.AdvanceDay(); // day 2: high_stakes_mirror fires (chase) -> owes_the_book
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDays(10); // day 12 = 2 + 10: marker_mirror fires (duck) -> dodging_debt
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDays(30); // day 42 = 12 + 30: debt_sold_mirror fires -> compromised_syndicate
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("debtHero", flagRows);
+            Check("debt path lands: compromised_syndicate + in_the_life set on the debt_sold fire day, dodging_debt/owes_the_book cleared",
+                flagRows.Exists(f => f.FlagName == "compromised_syndicate" && f.SetOnDay == 42)
+                && flagRows.Exists(f => f.FlagName == "in_the_life")
+                && !flagRows.Exists(f => f.FlagName == "dodging_debt")
+                && !flagRows.Exists(f => f.FlagName == "owes_the_book"));
+
+            world.Clock.AdvanceDays(365); // day 407 = 42 + 365
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            Check("BOTH on-ramps converge (2/2 — debt path): dirt_high_stakes_game(chase)->dirt_the_marker(duck)->dirt_debt_sold reaches syndicate_shakedown at exactly +365",
+                world.Fired.Any(f => f.EventId == "shakedown_mirror" && f.Day == 407),
+                string.Join(",", world.Fired.Select(f => $"{f.EventId}@{f.Day}")));
+        }
+
+        // §7.3 gate 3: the bust benches — dirt_busted's take_the_plea (arrest,
+        // 2 days) computes until_day = fire_day + days + 1, exactly the
+        // roster_availability_triad.md contract.
+        {
+            using World world = World.Create("dirtBustedAbsence", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "busted_mirror", "scope": "any", "weight": 1.0, "choices": [ { "id": "take_the_plea", "consequences": [ { "type": "absence", "reason": "arrest", "days": 2 } ] } ] } ] }"""));
+            world.AddPlayer("busted", age: 20, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("busted", out PlayerAbsenceRow absence);
+            Check("the bust benches: an arrest absence lands with until_day = fire_day(2) + days(2) + 1",
+                hasAbsence && absence.Reason == AbsenceReason.Arrest && absence.UntilDay == 5,
+                hasAbsence ? $"reason={absence.Reason} until={absence.UntilDay}" : "no absence row");
         }
     }
 

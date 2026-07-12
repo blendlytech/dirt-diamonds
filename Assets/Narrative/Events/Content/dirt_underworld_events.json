@@ -1,0 +1,342 @@
+{
+  "//": "DIRT-1 'The On-Ramp' (docs/design/criminal_underworld_content_arc.md §5), Sonnet 5. First batch of the criminal-underworld content arc: a gambling-debt spiral that converges into the SHIPPED compromised_syndicate -> syndicate_shakedown cascade (core_events.json), giving that cascade a second, content-authored on-ramp alongside back_alley_bribe. All 11 events are scope:'avatar' per the authoring contract §4.3 (sidesteps the scope:any weight-blast-radius and NULL-team tier-leak hazards for free). Flag lifecycle (owes_the_book -> dodging_debt/running_errands -> in_the_life, converging on compromised_syndicate) follows §5.1's table exactly; no orphaned flags, no dead-end set_flags (in_the_life is a disclosed DIRT-2 forward hook but is already read three times within this batch). detection_risk is never read or written anywhere in this file -- collision #1 in §2: DIRT-* tracks legal jeopardy with boolean flags only (owes_the_book/dodging_debt/running_errands/been_lifting/in_the_life), never the PED meter. The syndicate stays faceless on 'unknown' (dirt_debt_sold); the one new NAMED associate is the_bookie ('Sal'), added to contacts.json in this change (role:friend, zero registry code touch). Cooldown additions beyond the design doc's explicit numbers (the doc left these unspecified for several slots): dirt_the_marker (14d -- 'work it off'/'duck the call' both leave owes_the_book active, so the marker gate stays satisfied and needs pacing), dirt_lookout (30d -- none of its choices clear its gate), dirt_busted (30d -- 'fight it' keeps been_lifting active), dirt_family_finds_out (40d -- by design 'a promise is not an exit', nothing clears in_the_life), dirt_street_rep (40d -- same), dirt_clean_break (30d -- 'one last score' deliberately keeps in_the_life so the pull-back-in can recur, per the doc's own note). Every other event either clears its own gate on at least one branch or was given an explicit cooldown/min_days_since by the doc; check_event_graph_integrity #4 (no unpaced loops) holds throughout. dirt_hot_merch's optional bad_product engine-flag tie-in (doc §5.2 item 9, 'author's call, disclose if used') was NOT used -- kept as pure fencing-flavor texture, no HustleService coupling in this batch. dirt_busted's contact is 'unknown' (booking is faceless, mirroring roster_availability_events.json's narcotics_arrest) rather than agent_diaz, since this beat is tier-agnostic petty crime, not the pro-era legal-jeopardy triad. Weights: highest is dirt_debt_sold at 0.5 (avatar scope, single subject -- the ×136-subject blast-radius concern in check #6 doesn't apply), everything else <=0.30, matching §5.1's ceiling.",
+  "events": [
+    {
+      "id": "dirt_high_stakes_game",
+      "scope": "avatar",
+      "weight": 0.1,
+      "cooldown_days": 60,
+      "contact": "the_bookie",
+      "category": "hustle",
+      "prompt": "A card game in the back room of Sal's place has a seat open, and the buy-in is exactly the money you don't have.",
+      "prerequisites": [
+        { "field": "recklessness", "op": ">", "value": 45 },
+        { "flag_inactive": "owes_the_book" }
+      ],
+      "choices": [
+        { "id": "cash_out_early", "autopilot_weight": 3, "label": "Cash out early",
+          "outcome": "You take your small win off the table before it turns into a story you have to explain later.",
+          "consequences": [
+            { "type": "funds", "amount": 180 },
+            { "type": "stress", "amount": -8 }
+          ] },
+        { "id": "chase_the_pot", "autopilot_weight": 1, "label": "Chase the pot",
+          "outcome": "You push everything back in. The cards don't cooperate, and the number you owe by the end of the night is not a number you have.",
+          "consequences": [
+            { "type": "funds", "amount": -350 },
+            { "type": "set_flag", "flag": "owes_the_book" },
+            { "type": "stress", "amount": 12 }
+          ] },
+        { "id": "dont_sit_down", "autopilot_weight": 2, "label": "Don't sit down",
+          "outcome": "You watch one hand from the doorway and decide your rent doesn't need this kind of help.",
+          "consequences": [
+            { "type": "stress", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_the_marker",
+      "scope": "avatar",
+      "weight": 0.3,
+      "cooldown_days": 14,
+      "contact": "the_bookie",
+      "category": "hustle",
+      "prompt": "Sal finds you outside practice like he already knew your schedule. 'You know why I'm here.'",
+      "prerequisites": [
+        { "flag_active": "owes_the_book", "min_days_since": 10 }
+      ],
+      "choices": [
+        { "id": "pay_the_marker", "autopilot_weight": 2, "label": "Pay the marker",
+          "outcome": "You hand over the principal and the vig without a word. Sal counts it twice and nods once.",
+          "text_message": { "body": "We're square.", "delay_days": 1 },
+          "consequences": [
+            { "type": "funds", "amount": -450 },
+            { "type": "clear_flag", "flag": "owes_the_book" },
+            { "type": "person_stat", "stat": "discipline", "amount": 3 }
+          ] },
+        { "id": "work_it_off", "autopilot_weight": 1, "label": "Work it off",
+          "outcome": "Sal says he's got 'something lighter' if you're short on cash but not on time. You don't love how easy he makes it sound.",
+          "consequences": [
+            { "type": "set_flag", "flag": "running_errands" },
+            { "type": "funds", "amount": 80 },
+            { "type": "stress", "amount": 8 }
+          ] },
+        { "id": "duck_the_call", "autopilot_weight": 1, "label": "Duck the call",
+          "outcome": "You let it ring. Whatever this buys you, it isn't peace of mind.",
+          "consequences": [
+            { "type": "set_flag", "flag": "dodging_debt" },
+            { "type": "stress", "amount": 10 },
+            { "type": "person_stat", "stat": "morality", "amount": -3 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_debt_sold",
+      "scope": "avatar",
+      "weight": 0.5,
+      "contact": "unknown",
+      "category": "hustle",
+      "prompt": "The number that calls isn't Sal's. Whoever bought your marker doesn't do small talk, and they already know where you practice.",
+      "prerequisites": [
+        { "flag_active": "dodging_debt", "min_days_since": 30 },
+        { "flag_inactive": "compromised_syndicate" }
+      ],
+      "choices": [
+        { "id": "accept_new_terms", "autopilot_weight": 2, "label": "Accept their terms",
+          "outcome": "There's no negotiating a number this size with people like this -- only agreeing to whatever comes next.",
+          "consequences": [
+            { "type": "funds", "amount": -200 },
+            { "type": "set_flag", "flag": "compromised_syndicate" },
+            { "type": "set_flag", "flag": "in_the_life" },
+            { "type": "clear_flag", "flag": "dodging_debt" },
+            { "type": "clear_flag", "flag": "owes_the_book" },
+            { "type": "stress", "amount": 35 }
+          ] },
+        { "id": "try_to_disappear", "autopilot_weight": 1, "label": "Try to disappear",
+          "outcome": "You change your number. It buys you exactly four days before a different number finds you anyway.",
+          "consequences": [
+            { "type": "set_flag", "flag": "compromised_syndicate" },
+            { "type": "set_flag", "flag": "in_the_life" },
+            { "type": "clear_flag", "flag": "dodging_debt" },
+            { "type": "clear_flag", "flag": "owes_the_book" },
+            { "type": "stress", "amount": 45 },
+            { "type": "person_stat", "stat": "morality", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_run_the_package",
+      "scope": "avatar",
+      "weight": 0.25,
+      "cooldown_days": 21,
+      "contact": "the_bookie",
+      "category": "hustle",
+      "prompt": "Sal's 'something lighter' turns out to be a gym bag and an address. 'Don't open it. Don't be late.'",
+      "prerequisites": [
+        { "flag_active": "running_errands", "min_days_since": 7 }
+      ],
+      "choices": [
+        { "id": "clean_run", "autopilot_weight": 2, "label": "Make the clean run",
+          "outcome": "You drop the bag, take the envelope, and drive home under the speed limit the whole way.",
+          "consequences": [
+            { "type": "funds", "amount": 220 },
+            { "type": "clear_flag", "flag": "running_errands" },
+            { "type": "clear_flag", "flag": "owes_the_book" },
+            { "type": "set_flag", "flag": "in_the_life" }
+          ] },
+        { "id": "keep_the_extra", "autopilot_weight": 1, "label": "Skim a little off the top",
+          "outcome": "You pocket a little extra before the drop and hope nobody's counting as closely as you are.",
+          "consequences": [
+            { "type": "funds", "amount": 350 },
+            { "type": "person_stat", "stat": "morality", "amount": -3 },
+            { "type": "set_flag", "flag": "in_the_life" }
+          ] },
+        { "id": "cold_feet", "autopilot_weight": 1, "label": "Get cold feet, stall the drop",
+          "outcome": "You sit in the car for twenty minutes before you finally go through with it, and Sal notices you're late.",
+          "consequences": [
+            { "type": "stress", "amount": 10 },
+            { "type": "person_stat", "stat": "discipline", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_lookout",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 30,
+      "contact": "hs_friend",
+      "category": "hustle",
+      "prompt": "Marcus wants a lookout for something he won't fully explain, and he's offering actual cash for standing on a corner.",
+      "prerequisites": [
+        { "field": "tier", "op": "==", "value": 0 },
+        { "field": "funds", "op": "<", "value": 150 },
+        { "flag_active": "hs_started", "min_days_since": 14 }
+      ],
+      "choices": [
+        { "id": "stand_lookout", "autopilot_weight": 1, "label": "Stand lookout",
+          "outcome": "Nothing happens, which is the whole job. Marcus pays you anyway, like it's a bigger deal than it looked.",
+          "consequences": [
+            { "type": "funds", "amount": 60 },
+            { "type": "person_stat", "stat": "morality", "amount": -2 },
+            { "type": "stress", "amount": 6 }
+          ] },
+        { "id": "walk_home", "autopilot_weight": 2, "label": "Walk home instead",
+          "outcome": "You tell him you're good and head home. Marcus shrugs like he expected that.",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 2 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_sticky_fingers",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 45,
+      "category": "hustle",
+      "prompt": "The gas station's cameras are pointed at the register, not the aisle you're standing in, and your wallet is doing that thing where it's basically empty.",
+      "prerequisites": [
+        { "field": "funds", "op": "<", "value": 200 }
+      ],
+      "choices": [
+        { "id": "grab_it_and_go", "autopilot_weight": 1, "label": "Grab it and go",
+          "outcome": "It's in your pocket and you're out the door before you've really decided to do it.",
+          "consequences": [
+            { "type": "funds", "amount": 40 },
+            { "type": "person_stat", "stat": "morality", "amount": -3 },
+            { "type": "stress", "amount": 6 },
+            { "type": "set_flag", "flag": "been_lifting" }
+          ] },
+        { "id": "put_it_back", "autopilot_weight": 2, "label": "Put it back",
+          "outcome": "You set it back on the shelf and buy nothing. Small thing. Feels bigger than it should.",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "stress", "amount": -4 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_busted",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 30,
+      "contact": "unknown",
+      "category": "hustle",
+      "prompt": "A hand closes on your shoulder before you're two steps out the door. Loss prevention, and they've been watching longer than you thought.",
+      "prerequisites": [
+        { "flag_active": "been_lifting", "min_days_since": 20 }
+      ],
+      "choices": [
+        { "id": "take_the_plea", "autopilot_weight": 2, "label": "Take the plea",
+          "outcome": "A lawyer you can barely afford gets it down to a fine and a slap on the wrist. It still costs you two days you don't get back.",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 2 },
+            { "type": "funds", "amount": -300 },
+            { "type": "clear_flag", "flag": "been_lifting" },
+            { "type": "person_stat", "stat": "reputation", "amount": -4 },
+            { "type": "stress", "amount": 10 }
+          ] },
+        { "id": "fight_it", "autopilot_weight": 1, "label": "Fight it",
+          "outcome": "You fight the charge on principle. It costs more, takes longer, and the outcome is about the same.",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 3 },
+            { "type": "funds", "amount": -700 },
+            { "type": "stress", "amount": 25 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_family_finds_out",
+      "scope": "avatar",
+      "weight": 0.12,
+      "cooldown_days": 40,
+      "contact": "family_mom",
+      "category": "family",
+      "prompt": "Mom sets a stack of unexplained cash down on the kitchen table without a word, and the silence after is worse than any question would be.",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 30 }
+      ],
+      "choices": [
+        { "id": "promise_to_stop", "autopilot_weight": 2, "label": "Promise you'll stop",
+          "outcome": "You promise. She wants to believe you, and for a night, so do you.",
+          "consequences": [
+            { "type": "stress", "amount": -8 },
+            { "type": "person_stat", "stat": "maturity", "amount": 3 }
+          ] },
+        { "id": "lie_about_the_money", "autopilot_weight": 1, "label": "Lie about where it came from",
+          "outcome": "You make something up that almost holds together. She doesn't push. That's its own kind of answer.",
+          "consequences": [
+            { "type": "person_stat", "stat": "morality", "amount": -3 },
+            { "type": "stress", "amount": 6 }
+          ] },
+        { "id": "tell_them_the_truth", "autopilot_weight": 1, "label": "Tell her the truth",
+          "outcome": "You tell her everything. It's a hard conversation, and somehow an honest one is still better than the lie would've been.",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 3 },
+            { "type": "stress", "amount": 5 },
+            { "type": "person_stat", "stat": "morality", "amount": 3 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_hot_merch",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 30,
+      "category": "hustle",
+      "prompt": "A guy from the old crew has a car trunk full of things that fell off a truck, and he's offering a cut just to make a few calls.",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 5 }
+      ],
+      "choices": [
+        { "id": "move_it", "autopilot_weight": 1, "label": "Make the calls, move it",
+          "outcome": "You make a few calls, everything moves, and the cut lands in your pocket by the weekend.",
+          "consequences": [
+            { "type": "funds", "amount": 150 },
+            { "type": "person_stat", "stat": "morality", "amount": -3 },
+            { "type": "stress", "amount": 8 }
+          ] },
+        { "id": "not_my_problem", "autopilot_weight": 2, "label": "Tell him it's not your problem",
+          "outcome": "You tell him you're out on this one. He doesn't argue, just moves on to someone who won't say no.",
+          "consequences": [
+            { "type": "stress", "amount": -4 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_street_rep",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 40,
+      "category": "hustle",
+      "prompt": "People at the field talk different around you now -- half respect, half distance, like the dirt on you finally shows.",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 45 }
+      ],
+      "choices": [
+        { "id": "lean_into_it", "autopilot_weight": 2, "label": "Lean into the reputation",
+          "outcome": "You let the reputation do some of the talking for you. People stop testing you as often.",
+          "consequences": [
+            { "type": "person_stat", "stat": "reputation", "amount": -3 },
+            { "type": "person_stat", "stat": "social_status", "amount": 3 },
+            { "type": "funds", "amount": 50 }
+          ] },
+        { "id": "keep_a_low_profile", "autopilot_weight": 1, "label": "Keep a low profile",
+          "outcome": "You go out of your way to seem like exactly what you used to be. Fewer people buy it than you'd like.",
+          "consequences": [
+            { "type": "person_stat", "stat": "reputation", "amount": 2 },
+            { "type": "person_stat", "stat": "social_status", "amount": -2 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_clean_break",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 30,
+      "contact": "coach_reyes",
+      "category": "hustle",
+      "prompt": "Coach Reyes pulls you aside after everyone else has cleared the clubhouse. 'Whatever you've got going on outside this building -- it ends, or you do. Your call.'",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 60 }
+      ],
+      "choices": [
+        { "id": "get_out_clean", "autopilot_weight": 2, "label": "Get out clean",
+          "outcome": "You make the calls that end it -- all of it -- and brace for a cost that never quite comes due the way you expected.",
+          "consequences": [
+            { "type": "clear_flag", "flag": "in_the_life" },
+            { "type": "clear_flag", "flag": "been_lifting" },
+            { "type": "stress", "amount": -25 },
+            { "type": "person_stat", "stat": "morality", "amount": 4 },
+            { "type": "person_stat", "stat": "maturity", "amount": 4 }
+          ] },
+        { "id": "one_last_score", "autopilot_weight": 1, "label": "Just one last score",
+          "outcome": "You tell yourself this is the last one. You've told yourself that before.",
+          "consequences": [
+            { "type": "funds", "amount": 500 },
+            { "type": "person_stat", "stat": "morality", "amount": -4 },
+            { "type": "stress", "amount": 12 }
+          ] }
+      ]
+    }
+  ]
+}
