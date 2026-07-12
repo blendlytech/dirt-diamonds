@@ -754,6 +754,15 @@ public sealed partial class GameManager : Node
         LifeSim.AvatarSchoolAvailable =
             _avatarTierKnown && tier is LeagueTier.HS or LeagueTier.College;
 
+        // household_board.md: project the family's wealth tier in for the
+        // board rule — HS only (FamilyService's parental-support boundary,
+        // deliberately narrower than the school gate's HS-or-College), -1
+        // when uncovered so the life sim's share multiplier stays 1.
+        LifeSim.AvatarBoardWealthTier =
+            _avatarTierKnown && tier == LeagueTier.HS && Persons.TryGetFamily(avatarId, out FamilyBackgroundRow family)
+                ? family.WealthTier
+                : -1;
+
         // HS-5 §7.1: covers a loaded save whose avatar already has children
         // from a prior session — OnChildBorn keeps this live for a birth that
         // resolves mid-session, after this sync already ran.

@@ -55,7 +55,7 @@ public sealed partial class ScheduleScreen : PanelContainer
 
     [Export]
     public string NoFreeHoursText { get; set; } =
-        "No free hours — nobody eats today. Your needs will all fall and none will recover.";
+        "No free hours — your player has no time to eat today. All five needs will fall and none will recover.";
 
     [Export]
     public string OverAllocatedFormat { get; set; } = "Over by {0}h — reduce a block before confirming.";

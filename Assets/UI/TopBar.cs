@@ -29,11 +29,22 @@ public sealed partial class TopBar : PanelContainer
     private ProgressBar _hygieneBar = null!;
     private ProgressBar _socialBar = null!;
     private ProgressBar _fitnessBar = null!;
+    private Label _hungerLabel = null!;
+    private Label _sleepLabel = null!;
+    private Label _hygieneLabel = null!;
+    private Label _socialLabel = null!;
+    private Label _fitnessLabel = null!;
 
     private long _shownDay = long.MinValue;
     private double _shownFunds = double.NaN;
     private NeedsState _shownNeeds;
     private bool _needsInitialized;
+
+    // Same critical-needs cue as the Bank tab's NeedsCard: one bit per need
+    // at/under NeedsEngine.CriticalThreshold, so the label recolor happens
+    // only when a need actually crosses the line — the two surfaces can
+    // never disagree about when the crisis branch fires.
+    private int _shownCriticalMask = -1;
 
     public override void _Ready()
     {
@@ -44,6 +55,21 @@ public sealed partial class TopBar : PanelContainer
         _hygieneBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/HygieneRow/HygieneBar");
         _socialBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/SocialRow/SocialBar");
         _fitnessBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/FitnessRow/FitnessBar");
+        _hungerLabel = GetNode<Label>("TopBarLayout/NeedsRow/HungerRow/HungerLabel");
+        _sleepLabel = GetNode<Label>("TopBarLayout/NeedsRow/SleepRow/SleepLabel");
+        _hygieneLabel = GetNode<Label>("TopBarLayout/NeedsRow/HygieneRow/HygieneLabel");
+        _socialLabel = GetNode<Label>("TopBarLayout/NeedsRow/SocialRow/SocialLabel");
+        _fitnessLabel = GetNode<Label>("TopBarLayout/NeedsRow/FitnessRow/FitnessLabel");
+
+        // Marks are scene-authored at anchor 0.2; re-derived from the live
+        // constant so a CriticalThreshold retune can't leave the bar lying
+        // about where the crisis branch fires (Bank-tab idiom).
+        float criticalAnchor = NeedsEngine.CriticalThreshold / NeedsEngine.MaxNeed;
+        SetCriticalMarkAnchor(GetNode<ColorRect>("TopBarLayout/NeedsRow/HungerRow/HungerBar/HungerCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("TopBarLayout/NeedsRow/SleepRow/SleepBar/SleepCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("TopBarLayout/NeedsRow/HygieneRow/HygieneBar/HygieneCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("TopBarLayout/NeedsRow/SocialRow/SocialBar/SocialCriticalMark"), criticalAnchor);
+        SetCriticalMarkAnchor(GetNode<ColorRect>("TopBarLayout/NeedsRow/FitnessRow/FitnessBar/FitnessCriticalMark"), criticalAnchor);
     }
 
     public override void _Process(double delta)
@@ -87,7 +113,45 @@ public sealed partial class TopBar : PanelContainer
             _hygieneBar.Value = needs.Hygiene;
             _socialBar.Value = needs.Social;
             _fitnessBar.Value = needs.Fitness;
+            RefreshCriticalNeeds(in needs);
         }
+    }
+
+    private void RefreshCriticalNeeds(in NeedsState needs)
+    {
+        int mask = (needs.Hunger <= NeedsEngine.CriticalThreshold ? 1 : 0)
+            | (needs.Sleep <= NeedsEngine.CriticalThreshold ? 2 : 0)
+            | (needs.Hygiene <= NeedsEngine.CriticalThreshold ? 4 : 0)
+            | (needs.Social <= NeedsEngine.CriticalThreshold ? 8 : 0)
+            | (needs.Fitness <= NeedsEngine.CriticalThreshold ? 16 : 0);
+        if (mask == _shownCriticalMask)
+        {
+            return;
+        }
+        _shownCriticalMask = mask;
+        ApplyCriticalColor(_hungerLabel, (mask & 1) != 0);
+        ApplyCriticalColor(_sleepLabel, (mask & 2) != 0);
+        ApplyCriticalColor(_hygieneLabel, (mask & 4) != 0);
+        ApplyCriticalColor(_socialLabel, (mask & 8) != 0);
+        ApplyCriticalColor(_fitnessLabel, (mask & 16) != 0);
+    }
+
+    private static void ApplyCriticalColor(Label label, bool critical)
+    {
+        if (critical)
+        {
+            label.AddThemeColorOverride("font_color", UiColors.Danger);
+        }
+        else
+        {
+            label.RemoveThemeColorOverride("font_color");
+        }
+    }
+
+    private static void SetCriticalMarkAnchor(ColorRect mark, float anchor)
+    {
+        mark.AnchorLeft = anchor;
+        mark.AnchorRight = anchor;
     }
 
     private static bool NeedsEqual(in NeedsState a, in NeedsState b) =>

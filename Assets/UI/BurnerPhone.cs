@@ -156,6 +156,15 @@ public sealed partial class BurnerPhone : PanelContainer
     [Export]
     public string CostOfLivingFormat { get; set; } = "Cost of living: ${0:F0}/wk — next bill in {1}d";
 
+    // household_board.md §4: the two covered-household variants of the line
+    // above — fully covered has no bill to count down to.
+    [Export]
+    public string CostOfLivingCoveredText { get; set; } = "Cost of living: covered by your family.";
+
+    [Export]
+    public string CostOfLivingSharedFormat { get; set; } =
+        "Cost of living: your share ${0:F0}/wk — family covers the rest. Next bill in {1}d.";
+
     // Onboarding-overlay doc §4.1: the caption naming which need(s) crossed
     // NeedsEngine.CriticalThreshold — the literal behavior of the sim's
     // crisis branch, surfaced instead of invisible.
@@ -413,6 +422,7 @@ public sealed partial class BurnerPhone : PanelContainer
     private bool _bankInitialized;
     private double _shownFunds = double.NaN;
     private long _shownDaysUntilBill = -1;
+    private double _shownWeeklyBill = double.NaN;
     private int _shownEquipmentQuality = -1;
     private NeedsState _shownNeeds;
 
@@ -1138,12 +1148,21 @@ public sealed partial class BurnerPhone : PanelContainer
         long daysUntilBill = sinceBill == 0
             ? LifeSimManager.CostOfLivingCadenceDays
             : LifeSimManager.CostOfLivingCadenceDays - sinceBill;
-        if (!_bankInitialized || funds != _shownFunds || daysUntilBill != _shownDaysUntilBill)
+        // household_board.md §4: the effective bill after the family's share.
+        // Changes only on a tier/coverage change (rare), so it rides the same
+        // dirty flag as the countdown.
+        double weeklyBill = gm.LifeSim.AvatarWeeklyCostOfLiving;
+        if (!_bankInitialized || funds != _shownFunds || daysUntilBill != _shownDaysUntilBill || weeklyBill != _shownWeeklyBill)
         {
             _shownFunds = funds;
             _shownDaysUntilBill = daysUntilBill;
+            _shownWeeklyBill = weeklyBill;
             _fundsValueLabel.Text = string.Format(FundsFormat, funds);
-            _costOfLivingLabel.Text = string.Format(CostOfLivingFormat, LifeSimManager.WeeklyCostOfLiving, daysUntilBill);
+            _costOfLivingLabel.Text = weeklyBill <= 0.0
+                ? CostOfLivingCoveredText
+                : weeklyBill < LifeSimManager.WeeklyCostOfLiving
+                    ? string.Format(CostOfLivingSharedFormat, weeklyBill, daysUntilBill)
+                    : string.Format(CostOfLivingFormat, weeklyBill, daysUntilBill);
         }
 
         int equipmentQuality = gm.Gear.QualityFor(avatarId);

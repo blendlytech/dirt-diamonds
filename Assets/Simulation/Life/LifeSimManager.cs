@@ -124,6 +124,9 @@ public sealed class LifeSimManager
     // for headless callers. A set plan is consumed by the day it runs;
     // an unplanned tomorrow autopilots again (the pending-game-forfeit mirror).
     private string? _avatarPlayerId;
+    // The avatar's runtime, cached by SetAvatar so TickHour's household-board
+    // check is one ReferenceEquals — no string compare in the hot loop.
+    private NpcRuntime? _avatarRuntime;
     private DaySchedule _todaySchedule;
     private bool _hasTodaySchedule;
 
@@ -175,6 +178,31 @@ public sealed class LifeSimManager
     public bool AvatarWorkIsHustle { get; set; }
 
     /// <summary>
+    /// Household board (household_board.md): the avatar's §3 family wealth
+    /// tier when parents cover a share of his board — Eat's FinancialCost and
+    /// the weekly cost-of-living bill — or -1 for no coverage (the default:
+    /// pre-HS-2 saves, College/pro tiers, harness worlds). Like
+    /// <see cref="AvatarSchoolAvailable"/>, the bridge projects this in so the
+    /// assembly never reads the DB; the setter caches the share once so the
+    /// hot paths do no table lookup.
+    /// </summary>
+    public int AvatarBoardWealthTier
+    {
+        get => _avatarBoardWealthTier;
+        set
+        {
+            _avatarBoardWealthTier = value;
+            _avatarBoardShare = HouseholdBoard.ShareFor(value);
+        }
+    }
+
+    /// <summary>The avatar's effective weekly bill after the household covers its share — the number the Bank tab shows.</summary>
+    public double AvatarWeeklyCostOfLiving => WeeklyCostOfLiving * _avatarBoardShare;
+
+    private int _avatarBoardWealthTier = -1;
+    private double _avatarBoardShare = 1.0;
+
+    /// <summary>
     /// Points the daily clock at a tracked person (null clears it). Loud on an
     /// untracked id — the bridge seeds the avatar before pointing at it. Any
     /// pending plan is dropped: a succession heir starts on autopilot, never
@@ -188,6 +216,7 @@ public sealed class LifeSimManager
                 $"'{playerId}' is not a tracked life-sim person — seed it before making it the avatar.");
         }
         _avatarPlayerId = playerId;
+        _avatarRuntime = playerId is null ? null : _npcs[playerId];
         _hasTodaySchedule = false;
     }
 
@@ -533,7 +562,11 @@ public sealed class LifeSimManager
             // planned or autopiloted.
             if (costOfLivingDue && isAvatar)
             {
-                ApplyFundsDelta(npc, -WeeklyCostOfLiving);
+                // household_board.md: the family covers its share of the bill
+                // while the kid is a covered high-schooler (share 1.0 = the
+                // shipped full bill for Destitute, no-coverage, and every
+                // pre-slice save).
+                ApplyFundsDelta(npc, -WeeklyCostOfLiving * _avatarBoardShare);
             }
 
             // 9b: a planned avatar day runs its blocks instead of the
@@ -761,6 +794,12 @@ public sealed class LifeSimManager
 
     private void TickHour(NpcRuntime npc)
     {
+        // household_board.md: the avatar's meal price after the family's
+        // share; 1.0 for every NPC and for an uncovered avatar — both the
+        // decision (SelectAction) and the charge (ApplyAction) must see the
+        // same price or a broke covered kid would refuse meals he'd never pay for.
+        double eatCostShare = ReferenceEquals(npc, _avatarRuntime) ? _avatarBoardShare : 1.0;
+
         // Crisis = a critical need OR high stress (life_sim_ai.md's two override
         // triggers — the stress one live since Phase 7 gave the scalar a source).
         bool critical = npc.Needs.AnyAtOrBelow(NeedsEngine.CriticalThreshold)
@@ -773,16 +812,16 @@ public sealed class LifeSimManager
             // in-progress action is still the right call, let it run uninterrupted
             // (no double-restore); otherwise abandon it now, not when its
             // countdown happens to finish.
-            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _, npc.Stress);
+            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _, npc.Stress, eatCostShare);
             if (npc.BusyHoursRemaining <= 0 || picked != npc.CurrentAction)
             {
-                ApplyAction(npc, picked);
+                ApplyAction(npc, picked, eatCostShare);
             }
         }
         else if (npc.BusyHoursRemaining <= 0)
         {
-            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _, npc.Stress);
-            ApplyAction(npc, picked);
+            NpcActionId picked = UtilityCalculator.SelectAction(npc.Needs, npc.Funds, _weights, out _, npc.Stress, eatCostShare);
+            ApplyAction(npc, picked, eatCostShare);
         }
 
         if (npc.BusyHoursRemaining > 0)
@@ -802,7 +841,7 @@ public sealed class LifeSimManager
         npc.Stress = Math.Max(MinStress, npc.Stress - StressRelaxationPerHour);
     }
 
-    private static void ApplyAction(NpcRuntime npc, NpcActionId id)
+    private static void ApplyAction(NpcRuntime npc, NpcActionId id, double eatCostShare)
     {
         NpcActionDefinition def = ActionCatalog.Get(id);
         if (def.PrimaryNeed is NeedType need)
@@ -826,7 +865,10 @@ public sealed class LifeSimManager
                     def.PersonEffects[i].DeltaPerHour * def.TemporalCostHours);
             }
         }
-        ApplyFundsDelta(npc, -def.FinancialCost);
+        // household_board.md: Eat is the one action a covered household
+        // discounts — the id gate matters because LegalWork also carries
+        // PrimaryNeed Hunger, and its income must never scale.
+        ApplyFundsDelta(npc, id == NpcActionId.Eat ? -def.FinancialCost * eatCostShare : -def.FinancialCost);
         npc.CurrentAction = id;
         npc.BusyHoursRemaining = Math.Max(0, (int)MathF.Ceiling(def.TemporalCostHours) - 1);
     }

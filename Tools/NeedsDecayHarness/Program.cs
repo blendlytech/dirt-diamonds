@@ -66,6 +66,7 @@ internal static class Program
         RunLifeSimChecks();
         RunDailyClockChecks();
         RunSurvivalEconomyChecks();
+        RunHouseholdBoardChecks();
         RunPersonLayerChecks();
         RunRelationshipGraphChecks();
 
@@ -842,6 +843,132 @@ internal static class Program
             idlerFunds < SurvivalStartingFunds, $"{SurvivalStartingFunds:F0} -> {idlerFunds:F0}");
         Check("30-day solvency: working clearly beats not working",
             workerFunds > idlerFunds, $"worker {workerFunds:F0} vs idler {idlerFunds:F0}");
+    }
+
+    // ------------------------------------------------------------------
+    // Household board (docs/design/household_board.md): while a covered
+    // high-schooler, the family pays a wealth-tier share of Eat's cost and
+    // the weekly cost-of-living bill — and nothing else. Every OTHER check
+    // in this harness runs at the -1 no-coverage default, which is the
+    // slice's byte-identity guarantee; these drive the covered tiers.
+    // ------------------------------------------------------------------
+
+    private static void RunHouseholdBoardChecks()
+    {
+        Console.WriteLine("--- household board: family covers a wealth-tier share of meals + cost of living ---\n");
+
+        // Table pins — the design doc's §2 table cell by cell, plus the -1
+        // sentinel and out-of-range fallback every harness world relies on.
+        double[] expectedShares = { 1.0, 0.5, 0.0, 0.0, 0.0 };
+        bool tableExact = HouseholdBoard.BoardShareByTier.Length == expectedShares.Length;
+        for (int tier = 0; tableExact && tier < expectedShares.Length; tier++)
+        {
+            tableExact = HouseholdBoard.BoardShareByTier[tier] == expectedShares[tier]
+                && HouseholdBoard.ShareFor(tier) == expectedShares[tier];
+        }
+        Check("BoardShareByTier pins the §2 table (1.0 / 0.5 / 0 / 0 / 0)", tableExact);
+        Check("ShareFor(-1) and ShareFor(5) both fall back to 1.0 (full price — the byte-identity default)",
+            HouseholdBoard.ShareFor(-1) == 1.0 && HouseholdBoard.ShareFor(5) == 1.0);
+
+        // Decision-side: the shipped broke-crisis fixture (RunUtilityChecks #3)
+        // picks PickArgument because Eat is unaffordable at $0. A covered
+        // kid's meal is free — same needs, same $0 — and the pick flips to
+        // Eat: he raids the fridge instead of picking a fight.
+        NeedsState hungerCritical = NeedsState.FullySatisfied();
+        hungerCritical.Set(NeedType.Hunger, 10f);
+        NpcActionId coveredBrokePick = UtilityCalculator.SelectAction(
+            hungerCritical, 0.0, UtilityCalculator.DefaultWeights, out _, 0f, eatCostShare: 0.0);
+        Check("broke + hungry + meals covered picks Eat (the shipped broke-crisis fixture flips)",
+            coveredBrokePick == NpcActionId.Eat, $"picked {coveredBrokePick}");
+
+        // Execution-side, the meal debit: 8 Sleep + 15 Practice + exactly one
+        // free hour, avatar pinned hunger-critical, so that hour is a forced
+        // Eat in every world — and the day's ONLY spend (sleep/practice are
+        // free, day 1 carries no bill), so the funds delta IS the meal price.
+        double fullMeal = MealDayDelta(-1);
+        double halfMeal = MealDayDelta(1);
+        double freeMeal = MealDayDelta(2);
+        Check("one forced meal debits x1.0 / x0.5 / x0.0 by tier (-12 / -6 / 0 exactly)",
+            fullMeal == -12.0 && halfMeal == -6.0 && freeMeal == 0.0,
+            $"tier -1: {fullMeal:F2}, tier 1: {halfMeal:F2}, tier 2: {freeMeal:F2}");
+
+        // Execution-side, the weekly bill: 24h fully booked for 7 days (no
+        // free hours, no autopilot spend, no income) — the only funds
+        // movement is the day-7 cost-of-living debit, scaled by the share.
+        double fullBill = BilledWeekDelta(-1);
+        double halfBill = BilledWeekDelta(1);
+        double freeBill = BilledWeekDelta(2);
+        Check("the weekly bill debits x1.0 / x0.5 / x0.0 by tier (-70 / -35 / 0 exactly)",
+            fullBill == -LifeSimManager.WeeklyCostOfLiving
+            && halfBill == -LifeSimManager.WeeklyCostOfLiving * 0.5 && freeBill == 0.0,
+            $"tier -1: {fullBill:F2}, tier 1: {halfBill:F2}, tier 2: {freeBill:F2}");
+
+        // AvatarWeeklyCostOfLiving is the number the Bank tab renders.
+        (LifeSimManager probe, EventBus _) =
+            NewClockWorld("board-avatar", "board-bystander", 500.0, stress: 0f, markAvatar: true);
+        double defaultBill = probe.AvatarWeeklyCostOfLiving;
+        probe.AvatarBoardWealthTier = 1;
+        double sharedBill = probe.AvatarWeeklyCostOfLiving;
+        probe.AvatarBoardWealthTier = 4;
+        double coveredBill = probe.AvatarWeeklyCostOfLiving;
+        Check("AvatarWeeklyCostOfLiving tracks the tier (70 default, 35 shared, 0 covered)",
+            defaultBill == LifeSimManager.WeeklyCostOfLiving
+            && sharedBill == LifeSimManager.WeeklyCostOfLiving * 0.5 && coveredBill == 0.0,
+            $"default {defaultBill:F0}, tier 1 {sharedBill:F0}, tier 4 {coveredBill:F0}");
+
+        // The board rule must never leak into the background population: a
+        // bystander NPC's fortnight is byte-identical whether the avatar's
+        // household covers everything or nothing.
+        (LifeSimManager coveredWorld, EventBus coveredBus) =
+            NewClockWorld("board-avatar-b", "board-bystander-b", 500.0, stress: 0f, markAvatar: true);
+        coveredWorld.AvatarBoardWealthTier = 4;
+        (LifeSimManager defaultWorld, EventBus defaultBus) =
+            NewClockWorld("board-avatar-b", "board-bystander-b", 500.0, stress: 0f, markAvatar: true);
+        for (int day = 1; day <= 14; day++)
+        {
+            coveredBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            coveredBus.DispatchPending();
+            defaultBus.Publish(new DayAdvancedEvent(day, 2026, day));
+            defaultBus.DispatchPending();
+        }
+        Check("a bystander NPC's fortnight is byte-identical under tier 4 vs no coverage",
+            PersonStateIdentical(coveredWorld, defaultWorld, "board-bystander-b"));
+
+        Console.WriteLine();
+    }
+
+    /// <summary>Funds delta of the one-forced-meal day (see the meal-debit check) for a given board tier.</summary>
+    private static double MealDayDelta(int wealthTier)
+    {
+        const double StartFunds = 200.0;
+        (LifeSimManager world, EventBus bus) =
+            NewClockWorld("meal-avatar", "meal-bystander", StartFunds, stress: 0f, markAvatar: true);
+        world.AvatarBoardWealthTier = wealthTier;
+        NeedsState needs = NeedsState.FullySatisfied();
+        needs.Set(NeedType.Hunger, 10f);
+        world.SetNeeds("meal-avatar", needs);
+        world.SetTodaySchedule(new DaySchedule(8, 0, 15, 0, 0)); // 8 Sleep + 15 Practice + 1 free hour
+        bus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        bus.DispatchPending();
+        world.TryGetFunds("meal-avatar", out double funds);
+        return funds - StartFunds;
+    }
+
+    /// <summary>Funds delta of a fully-booked 7-day week (see the weekly-bill check) for a given board tier.</summary>
+    private static double BilledWeekDelta(int wealthTier)
+    {
+        const double StartFunds = 500.0;
+        (LifeSimManager world, EventBus bus) =
+            NewClockWorld("bill-avatar", "bill-bystander", StartFunds, stress: 0f, markAvatar: true);
+        world.AvatarBoardWealthTier = wealthTier;
+        for (int day = 1; day <= 7; day++)
+        {
+            world.SetTodaySchedule(new DaySchedule(8, 0, 16, 0, 0)); // 24h booked — zero free hours
+            bus.Publish(new DayAdvancedEvent(day, 2026, day));
+            bus.DispatchPending();
+        }
+        world.TryGetFunds("bill-avatar", out double funds);
+        return funds - StartFunds;
     }
 
     // ------------------------------------------------------------------

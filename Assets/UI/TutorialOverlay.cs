@@ -82,7 +82,7 @@ public sealed partial class TutorialOverlay : Control
             true),
         new(
             "Free hours are how he survives",
-            "Open Calendar → Plan Today. Sleep, School, Practice, Work — you allocate the day. Whatever you don't allocate is Free hours, and that is when your player eats, washes, rests and sees people. Book all 24 hours and nobody eats. Watch that line every day.",
+            "Open Calendar → Plan Today. Sleep, School, Practice, Work — you allocate the day. Whatever you don't allocate is Free hours: your player uses them on his own to eat, wash, rest and see people. You never schedule meals — he handles them himself, but only in free time. Book all 24 hours and he has no time to eat. Watch that line every day.",
             TutorialTarget.PlanToday,
             false),
         new(
@@ -92,7 +92,7 @@ public sealed partial class TutorialOverlay : Control
             false),
         new(
             "Money, bills, saving",
-            "Bank shows your cash and a cost-of-living bill every week. The game saves itself as you go — there's a Save Now in Settings if you want it, and a Replay tutorial button right under it if you ever want this again. Go play.",
+            "Bank shows your cash and the weekly cost of living — how much of that your family covers depends on how well-off they are. The game saves itself as you go — there's a Save Now in Settings if you want it, and a Replay tutorial button right under it if you ever want this again. Go play.",
             TutorialTarget.BankFunds,
             false),
     };

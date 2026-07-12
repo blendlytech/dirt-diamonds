@@ -40,7 +40,8 @@ The day-1 phone tutorial events (`tut_*`, the "Getting Started" thread) are **re
 - [ ] **Quit on step 4 → reload → resumes on step 4** (the `tutorial_step` KV round-trip).
 - [ ] **The existing mid-career test save never shows the overlay** (absent-key guard).
 - [ ] **Settings → Replay tutorial** reopens it from step 1.
-- [ ] **Plan Today's Free-hours line has three states:** book all 24 hours → danger-red *"No free hours — nobody eats today…"*; leave 1–4 free → amber *"tight"* warning; ≥5 free → the plain line explaining free hours are when your player eats/washes/rests/socializes.
+- [ ] **Plan Today's Free-hours line has three states:** book all 24 hours → danger-red *"No free hours — your player has no time to eat today…"*; leave 1–4 free → amber *"tight"* warning; ≥5 free → the plain line explaining free hours are when your player eats/washes/rests/socializes.
+- [ ] **Bank card's cost-of-living line matches your family** (household_board.md): Middle+ backstory → *"covered by your family"*; Working-class → *"your share $35/wk — family covers the rest"*; Destitute → the full $70 line. (The current test save is Middle — expect "covered".)
 - [ ] **Bank tab Needs card teaches itself:** *"Listed fastest-draining first."* under the heading; a thin red marker on every bar at the 20% line; hovering a row shows its drain-and-fix tooltip (Hunger's cites **~16h** to critical — the harness-measured figure); the card-level caption about acceleration + stress is present.
 - [ ] **Drive a need to 20 or below** (a few brutal days, or edit the test save): that row's label turns danger-red and a caption appears naming it (*"Hunger is critical — your player will drop what he's doing to fix it."*), and the 20-marker sits exactly where the color flips.
 - [ ] Confirm the test save is left pristine afterward, per the Slice-G discipline.

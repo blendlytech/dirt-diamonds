@@ -48,6 +48,16 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 value = 100
 
+[node name="HungerCriticalMark" type="ColorRect" parent="TopBarLayout/NeedsRow/HungerRow/HungerBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
+
 [node name="SleepRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -63,6 +73,16 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 value = 100
+
+[node name="SleepCriticalMark" type="ColorRect" parent="TopBarLayout/NeedsRow/SleepRow/SleepBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
 
 [node name="HygieneRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
 layout_mode = 2
@@ -80,6 +100,16 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 value = 100
 
+[node name="HygieneCriticalMark" type="ColorRect" parent="TopBarLayout/NeedsRow/HygieneRow/HygieneBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
+
 [node name="SocialRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -96,6 +126,16 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 value = 100
 
+[node name="SocialCriticalMark" type="ColorRect" parent="TopBarLayout/NeedsRow/SocialRow/SocialBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)
+
 [node name="FitnessRow" type="HBoxContainer" parent="TopBarLayout/NeedsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -111,3 +151,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 value = 100
+
+[node name="FitnessCriticalMark" type="ColorRect" parent="TopBarLayout/NeedsRow/FitnessRow/FitnessBar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.2
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 0.55)

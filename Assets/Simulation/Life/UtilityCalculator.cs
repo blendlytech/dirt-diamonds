@@ -83,7 +83,11 @@ public static class UtilityCalculator
     // Never filters/skips a candidate for unaffordability or high risk — only
     // penalizes via score — so a desperate or broke NPC can never come back
     // empty-handed (ActionCatalog.Idle is always a zero-cost candidate).
-    public static NpcActionId SelectAction(in NeedsState needs, double fundsAvailable, in ActionWeights weights, out float bestUtility, float stress0To100 = 0f)
+    // eatCostShare (household_board.md): the fraction of Eat's FinancialCost
+    // this person actually pays — the decision must see the same discounted
+    // price ApplyAction will charge, or a broke-but-covered avatar would
+    // flinch at a $12 he'd never pay. Scales the Eat row only; 1 for NPCs.
+    public static NpcActionId SelectAction(in NeedsState needs, double fundsAvailable, in ActionWeights weights, out float bestUtility, float stress0To100 = 0f, double eatCostShare = 1.0)
     {
         // life_sim_ai.md: at/under CriticalThreshold — or at/above the stress
         // override line, now that gritty events feed the stress scalar — the
@@ -106,10 +110,11 @@ public static class UtilityCalculator
             float temporalWeight = anyCritical ? 0f : weights.TemporalCostWeight;
             float stressReliefScore = def.IsStressRelief && anyCritical ? 1f : 0f;
 
+            double financialCost = def.Id == NpcActionId.Eat ? def.FinancialCost * eatCostShare : def.FinancialCost;
             float utility =
                 needScore * weights.NeedDeficitWeight +
                 TemporalCostScore(def.TemporalCostHours) * temporalWeight +
-                FinancialCostScore(def.FinancialCost, fundsAvailable) * weights.FinancialCostWeight +
+                FinancialCostScore(financialCost, fundsAvailable) * weights.FinancialCostWeight +
                 RiskScore(def.Risk0To100) * weights.RiskWeight +
                 stressReliefScore * weights.StressReliefWeight;
 
