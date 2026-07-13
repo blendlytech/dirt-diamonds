@@ -60,6 +60,23 @@ public sealed partial class ScheduleScreen : PanelContainer
     [Export]
     public string OverAllocatedFormat { get; set; } = "Over by {0}h — reduce a block before confirming.";
 
+    // Sleep-band hint (SleepProfile): four states matching the sim's bands —
+    // the 2h floor is the slider's own minimum, so the hint only has to sell
+    // the bands, not the absolute.
+    [Export]
+    public string SleepShortFormat { get; set; } =
+        "{0}h is a short night — stress up, mood down, and less rest banked. 6 is the minimum that doesn't hurt; 8 is best.";
+
+    [Export]
+    public string SleepOkFormat { get; set; } = "{0}h is fine — 8 gives the full-rest boost.";
+
+    [Export]
+    public string SleepBestText { get; set; } = "8h — fully rested: extra stress relief and a mood boost.";
+
+    [Export]
+    public string SleepOverFormat { get; set; } =
+        "{0}h is oversleeping — every hour past 8 banks nothing and sours the mood.";
+
     // Upper bound of the "tight" free-hours band (onboarding-overlay doc §4.2).
     // Harness-sourced, not the doc's first-pass 3: simulate_utility_decay's
     // scripted-week fixture still bottoms Hunger at 0 on its worst day with
@@ -86,6 +103,7 @@ public sealed partial class ScheduleScreen : PanelContainer
 
     private HSlider _sleepSlider = null!;
     private Label _sleepValueLabel = null!;
+    private Label _sleepHintLabel = null!;
     private Label _schoolNoteLabel = null!;
     private HSlider _practiceSlider = null!;
     private Label _practiceValueLabel = null!;
@@ -172,7 +190,12 @@ public sealed partial class ScheduleScreen : PanelContainer
 
         _sleepSlider = GetNode<HSlider>("Layout/SleepRow/SleepSlider");
         _sleepValueLabel = GetNode<Label>("Layout/SleepRow/SleepValueLabel");
+        _sleepHintLabel = GetNode<Label>("Layout/SleepHintLabel");
         _schoolNoteLabel = GetNode<Label>("Layout/SchoolNoteLabel");
+        // The slider's floor is scene-authored at 2; re-derived from the live
+        // constant so a SleepProfile retune can't leave the scene lying about
+        // where the body's absolute sits (the critical-mark idiom).
+        _sleepSlider.MinValue = SleepProfile.MinPlannedSleepHours;
         _practiceSlider = GetNode<HSlider>("Layout/PracticeRow/PracticeSlider");
         _practiceValueLabel = GetNode<Label>("Layout/PracticeRow/PracticeValueLabel");
         _gameSlider = GetNode<HSlider>("Layout/GameRow/GameSlider");
@@ -384,6 +407,7 @@ public sealed partial class ScheduleScreen : PanelContainer
     private void RefreshHoursLabels()
     {
         _sleepValueLabel.Text = ((int)_sleepSlider.Value).ToString();
+        RefreshSleepHint((int)_sleepSlider.Value);
         _practiceValueLabel.Text = ((int)_practiceSlider.Value).ToString();
         _gameValueLabel.Text = ((int)_gameSlider.Value).ToString();
         _workValueLabel.Text = ((int)_workSlider.Value).ToString();
@@ -432,6 +456,35 @@ public sealed partial class ScheduleScreen : PanelContainer
             _freeHoursLabel.RemoveThemeColorOverride("font_color");
         }
         _overAllocated = overAllocated;
+    }
+
+    /// <summary>
+    /// The sleep row's band feedback, mirroring the sim's SleepProfile bands
+    /// exactly (short = danger, 6–7 plain, 8 plain-positive, over = warning) —
+    /// the same teach-the-mechanic-in-place posture as the Free-hours line.
+    /// </summary>
+    private void RefreshSleepHint(int sleepHours)
+    {
+        if (sleepHours < SleepProfile.HealthyMinHours)
+        {
+            _sleepHintLabel.Text = string.Format(SleepShortFormat, sleepHours);
+            _sleepHintLabel.AddThemeColorOverride("font_color", UiColors.Danger);
+        }
+        else if (sleepHours < SleepProfile.OptimalHours)
+        {
+            _sleepHintLabel.Text = string.Format(SleepOkFormat, sleepHours);
+            _sleepHintLabel.RemoveThemeColorOverride("font_color");
+        }
+        else if (sleepHours == SleepProfile.OptimalHours)
+        {
+            _sleepHintLabel.Text = SleepBestText;
+            _sleepHintLabel.RemoveThemeColorOverride("font_color");
+        }
+        else
+        {
+            _sleepHintLabel.Text = string.Format(SleepOverFormat, sleepHours);
+            _sleepHintLabel.AddThemeColorOverride("font_color", UiColors.Warning);
+        }
     }
 
     private void OnConfirmPressed()

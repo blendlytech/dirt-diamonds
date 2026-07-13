@@ -32,6 +32,13 @@ public enum NpcActionId
     VideoGames = 12,
     Study = 13,
     Hangout = 14,
+
+    // Schedule-block-only (sleep bands, SleepProfile): the hours of a planned
+    // night PAST SleepProfile.OptimalHours tick under this — Sleep's exact
+    // restful environment but zero restore, so oversleeping wastes the hours
+    // instead of banking extra Sleep. Excluded from All/UtilityCalculator's
+    // scan like every other block-only id.
+    Oversleep = 15,
 }
 
 // PrimaryNeed is null for actions that don't restore a tracked need directly
@@ -144,6 +151,14 @@ public static class ActionCatalog
         new(NpcActionId.LegalWork, NeedType.Hunger, 16f, 8f, -200.0, 0f, false,
             new EnvironmentalModifiers(hunger: 1f, sleep: 2f, hygiene: 1f, social: 1f, fitness: 1.8f));
 
+    // Oversleep (sleep bands, SleepProfile): the hours of a planned night
+    // past OptimalHours. Sleep's exact 0.8 restful environment, zero restore
+    // (PrimaryNeed null) — lying in bed still shelters the other needs, it
+    // just banks nothing. Block-only; never autopilot-selected.
+    public static readonly NpcActionDefinition Oversleep =
+        new(NpcActionId.Oversleep, null, 0f, 1f, 0.0, 0f, false,
+            EnvironmentalModifiers.Uniform(0.8f));
+
     // HustleWork (Phase 8b, hustles_narcotics_fencing.md §2): the SAME
     // meal-access + needs drain as LegalWork — the Work block still costs the
     // avatar the same hours/exertion regardless of which activity they picked
@@ -223,6 +238,7 @@ public static class ActionCatalog
         NpcActionId.VideoGames => VideoGames,
         NpcActionId.Study => Study,
         NpcActionId.Hangout => Hangout,
+        NpcActionId.Oversleep => Oversleep,
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 }

@@ -60,6 +60,39 @@ text = ""
 layout_mode = 2
 size_flags_vertical = 3
 
+[node name="LocationCard" type="PanelContainer" parent="Layout/CenterSlot"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"Card"
+
+[node name="LocationLayout" type="VBoxContainer" parent="Layout/CenterSlot/LocationCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LocationImage" type="TextureRect" parent="Layout/CenterSlot/LocationCard/LocationLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="LocationPlaceholder" type="Label" parent="Layout/CenterSlot/LocationCard/LocationLayout"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 160)
+theme_type_variation = &"HeadingLabel"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+text = ""
+
+[node name="LocationCaption" type="Label" parent="Layout/CenterSlot/LocationCard/LocationLayout"]
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+text = ""
+
 [node name="AtBatView" parent="Layout/CenterSlot" instance=ExtResource("2_atbatview")]
 visible = false
 layout_mode = 2

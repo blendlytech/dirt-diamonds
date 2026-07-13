@@ -47,15 +47,21 @@ text = "Sleep"
 [node name="SleepSlider" type="HSlider" parent="Layout/SleepRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-min_value = 0
+min_value = 2
 max_value = 24
 step = 1
-value = 0
+value = 8
 
 [node name="SleepValueLabel" type="Label" parent="Layout/SleepRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(24, 0)
-text = "0"
+text = "8"
+
+[node name="SleepHintLabel" type="Label" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
 
 [node name="SchoolNoteLabel" type="Label" parent="Layout"]
 visible = false

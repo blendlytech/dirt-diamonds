@@ -82,7 +82,7 @@ public sealed partial class TutorialOverlay : Control
             true),
         new(
             "Free hours are how he survives",
-            "Open Calendar → Plan Today. Sleep, School, Practice, Work — you allocate the day. Whatever you don't allocate is Free hours: your player uses them on his own to eat, wash, rest and see people. You never schedule meals — he handles them himself, but only in free time. Book all 24 hours and he has no time to eat. Watch that line every day.",
+            "Open Calendar → Plan Today. Sleep, School, Practice, Work — you allocate the day. Whatever you don't allocate is Free hours: your player uses them on his own to eat, wash, rest and see people. You never schedule meals — he handles them himself, but only in free time. Book all 24 hours and he has no time to eat. And give him 8 hours of sleep — under 6 or over 8 and he pays for it.",
             TutorialTarget.PlanToday,
             false),
         new(

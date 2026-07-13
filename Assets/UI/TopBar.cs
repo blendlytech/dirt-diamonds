@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Simulation.Life;
 using Godot;
 
@@ -22,6 +23,7 @@ public sealed partial class TopBar : PanelContainer
     [Export]
     public string FundsFormat { get; set; } = "${0:N0}";
 
+    private TextureRect _schoolLogo = null!;
     private Label _dayLabel = null!;
     private Label _fundsLabel = null!;
     private ProgressBar _hungerBar = null!;
@@ -40,6 +42,11 @@ public sealed partial class TopBar : PanelContainer
     private NeedsState _shownNeeds;
     private bool _needsInitialized;
 
+    // School-logo identity: re-resolved only when the avatar's team changes
+    // (creation, succession, promotion). A school without authored logo art
+    // (6 of 8 today) or a non-HS team simply keeps the rect hidden.
+    private int _shownLogoTeamId = int.MinValue;
+
     // Same critical-needs cue as the Bank tab's NeedsCard: one bit per need
     // at/under NeedsEngine.CriticalThreshold, so the label recolor happens
     // only when a need actually crosses the line — the two surfaces can
@@ -48,6 +55,7 @@ public sealed partial class TopBar : PanelContainer
 
     public override void _Ready()
     {
+        _schoolLogo = GetNode<TextureRect>("TopBarLayout/BarRow/SchoolLogo");
         _dayLabel = GetNode<Label>("TopBarLayout/BarRow/DayLabel");
         _fundsLabel = GetNode<Label>("TopBarLayout/BarRow/FundsLabel");
         _hungerBar = GetNode<ProgressBar>("TopBarLayout/NeedsRow/HungerRow/HungerBar");
@@ -81,6 +89,21 @@ public sealed partial class TopBar : PanelContainer
             return;
         }
         Visible = true;
+
+        int teamId = gm.Career.AvatarTeamId;
+        if (teamId != _shownLogoTeamId)
+        {
+            _shownLogoTeamId = teamId;
+            bool hasLogo = false;
+            if (gm.Schools.TryGet(teamId, out SchoolDefinition school)
+                && SchoolArtLibrary.TryLoad(school.LogoPath, out Texture2D logo))
+            {
+                _schoolLogo.Texture = logo;
+                _schoolLogo.TooltipText = school.DisplayName;
+                hasLogo = true;
+            }
+            _schoolLogo.Visible = hasLogo;
+        }
 
         GlobalState state = gm.State;
         if (state.CurrentDay != _shownDay)

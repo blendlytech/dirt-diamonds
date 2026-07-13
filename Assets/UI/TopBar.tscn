@@ -14,6 +14,13 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_constants/separation = 12
 
+[node name="SchoolLogo" type="TextureRect" parent="TopBarLayout/BarRow"]
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(28, 28)
+expand_mode = 1
+stretch_mode = 5
+
 [node name="DayLabel" type="Label" parent="TopBarLayout/BarRow"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"

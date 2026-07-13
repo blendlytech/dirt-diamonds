@@ -724,7 +724,49 @@ public sealed class LifeSimManager
 
         // Sleep is the one live block: per-hour restore at the catalog entry's
         // own rate/environment, so tuning Sleep tunes both paths at once.
-        TickBlockHours(npc, schedule.SleepHours, in ActionCatalog.Sleep);
+        // Sleep bands (SleepProfile): restore caps at OptimalHours — the hours
+        // past it tick under Oversleep (same restful environment, zero
+        // restore) — and the night's band effect lands when the block ends.
+        // Avatar-only by construction: only the avatar has a planned day.
+        int sleepHours = schedule.SleepHours;
+        TickBlockHours(npc, Math.Min(sleepHours, SleepProfile.OptimalHours), in ActionCatalog.Sleep);
+        if (sleepHours > SleepProfile.OptimalHours)
+        {
+            TickBlockHours(npc, sleepHours - SleepProfile.OptimalHours, in ActionCatalog.Oversleep);
+        }
+        ApplySleepBand(npc, sleepHours);
+    }
+
+    /// <summary>
+    /// The end-of-night band effect (SleepProfile, user-directed 2026-07-12):
+    /// a short night (&lt; HealthyMinHours) frays the avatar — stress up, mood
+    /// down, on top of the smaller restore short blocks always had; exactly
+    /// OptimalHours grants the boost — extra stress relief and mood up; past
+    /// OptimalHours sours the mood (the wasted restore is structural, above).
+    /// 6–7 hours is deliberately neutral: fine, just not the boost.
+    /// </summary>
+    private static void ApplySleepBand(NpcRuntime npc, int sleepHours)
+    {
+        if (sleepHours < SleepProfile.HealthyMinHours)
+        {
+            npc.Stress = Math.Clamp(npc.Stress + SleepProfile.ShortNightStress, MinStress, MaxStress);
+            if (npc.Person is PersonRuntime person)
+            {
+                ApplyPersonStatDelta(person, PersonStatId.Happiness, SleepProfile.ShortNightHappinessDelta);
+            }
+        }
+        else if (sleepHours == SleepProfile.OptimalHours)
+        {
+            npc.Stress = Math.Clamp(npc.Stress - SleepProfile.GoodNightStressRelief, MinStress, MaxStress);
+            if (npc.Person is PersonRuntime person)
+            {
+                ApplyPersonStatDelta(person, PersonStatId.Happiness, SleepProfile.GoodNightHappinessDelta);
+            }
+        }
+        else if (sleepHours > SleepProfile.OptimalHours && npc.Person is PersonRuntime oversleeper)
+        {
+            ApplyPersonStatDelta(oversleeper, PersonStatId.Happiness, SleepProfile.OversleepHappinessDelta);
+        }
     }
 
     /// <summary>

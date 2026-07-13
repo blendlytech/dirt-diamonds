@@ -991,8 +991,13 @@ public sealed partial class GameManager : Node
             blocks.SchoolHours, practiceHours, gameHours, schedule.WorkHours,
             schedule.FreeTimeHours, schedule.FreeTimeActivity, LifeSim.AvatarTransportHoursSaved,
             out _);
+        // Sleep bands (SleepProfile): the body's guaranteed minimum is forced
+        // exactly like the calendar blocks — whatever the caller sent, a
+        // night can never go below the floor. The slider mirrors it, so this
+        // only bites a stale/hand-crafted submission (which may then trip the
+        // same over-allocation throw the calendar forcing uses).
         var forced = new DaySchedule(
-            schedule.SleepHours,
+            Math.Max(schedule.SleepHours, SleepProfile.MinPlannedSleepHours),
             blocks.SchoolHours,
             practiceHours,
             gameHours,

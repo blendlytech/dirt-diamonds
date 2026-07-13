@@ -67,6 +67,7 @@ internal static class Program
         RunDailyClockChecks();
         RunSurvivalEconomyChecks();
         RunHouseholdBoardChecks();
+        RunSleepBandChecks();
         RunPersonLayerChecks();
         RunRelationshipGraphChecks();
 
@@ -954,6 +955,130 @@ internal static class Program
         return funds - StartFunds;
     }
 
+    // ------------------------------------------------------------------
+    // Sleep bands (SleepProfile, user-directed 2026-07-12): a planned night
+    // under 6h frays the avatar, exactly 8h grants the boost, hours past 8
+    // bank nothing. Applies only in TickScheduledDay — avatar-only by
+    // construction — so every autopilot/NPC trace is untouched.
+    // ------------------------------------------------------------------
+
+    private static void RunSleepBandChecks()
+    {
+        Console.WriteLine("--- sleep bands: 2h floor, <6 hurts, 8 boosts, >8 banks nothing ---\n");
+
+        Check("SleepProfile pins: floor 2, healthy-min 6, optimal 8",
+            SleepProfile.MinPlannedSleepHours == 2 && SleepProfile.HealthyMinHours == 6
+            && SleepProfile.OptimalHours == 8);
+        Check("SleepProfile effect pins: short +8 stress / -1 mood, 8h -4 stress / +1 mood, oversleep -1 mood",
+            SleepProfile.ShortNightStress == 8f && SleepProfile.ShortNightHappinessDelta == -1f
+            && SleepProfile.GoodNightStressRelief == 4f && SleepProfile.GoodNightHappinessDelta == 1f
+            && SleepProfile.OversleepHappinessDelta == -1f);
+
+        // Oversleep is a block-only definition: Sleep's exact restful 0.8
+        // environment, zero restore, and absent from the autopilot scan.
+        bool inAll = false;
+        foreach (NpcActionDefinition def in ActionCatalog.All)
+        {
+            inAll |= def.Id == NpcActionId.Oversleep;
+        }
+        NpcActionDefinition oversleep = ActionCatalog.Get(NpcActionId.Oversleep);
+        Check("Oversleep: zero restore, Sleep's 0.8 environment, never autopilot-selectable",
+            !inAll && oversleep.PrimaryNeed is null && oversleep.RestoreAmount == 0f
+            && oversleep.Environment.Sleep == 0.8f && oversleep.Environment.Hunger == 0.8f);
+
+        // Stress bands, exactly: four worlds identical except the night —
+        // fully booked days (sleep + practice = 24, zero free hours) so no
+        // autopilot noise, day 1 so no bill. Every world relaxes stress the
+        // same 24 hourly steps; the band is the only difference, so the
+        // deltas are float-exact.
+        float shortStress = PlannedNightStress(4, 20);
+        float neutralStress = PlannedNightStress(7, 17);
+        float bestStress = PlannedNightStress(8, 16);
+        Check("a 4h night ends exactly +8 stress over a neutral 7h night",
+            shortStress == neutralStress + SleepProfile.ShortNightStress,
+            $"4h {shortStress:F2} vs 7h {neutralStress:F2}");
+        Check("an 8h night ends exactly -4 stress under a neutral 7h night",
+            bestStress == neutralStress - SleepProfile.GoodNightStressRelief,
+            $"8h {bestStress:F2} vs 7h {neutralStress:F2}");
+
+        // Mood bands, directional (the daily reversion pulls part-way back,
+        // so exact values would pin PersonDrift, not the band): hydrated at
+        // the neutral 50 setpoint, one planned day.
+        float shortMood = PlannedNightHappiness(4, 20);
+        float neutralMood = PlannedNightHappiness(7, 17);
+        float bestMood = PlannedNightHappiness(8, 16);
+        float overMood = PlannedNightHappiness(10, 14);
+        Check("mood: short night < neutral, 8h > neutral, oversleep < neutral",
+            shortMood < neutralMood && bestMood > neutralMood && overMood < neutralMood,
+            $"4h {shortMood:F2}, 7h {neutralMood:F2}, 8h {bestMood:F2}, 10h {overMood:F2}");
+
+        // Restore cap: hours past 8 bank nothing — under the OLD semantics a
+        // 10h block restored +100 and would end strictly better-rested than
+        // an 8h block; now the extra hours are pure Oversleep (zero restore,
+        // decay still ticking), so a 10h night can never end better-rested
+        // than an 8h one. (Measured: it ends slightly WORSE — the 8h block
+        // already reaches the cap, and the extra hours only decay from it.)
+        float sleep8 = PlannedNightSleepNeed(8, 16);
+        float sleep10 = PlannedNightSleepNeed(10, 14);
+        Check("hours past 8 bank no restore (a 10h night never ends better-rested than an 8h one)",
+            sleep10 <= sleep8,
+            $"8h ends Sleep {sleep8:F2}, 10h ends {sleep10:F2}");
+
+        // The bands never leak into the background population: the bystander
+        // NPC's day is byte-identical whatever the avatar planned.
+        (LifeSimManager shortWorld, EventBus shortBus) =
+            NewClockWorld("sleep-avatar", "sleep-bystander", 500.0, stress: 30f, markAvatar: true);
+        shortWorld.SetTodaySchedule(new DaySchedule(4, 0, 20, 0, 0));
+        shortBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        shortBus.DispatchPending();
+        (LifeSimManager bestWorld, EventBus bestBus) =
+            NewClockWorld("sleep-avatar", "sleep-bystander", 500.0, stress: 30f, markAvatar: true);
+        bestWorld.SetTodaySchedule(new DaySchedule(8, 0, 16, 0, 0));
+        bestBus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        bestBus.DispatchPending();
+        Check("bystander NPC byte-identical under a 4h vs 8h avatar night",
+            PersonStateIdentical(shortWorld, bestWorld, "sleep-bystander"));
+
+        Console.WriteLine();
+    }
+
+    /// <summary>End-of-day avatar stress after one planned day of sleepHours + practiceHours (must sum to 24), start stress 30.</summary>
+    private static float PlannedNightStress(int sleepHours, int practiceHours)
+    {
+        (LifeSimManager world, EventBus bus) =
+            NewClockWorld("night-avatar", "night-bystander", 500.0, stress: 30f, markAvatar: true);
+        world.SetTodaySchedule(new DaySchedule(sleepHours, 0, practiceHours, 0, 0));
+        bus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        bus.DispatchPending();
+        world.TryGetStress("night-avatar", out float stress);
+        return stress;
+    }
+
+    /// <summary>End-of-day avatar happiness (hydrated neutral 50) after one planned day of sleepHours + practiceHours.</summary>
+    private static float PlannedNightHappiness(int sleepHours, int practiceHours)
+    {
+        (LifeSimManager world, EventBus bus) =
+            NewClockWorld("night-avatar", "night-bystander", 500.0, stress: 0f, markAvatar: true);
+        world.SetPersonStats("night-avatar", PersonStats.Neutral());
+        world.SetTodaySchedule(new DaySchedule(sleepHours, 0, practiceHours, 0, 0));
+        bus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        bus.DispatchPending();
+        world.TryGetPersonStats("night-avatar", out PersonStats stats);
+        return stats.Happiness;
+    }
+
+    /// <summary>End-of-day avatar Sleep need after one planned day of sleepHours + practiceHours.</summary>
+    private static float PlannedNightSleepNeed(int sleepHours, int practiceHours)
+    {
+        (LifeSimManager world, EventBus bus) =
+            NewClockWorld("night-avatar", "night-bystander", 500.0, stress: 0f, markAvatar: true);
+        world.SetTodaySchedule(new DaySchedule(sleepHours, 0, practiceHours, 0, 0));
+        bus.Publish(new DayAdvancedEvent(1, 2026, 1));
+        bus.DispatchPending();
+        world.TryGetNeeds("night-avatar", out NeedsState needs);
+        return needs.Sleep;
+    }
+
     /// <summary>Funds delta of a fully-booked 7-day week (see the weekly-bill check) for a given board tier.</summary>
     private static double BilledWeekDelta(int wealthTier)
     {
@@ -1126,8 +1251,11 @@ internal static class Program
         {
             if (day <= 7)
             {
-                plain.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0));
-                hydrated.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0));
+                // 7h nights: the sleep-band NEUTRAL hour count (SleepProfile),
+                // so this fixture keeps isolating the §2.2 identity — an 8h
+                // night now deliberately moves happiness (the boost).
+                plain.SetTodaySchedule(new DaySchedule(7, 6, 0, 0, 0));
+                hydrated.SetTodaySchedule(new DaySchedule(7, 6, 0, 0, 0));
             }
             plainBus.Publish(new DayAdvancedEvent(day, 2026, day));
             plainBus.DispatchPending();
@@ -1171,7 +1299,9 @@ internal static class Program
         {
             if (day <= 5)
             {
-                scholar.SetTodaySchedule(new DaySchedule(8, 6, 0, 0, 0, 2, NpcActionId.Study));
+                // 7h = the sleep-band neutral count — isolates Study's own
+                // happiness cost from the 8h-night boost.
+                scholar.SetTodaySchedule(new DaySchedule(7, 6, 0, 0, 0, 2, NpcActionId.Study));
             }
             scholarBus.Publish(new DayAdvancedEvent(day, 2026, day));
             scholarBus.DispatchPending();
@@ -1233,7 +1363,8 @@ internal static class Program
         // --- Effect channel: a VideoGames evening, ops replicated exactly ---
         (LifeSimManager gamer, EventBus gamerBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
         gamer.SetPersonStats(AvatarId, PersonStats.Neutral());
-        gamer.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.VideoGames));
+        // 7h = sleep-band neutral, keeping the op-for-op expectation pure.
+        gamer.SetTodaySchedule(new DaySchedule(7, 0, 0, 0, 0, 2, NpcActionId.VideoGames));
         gamerBus.Publish(new DayAdvancedEvent(1, 2026, 1));
         gamerBus.DispatchPending();
         float expHappiness = 50f, expDiscipline = 50f, expUnflushedH = 0f, expUnflushedD = 0f;
@@ -1272,7 +1403,8 @@ internal static class Program
         nearCap.Happiness = 99.5f;
         (LifeSimManager capped, EventBus cappedBus) = NewClockWorld(AvatarId, BystanderId, SeedFunds, stress: 0f, markAvatar: true);
         capped.SetPersonStats(AvatarId, nearCap);
-        capped.SetTodaySchedule(new DaySchedule(8, 0, 0, 0, 0, 2, NpcActionId.VideoGames));
+        // 7h = sleep-band neutral, keeping the clamp arithmetic pure.
+        capped.SetTodaySchedule(new DaySchedule(7, 0, 0, 0, 0, 2, NpcActionId.VideoGames));
         cappedBus.Publish(new DayAdvancedEvent(1, 2026, 1));
         cappedBus.DispatchPending();
         capped.TryGetPersonStats(AvatarId, out PersonStats cappedStats);
