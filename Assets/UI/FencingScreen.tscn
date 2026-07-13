@@ -83,6 +83,15 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
+[node name="RunTallyLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ShowAnotherButton" type="Button" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+text = "Show Him Another Lot"
+
 [node name="DoneButton" type="Button" parent="Panel/Layout/ResultPanel"]
 layout_mode = 2
-text = "Done"
+text = "That's Enough For Today"
