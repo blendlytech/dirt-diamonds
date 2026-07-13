@@ -101,7 +101,7 @@ public readonly record struct RobberyState(
         FundsDelta, DetectionRiskDelta, HealthCeilingDelta, RecklessnessDelta, StressDelta,
         supplierTrustDelta: 0, crewStandingDelta: CrewStandingDelta,
         setWatchlistFlag: false, setBadProductFlag: false, setSpoiledGoodsFlag: false, setControlsTurfFlag: false,
-        setGamblingBustFlag: false, setRobberyBustFlag: RobberyBustFlag);
+        setGamblingBustFlag: false, setRobberyBustFlag: RobberyBustFlag, setArmsHotGoodsFlag: HotGoodsFlag);
 }
 
 /// <summary>

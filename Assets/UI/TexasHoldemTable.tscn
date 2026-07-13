@@ -60,11 +60,11 @@ layout_mode = 2
 size_flags_horizontal = 3
 item_count = 3
 selected = 0
-popup/item_0/text = "Low"
+popup/item_0/text = "Back-Room Game (Low)"
 popup/item_0/id = 0
-popup/item_1/text = "Mid"
+popup/item_1/text = "Social Club (Mid)"
 popup/item_1/id = 1
-popup/item_2/text = "High"
+popup/item_2/text = "High-Roller Room (High)"
 popup/item_2/id = 2
 
 [node name="OpponentsRow" type="HBoxContainer" parent="Panel/Layout/StartPanel"]
@@ -117,17 +117,27 @@ text = "Sit Down"
 layout_mode = 2
 visible = false
 
-[node name="BoardLabel" type="Label" parent="Panel/Layout/TablePanel"]
+[node name="BoardLabel" type="RichTextLabel" parent="Panel/Layout/TablePanel"]
 layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
 text = "Board: —"
 
-[node name="HeroCardsLabel" type="Label" parent="Panel/Layout/TablePanel"]
+[node name="HeroCardsLabel" type="RichTextLabel" parent="Panel/Layout/TablePanel"]
 layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
 text = "Your hand: —"
 
 [node name="PotLabel" type="Label" parent="Panel/Layout/TablePanel"]
 layout_mode = 2
 text = "Pot: $0"
+
+[node name="SessionStatsLabel" type="Label" parent="Panel/Layout/TablePanel"]
+layout_mode = 2
+text = ""
 
 [node name="SeatsLabel" type="Label" parent="Panel/Layout/TablePanel"]
 layout_mode = 2

@@ -906,6 +906,9 @@ internal static class Program
         Check("robbery: ToResolution projects the bust flag and only robbery-shaped deltas",
             !cleanDone.ToResolution().SetRobberyBustFlag && pressBusted.ToResolution().SetRobberyBustFlag
             && cleanDone.ToResolution().SupplierTrustDelta == 0 && !cleanDone.ToResolution().SetWatchlistFlag);
+        Check("robbery (R-4): ToResolution arms hot_goods on a clean getaway, never on a bust",
+            cleanDone.ToResolution().SetArmsHotGoodsFlag && !pressBusted.ToResolution().SetArmsHotGoodsFlag
+            && !cleanDone.ToResolution().SetConsumesHotGoodsFlag);
 
         ulong botchSeed = FindSeed(s =>
         {

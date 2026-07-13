@@ -287,6 +287,14 @@ public sealed class HustleService
                 // resolution (INV-1) — never on a forfeited/abandoned session.
                 _players.SetFlag(playerId, "hot_goods", false, day);
             }
+            if (resolution.SetArmsHotGoodsFlag)
+            {
+                // R-4: a clean robbery getaway arms the same flag Fencing's
+                // FreshFromAJob option (above) later consumes — the cross-hustle
+                // hook (§5.6/§5.2). Both writers touch "hot_goods" but never in
+                // the same resolution, since Robbery and Fencing are separate apply calls.
+                _players.SetFlag(playerId, "hot_goods", true, day);
+            }
             _db.CommitBatch();
         }
         catch

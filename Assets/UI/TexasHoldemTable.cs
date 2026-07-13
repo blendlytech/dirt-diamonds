@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Economy.Hustles;
@@ -60,9 +61,10 @@ public sealed partial class TexasHoldemTable : Control
     private Button _sitDownButton = null!;
 
     private VBoxContainer _tablePanel = null!;
-    private Label _boardLabel = null!;
-    private Label _heroCardsLabel = null!;
+    private RichTextLabel _boardLabel = null!;
+    private RichTextLabel _heroCardsLabel = null!;
     private Label _potLabel = null!;
+    private Label _sessionStatsLabel = null!;
     private Label _seatsLabel = null!;
     private Label _actionLogLabel = null!;
 
@@ -89,6 +91,9 @@ public sealed partial class TexasHoldemTable : Control
     private RngState _rng;
     private HoldemSessionState? _session;
 
+    /// <summary>§6 polish — the hero's stack after each completed hand this session, seeded with the buy-in; renders as <see cref="BuildSparkline"/>'s bankroll graph. UI-local, never persisted (mirrors <see cref="HoldemSessionState.HandsPlayed"/>'s own presentation-only counterpart).</summary>
+    private readonly List<long> _stackHistory = new();
+
     public override void _Ready()
     {
         _statusLabel = GetNode<Label>("Panel/Layout/StatusLabel");
@@ -102,9 +107,10 @@ public sealed partial class TexasHoldemTable : Control
         _sitDownButton = GetNode<Button>("Panel/Layout/StartPanel/SitDownButton");
 
         _tablePanel = GetNode<VBoxContainer>("Panel/Layout/TablePanel");
-        _boardLabel = GetNode<Label>("Panel/Layout/TablePanel/BoardLabel");
-        _heroCardsLabel = GetNode<Label>("Panel/Layout/TablePanel/HeroCardsLabel");
+        _boardLabel = GetNode<RichTextLabel>("Panel/Layout/TablePanel/BoardLabel");
+        _heroCardsLabel = GetNode<RichTextLabel>("Panel/Layout/TablePanel/HeroCardsLabel");
         _potLabel = GetNode<Label>("Panel/Layout/TablePanel/PotLabel");
+        _sessionStatsLabel = GetNode<Label>("Panel/Layout/TablePanel/SessionStatsLabel");
         _seatsLabel = GetNode<Label>("Panel/Layout/TablePanel/SeatsLabel");
         _actionLogLabel = GetNode<Label>("Panel/Layout/TablePanel/ActionLogLabel");
 
@@ -185,6 +191,7 @@ public sealed partial class TexasHoldemTable : Control
         _sessionActive = true;
         _sessionDay = day;
         _session = null;
+        _stackHistory.Clear();
         _ctx = gm.Hustles.BuildHoldemContext(gm.Career.AvatarPlayerId);
         _rng = new RngState(unchecked((ulong)System.Environment.TickCount64) ^ 0x504F4B4552UL | 1UL);
 
@@ -216,6 +223,7 @@ public sealed partial class TexasHoldemTable : Control
         long buyIn = (long)_buyInSlider.Value;
 
         _session = HoldemSession.StartSession(in _ctx, tier, buyIn, numOpponents, ref _rng);
+        _stackHistory.Add(buyIn);
         _session.Table.StartHand(ref _rng);
         AdvanceAfterHandIfComplete();
         RefreshTableDisplay();
@@ -257,6 +265,7 @@ public sealed partial class TexasHoldemTable : Control
         if (_session is { IsOver: false } session && session.Table.HandComplete)
         {
             HoldemSession.CompleteHand(session, in _ctx, ref _rng);
+            _stackHistory.Add(session.Table.Stack[session.HeroSeat]);
         }
     }
 
@@ -272,10 +281,11 @@ public sealed partial class TexasHoldemTable : Control
 
         ShowPanel(_tablePanel);
         HoldemHandState table = session.Table;
-        _boardLabel.Text = "Board: " + FormatCards(table.Board.AsSpan(0, table.BoardCount));
-        _heroCardsLabel.Text = "Your hand: " + FormatCards(
+        _boardLabel.Text = "Board: " + FormatCardsBbcode(table.Board.AsSpan(0, table.BoardCount));
+        _heroCardsLabel.Text = "Your hand: " + FormatCardsBbcode(
             new[] { table.HoleCards[session.HeroSeat * 2], table.HoleCards[session.HeroSeat * 2 + 1] });
         _potLabel.Text = string.Format(PotFormat, table.Pot, table.CurrentBet);
+        _sessionStatsLabel.Text = BuildSessionStats(session, table);
         _seatsLabel.Text = BuildSeatsSummary(table);
         _actionLogLabel.Text = BuildActionLog(table);
 
@@ -346,7 +356,11 @@ public sealed partial class TexasHoldemTable : Control
     // Text formatting — event-driven (button presses), never per-frame
     // ------------------------------------------------------------------
 
-    private static string FormatCards(ReadOnlySpan<Card> cards)
+    /// <summary>§6 polish — suit pips + rank in BBCode (red for hearts/diamonds) for the <see cref="RichTextLabel"/> board/hero lines, replacing the old plain-text "Ac Kd" debug format. Reads <see cref="Card.Rank"/>/<see cref="Card.Suit"/> directly rather than <see cref="Card.ToString"/>, which stays the harness/debug-only format it was documented as (never a UI dependency).</summary>
+    private static readonly char[] SuitGlyphs = { '♣', '♦', '♥', '♠' };
+    private const string RedSuitColor = "#e0524f";
+
+    private static string FormatCardsBbcode(ReadOnlySpan<Card> cards)
     {
         if (cards.Length == 0)
         {
@@ -359,7 +373,66 @@ public sealed partial class TexasHoldemTable : Control
             {
                 sb.Append(' ');
             }
-            sb.Append(cards[i].ToString());
+            AppendCardBbcode(sb, cards[i]);
+        }
+        return sb.ToString();
+    }
+
+    private static void AppendCardBbcode(StringBuilder sb, Card card)
+    {
+        char rank = card.Rank switch
+        {
+            14 => 'A',
+            13 => 'K',
+            12 => 'Q',
+            11 => 'J',
+            10 => 'T',
+            _ => (char)('0' + card.Rank),
+        };
+        char suit = SuitGlyphs[card.Suit];
+        bool red = card.Suit is 1 or 2; // diamonds, hearts (Card.Suit packing: 0=c,1=d,2=h,3=s)
+        if (red)
+        {
+            sb.Append("[color=").Append(RedSuitColor).Append(']');
+        }
+        sb.Append(rank).Append(suit);
+        if (red)
+        {
+            sb.Append("[/color]");
+        }
+    }
+
+    /// <summary>§6 polish — hands-played counter + a compact Unicode-block sparkline of the hero's post-hand stack across the session, both reading only <see cref="HoldemSessionState"/>/<see cref="_stackHistory"/> (no sim touch).</summary>
+    private static readonly char[] SparkLevels = { '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█' };
+
+    private string BuildSessionStats(HoldemSessionState session, HoldemHandState table)
+    {
+        long currentStack = table.Stack[session.HeroSeat];
+        string handWord = session.HandsPlayed == 1 ? "hand" : "hands";
+        string spark = BuildSparkline(_stackHistory);
+        return spark.Length > 0
+            ? $"{session.HandsPlayed} {handWord} played   {spark}   ${currentStack}"
+            : $"{session.HandsPlayed} {handWord} played   ${currentStack}";
+    }
+
+    private static string BuildSparkline(List<long> history)
+    {
+        if (history.Count < 2)
+        {
+            return string.Empty;
+        }
+        long min = long.MaxValue, max = long.MinValue;
+        foreach (long v in history)
+        {
+            if (v < min) min = v;
+            if (v > max) max = v;
+        }
+        long range = Math.Max(1, max - min);
+        var sb = new StringBuilder(history.Count);
+        foreach (long v in history)
+        {
+            int level = (int)((v - min) * (SparkLevels.Length - 1) / range);
+            sb.Append(SparkLevels[level]);
         }
         return sb.ToString();
     }
