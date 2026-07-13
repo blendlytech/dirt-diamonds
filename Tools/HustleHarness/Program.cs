@@ -24,6 +24,7 @@ internal static class Program
         RunStage2Checks();
         RunStage3Checks();
         RunEvBandChecks();
+        RunHaggleChecks();
         RunFencingChecks();
         RunRobberyChecks();
         RunDeterminismChecks();
@@ -368,6 +369,197 @@ internal static class Program
         Check("EV bands: tail risk is non-decreasing Safe→Aggressive (Hold policies never retaliate; TakeOver does)",
             safe.RetaliationRate == 0 && moderate.RetaliationRate == 0 && aggressive.RetaliationRate > 0,
             $"safe={safe.RetaliationRate:P1} moderate={moderate.RetaliationRate:P1} aggressive={aggressive.RetaliationRate:P1}");
+    }
+
+    // ------------------------------------------------------------------
+    // Check H — Supplier Haggle (docs/design/hustle_minigames_depth_pass.md §3.1, slice N-2)
+    // ------------------------------------------------------------------
+
+    /// <summary>Drives one haggle under the §3.1 neutral autopilot: accept once the ask falls to the fixed fraction of the opening ask; otherwise bid half the live ask (deliberately low, so the ask concedes — the buyer-side mirror of RunNeutral's counter-at-2×).</summary>
+    private static HaggleState RunNeutralHaggle(in HustleContext ctx, ref RngState rng)
+    {
+        HaggleState state = NarcoticsHustle.HaggleStart(in ctx, ref rng);
+        while (state.Outcome == HaggleOutcomeKind.InProgress)
+        {
+            state = NarcoticsHustle.NeutralHaggleDecision(in state)
+                ? NarcoticsHustle.HaggleAccept(in state)
+                : NarcoticsHustle.HaggleCounter(in state, state.CurrentAsk * 0.5);
+        }
+        return state;
+    }
+
+    private static void RunHaggleChecks()
+    {
+        HustleContext ctx = MidCareerCtx();
+
+        // --- state-machine legality -----------------------------------
+        var rng = new RngState(11);
+        HaggleState opened = NarcoticsHustle.HaggleStart(in ctx, ref rng);
+        Check("haggle: HaggleStart opens above the hidden floor at the profile's ask multiple",
+            opened.Outcome == HaggleOutcomeKind.InProgress
+            && opened.CurrentAsk == opened.HiddenFloor * NarcoticsHustle.NarcoticsProfile.HaggleOpenAskMult
+            && opened.PatienceRemaining == NarcoticsHustle.NarcoticsProfile.HagglePatienceBase,
+            $"ask={opened.CurrentAsk:F2} floor={opened.HiddenFloor:F2} patience={opened.PatienceRemaining}");
+
+        // Same seed ⇒ identical u draw, so the only difference is the trust discount.
+        var lowTrustRng = new RngState(77);
+        var highTrustRng = new RngState(77);
+        HustleContext lowTrust = new(ctx.Funds, ctx.Heat, ctx.Reck, supplierTrust: -100,
+            ctx.CrewStandingLocal, ctx.OwnsTurfLocal, ctx.UsesProduct);
+        HustleContext highTrust = new(ctx.Funds, ctx.Heat, ctx.Reck, supplierTrust: 100,
+            ctx.CrewStandingLocal, ctx.OwnsTurfLocal, ctx.UsesProduct);
+        HaggleState lowTrustLot = NarcoticsHustle.HaggleStart(in lowTrust, ref lowTrustRng);
+        HaggleState highTrustLot = NarcoticsHustle.HaggleStart(in highTrust, ref highTrustRng);
+        Check("haggle: hidden floor falls with supplier trust (same draw, different trust) and trust buys patience",
+            highTrustLot.HiddenFloor < lowTrustLot.HiddenFloor
+            && highTrustLot.InitialPatience == lowTrustLot.InitialPatience + 1,
+            $"low={lowTrustLot.HiddenFloor:F2} high={highTrustLot.HiddenFloor:F2}");
+
+        HaggleState accepted = NarcoticsHustle.HaggleAccept(in opened);
+        Check("haggle: accept closes at the ask on the table and books the deal trust bonus",
+            accepted.Outcome == HaggleOutcomeKind.Deal && accepted.DealUnitCost == opened.CurrentAsk
+            && accepted.SupplierTrustDelta == NarcoticsHustle.NarcoticsProfile.HaggleDealTrustBonus
+            && accepted.BuyInMaxMult == NarcoticsHustle.NarcoticsProfile.HaggleBuyInMultMin
+                + NarcoticsHustle.NarcoticsProfile.HaggleBuyInMultSpan,
+            $"cost={accepted.DealUnitCost:F2} trust={accepted.SupplierTrustDelta} mult={accepted.BuyInMaxMult:F2}");
+
+        // A lowball concedes the ask exactly DropFrac of the way to the floor and burns one round.
+        HaggleState conceded = NarcoticsHustle.HaggleCounter(in opened, 1.0);
+        double expectedNextAsk = opened.CurrentAsk
+            - NarcoticsHustle.NarcoticsProfile.HaggleDropFrac * (opened.CurrentAsk - opened.HiddenFloor);
+        Check("haggle: a lowball drops the ask toward the floor and burns patience",
+            conceded.Outcome == HaggleOutcomeKind.InProgress && conceded.CurrentAsk == expectedNextAsk
+            && conceded.PatienceRemaining == opened.PatienceRemaining - 1,
+            $"ask={conceded.CurrentAsk:F2} (want {expectedNextAsk:F2}) patience={conceded.PatienceRemaining}");
+
+        // Bid exactly the live willingness on round 2 ⇒ closes at the bid (below the ask).
+        double willingness = conceded.HiddenFloor + (conceded.CurrentAsk - conceded.HiddenFloor)
+            * ((double)conceded.PatienceRemaining / conceded.InitialPatience);
+        HaggleState metWillingness = NarcoticsHustle.HaggleCounter(in conceded, willingness);
+        Check("haggle: a bid at the supplier's live willingness closes at the bid",
+            metWillingness.Outcome == HaggleOutcomeKind.Deal && metWillingness.DealUnitCost == willingness
+            && metWillingness.DealUnitCost < conceded.CurrentAsk,
+            $"deal={metWillingness.DealUnitCost:F2} ask was {conceded.CurrentAsk:F2}");
+
+        // Bidding above the ask never pays more than the ask.
+        HaggleState overbid = NarcoticsHustle.HaggleCounter(in opened, opened.CurrentAsk * 2.0);
+        Check("haggle: a bid above the ask closes at the ask (never charges more than asked)",
+            overbid.Outcome == HaggleOutcomeKind.Deal && overbid.DealUnitCost == opened.CurrentAsk);
+
+        // Grinding lowballs to zero patience is a refusal with the trust penalty and no deal.
+        HaggleState ground = opened;
+        while (ground.Outcome == HaggleOutcomeKind.InProgress)
+        {
+            ground = NarcoticsHustle.HaggleCounter(in ground, ground.CurrentAsk * 0.3);
+        }
+        Check("haggle: patience exhausted is a refusal — no run, push-too-hard trust penalty",
+            ground.Outcome == HaggleOutcomeKind.Refused && ground.DealUnitCost == 0
+            && ground.SupplierTrustDelta == -NarcoticsHustle.NarcoticsProfile.HaggleRefusalTrustPenalty
+            && ground.ToResolution().SupplierTrustDelta == -NarcoticsHustle.NarcoticsProfile.HaggleRefusalTrustPenalty
+            && ground.ToResolution().FundsDelta == 0,
+            $"outcome={ground.Outcome} trust={ground.SupplierTrustDelta}");
+
+        HaggleState walked = NarcoticsHustle.HaggleWalk(in opened);
+        Check("haggle: walking away ends with no deal and no trust consequence",
+            walked.Outcome == HaggleOutcomeKind.Walked && walked.SupplierTrustDelta == 0 && walked.DealUnitCost == 0);
+
+        bool terminalAbsorbing = ThrowsOn(() => NarcoticsHustle.HaggleAccept(in accepted))
+            && ThrowsOn(() => NarcoticsHustle.HaggleCounter(in ground, 5.0))
+            && ThrowsOn(() => NarcoticsHustle.HaggleWalk(in walked));
+        Check("haggle: Deal/Refused/Walked are absorbing (every further call throws)", terminalAbsorbing);
+
+        // --- the LOCKED §3.1 EV-neutrality bind -------------------------
+        const int trials = 20_000;
+        double totalCost = 0;
+        int deals = 0;
+        for (int i = 0; i < trials; i++)
+        {
+            var r = new RngState((ulong)i * 6353UL + 13UL);
+            HaggleState result = RunNeutralHaggle(in ctx, ref r);
+            if (result.Outcome == HaggleOutcomeKind.Deal)
+            {
+                deals++;
+                totalCost += result.DealUnitCost;
+            }
+        }
+        double meanCost = deals > 0 ? totalCost / deals : double.NaN;
+
+        // Skilled (patient lowball: grind concessions, accept on the last safe round)
+        // vs bad (accept the opening ask cold) — §3.1's "a skilled haggler beats it,
+        // a bad/greedy one pays more."
+        double patientTotal = 0;
+        double eagerTotal = 0;
+        for (int i = 0; i < trials; i++)
+        {
+            var r = new RngState((ulong)i * 6353UL + 900_013UL);
+            HaggleState state = NarcoticsHustle.HaggleStart(in ctx, ref r);
+            HaggleState eager = NarcoticsHustle.HaggleAccept(in state);
+            eagerTotal += eager.DealUnitCost;
+            while (state.PatienceRemaining > 1)
+            {
+                state = NarcoticsHustle.HaggleCounter(in state, state.CurrentAsk * 0.3);
+            }
+            state = NarcoticsHustle.HaggleAccept(in state);
+            patientTotal += state.DealUnitCost;
+        }
+        double patientMean = patientTotal / trials;
+        double eagerMean = eagerTotal / trials;
+
+        Console.WriteLine("--- Haggle neutral policy (mid-career avatar, N=20,000) ---");
+        Console.WriteLine($"  neutral: mean effective UnitCost={meanCost:F3} (flat shipped price {NarcoticsHustle.NarcoticsProfile.UnitCost})  deal rate={(double)deals / trials:P1}");
+        Console.WriteLine($"  patient: mean={patientMean:F3}   eager-accept: mean={eagerMean:F3}\n");
+
+        Check("haggle EV-neutrality (LOCKED §3.1): neutral autopilot mean effective UnitCost within ±0.15 of the shipped flat 10",
+            deals == trials && Math.Abs(meanCost - NarcoticsHustle.NarcoticsProfile.UnitCost) < 0.15,
+            $"mean={meanCost:F3} deals={deals}/{trials}");
+        Check("haggle skill: a patient haggler beats the flat price; an eager one pays more",
+            patientMean < NarcoticsHustle.NarcoticsProfile.UnitCost
+            && eagerMean > NarcoticsHustle.NarcoticsProfile.UnitCost,
+            $"patient={patientMean:F3} eager={eagerMean:F3}");
+
+        // --- haggled Stage-1 plumbing -----------------------------------
+        var unitRng = new RngState(FindSeed(s =>
+        {
+            var r = new RngState(s);
+            return NarcoticsHustle.DropInventory(in ctx, 300, 8.0, 1.0, ref r).Stage == HustleStage.InventoryDrop;
+        }));
+        HustleState haggledDrop = NarcoticsHustle.DropInventory(in ctx, 300, 8.0, 1.0, ref unitRng);
+        Check("haggle: the haggled unit cost drives units per dollar in DropInventory",
+            haggledDrop.InventoryUnits == 300 / 8.0, $"units={haggledDrop.InventoryUnits}");
+
+        double baseMax = Math.Min(ctx.Funds, NarcoticsHustle.ComputeBuyInMax(in ctx));
+        bool multScalesCeiling = !ThrowsOn(() =>
+        {
+            var r = new RngState(3);
+            NarcoticsHustle.DropInventory(in ctx, baseMax * 1.2, 10.0, 1.3, ref r);
+        }) && ThrowsOn(() =>
+        {
+            var r = new RngState(3);
+            NarcoticsHustle.DropInventory(in ctx, baseMax * 0.95, 10.0, 0.9, ref r);
+        });
+        Check("haggle: the allotment multiplier scales the DropInventory ceiling both ways", multScalesCeiling);
+
+        // --- end-to-end EV neutrality: the shipped Safe band through a neutral
+        // haggle must not move (INV-2's lumpy-but-bounded thesis holds).
+        var flatSafe = RunPolicy(ctx, 300, 1.0, PushLevel.Hold, trials, 1_000_000UL);
+        double haggledTotal = 0;
+        for (int i = 0; i < trials; i++)
+        {
+            var r = new RngState(4_000_000UL + (ulong)i * 7919UL + 1UL);
+            HaggleState haggle = RunNeutralHaggle(in ctx, ref r);
+            HustleState state = NarcoticsHustle.DropInventory(in ctx, 300, haggle.DealUnitCost, haggle.BuyInMaxMult, ref r);
+            if (state.Stage != HustleStage.Busted)
+            {
+                state = NarcoticsHustle.CutProduct(in state, in ctx, 1.0, ref r);
+                state = NarcoticsHustle.PushTerritory(in state, in ctx, PushLevel.Hold, ref r);
+            }
+            haggledTotal += state.FundsDelta;
+        }
+        double haggledSafeMean = haggledTotal / trials;
+        Console.WriteLine($"--- Safe policy through neutral haggle: mean={haggledSafeMean:F1} (flat band mean={flatSafe.MeanFunds:F1}) ---\n");
+        Check("haggle EV-neutrality end-to-end: the Safe band through a neutral haggle stays within ±8 of the flat band",
+            Math.Abs(haggledSafeMean - flatSafe.MeanFunds) < 8.0,
+            $"haggled={haggledSafeMean:F1} flat={flatSafe.MeanFunds:F1}");
     }
 
     // ------------------------------------------------------------------
@@ -796,6 +988,15 @@ internal static class Program
         Check("determinism: same seed ⇒ identical Fencing negotiation",
             RunFencing(seed).Equals(RunFencing(seed)));
 
+        HaggleState RunHaggle(ulong s)
+        {
+            var rng = new RngState(s);
+            return RunNeutralHaggle(in ctx, ref rng);
+        }
+
+        Check("determinism: same seed ⇒ identical supplier haggle",
+            RunHaggle(seed).Equals(RunHaggle(seed)));
+
         RobberyContext robberyCtx = RobberyCtx();
         RobberyState RunRobbery(ulong s)
         {
@@ -850,12 +1051,27 @@ internal static class Program
             _ = state.ToResolution();
         }
 
+        void OneHaggledRun(ulong seed)
+        {
+            var rng = new RngState(seed);
+            HaggleState haggle = RunNeutralHaggle(in ctx, ref rng);
+            HustleState state = NarcoticsHustle.DropInventory(in ctx, 300, haggle.DealUnitCost, haggle.BuyInMaxMult, ref rng);
+            if (state.Stage != HustleStage.Busted)
+            {
+                state = NarcoticsHustle.CutProduct(in state, in ctx, 1.6, ref rng);
+                state = NarcoticsHustle.PushTerritory(in state, in ctx, PushLevel.Encroach, ref rng);
+            }
+            _ = state.ToResolution();
+            _ = haggle.ToResolution();
+        }
+
         // Warm-up: JIT everything before measuring.
         for (ulong i = 1; i <= 50; i++)
         {
             OneNarcoticsRun(i);
             OneFencingRun(i);
             OneRobberyRun(i);
+            OneHaggledRun(i);
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -877,11 +1093,18 @@ internal static class Program
         }
         long afterRobbery = GC.GetAllocatedBytesForCurrentThread();
 
+        for (ulong i = 1000; i <= 1200; i++)
+        {
+            OneHaggledRun(i);
+        }
+        long afterHaggled = GC.GetAllocatedBytesForCurrentThread();
+
         double narcoticsPerRun = (afterNarcotics - before) / 201.0;
         double fencingPerRun = (afterFencing - afterNarcotics) / 201.0;
         double robberyPerRun = (afterRobbery - afterFencing) / 201.0;
+        double haggledPerRun = (afterHaggled - afterRobbery) / 201.0;
 
-        Console.WriteLine($"--- zero-alloc: {narcoticsPerRun:F1} B/Narcotics-run, {fencingPerRun:F1} B/Fencing-run, {robberyPerRun:F1} B/Robbery-run ---\n");
+        Console.WriteLine($"--- zero-alloc: {narcoticsPerRun:F1} B/Narcotics-run, {fencingPerRun:F1} B/Fencing-run, {robberyPerRun:F1} B/Robbery-run, {haggledPerRun:F1} B/haggled-run ---\n");
 
         Check("zero-alloc: a warm resolved Narcotics run allocates ~0 B", narcoticsPerRun < 16,
             $"{narcoticsPerRun:F1} B/run");
@@ -889,5 +1112,7 @@ internal static class Program
             $"{fencingPerRun:F1} B/run");
         Check("zero-alloc: a warm completed Robbery run allocates ~0 B", robberyPerRun < 16,
             $"{robberyPerRun:F1} B/run");
+        Check("zero-alloc: a warm haggled Narcotics run allocates ~0 B", haggledPerRun < 16,
+            $"{haggledPerRun:F1} B/run");
     }
 }

@@ -44,8 +44,51 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
+[node name="HagglePanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="AskLabel" type="Label" parent="Panel/Layout/HagglePanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="BidRow" type="HBoxContainer" parent="Panel/Layout/HagglePanel"]
+layout_mode = 2
+
+[node name="BidLabel" type="Label" parent="Panel/Layout/HagglePanel/BidRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+text = "Bid $"
+
+[node name="BidSlider" type="HSlider" parent="Panel/Layout/HagglePanel/BidRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 20.0
+step = 0.05
+value = 8.0
+
+[node name="BidValueLabel" type="Label" parent="Panel/Layout/HagglePanel/BidRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "8.00"
+
+[node name="CounterButton" type="Button" parent="Panel/Layout/HagglePanel"]
+layout_mode = 2
+text = "Counter-offer"
+
+[node name="AcceptButton" type="Button" parent="Panel/Layout/HagglePanel"]
+layout_mode = 2
+text = "Accept His Price"
+
+[node name="WalkButton" type="Button" parent="Panel/Layout/HagglePanel"]
+layout_mode = 2
+text = "Walk Away (no run today)"
+
 [node name="StartPanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
+visible = false
 
 [node name="BuyInRow" type="HBoxContainer" parent="Panel/Layout/StartPanel"]
 layout_mode = 2

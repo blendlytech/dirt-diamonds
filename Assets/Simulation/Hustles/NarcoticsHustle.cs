@@ -53,6 +53,49 @@ public enum HustleStage : byte
     Busted,
 }
 
+public enum HaggleOutcomeKind : byte
+{
+    InProgress,
+
+    /// <summary>Price agreed — the run proceeds at <see cref="HaggleState.DealUnitCost"/>.</summary>
+    Deal,
+
+    /// <summary>Patience ran out — the supplier is unwilling today (forfeit-to-no-deal, §3.1) and trust takes the push-too-hard penalty.</summary>
+    Refused,
+
+    /// <summary>The player walked — no run today, no trust consequence.</summary>
+    Walked,
+}
+
+/// <summary>
+/// One supplier haggle's live state (docs/design/hustle_minigames_depth_pass.md
+/// §3.1, slice N-2): the buyer-side inversion of <see cref="FencingState"/> —
+/// the supplier's ask descends toward a hidden floor as patience burns, and the
+/// player wants a LOW close. Hidden fields stay public for the harness, same as
+/// Fencing's; Layer 3 never renders <see cref="HiddenFloor"/>. A closed deal
+/// carries the run's effective unit cost plus the allotment multiplier
+/// (<see cref="BuyInMaxMult"/> — pay nearer the ask and the supplier fronts
+/// more; squeeze the floor and the allotment shrinks: the margin/volume trade).
+/// <see cref="ToResolution"/> projects only the trust delta — no money moves at
+/// the haggle itself; the buy-in debit stays in <see cref="NarcoticsHustle.DropInventory"/>.
+/// </summary>
+public readonly record struct HaggleState(
+    HaggleOutcomeKind Outcome,
+    double HiddenFloor,
+    double InitialAsk,
+    double CurrentAsk,
+    int InitialPatience,
+    int PatienceRemaining,
+    double DealUnitCost,
+    double BuyInMaxMult,
+    int SupplierTrustDelta)
+{
+    public HustleResolution ToResolution() => new(
+        fundsDelta: 0, detectionRiskDelta: 0, healthCeilingDelta: 0, recklessnessDelta: 0, stressDelta: 0,
+        SupplierTrustDelta, crewStandingDelta: 0,
+        setWatchlistFlag: false, setBadProductFlag: false, setSpoiledGoodsFlag: false, setControlsTurfFlag: false);
+}
+
 public enum PushLevel : byte
 {
     Hold,
@@ -113,6 +156,37 @@ public static class NarcoticsHustle
         public const double BuyInMin = 100;
         public const double BuyInMaxBase = 1000;
         public const double CutMax = 2.5;
+
+        // --- Supplier haggle (§3.1, N-2). EV-neutrality is LOCKED: the neutral
+        // autopilot closes deterministically at HaggleOpenAskMult · (1 − DropFrac)²
+        // = 1.1 × the hidden floor, so with the floor-draw mean at trust 20 being
+        // 10 × (E[u] − 0.02) = 9.1, the neutral mean effective cost is 10.01 ≈
+        // UnitCost — the haggle adds variance and agency, not free money. Any
+        // retune of these six coupled constants must re-prove that identity in
+        // HustleHarness (the ±0.15 band check).
+        public const double HaggleFloorUMin = 0.86;
+        public const double HaggleFloorUMax = 1.00;
+        public const double HaggleTrustDiscount = 0.10;
+        public const double HaggleFloorMultMin = 0.60;
+        public const double HaggleFloorMultMax = 1.05;
+        public const double HaggleOpenAskMult = 1.4;
+        public const double HaggleDropFrac = 0.5;
+        public const int HagglePatienceBase = 4;
+
+        /// <summary>Mirror of Fencing's PatienceBonusStanding: a supplier this trusted grants an extra round.</summary>
+        public const int HagglePatienceBonusTrust = 50;
+
+        /// <summary>The §3.1 neutral autopilot's fixed fraction: accept once the ask has fallen to this multiple of the opening ask.</summary>
+        public const double NeutralHaggleAcceptFrac = 0.85;
+
+        // Allotment multiplier over ComputeBuyInMax, lerped by where the close
+        // landed between floor and opening ask — the neutral close (t = 0.25)
+        // lands exactly 1.0, preserving the shipped ceiling.
+        public const double HaggleBuyInMultMin = 0.90;
+        public const double HaggleBuyInMultSpan = 0.40;
+
+        public const int HaggleDealTrustBonus = 1;
+        public const int HaggleRefusalTrustPenalty = 4;
     }
 
     private readonly struct MarketTier
@@ -144,15 +218,125 @@ public static class NarcoticsHustle
         * (1 - 0.4 * ctx.Heat);
 
     /// <summary>
+    /// Stage 0 (§3.1, N-2): opens the supplier haggle — draws the hidden floor
+    /// (trusted suppliers quote lower) and the opening ask above it. The one
+    /// RngState draw in the whole haggle; every later transition is
+    /// deterministic, mirroring Fencing's draw-once-then-negotiate shape.
+    /// </summary>
+    public static HaggleState HaggleStart(in HustleContext ctx, ref RngState rng)
+    {
+        double u = NarcoticsProfile.HaggleFloorUMin
+            + rng.NextDouble() * (NarcoticsProfile.HaggleFloorUMax - NarcoticsProfile.HaggleFloorUMin);
+        double floorMult = Math.Clamp(
+            u - NarcoticsProfile.HaggleTrustDiscount * (ctx.SupplierTrust / 100.0),
+            NarcoticsProfile.HaggleFloorMultMin, NarcoticsProfile.HaggleFloorMultMax);
+        double floor = NarcoticsProfile.UnitCost * floorMult;
+        double ask = floor * NarcoticsProfile.HaggleOpenAskMult;
+        int patience = NarcoticsProfile.HagglePatienceBase
+            + (ctx.SupplierTrust >= NarcoticsProfile.HagglePatienceBonusTrust ? 1 : 0);
+
+        return new HaggleState(
+            HaggleOutcomeKind.InProgress, floor, ask, ask, patience, patience,
+            DealUnitCost: 0, BuyInMaxMult: 0, SupplierTrustDelta: 0);
+    }
+
+    /// <summary>Takes the supplier's ask on the table now.</summary>
+    public static HaggleState HaggleAccept(in HaggleState state)
+    {
+        RequireHaggleInProgress(state);
+        return CloseHaggle(state, state.CurrentAsk);
+    }
+
+    /// <summary>
+    /// Bids a price. A bid at/above the supplier's live willingness closes at
+    /// min(bid, ask) — he never charges more than he's asking; a lowball makes
+    /// him concede toward the floor and burns a round. Patience hitting 0 is a
+    /// refusal: no run today and the push-too-hard trust penalty (§3.1).
+    /// </summary>
+    public static HaggleState HaggleCounter(in HaggleState state, double bidPrice)
+    {
+        RequireHaggleInProgress(state);
+
+        double willingness = ComputeSupplierWillingness(in state);
+        if (bidPrice >= willingness)
+        {
+            return CloseHaggle(state, Math.Min(bidPrice, state.CurrentAsk));
+        }
+
+        int patience = state.PatienceRemaining - 1;
+        if (patience <= 0)
+        {
+            return state with
+            {
+                Outcome = HaggleOutcomeKind.Refused,
+                PatienceRemaining = 0,
+                SupplierTrustDelta = -NarcoticsProfile.HaggleRefusalTrustPenalty,
+            };
+        }
+
+        double nextAsk = state.CurrentAsk - NarcoticsProfile.HaggleDropFrac * (state.CurrentAsk - state.HiddenFloor);
+        return state with { CurrentAsk = nextAsk, PatienceRemaining = patience };
+    }
+
+    /// <summary>Walks away from today's price: no run, no trust consequence.</summary>
+    public static HaggleState HaggleWalk(in HaggleState state)
+    {
+        RequireHaggleInProgress(state);
+        return state with { Outcome = HaggleOutcomeKind.Walked };
+    }
+
+    /// <summary>The §3.1 headless autopilot stand-in: accepts once the ask has fallen to a fixed fraction of the opening ask — the buyer-side mirror of Fencing's <see cref="FencingNegotiation.NeutralAcceptDecision"/>.</summary>
+    public static bool NeutralHaggleDecision(in HaggleState state) =>
+        state.CurrentAsk <= state.InitialAsk * NarcoticsProfile.NeutralHaggleAcceptFrac;
+
+    /// <summary>Buyer-side mirror of Fencing's ceiling: starts at the current ask (full patience) and descends to the hidden floor as patience burns.</summary>
+    private static double ComputeSupplierWillingness(in HaggleState state) =>
+        state.HiddenFloor + (state.CurrentAsk - state.HiddenFloor)
+            * ((double)state.PatienceRemaining / state.InitialPatience);
+
+    private static HaggleState CloseHaggle(in HaggleState state, double dealPrice)
+    {
+        double t = state.InitialAsk > state.HiddenFloor
+            ? Math.Clamp((dealPrice - state.HiddenFloor) / (state.InitialAsk - state.HiddenFloor), 0, 1)
+            : 1;
+        return state with
+        {
+            Outcome = HaggleOutcomeKind.Deal,
+            DealUnitCost = dealPrice,
+            BuyInMaxMult = NarcoticsProfile.HaggleBuyInMultMin + NarcoticsProfile.HaggleBuyInMultSpan * t,
+            SupplierTrustDelta = NarcoticsProfile.HaggleDealTrustBonus,
+        };
+    }
+
+    private static void RequireHaggleInProgress(in HaggleState state)
+    {
+        if (state.Outcome != HaggleOutcomeKind.InProgress)
+        {
+            throw new InvalidOperationException($"Cannot act on a haggle already resolved ({state.Outcome}).");
+        }
+    }
+
+    /// <summary>
     /// Stage 1: commits <paramref name="buyIn"/> (clamped to [BuyInMin, min(funds, BuyInMax)]
     /// by the caller — this throws on an out-of-range value, the same
     /// fail-loud contract <see cref="Life.DaySchedule"/>'s ctor keeps) and
     /// rolls the seizure check. Debits the buy-in immediately either way —
-    /// capital is at risk from this point (§3.1).
+    /// capital is at risk from this point (§3.1). This flat-price signature is
+    /// the shipped pre-N-2 path, byte-identical; a haggled run goes through the
+    /// overload below.
     /// </summary>
-    public static HustleState DropInventory(in HustleContext ctx, double buyIn, ref RngState rng)
+    public static HustleState DropInventory(in HustleContext ctx, double buyIn, ref RngState rng) =>
+        DropInventory(in ctx, buyIn, NarcoticsProfile.UnitCost, buyInMaxMult: 1.0, ref rng);
+
+    /// <summary>
+    /// N-2 overload: Stage 1 at the haggled <paramref name="unitCost"/> and
+    /// allotment multiplier from a closed <see cref="HaggleState"/> — units per
+    /// dollar and the supplier-front ceiling both move with the deal struck.
+    /// </summary>
+    public static HustleState DropInventory(
+        in HustleContext ctx, double buyIn, double unitCost, double buyInMaxMult, ref RngState rng)
     {
-        double maxBuyIn = Math.Min(ctx.Funds, ComputeBuyInMax(in ctx));
+        double maxBuyIn = Math.Min(ctx.Funds, ComputeBuyInMax(in ctx) * buyInMaxMult);
         if (buyIn < NarcoticsProfile.BuyInMin || buyIn > maxBuyIn)
         {
             throw new ArgumentOutOfRangeException(
@@ -172,7 +356,7 @@ public static class NarcoticsHustle
         }
 
         return new HustleState(
-            HustleStage.InventoryDrop, buyIn, buyIn / NarcoticsProfile.UnitCost, 0, 0,
+            HustleStage.InventoryDrop, buyIn, buyIn / unitCost, 0, 0,
             FundsDelta: -buyIn, DetectionRiskDelta: 0, HealthCeilingDelta: 0, RecklessnessDelta: 0, StressDelta: 0,
             SupplierTrustDelta: 0, CrewStandingDelta: 0,
             WatchlistFlag: false, BadProductFlag: false, SpoiledGoodsFlag: false, ControlsTurfFlag: false);

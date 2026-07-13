@@ -29,6 +29,14 @@ namespace DirtAndDiamonds.UI;
 /// the built-in Lever-A tail scaling the spec calls out, no new risk math.
 /// Capped at <see cref="MaxRunsPerDay"/> (flat, in-memory, no GameManager
 /// hour-budget dependency per §11's resolved seam).
+///
+/// N-2 (§3.1): every run now opens with a supplier haggle (Stage 0) over the
+/// pure <see cref="NarcoticsHustle.HaggleStart"/> family — the closed deal's
+/// effective unit cost and allotment multiplier feed the buy-in stage via the
+/// haggled <see cref="NarcoticsHustle.DropInventory"/> overload, its trust
+/// delta folds through <see cref="FoldAccrued"/>, and a refusal or walk ends
+/// the session with no run today (forfeit-to-no-deal). Re-ups re-haggle: each
+/// run is its own supply buy, at trust nudged by the session's accrual.
 /// </summary>
 public sealed partial class NarcoticsHustleScreen : Control
 {
@@ -47,7 +55,26 @@ public sealed partial class NarcoticsHustleScreen : Control
     [Export]
     public string RunTallyFormat { get; set; } = "Session total so far: funds {0:+0;-0;0}, detection {1:+0;-0;0}.";
 
+    [Export]
+    public string HaggleAskFormat { get; set; } = "The supplier wants ${0:F2}/unit (street price ${1:F0}). Patience: {2}.";
+
+    [Export]
+    public string HaggleDealFormat { get; set; } = "Locked in ${0:F2}/unit. He'll front up to ${1:F0}.";
+
+    [Export]
+    public string SupplierRefusedText { get; set; } = "You pushed too hard — the supplier walks off. No run today.";
+
+    [Export]
+    public string SupplierWalkedText { get; set; } = "You passed on today's price. No run today.";
+
     private Label _statusLabel = null!;
+    private VBoxContainer _hagglePanel = null!;
+    private Label _askLabel = null!;
+    private HSlider _bidSlider = null!;
+    private Label _bidValueLabel = null!;
+    private Button _counterButton = null!;
+    private Button _acceptButton = null!;
+    private Button _walkButton = null!;
     private VBoxContainer _startPanel = null!;
     private HSlider _buyInSlider = null!;
     private Label _buyInValueLabel = null!;
@@ -73,12 +100,22 @@ public sealed partial class NarcoticsHustleScreen : Control
     private HustleContext _ctx;
     private RngState _rng;
     private HustleState? _state;
+    private HaggleState? _haggle;
+    private double _dealUnitCost;
+    private double _dealBuyInMult;
     private HustleResolution _accrued;
     private int _runsUsed;
 
     public override void _Ready()
     {
         _statusLabel = GetNode<Label>("Panel/Layout/StatusLabel");
+        _hagglePanel = GetNode<VBoxContainer>("Panel/Layout/HagglePanel");
+        _askLabel = GetNode<Label>("Panel/Layout/HagglePanel/AskLabel");
+        _bidSlider = GetNode<HSlider>("Panel/Layout/HagglePanel/BidRow/BidSlider");
+        _bidValueLabel = GetNode<Label>("Panel/Layout/HagglePanel/BidRow/BidValueLabel");
+        _counterButton = GetNode<Button>("Panel/Layout/HagglePanel/CounterButton");
+        _acceptButton = GetNode<Button>("Panel/Layout/HagglePanel/AcceptButton");
+        _walkButton = GetNode<Button>("Panel/Layout/HagglePanel/WalkButton");
         _startPanel = GetNode<VBoxContainer>("Panel/Layout/StartPanel");
         _buyInSlider = GetNode<HSlider>("Panel/Layout/StartPanel/BuyInRow/BuyInSlider");
         _buyInValueLabel = GetNode<Label>("Panel/Layout/StartPanel/BuyInRow/BuyInValueLabel");
@@ -100,6 +137,10 @@ public sealed partial class NarcoticsHustleScreen : Control
 
         _buyInSlider.ValueChanged += _ => _buyInValueLabel.Text = ((int)_buyInSlider.Value).ToString();
         _cutSlider.ValueChanged += _ => _cutValueLabel.Text = _cutSlider.Value.ToString("F1");
+        _bidSlider.ValueChanged += _ => _bidValueLabel.Text = _bidSlider.Value.ToString("F2");
+        _counterButton.Pressed += OnHaggleCounterPressed;
+        _acceptButton.Pressed += OnHaggleAcceptPressed;
+        _walkButton.Pressed += OnHaggleWalkPressed;
         _commitButton.Pressed += OnCommitPressed;
         _cutButton.Pressed += OnCutPressed;
         _bankExitDropButton.Pressed += OnBankExitDropPressed;
@@ -112,6 +153,9 @@ public sealed partial class NarcoticsHustleScreen : Control
 
     public override void _ExitTree()
     {
+        _counterButton.Pressed -= OnHaggleCounterPressed;
+        _acceptButton.Pressed -= OnHaggleAcceptPressed;
+        _walkButton.Pressed -= OnHaggleWalkPressed;
         _commitButton.Pressed -= OnCommitPressed;
         _cutButton.Pressed -= OnCutPressed;
         _bankExitDropButton.Pressed -= OnBankExitDropPressed;
@@ -156,42 +200,131 @@ public sealed partial class NarcoticsHustleScreen : Control
     /// <summary>
     /// Starts one run (the first, or a re-up): rebuilds <see cref="_ctx"/> from
     /// the base snapshot nudged by everything <see cref="_accrued"/> so far —
-    /// funds reflect prior takes/losses, heat reflects prior detection deltas —
-    /// so a hot run's own heat feeds into the next drop's pSeize (§3.2's
-    /// built-in tail scaling). No DB read; the live DB row never moves mid-session.
+    /// funds reflect prior takes/losses, heat reflects prior detection deltas,
+    /// supplier trust reflects prior haggle/run deltas (N-2: the haggle's own
+    /// trust hit feeds the next run's floor and patience) — so a hot run's own
+    /// heat feeds into the next drop's pSeize (§3.2's built-in tail scaling).
+    /// No DB read; the live DB row never moves mid-session. Each run opens with
+    /// its own supplier haggle (§3.1 Stage 0) — a re-up is a fresh supply buy.
     /// </summary>
     private void BeginRun()
     {
         _state = null;
+        _haggle = null;
         double liveFunds = Math.Max(0, _baseCtx.Funds + _accrued.FundsDelta);
         double liveHeat = Math.Clamp(_baseCtx.Heat + _accrued.DetectionRiskDelta / 100.0, 0, 1);
+        int liveTrust = Math.Clamp(_baseCtx.SupplierTrust + _accrued.SupplierTrustDelta, -100, 100);
         _ctx = new HustleContext(
-            liveFunds, liveHeat, _baseCtx.Reck, _baseCtx.SupplierTrust,
+            liveFunds, liveHeat, _baseCtx.Reck, liveTrust,
             _baseCtx.CrewStandingLocal + _accrued.CrewStandingDelta, _baseCtx.OwnsTurfLocal, _baseCtx.UsesProduct);
 
-        double maxBuyIn = Math.Min(_ctx.Funds, NarcoticsHustle.ComputeBuyInMax(in _ctx));
-        bool canAfford = maxBuyIn >= NarcoticsHustle.NarcoticsProfile.BuyInMin;
-        _buyInSlider.MinValue = NarcoticsHustle.NarcoticsProfile.BuyInMin;
-        _buyInSlider.MaxValue = canAfford ? maxBuyIn : NarcoticsHustle.NarcoticsProfile.BuyInMin;
-        _buyInSlider.Value = _buyInSlider.MinValue;
-        _buyInValueLabel.Text = ((int)_buyInSlider.Value).ToString();
-        _commitButton.Disabled = !canAfford;
-        _statusLabel.Text = canAfford ? string.Empty : CantAffordText;
+        // Best-case affordability gate before wasting the player's time haggling:
+        // even at the widest allotment the supplier could grant, can a min buy-in fit?
+        double bestCaseMax = Math.Min(_ctx.Funds, NarcoticsHustle.ComputeBuyInMax(in _ctx)
+            * (NarcoticsHustle.NarcoticsProfile.HaggleBuyInMultMin + NarcoticsHustle.NarcoticsProfile.HaggleBuyInMultSpan));
+        if (bestCaseMax < NarcoticsHustle.NarcoticsProfile.BuyInMin)
+        {
+            ShowBuyInPanel(maxBuyIn: 0, canAfford: false);
+            return;
+        }
 
-        ShowPanel(_startPanel);
+        _haggle = NarcoticsHustle.HaggleStart(in _ctx, ref _rng);
+        HaggleState haggle = _haggle.Value;
+        _bidSlider.MinValue = 1.0;
+        _bidSlider.MaxValue = haggle.CurrentAsk;
+        _bidSlider.Value = haggle.CurrentAsk * 0.6;
+        _bidValueLabel.Text = _bidSlider.Value.ToString("F2");
+        RefreshHaggleLabel();
+        _statusLabel.Text = string.Empty;
+        ShowPanel(_hagglePanel);
     }
 
     private void ShowPanel(Control panel)
     {
+        _hagglePanel.Visible = ReferenceEquals(panel, _hagglePanel);
         _startPanel.Visible = ReferenceEquals(panel, _startPanel);
         _postDropPanel.Visible = ReferenceEquals(panel, _postDropPanel);
         _postCutPanel.Visible = ReferenceEquals(panel, _postCutPanel);
         _resultPanel.Visible = ReferenceEquals(panel, _resultPanel);
     }
 
+    private void RefreshHaggleLabel()
+    {
+        HaggleState haggle = _haggle!.Value;
+        _askLabel.Text = string.Format(
+            HaggleAskFormat, haggle.CurrentAsk, NarcoticsHustle.NarcoticsProfile.StreetPrice, haggle.PatienceRemaining);
+    }
+
+    private void OnHaggleCounterPressed()
+    {
+        _haggle = NarcoticsHustle.HaggleCounter(_haggle!.Value, _bidSlider.Value);
+        AdvanceHaggle();
+    }
+
+    private void OnHaggleAcceptPressed()
+    {
+        _haggle = NarcoticsHustle.HaggleAccept(_haggle!.Value);
+        AdvanceHaggle();
+    }
+
+    private void OnHaggleWalkPressed()
+    {
+        _haggle = NarcoticsHustle.HaggleWalk(_haggle!.Value);
+        AdvanceHaggle();
+    }
+
+    private void AdvanceHaggle()
+    {
+        HaggleState haggle = _haggle!.Value;
+        switch (haggle.Outcome)
+        {
+            case HaggleOutcomeKind.InProgress:
+                _bidSlider.MaxValue = haggle.CurrentAsk;
+                RefreshHaggleLabel();
+                break;
+            case HaggleOutcomeKind.Deal:
+                FoldAccrued(haggle.ToResolution());
+                _dealUnitCost = haggle.DealUnitCost;
+                _dealBuyInMult = haggle.BuyInMaxMult;
+                double maxBuyIn = Math.Min(
+                    _ctx.Funds, NarcoticsHustle.ComputeBuyInMax(in _ctx) * _dealBuyInMult);
+                ShowBuyInPanel(maxBuyIn, canAfford: maxBuyIn >= NarcoticsHustle.NarcoticsProfile.BuyInMin);
+                break;
+            case HaggleOutcomeKind.Refused:
+            case HaggleOutcomeKind.Walked:
+                // No run today (§3.1 forfeit-to-no-deal): a refusal still costs
+                // trust, a walk costs nothing — either way the session ends and
+                // whatever earlier runs accrued applies on Done.
+                FoldAccrued(haggle.ToResolution());
+                _resultLabel.Text = haggle.Outcome == HaggleOutcomeKind.Refused
+                    ? SupplierRefusedText
+                    : SupplierWalkedText;
+                _reUpButton.Visible = false;
+                _runTallyLabel.Text = _runsUsed > 0
+                    ? string.Format(RunTallyFormat, _accrued.FundsDelta, _accrued.DetectionRiskDelta)
+                    : string.Empty;
+                ShowPanel(_resultPanel);
+                break;
+        }
+    }
+
+    private void ShowBuyInPanel(double maxBuyIn, bool canAfford)
+    {
+        _buyInSlider.MinValue = NarcoticsHustle.NarcoticsProfile.BuyInMin;
+        _buyInSlider.MaxValue = canAfford ? maxBuyIn : NarcoticsHustle.NarcoticsProfile.BuyInMin;
+        _buyInSlider.Value = _buyInSlider.MinValue;
+        _buyInValueLabel.Text = ((int)_buyInSlider.Value).ToString();
+        _commitButton.Disabled = !canAfford;
+        _statusLabel.Text = canAfford
+            ? string.Format(HaggleDealFormat, _dealUnitCost, maxBuyIn)
+            : CantAffordText;
+        ShowPanel(_startPanel);
+    }
+
     private void OnCommitPressed()
     {
-        _state = NarcoticsHustle.DropInventory(in _ctx, _buyInSlider.Value, ref _rng);
+        _state = NarcoticsHustle.DropInventory(
+            in _ctx, _buyInSlider.Value, _dealUnitCost, _dealBuyInMult, ref _rng);
         _cutSlider.Value = _cutSlider.MinValue;
         Advance();
     }
@@ -257,9 +390,11 @@ public sealed partial class NarcoticsHustleScreen : Control
     }
 
     /// <summary>Folds the current run's terminal state into <see cref="_accrued"/> without committing — the in-memory INV-1 accumulator.</summary>
-    private HustleResolution CombineAccrued(in HustleState terminal)
+    private HustleResolution CombineAccrued(in HustleState terminal) => FoldAccrued(terminal.ToResolution());
+
+    /// <summary>Resolution-shaped fold for deltas that don't come from a <see cref="HustleState"/> — the N-2 haggle's trust delta.</summary>
+    private HustleResolution FoldAccrued(in HustleResolution delta)
     {
-        HustleResolution delta = terminal.ToResolution();
         _accrued = new HustleResolution(
             _accrued.FundsDelta + delta.FundsDelta,
             _accrued.DetectionRiskDelta + delta.DetectionRiskDelta,
