@@ -39,11 +39,14 @@ public readonly struct HustleResolution
     /// <summary>Robbery only (docs/design/hustle_minigames_depth_pass.md §5.2) — set on a botched execute/getaway, the robbery analogue of the sting/raid flags ("robbery_bust"). The R-2 <see cref="Economy.Hustles.HustleService"/> apply path consumes it; leaving it defaulted keeps every other hustle a no-op, exactly like the four flags above.</summary>
     public readonly bool SetRobberyBustFlag;
 
+    /// <summary>Fencing only (§4.1/§5.2/§11) — set when an acquired lot's source was <c>FencingSource.FreshFromAJob</c>, clearing the <c>hot_goods</c> flag on apply (consume-on-use). Every other hustle leaves this at its default, the same no-op discipline as the flags above.</summary>
+    public readonly bool SetConsumesHotGoodsFlag;
+
     public HustleResolution(
         double fundsDelta, int detectionRiskDelta, int healthCeilingDelta, int recklessnessDelta, double stressDelta,
         int supplierTrustDelta, int crewStandingDelta,
         bool setWatchlistFlag, bool setBadProductFlag, bool setSpoiledGoodsFlag, bool setControlsTurfFlag,
-        bool setGamblingBustFlag = false, bool setRobberyBustFlag = false)
+        bool setGamblingBustFlag = false, bool setRobberyBustFlag = false, bool setConsumesHotGoodsFlag = false)
     {
         FundsDelta = fundsDelta;
         DetectionRiskDelta = detectionRiskDelta;
@@ -58,5 +61,6 @@ public readonly struct HustleResolution
         SetControlsTurfFlag = setControlsTurfFlag;
         SetGamblingBustFlag = setGamblingBustFlag;
         SetRobberyBustFlag = setRobberyBustFlag;
+        SetConsumesHotGoodsFlag = setConsumesHotGoodsFlag;
     }
 }

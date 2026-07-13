@@ -132,6 +132,27 @@ public sealed class HustleService
         return new FencingContext(row.DetectionRisk / 100.0, fenceStanding);
     }
 
+    /// <summary>
+    /// §4.1/§5.2's cross-hook read side: is a <c>hot_goods</c> lot available to
+    /// acquire? Content-gated — false until a Robbery run ever arms the flag
+    /// (R-4), so Fencing's <c>FreshFromAJob</c> acquisition option degrades
+    /// gracefully before Robberies writes it. Same one-off flag scan as
+    /// <see cref="BuildNarcoticsContext"/>'s <c>uses_product</c>/<c>controls_turf_local</c> reads.
+    /// </summary>
+    public bool HasHotGoodsFlag(string playerId)
+    {
+        var flags = new List<EntityFlagRow>();
+        _players.LoadActiveFlags(playerId, flags);
+        foreach (EntityFlagRow flag in flags)
+        {
+            if (string.Equals(flag.FlagName, "hot_goods", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>Snapshots docs/design/hustles_texas_holdem.md §9's context for <paramref name="playerId"/> — simpler than Narcotics'/Fencing's: no faction reps at all, so no graph/Game_State touch.</summary>
     public HoldemContext BuildHoldemContext(string playerId)
     {
@@ -257,6 +278,14 @@ public sealed class HustleService
             if (resolution.SetRobberyBustFlag)
             {
                 _players.SetFlag(playerId, "robbery_bust", true, day);
+            }
+            if (resolution.SetConsumesHotGoodsFlag)
+            {
+                // §11 consume-on-use: cleared the moment the FreshFromAJob lot
+                // that used it is applied, not on a timer. Rides the same batch
+                // as everything else, so it only ever lands alongside a Done'd
+                // resolution (INV-1) — never on a forfeited/abandoned session.
+                _players.SetFlag(playerId, "hot_goods", false, day);
             }
             _db.CommitBatch();
         }

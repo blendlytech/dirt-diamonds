@@ -26,6 +26,37 @@ public enum FencingOutcomeKind : byte
 }
 
 /// <summary>
+/// Where a lot in the Acquire stage (§4.1) can come from — a small, legible
+/// risk/value pick, not a minigame-within-a-minigame. Ordered low→high
+/// value/heat. <see cref="FreshFromAJob"/> is content-gated: it requires a
+/// <c>hot_goods</c> flag the player doesn't have until a Robbery run arms one
+/// (R-4), so it degrades gracefully before Robberies ships (§5.2/§11).
+/// </summary>
+public enum FencingSource : byte
+{
+    PawnShopOverstock,
+    FellOffATruck,
+    FreshFromAJob,
+}
+
+/// <summary>The result of an Acquire-stage pick (§4.1) — feeds <see cref="FencingNegotiation.StartLot(in FencingContext, in LotAcquisition, ref RngState)"/>.</summary>
+public readonly struct LotAcquisition
+{
+    public readonly FencingSource Source;
+    public readonly double Value;
+    public readonly int InitialDetectionRiskDelta;
+    public readonly bool SpoiledGoodsFlag;
+
+    public LotAcquisition(FencingSource source, double value, int initialDetectionRiskDelta, bool spoiledGoodsFlag)
+    {
+        Source = source;
+        Value = value;
+        InitialDetectionRiskDelta = initialDetectionRiskDelta;
+        SpoiledGoodsFlag = spoiledGoodsFlag;
+    }
+}
+
+/// <summary>
 /// One negotiation's live state (§4): the fence's current offer plus the
 /// hidden true value/reservation drawn once at <see cref="FencingNegotiation.StartLot"/>
 /// — kept as plain public fields (not hidden from the pure-math layer) so
@@ -47,12 +78,14 @@ public readonly record struct FencingState(
     int DetectionRiskDelta,
     double StressDelta,
     bool WatchlistFlag,
-    bool SpoiledGoodsFlag)
+    bool SpoiledGoodsFlag,
+    bool ConsumesHotGoodsFlag)
 {
     public HustleResolution ToResolution() => new(
         FundsDelta, DetectionRiskDelta, healthCeilingDelta: 0, recklessnessDelta: 0, StressDelta,
         supplierTrustDelta: 0, crewStandingDelta: 0,
-        WatchlistFlag, setBadProductFlag: false, SpoiledGoodsFlag, setControlsTurfFlag: false);
+        WatchlistFlag, setBadProductFlag: false, SpoiledGoodsFlag, setControlsTurfFlag: false,
+        setGamblingBustFlag: false, setRobberyBustFlag: false, setConsumesHotGoodsFlag: ConsumesHotGoodsFlag);
 }
 
 /// <summary>
@@ -86,10 +119,22 @@ public static class FencingNegotiation
         public const double NeutralAcceptMultiplier = 1.3;
     }
 
-    /// <summary>Draws the lot's hidden V/R and the fence's opening offer (§4.1) — the only RngState draw in the whole negotiation besides the per-deal sting roll.</summary>
+    /// <summary>Draws the lot's hidden V/R and the fence's opening offer from a flat [VMin, VMax] draw — the shipped, un-sourced path (still used by any caller that doesn't route through §4.1's acquisition stage). The only RngState draw here besides the per-deal sting roll.</summary>
     public static FencingState StartLot(in FencingContext ctx, ref RngState rng)
     {
         double v = FencingProfile.VMin + rng.NextDouble() * (FencingProfile.VMax - FencingProfile.VMin);
+        return StartLotFromValue(in ctx, v, initialDetectionRiskDelta: 0, spoiledGoodsFlag: false, consumesHotGoodsFlag: false, ref rng);
+    }
+
+    /// <summary>§4.1: starts a lot from an <see cref="AcquireLot"/> pick instead of the flat draw — V and the initial heat/spoiled exposure come from the chosen source; hidden R, the opening offer, and patience draw exactly as the flat overload.</summary>
+    public static FencingState StartLot(in FencingContext ctx, in LotAcquisition acquisition, ref RngState rng) =>
+        StartLotFromValue(
+            in ctx, acquisition.Value, acquisition.InitialDetectionRiskDelta, acquisition.SpoiledGoodsFlag,
+            consumesHotGoodsFlag: acquisition.Source == FencingSource.FreshFromAJob, ref rng);
+
+    private static FencingState StartLotFromValue(
+        in FencingContext ctx, double v, int initialDetectionRiskDelta, bool spoiledGoodsFlag, bool consumesHotGoodsFlag, ref RngState rng)
+    {
         double baseR = FencingProfile.BaseRMin + rng.NextDouble() * (FencingProfile.BaseRMax - FencingProfile.BaseRMin);
         double rMult = Math.Clamp(
             baseR + 0.10 * (ctx.FenceStanding / 100.0), FencingProfile.RMultMin, FencingProfile.RMultMax);
@@ -99,8 +144,59 @@ public static class FencingNegotiation
 
         return new FencingState(
             FencingOutcomeKind.InProgress, v, r, o1, o1, patience, patience,
-            DealPrice: 0, FundsDelta: 0, DetectionRiskDelta: 0, StressDelta: 0,
-            WatchlistFlag: false, SpoiledGoodsFlag: false);
+            DealPrice: 0, FundsDelta: 0, DetectionRiskDelta: initialDetectionRiskDelta, StressDelta: 0,
+            WatchlistFlag: false, SpoiledGoodsFlag: spoiledGoodsFlag, ConsumesHotGoodsFlag: consumesHotGoodsFlag);
+    }
+
+    private readonly struct SourceProfile
+    {
+        public readonly double VMin;
+        public readonly double VMax;
+        public readonly int HeatCost;
+
+        /// <summary>Chance the acquired lot is already tagged <c>spoiled_goods</c> — only <see cref="FencingSource.FellOffATruck"/> carries this risk.</summary>
+        public readonly double SpoiledChance;
+
+        public SourceProfile(double vMin, double vMax, int heatCost, double spoiledChance)
+        {
+            VMin = vMin;
+            VMax = vMax;
+            HeatCost = heatCost;
+            SpoiledChance = spoiledChance;
+        }
+    }
+
+    private static SourceProfile Source(FencingSource source) => source switch
+    {
+        // Low value, near-zero heat — the safe, boring pick.
+        FencingSource.PawnShopOverstock => new SourceProfile(vMin: 150, vMax: 400, heatCost: 0, spoiledChance: 0.0),
+        // Mid value, small heat, and a real chance the goods are already hot.
+        FencingSource.FellOffATruck => new SourceProfile(vMin: 350, vMax: 650, heatCost: 4, spoiledChance: 0.12),
+        // High value (above the flat draw's own VMax=800), notable heat, gated on a consumed hot_goods flag.
+        FencingSource.FreshFromAJob => new SourceProfile(vMin: 650, vMax: 1000, heatCost: 10, spoiledChance: 0.0),
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, null),
+    };
+
+    /// <summary>
+    /// Stage 0 (§4.1): picks where the lot came from — sets its hidden V range
+    /// and an initial heat cost instead of the flat <see cref="StartLot(in FencingContext, ref RngState)"/>
+    /// draw. One RNG draw for V, plus one for <see cref="FencingSource.FellOffATruck"/>'s
+    /// spoiled-goods roll (skipped for the other two sources — no wasted draw).
+    /// <see cref="FencingSource.FreshFromAJob"/> requires <paramref name="hotGoodsAvailable"/>
+    /// (the §5.2/§11 cross-hook's consume-on-use precondition — Layer 2 clears the
+    /// flag once this pick's resulting lot is folded into an applied resolution).
+    /// </summary>
+    public static LotAcquisition AcquireLot(FencingSource source, bool hotGoodsAvailable, ref RngState rng)
+    {
+        if (source == FencingSource.FreshFromAJob && !hotGoodsAvailable)
+        {
+            throw new InvalidOperationException("FreshFromAJob requires an available hot_goods flag.");
+        }
+
+        SourceProfile profile = Source(source);
+        double v = profile.VMin + rng.NextDouble() * (profile.VMax - profile.VMin);
+        bool spoiled = profile.SpoiledChance > 0 && rng.NextDouble() < profile.SpoiledChance;
+        return new LotAcquisition(source, v, profile.HeatCost, spoiled);
     }
 
     /// <summary>§4.1: is this fence wired? Rolled on every closed deal, never on a walk.</summary>

@@ -26,6 +26,7 @@ internal static class Program
         RunEvBandChecks();
         RunHaggleChecks();
         RunFencingChecks();
+        RunFencingAcquisitionChecks();
         RunRobberyChecks();
         RunDeterminismChecks();
         RunZeroAllocChecks();
@@ -667,6 +668,105 @@ internal static class Program
         Check("fencing: forced sting halves the deal and writes the sting deltas",
             stungDeal.FundsDelta == 0.5 * expectedDeal && stungDeal.DetectionRiskDelta == 10 && stungDeal.WatchlistFlag,
             $"funds={stungDeal.FundsDelta} (want {0.5 * expectedDeal}), detect={stungDeal.DetectionRiskDelta}");
+    }
+
+    // ------------------------------------------------------------------
+    // Check 6b — Fencing acquisition (F-2, docs/design/hustle_minigames_depth_pass.md §4.1)
+    // ------------------------------------------------------------------
+
+    private static void RunFencingAcquisitionChecks()
+    {
+        // Each source's V draw stays inside its table range, with the right fixed heat cost.
+        bool pawnInRange = true, truckInRange = true, freshInRange = true;
+        for (ulong s = 1; s <= 2000; s++)
+        {
+            var pawnRng = new RngState(s);
+            LotAcquisition pawn = FencingNegotiation.AcquireLot(FencingSource.PawnShopOverstock, hotGoodsAvailable: false, ref pawnRng);
+            pawnInRange &= pawn.Value is >= 150 and <= 400 && pawn.InitialDetectionRiskDelta == 0 && !pawn.SpoiledGoodsFlag;
+
+            var truckRng = new RngState(s);
+            LotAcquisition truck = FencingNegotiation.AcquireLot(FencingSource.FellOffATruck, hotGoodsAvailable: false, ref truckRng);
+            truckInRange &= truck.Value is >= 350 and <= 650 && truck.InitialDetectionRiskDelta == 4;
+
+            var freshRng = new RngState(s);
+            LotAcquisition fresh = FencingNegotiation.AcquireLot(FencingSource.FreshFromAJob, hotGoodsAvailable: true, ref freshRng);
+            freshInRange &= fresh.Value is >= 650 and <= 1000 && fresh.InitialDetectionRiskDelta == 10 && !fresh.SpoiledGoodsFlag;
+        }
+        Check("fencing acquisition: PawnShopOverstock draws V in [150,400], zero heat, never spoiled", pawnInRange);
+        Check("fencing acquisition: FellOffATruck draws V in [350,650], heat cost 4", truckInRange);
+        Check("fencing acquisition: FreshFromAJob draws V in [650,1000], heat cost 10, never spoiled", freshInRange);
+
+        // FreshFromAJob is gated on an available hot_goods flag.
+        bool threwWithoutFlag = false;
+        try
+        {
+            var rng = new RngState(1);
+            FencingNegotiation.AcquireLot(FencingSource.FreshFromAJob, hotGoodsAvailable: false, ref rng);
+        }
+        catch (InvalidOperationException)
+        {
+            threwWithoutFlag = true;
+        }
+        Check("fencing acquisition: FreshFromAJob throws without an available hot_goods flag", threwWithoutFlag);
+
+        // FellOffATruck's spoiled-goods roll lands near its 12% table chance.
+        const int spoiledTrials = 20_000;
+        int spoiledCount = 0;
+        for (int i = 0; i < spoiledTrials; i++)
+        {
+            var rng = new RngState((ulong)i * 104729UL + 17UL);
+            LotAcquisition truck = FencingNegotiation.AcquireLot(FencingSource.FellOffATruck, hotGoodsAvailable: false, ref rng);
+            if (truck.SpoiledGoodsFlag)
+            {
+                spoiledCount++;
+            }
+        }
+        double spoiledRate = (double)spoiledCount / spoiledTrials;
+        Check("fencing acquisition: FellOffATruck's spoiled-goods rate lands near its 12% table chance",
+            Math.Abs(spoiledRate - 0.12) < 0.02, $"rate={spoiledRate:P1}");
+
+        FencingContext fenceCtx = FenceCtx();
+
+        // StartLot(ctx, acquisition, rng) seeds the negotiation from the acquired V/heat,
+        // and only FreshFromAJob ever sets ConsumesHotGoodsFlag.
+        var freshAcqRng = new RngState(7);
+        LotAcquisition freshAcq = FencingNegotiation.AcquireLot(FencingSource.FreshFromAJob, hotGoodsAvailable: true, ref freshAcqRng);
+        FencingState freshLot = FencingNegotiation.StartLot(in fenceCtx, in freshAcq, ref freshAcqRng);
+        Check("fencing acquisition: StartLot seeds HiddenValue/initial heat from the acquisition and sets ConsumesHotGoodsFlag",
+            freshLot.HiddenValue == freshAcq.Value && freshLot.DetectionRiskDelta == freshAcq.InitialDetectionRiskDelta
+            && freshLot.ConsumesHotGoodsFlag);
+
+        var pawnAcqRng = new RngState(7);
+        LotAcquisition pawnAcq = FencingNegotiation.AcquireLot(FencingSource.PawnShopOverstock, hotGoodsAvailable: false, ref pawnAcqRng);
+        FencingState pawnLot = FencingNegotiation.StartLot(in fenceCtx, in pawnAcq, ref pawnAcqRng);
+        Check("fencing acquisition: non-FreshFromAJob sources never set ConsumesHotGoodsFlag", !pawnLot.ConsumesHotGoodsFlag);
+
+        // ConsumesHotGoodsFlag survives to the terminal ToResolution() regardless of outcome (a Walk, not just a Deal).
+        var walkAcqRng = new RngState(7);
+        LotAcquisition walkAcq = FencingNegotiation.AcquireLot(FencingSource.FreshFromAJob, hotGoodsAvailable: true, ref walkAcqRng);
+        FencingState walkState = FencingNegotiation.StartLot(in fenceCtx, in walkAcq, ref walkAcqRng);
+        while (walkState.Outcome == FencingOutcomeKind.InProgress)
+        {
+            walkState = FencingNegotiation.Counter(in walkState, in fenceCtx, walkState.CurrentOffer * 10.0, ref walkAcqRng);
+        }
+        Check("fencing acquisition: ConsumesHotGoodsFlag survives to a Walk outcome's resolution",
+            walkState.Outcome == FencingOutcomeKind.Walk && walkState.ToResolution().SetConsumesHotGoodsFlag);
+
+        // The flat (un-sourced) StartLot overload is untouched: still zero initial heat/spoiled/consumes.
+        var flatRng = new RngState(99);
+        FencingState flatLot = FencingNegotiation.StartLot(in fenceCtx, ref flatRng);
+        Check("fencing acquisition: the flat StartLot overload still starts at zero heat/spoiled/consumes",
+            flatLot.DetectionRiskDelta == 0 && !flatLot.SpoiledGoodsFlag && !flatLot.ConsumesHotGoodsFlag);
+
+        // Determinism: same seed through Acquire+StartLot => identical state.
+        FencingState DrivenAcquireAndStart(ulong seed)
+        {
+            var r = new RngState(seed);
+            LotAcquisition acq = FencingNegotiation.AcquireLot(FencingSource.FellOffATruck, hotGoodsAvailable: false, ref r);
+            return FencingNegotiation.StartLot(in fenceCtx, in acq, ref r);
+        }
+        Check("fencing acquisition: same seed => identical Acquire+StartLot draw",
+            DrivenAcquireAndStart(555).Equals(DrivenAcquireAndStart(555)));
     }
 
     // ------------------------------------------------------------------

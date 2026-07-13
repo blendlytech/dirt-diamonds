@@ -39,6 +39,25 @@ theme_type_variation = &"HeadingLabel"
 layout_mode = 2
 text = "Fencing Negotiation"
 
+[node name="AcquirePanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="AcquireLabel" type="Label" parent="Panel/Layout/AcquirePanel"]
+layout_mode = 2
+text = "Where are these goods from?"
+
+[node name="PawnShopButton" type="Button" parent="Panel/Layout/AcquirePanel"]
+layout_mode = 2
+text = "Pawn Shop Overstock (low value, no heat)"
+
+[node name="TruckButton" type="Button" parent="Panel/Layout/AcquirePanel"]
+layout_mode = 2
+text = "Fell Off a Truck (mid value, some heat)"
+
+[node name="FreshJobButton" type="Button" parent="Panel/Layout/AcquirePanel"]
+layout_mode = 2
+text = "Fresh From a Job (high value, hot goods)"
+
 [node name="OfferLabel" type="Label" parent="Panel/Layout"]
 layout_mode = 2
 text = "Current offer: $0"
@@ -49,6 +68,7 @@ text = "Patience: 0"
 
 [node name="NegotiatePanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
+visible = false
 
 [node name="AskRow" type="HBoxContainer" parent="Panel/Layout/NegotiatePanel"]
 layout_mode = 2

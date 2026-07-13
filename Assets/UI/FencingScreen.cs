@@ -36,10 +36,32 @@ namespace DirtAndDiamonds.UI;
 /// wired here — this sub-slice is UI-only per §10's role split.
 /// Capped at <see cref="MaxLotsPerDay"/> (flat, in-memory, no GameManager
 /// hour-budget dependency, same resolved seam as N-1).
+///
+/// F-2 (§4.1): every lot now opens with an Acquire pick — Pawn Shop
+/// Overstock / Fell Off a Truck / Fresh From a Job — over the pure
+/// <see cref="FencingNegotiation.AcquireLot"/> table, whose V/initial-heat/
+/// spoiled-goods outputs seed <see cref="FencingNegotiation.StartLot(in FencingContext, in LotAcquisition, ref RngState)"/>
+/// instead of the old flat draw. FreshFromAJob is content-gated on
+/// <see cref="_hotGoodsAvailable"/> — a session-local snapshot of
+/// <see cref="HustleService.HasHotGoodsFlag"/> taken once at session start
+/// and flipped false the moment it's used, so a second lot in the same
+/// multi-lot session can't spend a flag that's already been folded into
+/// <see cref="_accrued"/> (still nothing hits the DB until Done — the flag's
+/// actual clear rides <see cref="_accrued"/>'s <c>SetConsumesHotGoodsFlag</c>
+/// through the same single Done commit as everything else, INV-1).
 /// </summary>
 public sealed partial class FencingScreen : Control
 {
     private const int MaxLotsPerDay = 3;
+
+    [Export]
+    public string AcquirePawnShopText { get; set; } = "Pawn Shop Overstock (low value, no heat)";
+
+    [Export]
+    public string AcquireTruckText { get; set; } = "Fell Off a Truck (mid value, some heat)";
+
+    [Export]
+    public string AcquireFreshJobText { get; set; } = "Fresh From a Job (high value, hot goods)";
 
     [Export]
     public string OfferFormat { get; set; } = "Current offer: ${0:F0}";
@@ -64,6 +86,10 @@ public sealed partial class FencingScreen : Control
     // R well under this); the UI never reads either hidden field.
     private const double AskCeiling = 2000;
 
+    private VBoxContainer _acquirePanel = null!;
+    private Button _pawnShopButton = null!;
+    private Button _truckButton = null!;
+    private Button _freshJobButton = null!;
     private Label _offerLabel = null!;
     private Label _patienceLabel = null!;
     private VBoxContainer _negotiatePanel = null!;
@@ -84,9 +110,14 @@ public sealed partial class FencingScreen : Control
     private FencingState _state;
     private HustleResolution _accrued;
     private int _lotsUsed;
+    private bool _hotGoodsAvailable;
 
     public override void _Ready()
     {
+        _acquirePanel = GetNode<VBoxContainer>("Panel/Layout/AcquirePanel");
+        _pawnShopButton = GetNode<Button>("Panel/Layout/AcquirePanel/PawnShopButton");
+        _truckButton = GetNode<Button>("Panel/Layout/AcquirePanel/TruckButton");
+        _freshJobButton = GetNode<Button>("Panel/Layout/AcquirePanel/FreshJobButton");
         _offerLabel = GetNode<Label>("Panel/Layout/OfferLabel");
         _patienceLabel = GetNode<Label>("Panel/Layout/PatienceLabel");
         _negotiatePanel = GetNode<VBoxContainer>("Panel/Layout/NegotiatePanel");
@@ -100,6 +131,12 @@ public sealed partial class FencingScreen : Control
         _doneButton = GetNode<Button>("Panel/Layout/ResultPanel/DoneButton");
 
         _askSpinBox.MaxValue = AskCeiling;
+        _pawnShopButton.Text = AcquirePawnShopText;
+        _truckButton.Text = AcquireTruckText;
+        _freshJobButton.Text = AcquireFreshJobText;
+        _pawnShopButton.Pressed += OnPawnShopPressed;
+        _truckButton.Pressed += OnTruckPressed;
+        _freshJobButton.Pressed += OnFreshJobPressed;
         _counterButton.Pressed += OnCounterPressed;
         _acceptButton.Pressed += OnAcceptPressed;
         _showAnotherButton.Pressed += OnShowAnotherPressed;
@@ -108,6 +145,9 @@ public sealed partial class FencingScreen : Control
 
     public override void _ExitTree()
     {
+        _pawnShopButton.Pressed -= OnPawnShopPressed;
+        _truckButton.Pressed -= OnTruckPressed;
+        _freshJobButton.Pressed -= OnFreshJobPressed;
         _counterButton.Pressed -= OnCounterPressed;
         _acceptButton.Pressed -= OnAcceptPressed;
         _showAnotherButton.Pressed -= OnShowAnotherPressed;
@@ -138,6 +178,7 @@ public sealed partial class FencingScreen : Control
         _sessionActive = true;
         _sessionDay = day;
         _baseCtx = gm.Hustles.BuildFencingContext(gm.Career.AvatarPlayerId, day);
+        _hotGoodsAvailable = gm.Hustles.HasHotGoodsFlag(gm.Career.AvatarPlayerId);
         _rng = new RngState(unchecked((ulong)System.Environment.TickCount64) ^ 0x46454E43494E47UL | 1UL);
         _accrued = default;
         _lotsUsed = 0;
@@ -151,19 +192,43 @@ public sealed partial class FencingScreen : Control
     /// prior lot's <see cref="_accrued"/> detection delta so a hot lot's own
     /// sting exposure feeds the next lot's sting roll (§4.2's tail scaling).
     /// FenceStanding is not nudged — see the class doc's disclosed seam.
-    /// No DB read; the live DB row never moves mid-session.
+    /// No DB read; the live DB row never moves mid-session. Opens on the
+    /// Acquire panel (§4.1) — the negotiation itself only starts once a
+    /// source is picked, in <see cref="OnAcquireSourcePressed"/>.
     /// </summary>
     private void BeginLot()
     {
         double liveHeat = Math.Clamp(_baseCtx.Heat + _accrued.DetectionRiskDelta / 100.0, 0, 1);
         _ctx = new FencingContext(liveHeat, _baseCtx.FenceStanding);
-        _state = FencingNegotiation.StartLot(in _ctx, ref _rng);
+
+        _freshJobButton.Disabled = !_hotGoodsAvailable;
+        _acquirePanel.Visible = true;
+        _negotiatePanel.Visible = false;
+        _resultPanel.Visible = false;
+    }
+
+    /// <summary>§4.1: the Acquire pick — draws the lot via <see cref="FencingNegotiation.AcquireLot"/> and starts the negotiation from it. FreshFromAJob spends the session's one-time <see cref="_hotGoodsAvailable"/> snapshot; the actual DB flag only clears on Done, via <see cref="_accrued"/>'s folded <c>SetConsumesHotGoodsFlag</c> (INV-1).</summary>
+    private void OnAcquireSourcePressed(FencingSource source)
+    {
+        LotAcquisition acquisition = FencingNegotiation.AcquireLot(source, _hotGoodsAvailable, ref _rng);
+        if (source == FencingSource.FreshFromAJob)
+        {
+            _hotGoodsAvailable = false;
+        }
+        _state = FencingNegotiation.StartLot(in _ctx, in acquisition, ref _rng);
 
         _askSpinBox.Value = _state.CurrentOffer;
+        _acquirePanel.Visible = false;
         _negotiatePanel.Visible = true;
         _resultPanel.Visible = false;
         RefreshNegotiationLabels();
     }
+
+    private void OnPawnShopPressed() => OnAcquireSourcePressed(FencingSource.PawnShopOverstock);
+
+    private void OnTruckPressed() => OnAcquireSourcePressed(FencingSource.FellOffATruck);
+
+    private void OnFreshJobPressed() => OnAcquireSourcePressed(FencingSource.FreshFromAJob);
 
     private void RefreshNegotiationLabels()
     {
@@ -234,7 +299,9 @@ public sealed partial class FencingScreen : Control
             _accrued.SetWatchlistFlag || delta.SetWatchlistFlag,
             _accrued.SetBadProductFlag || delta.SetBadProductFlag,
             _accrued.SetSpoiledGoodsFlag || delta.SetSpoiledGoodsFlag,
-            _accrued.SetControlsTurfFlag || delta.SetControlsTurfFlag);
+            _accrued.SetControlsTurfFlag || delta.SetControlsTurfFlag,
+            setGamblingBustFlag: false, setRobberyBustFlag: false,
+            setConsumesHotGoodsFlag: _accrued.SetConsumesHotGoodsFlag || delta.SetConsumesHotGoodsFlag);
         return _accrued;
     }
 
@@ -246,7 +313,7 @@ public sealed partial class FencingScreen : Control
         if (_accrued.FundsDelta != 0 || _accrued.DetectionRiskDelta != 0 || _accrued.HealthCeilingDelta != 0
             || _accrued.RecklessnessDelta != 0 || _accrued.StressDelta != 0 || _accrued.SupplierTrustDelta != 0
             || _accrued.CrewStandingDelta != 0 || _accrued.SetWatchlistFlag || _accrued.SetBadProductFlag
-            || _accrued.SetSpoiledGoodsFlag || _accrued.SetControlsTurfFlag)
+            || _accrued.SetSpoiledGoodsFlag || _accrued.SetControlsTurfFlag || _accrued.SetConsumesHotGoodsFlag)
         {
             gm.Hustles.ApplyFencingResolution(gm.Career.AvatarPlayerId, _accrued, _sessionDay);
         }
