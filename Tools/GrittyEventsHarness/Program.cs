@@ -72,6 +72,7 @@ internal static class Program
             RunTierGpaChecks();
             RunHsOnboardingArcChecks();
             RunDirtUnderworldArcChecks();
+            RunDirtTheFixArcChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -245,7 +246,7 @@ internal static class Program
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
             batchFiles.Length >= 10
-            && wholeFolder.Count == 90
+            && wholeFolder.Count == 101
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -324,7 +325,18 @@ internal static class Program
             && wholeFolder.TryGetById("dirt_family_finds_out", out _)
             && wholeFolder.TryGetById("dirt_hot_merch", out _)
             && wholeFolder.TryGetById("dirt_street_rep", out _)
-            && wholeFolder.TryGetById("dirt_clean_break", out _),
+            && wholeFolder.TryGetById("dirt_clean_break", out _)
+            && wholeFolder.TryGetById("dirt_the_ask", out _)
+            && wholeFolder.TryGetById("dirt_made_useful", out _)
+            && wholeFolder.TryGetById("dirt_the_tip", out _)
+            && wholeFolder.TryGetById("dirt_shave_runs", out _)
+            && wholeFolder.TryGetById("dirt_teammate_knows", out _)
+            && wholeFolder.TryGetById("dirt_league_investigation", out _)
+            && wholeFolder.TryGetById("dirt_permanent_ban", out _)
+            && wholeFolder.TryGetById("dirt_blacklisted", out _)
+            && wholeFolder.TryGetById("dirt_turn_informant_a", out _)
+            && wholeFolder.TryGetById("dirt_turn_informant_b", out _)
+            && wholeFolder.TryGetById("dirt_walk_away_clean", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -388,7 +400,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 90 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 101 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -2550,6 +2562,329 @@ internal static class Program
             Check("the bust benches: an arrest absence lands with until_day = fire_day(2) + days(2) + 1",
                 hasAbsence && absence.Reason == AbsenceReason.Arrest && absence.UntilDay == 5,
                 hasAbsence ? $"reason={absence.Reason} until={absence.UntilDay}" : "no absence row");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h6. DIRT-2 "The Fix" (criminal_underworld_dirt2_the_fix.md §5-7)
+    // ------------------------------------------------------------------
+
+    // Every fix-cascade event except the terminal epilogue (dirt_blacklisted,
+    // which gates only on the already-terminal banned_for_life flag, per
+    // spec §5.2 item 8 -- no tier gate needed once you're already banned).
+    private static readonly string[] DirtTheFixEventIds =
+    {
+        "dirt_the_ask", "dirt_made_useful", "dirt_the_tip", "dirt_shave_runs",
+        "dirt_teammate_knows", "dirt_league_investigation", "dirt_permanent_ban",
+        "dirt_turn_informant_a", "dirt_turn_informant_b", "dirt_walk_away_clean",
+    };
+
+    private static void RunDirtTheFixArcChecks()
+    {
+        Console.WriteLine("--- DIRT-2 'The Fix' (criminal_underworld_dirt2_the_fix.md) ---");
+
+        string dirtJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "dirt_underworld_events.json"));
+        GrittyEventLibrary dirt = GrittyEventJson.Parse(dirtJson);
+
+        static bool SetsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.SetFlag && k.FlagName == flag);
+        static bool ClearsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.ClearFlag && k.FlagName == flag);
+        static bool ReadsFlagActive(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == flag);
+        static bool ReadsFlagInactive(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagInactive && p.FlagName == flag);
+        static bool HasTierFloor(GrittyEventDefinition e) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.Tier
+                && p.Comparison == FieldComparison.GreaterOrEqual && p.Value == 2);
+
+        dirt.TryGetById("dirt_the_ask", out GrittyEventDefinition theAsk);
+        dirt.TryGetById("dirt_made_useful", out GrittyEventDefinition madeUseful);
+        dirt.TryGetById("dirt_the_tip", out GrittyEventDefinition theTip);
+        dirt.TryGetById("dirt_shave_runs", out GrittyEventDefinition shaveRuns);
+        dirt.TryGetById("dirt_teammate_knows", out GrittyEventDefinition teammateKnows);
+        dirt.TryGetById("dirt_league_investigation", out GrittyEventDefinition investigation);
+        dirt.TryGetById("dirt_permanent_ban", out GrittyEventDefinition permanentBan);
+        dirt.TryGetById("dirt_blacklisted", out GrittyEventDefinition blacklisted);
+        dirt.TryGetById("dirt_turn_informant_a", out GrittyEventDefinition informantA);
+        dirt.TryGetById("dirt_turn_informant_b", out GrittyEventDefinition informantB);
+        dirt.TryGetById("dirt_walk_away_clean", out GrittyEventDefinition walkAwayClean);
+
+        // §4 item 3: every fix-cascade event carries the tier>=2 floor.
+        int tierFloorCount = DirtTheFixEventIds.Count(id =>
+            dirt.TryGetById(id, out GrittyEventDefinition e) && HasTierFloor(e));
+        Check("all 10 fix-cascade events (excluding the terminal epilogue) carry the tier>=2 floor",
+            tierFloorCount == DirtTheFixEventIds.Length, $"{tierFloorCount}/{DirtTheFixEventIds.Length}");
+
+        // §2 collision #1 continued: a fixer who never juiced must never draw
+        // the caught_juicing beat -- detection_risk stays untouched.
+        string[] dirtTheFixAndEpilogue = DirtTheFixEventIds.Append("dirt_blacklisted").ToArray();
+        Check("DIRT-2 never reads or writes detection_risk (the PED meter, not a heat gauge)",
+            !dirt.Events.Where(e => dirtTheFixAndEpilogue.Contains(e.Id)).Any(e =>
+                e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.DetectionRisk)
+                || e.Choices.Any(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.DetectionRisk))));
+
+        // §5.1 flag lifecycle, pinned choice by choice.
+        EventChoice hearThemOut = theAsk.Choices.Single(c => c.Id == "hear_them_out");
+        EventChoice letThemIn = madeUseful.Choices.Single(c => c.Id == "let_them_in");
+        Check("primary ramp: dirt_the_ask gates flag_active compromised_syndicate; its hear_them_out sets on_the_hook",
+            ReadsFlagActive(theAsk, "compromised_syndicate") && SetsFlag(hearThemOut, "on_the_hook"));
+        Check("second ramp (CONVERGENCE): dirt_made_useful gates flag_active in_the_life + flag_inactive compromised_syndicate; its let_them_in sets BOTH compromised_syndicate (a new third writer) and on_the_hook",
+            ReadsFlagActive(madeUseful, "in_the_life") && ReadsFlagInactive(madeUseful, "compromised_syndicate")
+            && SetsFlag(letThemIn, "compromised_syndicate") && SetsFlag(letThemIn, "on_the_hook"));
+
+        Check("on_the_hook is read by dirt_the_tip and dirt_shave_runs",
+            ReadsFlagActive(theTip, "on_the_hook") && ReadsFlagActive(shaveRuns, "on_the_hook"));
+
+        EventChoice shaveARun = shaveRuns.Choices.Single(c => c.Id == "shave_a_run");
+        EventChoice throwWholeGame = shaveRuns.Choices.Single(c => c.Id == "throw_the_whole_game");
+        Check("shaving_runs is set by dirt_shave_runs' shave AND throw branches; threw_a_game ONLY by the throw branch (the aggravating rung)",
+            SetsFlag(shaveARun, "shaving_runs") && !SetsFlag(shaveARun, "threw_a_game")
+            && SetsFlag(throwWholeGame, "shaving_runs") && SetsFlag(throwWholeGame, "threw_a_game"));
+        Check("shaving_runs is read by dirt_teammate_knows and dirt_league_investigation",
+            ReadsFlagActive(teammateKnows, "shaving_runs") && ReadsFlagActive(investigation, "shaving_runs"));
+        Check("threw_a_game is read by dirt_permanent_ban (the sole gate to the terminal ban)",
+            ReadsFlagActive(permanentBan, "threw_a_game"));
+
+        EventChoice takeSuspension = investigation.Choices.Single(c => c.Id == "take_the_suspension");
+        Check("the bust is survivable: take_the_suspension clears shaving_runs, threw_a_game, AND on_the_hook, and produces a suspension absence",
+            ClearsFlag(takeSuspension, "shaving_runs") && ClearsFlag(takeSuspension, "threw_a_game")
+            && ClearsFlag(takeSuspension, "on_the_hook")
+            && takeSuspension.Consequences.Any(k => k.Kind == ConsequenceKind.Absence && k.AbsenceReason == AbsenceReason.Suspension && k.Amount >= 1));
+
+        EventChoice lawyerItDown = permanentBan.Choices.Single(c => c.Id == "lawyer_it_down");
+        Check("the terminal path: dirt_permanent_ban sets banned_for_life (never cleared anywhere in the batch) and self-blocks its own gate by clearing threw_a_game",
+            SetsFlag(lawyerItDown, "banned_for_life") && ClearsFlag(lawyerItDown, "threw_a_game")
+            && !dirt.Events.Any(e => e.Choices.Any(c => ClearsFlag(c, "banned_for_life"))));
+        Check("banned_for_life's real teeth are the suspension + the rival/league edge (§2 collision #2 -- NOT a claimed career end, CareerManager reads no flags)",
+            lawyerItDown.Consequences.Any(k => k.Kind == ConsequenceKind.Absence && k.AbsenceReason == AbsenceReason.Suspension && k.Amount >= 40)
+            && lawyerItDown.Consequences.Any(k => k.Kind == ConsequenceKind.Relationship && k.RelationshipKind == RelationshipKind.Rival && k.Target == RelationshipTargetSelector.League));
+        Check("banned_for_life is READ, not orphaned: dirt_blacklisted's epilogue gates on flag_active banned_for_life",
+            ReadsFlagActive(blacklisted, "banned_for_life"));
+
+        // Refusal / informing route to the SHIPPED syndicate_marked -> syndicate_enforcers cascade.
+        EventChoice tellThemNo = theAsk.Choices.Single(c => c.Id == "tell_them_no");
+        EventChoice cooperateA = informantA.Choices.Single(c => c.Id == "cooperate");
+        EventChoice cooperateB = informantB.Choices.Single(c => c.Id == "cooperate");
+        Check("refusing the ask (dirt_the_ask's tell_them_no) sets syndicate_marked -- the shipped enforcer track",
+            SetsFlag(tellThemNo, "syndicate_marked"));
+        Check("informing IS defiance: both dirt_turn_informant variants' cooperate choice ALSO sets syndicate_marked",
+            SetsFlag(cooperateA, "syndicate_marked") && SetsFlag(cooperateB, "syndicate_marked"));
+
+        string careerArcJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "career_arc_events.json"));
+        GrittyEventLibrary careerArc = GrittyEventJson.Parse(careerArcJson);
+        careerArc.TryGetById("syndicate_enforcers", out GrittyEventDefinition enforcers);
+        Check("the shipped syndicate_enforcers reads syndicate_marked at +14d -- every DIRT-2 writer reaches the same shipped beat",
+            ReadsFlagActive(enforcers, "syndicate_marked")
+            && enforcers.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "syndicate_marked").MinDaysSince == 14);
+
+        // The OR-as-two-events split (§5.2 item 9 / framework §3): disjoint
+        // gates so a subject never satisfies both variants on the same day,
+        // sharing identical consequences.
+        Check("dirt_turn_informant_a gates on_the_hook active AND shaving_runs inactive (the pre-fix door out)",
+            ReadsFlagActive(informantA, "on_the_hook") && ReadsFlagInactive(informantA, "shaving_runs"));
+        Check("dirt_turn_informant_b gates shaving_runs active (the post-fix door out) -- disjoint from _a",
+            ReadsFlagActive(informantB, "shaving_runs"));
+        Check("both informant variants clear on_the_hook/shaving_runs/threw_a_game and set cooperated_with_league on cooperate (shared consequences)",
+            ClearsFlag(cooperateA, "on_the_hook") && ClearsFlag(cooperateB, "on_the_hook")
+            && ClearsFlag(cooperateA, "shaving_runs") && ClearsFlag(cooperateB, "shaving_runs")
+            && ClearsFlag(cooperateA, "threw_a_game") && ClearsFlag(cooperateB, "threw_a_game")
+            && SetsFlag(cooperateA, "cooperated_with_league") && SetsFlag(cooperateB, "cooperated_with_league"));
+
+        // The soft door out: never crossed the line, marker still looms.
+        EventChoice walkAway = walkAwayClean.Choices.Single(c => c.Id == "walk_away");
+        Check("dirt_walk_away_clean gates on_the_hook active + shaving_runs inactive; walk_away clears on_the_hook but does NOT clear compromised_syndicate (the marker persists -- the shipped +365 shakedown still looms)",
+            ReadsFlagActive(walkAwayClean, "on_the_hook") && ReadsFlagInactive(walkAwayClean, "shaving_runs")
+            && ClearsFlag(walkAway, "on_the_hook") && !ClearsFlag(walkAway, "compromised_syndicate"));
+
+        // check_event_graph_integrity #2/#3: every flag DIRT-2 introduces is
+        // read by at least one prerequisite in the batch. cooperated_with_league
+        // is the one genuinely orphaned set -- a disclosed DIRT-4 forward hook.
+        Check("on_the_hook is read by at least one prerequisite in the batch",
+            dirt.Events.Any(e => ReadsFlagActive(e, "on_the_hook") || ReadsFlagInactive(e, "on_the_hook")));
+        Check("shaving_runs is read by at least one prerequisite in the batch",
+            dirt.Events.Any(e => ReadsFlagActive(e, "shaving_runs") || ReadsFlagInactive(e, "shaving_runs")));
+        Check("threw_a_game is read by at least one prerequisite in the batch",
+            dirt.Events.Any(e => ReadsFlagActive(e, "threw_a_game") || ReadsFlagInactive(e, "threw_a_game")));
+        Check("banned_for_life is read by at least one prerequisite in the batch",
+            dirt.Events.Any(e => ReadsFlagActive(e, "banned_for_life") || ReadsFlagInactive(e, "banned_for_life")));
+        Check("cooperated_with_league is a disclosed DIRT-4 forward hook (set, never read in this batch) -- legal per check #3",
+            dirt.Events.Any(e => e.Choices.Any(c => SetsFlag(c, "cooperated_with_league")))
+            && !dirt.Events.Any(e => ReadsFlagActive(e, "cooperated_with_league") || ReadsFlagInactive(e, "cooperated_with_league")));
+
+        // Standing check: every new event carries an explicit, nonzero
+        // cooldown (belt-and-braces pacing even on self-blocking flags, per
+        // the batch header's disclosed cooldown additions).
+        int cooldownedCount = 0;
+        foreach (string id in DirtTheFixEventIds.Append("dirt_blacklisted"))
+        {
+            if (dirt.TryGetById(id, out GrittyEventDefinition e) && e.CooldownDays > 0)
+            {
+                cooldownedCount++;
+            }
+        }
+        Check("every DIRT-2 event carries an explicit nonzero cooldown (check #4 -- no unpaced loop)",
+            cooldownedCount == DirtTheFixEventIds.Length + 1, $"{cooldownedCount}/{DirtTheFixEventIds.Length + 1}");
+
+        // §7.3 "tier gate safety": every fix-cascade event is inert at
+        // tier=0/1, and an unrostered (-1 sentinel) subject satisfies none of
+        // them -- checked with every OTHER prerequisite on that specific
+        // event artificially satisfied (flags pinned safely past their own
+        // min_days_since floor) so only the tier gate is under test, mirroring
+        // RunTierGpaChecks' rookie-batch proof.
+        {
+            const long day = 1000;
+            static Dictionary<(string PlayerId, string FlagName), long> BestCaseFlags(GrittyEventDefinition e, string playerId)
+            {
+                var flags = new Dictionary<(string PlayerId, string FlagName), long>();
+                foreach (EventPrerequisite p in e.Prerequisites)
+                {
+                    if (p.Kind == PrerequisiteKind.FlagActive)
+                    {
+                        flags[(playerId, p.FlagName!)] = day - p.MinDaysSince - 5;
+                    }
+                }
+                return flags;
+            }
+
+            foreach (int tier in new[] { 0, 1, -1 })
+            {
+                int holdable = 0;
+                string offender = "";
+                foreach (string id in DirtTheFixEventIds)
+                {
+                    if (!dirt.TryGetById(id, out GrittyEventDefinition e)) continue;
+                    var subject = new PollPlayerRow { PlayerId = "subject", Tier = tier, Gpa = 2.5 };
+                    Dictionary<(string PlayerId, string FlagName), long> flags = BestCaseFlags(e, "subject");
+                    if (ConditionEvaluator.AllHold(e.Prerequisites, in subject, flags, day))
+                    {
+                        holdable++;
+                        offender = id;
+                    }
+                }
+                Check($"no fix-cascade event can hold for a tier={tier} subject, even with every OTHER prerequisite satisfied",
+                    holdable == 0, holdable > 0 ? $"{holdable} holdable, e.g. {offender}" : "0 holdable");
+            }
+        }
+
+        // §7.3 gate 1: both ramps reach the fix cascade, and the SECOND
+        // ramp's compromised_syndicate write (the new third writer) reaches
+        // the shipped +365 syndicate_shakedown shape -- the same convergence
+        // proof RunDirtUnderworldArcChecks ran for DIRT-1, one tier up.
+        {
+            const string rampMirrorJson =
+                """
+                { "events": [
+                  { "id": "ask_mirror", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "compromised_syndicate", "min_days_since": 30 },
+                      { "field": "tier", "op": ">=", "value": 2 }, { "flag_inactive": "on_the_hook" } ],
+                    "choices": [ { "id": "hear_them_out", "consequences": [ { "type": "set_flag", "flag": "on_the_hook" } ] } ] },
+                  { "id": "made_useful_mirror", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "in_the_life" }, { "flag_inactive": "compromised_syndicate" },
+                      { "field": "tier", "op": ">=", "value": 2 }, { "flag_inactive": "on_the_hook" } ],
+                    "choices": [ { "id": "let_them_in", "consequences": [
+                      { "type": "set_flag", "flag": "compromised_syndicate" }, { "type": "set_flag", "flag": "on_the_hook" } ] } ] },
+                  { "id": "shakedown_mirror", "scope": "any", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "compromised_syndicate", "min_days_since": 365 } ],
+                    "choices": [ { "id": "pay", "consequences": [ { "type": "funds", "amount": -1 } ] } ] }
+                ] }
+                """;
+            using World world = World.Create("dirtFixRamps", GrittyEventJson.Parse(rampMirrorJson));
+            var baseball = new BaseballQueries(world.Db);
+            baseball.InsertTeam(new TeamRow { TeamId = 601, City = "Testburg", Name = "Ramps", Abbreviation = "RMP", League = "MiLB", Division = "A" });
+            baseball.UpsertTeamTier(601, LeagueTier.MinorA);
+
+            world.AddPlayer("useful", age: 24, teamId: 601);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "useful");
+            world.Players.SetFlag("useful", "in_the_life", true, 0);
+            world.Dispatcher.PollOnce(); // boot day 1
+
+            world.Clock.AdvanceDay(); // day 2: made_useful_mirror fires -> compromised_syndicate + on_the_hook
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("useful", flagRows);
+            Check("second ramp fires: dirt_made_useful's shape sets compromised_syndicate + on_the_hook on day 2",
+                flagRows.Exists(f => f.FlagName == "compromised_syndicate" && f.SetOnDay == 2)
+                && flagRows.Exists(f => f.FlagName == "on_the_hook"));
+
+            world.Clock.AdvanceDays(365); // day 367 = 2 + 365
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            Check("the second ramp's compromised_syndicate write reaches the shipped shakedown shape at exactly +365 -- the DIRT-1 convergence proof, one tier up",
+                world.Fired.Any(f => f.EventId == "shakedown_mirror" && f.Day == 367));
+        }
+
+        // §7.3 gate 2 (numeric): the fix reaches the teeth -- take_the_suspension's
+        // exact consequence shape computes until_day = fire_day + days(20) + 1,
+        // and clears shaving_runs/threw_a_game/on_the_hook, isolated the same
+        // way dirtBustedAbsence isolates dirt_busted's arrest absence above.
+        {
+            using World world = World.Create("dirtFixTeeth", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "investigation_mirror", "scope": "any", "weight": 1.0,
+                  "choices": [ { "id": "take_the_suspension", "consequences": [
+                    { "type": "absence", "reason": "suspension", "days": 20 },
+                    { "type": "clear_flag", "flag": "shaving_runs" },
+                    { "type": "clear_flag", "flag": "threw_a_game" },
+                    { "type": "clear_flag", "flag": "on_the_hook" },
+                    { "type": "set_flag", "flag": "served_suspension" } ] } ] } ] }
+                """));
+            world.AddPlayer("fixer", age: 24, teamId: 1);
+            world.Players.SetFlag("fixer", "shaving_runs", true, 0);
+            world.Players.SetFlag("fixer", "on_the_hook", true, 0);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires (mirror is unconditional, weight 1.0)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("fixer", out PlayerAbsenceRow absence);
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("fixer", flagRows);
+            Check("take_the_suspension lands until_day = fire_day(2) + days(20) + 1, and clears shaving_runs/threw_a_game/on_the_hook",
+                hasAbsence && absence.Reason == AbsenceReason.Suspension && absence.UntilDay == 23
+                && !flagRows.Exists(f => f.FlagName == "shaving_runs") && !flagRows.Exists(f => f.FlagName == "on_the_hook")
+                && flagRows.Exists(f => f.FlagName == "served_suspension"),
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
+        }
+
+        // §7.3 gate 3 (numeric): the terminal path -- lawyer_it_down's exact
+        // consequence shape computes until_day = fire_day + days(60) + 1 and
+        // sets banned_for_life (never cleared).
+        {
+            using World world = World.Create("dirtFixTerminal", GrittyEventJson.Parse(
+                """
+                { "events": [ { "id": "ban_mirror", "scope": "any", "weight": 1.0,
+                  "choices": [ { "id": "lawyer_it_down", "consequences": [
+                    { "type": "absence", "reason": "suspension", "days": 60 },
+                    { "type": "set_flag", "flag": "banned_for_life" },
+                    { "type": "clear_flag", "flag": "shaving_runs" },
+                    { "type": "clear_flag", "flag": "threw_a_game" },
+                    { "type": "clear_flag", "flag": "on_the_hook" } ] } ] } ] }
+                """));
+            world.AddPlayer("thrower", age: 28, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("thrower", out PlayerAbsenceRow absence);
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("thrower", flagRows);
+            Check("lawyer_it_down lands until_day = fire_day(2) + days(60) + 1 and sets banned_for_life (terminal)",
+                hasAbsence && absence.Reason == AbsenceReason.Suspension && absence.UntilDay == 63
+                && flagRows.Exists(f => f.FlagName == "banned_for_life"),
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
         }
     }
 
