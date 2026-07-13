@@ -470,6 +470,11 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "Texas Hold'em"
 
+[node name="RobberyButton" type="Button" parent="Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Robbery"
+
 [node name="Family" type="MarginContainer" parent="Screen/ScreenLayout/PhoneTabs"]
 visible = false
 layout_mode = 2

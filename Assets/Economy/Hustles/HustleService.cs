@@ -24,6 +24,7 @@ public enum WorkActivity : byte
     Narcotics,
     Fencing,
     Poker,
+    Robbery,
 }
 
 /// <summary>One armed-but-unplayed interactive hustle session, awaiting the player (§2's Game-block mirror).</summary>
@@ -138,6 +139,22 @@ public sealed class HustleService
         return new HoldemContext(row.Funds, row.DetectionRisk / 100.0, row.Recklessness / 100.0);
     }
 
+    /// <summary>
+    /// Snapshots docs/design/hustle_minigames_depth_pass.md §5's context for
+    /// <paramref name="playerId"/>. <see cref="RobberyContext.HasCrew"/> reuses
+    /// the same <see cref="GameStateKeys.HustleCrewPlayerId"/> rep Narcotics
+    /// resolves (§5.1.2) — <see cref="ResolveFactionRep"/> always resolves (and
+    /// caches) a rep given a large-enough player pool, so <c>HasCrew</c> is true
+    /// whenever that resolution succeeds; a too-small world throws there exactly
+    /// as it does for Narcotics/Fencing today, so Robbery degrades identically.
+    /// </summary>
+    public RobberyContext BuildRobberyContext(string playerId, long day)
+    {
+        PlayerRow row = RequirePlayer(playerId);
+        ResolveFactionRep(GameStateKeys.HustleCrewPlayerId, "faction_crew_1", playerId, day);
+        return new RobberyContext(row.Funds, row.DetectionRisk / 100.0, row.Recklessness / 100.0, hasCrew: true);
+    }
+
     // ------------------------------------------------------------------
     // Resolution application (§5)
     // ------------------------------------------------------------------
@@ -181,6 +198,25 @@ public sealed class HustleService
     public void ApplyHoldemResolution(string playerId, in HustleResolution resolution, long day) =>
         ApplyCore(playerId, in resolution, day);
 
+    /// <summary>
+    /// Applies a resolved Robbery run: the shared primitives via
+    /// <see cref="ApplyCore"/> (funds/detection/health/reckless/stress and the
+    /// additive <c>robbery_bust</c> flag), plus the crew-job
+    /// <see cref="HustleResolution.CrewStandingDelta"/> — the same adversarial
+    /// crew-edge write Narcotics' <c>PushTerritory</c> crew path uses (§5.1.2:
+    /// a crew job risks the split *and* the relationship).
+    /// </summary>
+    public void ApplyRobberyResolution(string playerId, in HustleResolution resolution, long day)
+    {
+        ApplyCore(playerId, in resolution, day);
+
+        if (resolution.CrewStandingDelta != 0)
+        {
+            string crewId = RequireResolvedRep(GameStateKeys.HustleCrewPlayerId, "crew");
+            AdjustOrCreateRelationship(playerId, crewId, resolution.CrewStandingDelta, RelationshipKind.Rival);
+        }
+    }
+
     private void ApplyCore(string playerId, in HustleResolution resolution, long day)
     {
         _db.BeginBatch();
@@ -217,6 +253,10 @@ public sealed class HustleService
             if (resolution.SetGamblingBustFlag)
             {
                 _players.SetFlag(playerId, "gambling_bust", true, day);
+            }
+            if (resolution.SetRobberyBustFlag)
+            {
+                _players.SetFlag(playerId, "robbery_bust", true, day);
             }
             _db.CommitBatch();
         }

@@ -1,0 +1,139 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/RobberyScreen.cs" id="1_robbery"]
+
+[node name="RobberyScreen" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
+script = ExtResource("1_robbery")
+
+[node name="Scrim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.55)
+
+[node name="Panel" type="PanelContainer" parent="."]
+theme_type_variation = &"Card"
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -240.0
+offset_right = 220.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/Layout"]
+theme_type_variation = &"HeadingLabel"
+layout_mode = 2
+text = "Robbery"
+
+[node name="StatusLabel" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="CasePanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+
+[node name="CaseLabel" type="Label" parent="Panel/Layout/CasePanel"]
+layout_mode = 2
+text = "Pick a mark:"
+
+[node name="StoreButton" type="Button" parent="Panel/Layout/CasePanel"]
+layout_mode = 2
+text = "Convenience Store (small, safe)"
+
+[node name="BookieButton" type="Button" parent="Panel/Layout/CasePanel"]
+layout_mode = 2
+text = "Bookie's Stash (moderate)"
+
+[node name="WarehouseButton" type="Button" parent="Panel/Layout/CasePanel"]
+layout_mode = 2
+text = "Warehouse (big, dangerous)"
+
+[node name="CaseItCheckBox" type="CheckBox" parent="Panel/Layout/CasePanel"]
+layout_mode = 2
+text = "Case it first (small heat cost, better odds)"
+
+[node name="ApproachPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="ApproachTargetLabel" type="Label" parent="Panel/Layout/ApproachPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ApproachLabel" type="Label" parent="Panel/Layout/ApproachPanel"]
+layout_mode = 2
+text = "Choose your approach:"
+
+[node name="SoloQuietButton" type="Button" parent="Panel/Layout/ApproachPanel"]
+layout_mode = 2
+text = "Solo &amp; Quiet (low risk, low take)"
+
+[node name="StrongArmButton" type="Button" parent="Panel/Layout/ApproachPanel"]
+layout_mode = 2
+text = "Strong-Arm (bigger take, health risk)"
+
+[node name="CrewButton" type="Button" parent="Panel/Layout/ApproachPanel"]
+layout_mode = 2
+text = "Crew Job (biggest take, split + standing)"
+
+[node name="ExecutePanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="ExecuteButton" type="Button" parent="Panel/Layout/ExecutePanel"]
+layout_mode = 2
+text = "Go"
+
+[node name="GrabbedPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="GrabbedLabel" type="Label" parent="Panel/Layout/GrabbedPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="PressLuckButton" type="Button" parent="Panel/Layout/GrabbedPanel"]
+layout_mode = 2
+text = "Press Your Luck (go for it all)"
+
+[node name="GrabAndRunButton" type="Button" parent="Panel/Layout/GrabbedPanel"]
+layout_mode = 2
+text = "Grab and Run (bank what you have)"
+
+[node name="GetawayPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="GetawayButton" type="Button" parent="Panel/Layout/GetawayPanel"]
+layout_mode = 2
+text = "Make the Getaway"
+
+[node name="ResultPanel" type="VBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+visible = false
+
+[node name="ResultLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="DoneButton" type="Button" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+text = "Done"

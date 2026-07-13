@@ -337,6 +337,7 @@ public sealed partial class BurnerPhone : PanelContainer
     private Button _narcoticsButton = null!;
     private Button _fencingButton = null!;
     private Button _pokerButton = null!;
+    private Button _robberyButton = null!;
     private Button _proShopButton = null!;
 
     // Status-bar clock: the human calendar date + live time-of-day (Slice
@@ -516,10 +517,12 @@ public sealed partial class BurnerPhone : PanelContainer
         _narcoticsButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/NarcoticsButton");
         _fencingButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/FencingButton");
         _pokerButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/PokerButton");
+        _robberyButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/HustlesCard/HustlesCardLayout/HustleButtonsRow/RobberyButton");
         _proShopButton = GetNode<Button>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/EquipmentCard/EquipmentCardLayout/ProShopButton");
         _narcoticsButton.Pressed += OnNarcoticsPressed;
         _fencingButton.Pressed += OnFencingPressed;
         _pokerButton.Pressed += OnPokerPressed;
+        _robberyButton.Pressed += OnRobberyPressed;
         _proShopButton.Pressed += OnProShopPressed;
 
         _carrierCard = GetNode<PanelContainer>("Screen/ScreenLayout/PhoneTabs/Bank/BankScroll/BankLayout/CarrierCard");
@@ -576,6 +579,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _narcoticsButton.Pressed -= OnNarcoticsPressed;
         _fencingButton.Pressed -= OnFencingPressed;
         _pokerButton.Pressed -= OnPokerPressed;
+        _robberyButton.Pressed -= OnRobberyPressed;
         _proShopButton.Pressed -= OnProShopPressed;
         _buyMinutesButton.Pressed -= OnBuyMinutesPressed;
         _upgradePhoneButton.Pressed -= OnUpgradePhonePressed;
@@ -1655,6 +1659,8 @@ public sealed partial class BurnerPhone : PanelContainer
     private void OnFencingPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Fencing);
 
     private void OnPokerPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Poker);
+
+    private void OnRobberyPressed() => EmitSignal(SignalName.HustleLaunchRequested, (int)WorkActivity.Robbery);
 
     private void OnProShopPressed() => EmitSignal(SignalName.ShopOpenRequested);
 
