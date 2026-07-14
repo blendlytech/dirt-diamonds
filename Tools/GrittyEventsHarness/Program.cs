@@ -73,6 +73,7 @@ internal static class Program
             RunHsOnboardingArcChecks();
             RunDirtUnderworldArcChecks();
             RunDirtTheFixArcChecks();
+            RunDirtProductTurfArcChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -246,7 +247,7 @@ internal static class Program
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
             batchFiles.Length >= 10
-            && wholeFolder.Count == 101
+            && wholeFolder.Count == 110
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -336,7 +337,16 @@ internal static class Program
             && wholeFolder.TryGetById("dirt_blacklisted", out _)
             && wholeFolder.TryGetById("dirt_turn_informant_a", out _)
             && wholeFolder.TryGetById("dirt_turn_informant_b", out _)
-            && wholeFolder.TryGetById("dirt_walk_away_clean", out _),
+            && wholeFolder.TryGetById("dirt_walk_away_clean", out _)
+            && wholeFolder.TryGetById("dirt_turf_dispute", out _)
+            && wholeFolder.TryGetById("dirt_the_corner_earns", out _)
+            && wholeFolder.TryGetById("dirt_give_up_the_corner", out _)
+            && wholeFolder.TryGetById("dirt_bad_batch_comes_back", out _)
+            && wholeFolder.TryGetById("dirt_lying_low", out _)
+            && wholeFolder.TryGetById("dirt_dead_weight", out _)
+            && wholeFolder.TryGetById("dirt_robbery_fallout", out _)
+            && wholeFolder.TryGetById("dirt_sitting_on_hot_goods", out _)
+            && wholeFolder.TryGetById("dirt_card_room_raided", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -400,7 +410,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 101 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 110 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -2885,6 +2895,312 @@ internal static class Program
                 hasAbsence && absence.Reason == AbsenceReason.Suspension && absence.UntilDay == 63
                 && flagRows.Exists(f => f.FlagName == "banned_for_life"),
                 hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h7. DIRT-3 "Product & Turf" (criminal_underworld_dirt3_product_and_turf.md §5-7)
+    // ------------------------------------------------------------------
+
+    private static readonly string[] DirtProductTurfEventIds =
+    {
+        "dirt_turf_dispute", "dirt_the_corner_earns", "dirt_give_up_the_corner",
+        "dirt_bad_batch_comes_back", "dirt_lying_low", "dirt_dead_weight",
+        "dirt_robbery_fallout", "dirt_sitting_on_hot_goods", "dirt_card_room_raided",
+    };
+
+    private static void RunDirtProductTurfArcChecks()
+    {
+        Console.WriteLine("--- DIRT-3 'Product & Turf' (criminal_underworld_dirt3_product_and_turf.md) ---");
+
+        string dirtJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "dirt_underworld_events.json"));
+        GrittyEventLibrary dirt = GrittyEventJson.Parse(dirtJson);
+
+        static bool SetsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.SetFlag && k.FlagName == flag);
+        static bool ClearsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.ClearFlag && k.FlagName == flag);
+        static bool ReadsFlagActive(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == flag);
+
+        // Spec §5: all 9 events resolve, avatar-scoped, category:hustle.
+        int avatarHustleCount = DirtProductTurfEventIds.Count(id =>
+            dirt.TryGetById(id, out GrittyEventDefinition e) && e.Scope == EventScope.Avatar && e.Category == EventCategory.Hustle);
+        Check("all 9 DIRT-3 events resolve, are avatar-scoped, and tagged category:hustle",
+            avatarHustleCount == DirtProductTurfEventIds.Length, $"{avatarHustleCount}/{DirtProductTurfEventIds.Length}");
+
+        dirt.TryGetById("dirt_turf_dispute", out GrittyEventDefinition turfDispute);
+        dirt.TryGetById("dirt_the_corner_earns", out GrittyEventDefinition cornerEarns);
+        dirt.TryGetById("dirt_give_up_the_corner", out GrittyEventDefinition giveUpCorner);
+        dirt.TryGetById("dirt_bad_batch_comes_back", out GrittyEventDefinition badBatch);
+        dirt.TryGetById("dirt_lying_low", out GrittyEventDefinition lyingLow);
+        dirt.TryGetById("dirt_dead_weight", out GrittyEventDefinition deadWeight);
+        dirt.TryGetById("dirt_robbery_fallout", out GrittyEventDefinition robberyFallout);
+        dirt.TryGetById("dirt_sitting_on_hot_goods", out GrittyEventDefinition sittingOnHotGoods);
+        dirt.TryGetById("dirt_card_room_raided", out GrittyEventDefinition cardRoomRaided);
+
+        // §2 collision #1 continued: DIRT-3 never touches detection_risk either
+        // -- heat is tracked only via the seven boolean hustle-engine flags.
+        Check("DIRT-3 never reads or writes detection_risk (the PED meter, not a heat gauge)",
+            !dirt.Events.Where(e => DirtProductTurfEventIds.Contains(e.Id)).Any(e =>
+                e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.DetectionRisk)
+                || e.Choices.Any(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.DetectionRisk))));
+
+        // §5.1/§5.2's gate table, pinned exactly (flag name + min_days_since per slot).
+        Check("dirt_turf_dispute gates flag_active controls_turf_local at +14d",
+            turfDispute.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "controls_turf_local").MinDaysSince == 14);
+        Check("dirt_the_corner_earns gates flag_active controls_turf_local at +10d",
+            cornerEarns.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "controls_turf_local").MinDaysSince == 10);
+        Check("dirt_give_up_the_corner gates flag_active controls_turf_local at +30d",
+            giveUpCorner.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "controls_turf_local").MinDaysSince == 30);
+        Check("dirt_bad_batch_comes_back gates flag_active bad_product at +10d",
+            badBatch.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "bad_product").MinDaysSince == 10);
+        Check("dirt_lying_low gates flag_active narc_watchlist at +7d (§8.1 shared read with the shipped narcotics_arrest)",
+            lyingLow.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "narc_watchlist").MinDaysSince == 7);
+        Check("dirt_dead_weight gates flag_active spoiled_goods at +10d",
+            deadWeight.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "spoiled_goods").MinDaysSince == 10);
+        Check("dirt_robbery_fallout (the keystone) gates flag_active robbery_bust at +10d",
+            robberyFallout.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "robbery_bust").MinDaysSince == 10);
+        Check("dirt_sitting_on_hot_goods gates flag_active hot_goods with no delay floor (a hot lot doesn't wait -- §5.2 item 8)",
+            sittingOnHotGoods.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "hot_goods").MinDaysSince == 0);
+        Check("dirt_card_room_raided gates flag_active gambling_bust at +7d",
+            cardRoomRaided.Prerequisites.Single(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "gambling_bust").MinDaysSince == 7);
+
+        // §7.4 bullet 1: all seven HustleService engine flags have a reader
+        // somewhere in DIRT-3 -- the whole point of the batch (§2's table).
+        string[] engineFlags = { "controls_turf_local", "bad_product", "robbery_bust", "hot_goods", "narc_watchlist", "spoiled_goods", "gambling_bust" };
+        int flagsWithReader = engineFlags.Count(flag => dirt.Events.Any(e => ReadsFlagActive(e, flag)));
+        Check("all seven HustleService engine flags are read (flag_active) by at least one DIRT-3 event",
+            flagsWithReader == engineFlags.Length, $"{flagsWithReader}/{engineFlags.Length}");
+
+        // §7.4 bullet 3 (turf teeth, static half): stand_your_ground carries an
+        // injury absence with NO accompanying health_ceiling consequence --
+        // the roster-availability engine computes rust from live health_ceiling
+        // at apply time (roster_availability_notes precedent, reused verbatim
+        // from DIRT-1's dirt_busted).
+        EventChoice standGround = turfDispute.Choices.Single(c => c.Id == "stand_your_ground");
+        Check("dirt_turf_dispute's stand_your_ground produces an injury absence and carries NO authored health_ceiling consequence (the injury-rust rule)",
+            standGround.Consequences.Any(k => k.Kind == ConsequenceKind.Absence && k.AbsenceReason == AbsenceReason.Injury && k.Amount >= 1)
+            && !standGround.Consequences.Any(k => k.Kind == ConsequenceKind.HealthCeiling));
+
+        EventChoice walkAwayCorner = giveUpCorner.Choices.Single(c => c.Id == "walk_away_from_the_corner");
+        Check("dirt_give_up_the_corner's walk_away_from_the_corner clears controls_turf_local (the disclosed content-clears-engine-flag inverse, §4 item 2)",
+            ClearsFlag(walkAwayCorner, "controls_turf_local"));
+        Check("dirt_give_up_the_corner's walk_away_from_the_corner does NOT touch in_the_life -- it resolves only the turf half; the full-life exit still routes through the shipped dirt_clean_break",
+            !SetsFlag(walkAwayCorner, "in_the_life") && !ClearsFlag(walkAwayCorner, "in_the_life"));
+
+        EventChoice takePlea = robberyFallout.Choices.Single(c => c.Id == "take_the_plea");
+        EventChoice fightIt = robberyFallout.Choices.Single(c => c.Id == "fight_it");
+        Check("dirt_robbery_fallout's take_the_plea clears robbery_bust (the served-it exit); fight_it leaves it set (the case grinds on, cooldown re-offers)",
+            ClearsFlag(takePlea, "robbery_bust") && !ClearsFlag(fightIt, "robbery_bust"));
+
+        // §7.4 bullet 6: the two engine clears are the ONLY content writes to
+        // hustle flags -- content reads engine state but never fabricates it.
+        {
+            var setFlags = new HashSet<string>(StringComparer.Ordinal);
+            var clearFlags = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string id in DirtProductTurfEventIds)
+            {
+                dirt.TryGetById(id, out GrittyEventDefinition e);
+                foreach (EventChoice c in e.Choices)
+                {
+                    foreach (EventConsequence k in c.Consequences)
+                    {
+                        if (k.Kind == ConsequenceKind.SetFlag) setFlags.Add(k.FlagName!);
+                        if (k.Kind == ConsequenceKind.ClearFlag) clearFlags.Add(k.FlagName!);
+                    }
+                }
+            }
+            Check("DIRT-3 sets ONLY in_the_life (zero new content flags, §4 item 1) and clears ONLY robbery_bust/controls_turf_local (the two disclosed engine-clears, §4 item 2)",
+                setFlags.Count == 1 && setFlags.Contains("in_the_life") && clearFlags.SetEquals(new[] { "robbery_bust", "controls_turf_local" }),
+                $"sets=[{string.Join(",", setFlags)}] clears=[{string.Join(",", clearFlags)}]");
+        }
+
+        // §7.4 bullet 5 (check #4): every DIRT-3 event carries an explicit
+        // nonzero cooldown -- five of seven engine flags never self-clear, so
+        // cooldown is the sole pacing mechanism (spec §4 item 3).
+        int cooldownedCount = DirtProductTurfEventIds.Count(id => dirt.TryGetById(id, out GrittyEventDefinition e) && e.CooldownDays > 0);
+        Check("every DIRT-3 event carries an explicit nonzero cooldown (check #4 -- no unpaced loop)",
+            cooldownedCount == DirtProductTurfEventIds.Length, $"{cooldownedCount}/{DirtProductTurfEventIds.Length}");
+
+        // §7.4 bullet 4: fresh-save inert, STRUCTURALLY -- unlike DIRT-1's
+        // hs_started+14 anchor or DIRT-2's tier floor, no anchor is needed at
+        // all: every gate requires an engine flag only a played hustle run can
+        // set, so a fresh avatar with an EMPTY flag set holds zero DIRT-3
+        // gates at any day (checked at day 2 AND a far-future day, since with
+        // no flag rows at all the day value cannot matter).
+        {
+            var freshAvatar = new PollPlayerRow
+            {
+                PlayerId = "freshNoFlags", Age = 16, TeamId = 1, Funds = 50, HealthCeiling = 100,
+                Recklessness = 0, BaseballInterest = 100, DetectionRisk = 0, Strictness = 50,
+                TeammateExOfPartner = false, Tier = 0, Gpa = 2.5,
+            };
+            var noFlags = new Dictionary<(string PlayerId, string FlagName), long>();
+            foreach (long day in new long[] { 2, 9999 })
+            {
+                int holdable = DirtProductTurfEventIds.Count(id =>
+                    dirt.TryGetById(id, out GrittyEventDefinition e) && ConditionEvaluator.AllHold(e.Prerequisites, in freshAvatar, noFlags, day));
+                Check($"no DIRT-3 gate can hold for a fresh avatar with an EMPTY flag set at day {day} (§4.4 -- no engine flag means no reactive beat)",
+                    holdable == 0, $"{holdable} gate(s) holdable");
+            }
+        }
+
+        // §7.4 bullet 2 (THE KEYSTONE): the robbery teeth. Isolated
+        // single-choice mirrors of dirt_robbery_fallout's two branches (the
+        // dirtBustedAbsence/investigation_mirror precedent) prove the exact
+        // until_day math independent of which branch autopilot would draw
+        // from the real multi-choice event; the flag set/clear shapes above
+        // are already pinned statically against the real choices.
+        {
+            using World world = World.Create("dirtRobberyPlea", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "plea_mirror", "scope": "any", "weight": 1.0, "choices": [ { "id": "take_the_plea", "consequences": [ { "type": "absence", "reason": "arrest", "days": 3 } ] } ] } ] }"""));
+            world.AddPlayer("pleaTaker", age: 22, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("pleaTaker", out PlayerAbsenceRow absence);
+            Check("dirt_robbery_fallout's take_the_plea lands until_day = fire_day(2) + days(3) + 1, as an arrest absence",
+                hasAbsence && absence.Reason == AbsenceReason.Arrest && absence.UntilDay == 6,
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
+        }
+        {
+            using World world = World.Create("dirtRobberyFight", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "fight_mirror", "scope": "any", "weight": 1.0, "choices": [ { "id": "fight_it", "consequences": [ { "type": "absence", "reason": "arrest", "days": 4 } ] } ] } ] }"""));
+            world.AddPlayer("fighter", age: 22, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("fighter", out PlayerAbsenceRow absence);
+            Check("dirt_robbery_fallout's fight_it lands until_day = fire_day(2) + days(4) + 1, the longer arrest",
+                hasAbsence && absence.Reason == AbsenceReason.Arrest && absence.UntilDay == 7,
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
+        }
+
+        // §7.4 bullet 3 (turf teeth, dynamic half): stand_your_ground's injury
+        // absence lands with the same roster-availability until_day contract.
+        {
+            using World world = World.Create("dirtTurfStand", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "stand_mirror", "scope": "any", "weight": 1.0, "choices": [ { "id": "stand_your_ground", "consequences": [ { "type": "absence", "reason": "injury", "days": 3 } ] } ] } ] }"""));
+            world.AddPlayer("standing", age: 22, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("standing", out PlayerAbsenceRow absence);
+            Check("dirt_turf_dispute's stand_your_ground lands until_day = fire_day(2) + days(3) + 1, as an injury absence",
+                hasAbsence && absence.Reason == AbsenceReason.Injury && absence.UntilDay == 6,
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
+        }
+
+        // §7.4 bullet 3 (THE CONVERGENCE): a subject with ONLY an engine flag
+        // set (bad_product -- spec's own example) that fires a DIRT-3 branch
+        // ends with in_the_life set, reaching the SHIPPED dirt_family_finds_out
+        // (+30d) and dirt_clean_break (+60d) epilogues -- the pure-hustle
+        // player flows into the whole arc. Mirrors DIRT-1/DIRT-2's own
+        // "both on-ramps converge" mirror-cascade technique one tier further
+        // out; each stage is a separate AdvanceDays+Poll+Dispatch cycle
+        // (the dirtDebtPath precedent), not one big jump, since PollOnce
+        // evaluates current state as of the current day, not a day-by-day replay.
+        {
+            const string epilogueMirrorJson =
+                """
+                { "events": [
+                  { "id": "bad_batch_mirror", "scope": "avatar", "weight": 1.0, "cooldown_days": 500,
+                    "prerequisites": [ { "flag_active": "bad_product", "min_days_since": 10 } ],
+                    "choices": [ { "id": "make_it_right", "consequences": [ { "type": "set_flag", "flag": "in_the_life" } ] } ] },
+                  { "id": "family_finds_out_mirror", "scope": "avatar", "weight": 1.0, "cooldown_days": 500,
+                    "prerequisites": [ { "flag_active": "in_the_life", "min_days_since": 30 } ],
+                    "choices": [ { "id": "promise", "consequences": [ { "type": "stress", "amount": -1 } ] } ] },
+                  { "id": "clean_break_mirror", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "in_the_life", "min_days_since": 60 } ],
+                    "choices": [ { "id": "get_out", "consequences": [ { "type": "stress", "amount": -1 } ] } ] }
+                ] }
+                """;
+            using World world = World.Create("dirtProductTurfEpilogues", GrittyEventJson.Parse(epilogueMirrorJson));
+            world.AddPlayer("hustler", age: 24, teamId: 1);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hustler");
+            world.Players.SetFlag("hustler", "bad_product", true, 0);
+            world.Dispatcher.PollOnce(); // boot day 1
+
+            world.Clock.AdvanceDays(9); // day 10 = 1 + 9: bad_batch_mirror's gate (bad_product@0 +10d) first holds
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("hustler", flagRows);
+            Check("a pure-hustle subject (ONLY bad_product set, no compromised_syndicate) fires dirt_bad_batch_comes_back's shape and ends with in_the_life set",
+                flagRows.Exists(f => f.FlagName == "in_the_life" && f.SetOnDay == 10));
+
+            world.Clock.AdvanceDays(30); // day 40 = 10 + 30: family_finds_out_mirror's gate first holds
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("CONVERGENCE (1/3): the shipped dirt_family_finds_out shape becomes eligible at exactly in_the_life + 30d",
+                world.Fired.Any(f => f.EventId == "family_finds_out_mirror" && f.Day == 40));
+
+            world.Clock.AdvanceDays(30); // day 70 = 40 + 30 = in_the_life(10) + 60
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            Check("CONVERGENCE (2/3): the shipped dirt_clean_break shape becomes eligible at exactly in_the_life + 60d",
+                world.Fired.Any(f => f.EventId == "clean_break_mirror" && f.Day == 70));
+        }
+
+        // CONVERGENCE (3/3): the same pure-hustle flag, at tier>=2, reaches
+        // DIRT-2's dirt_made_useful shape -- the pure-hustle player who made
+        // the show flows into the fix cascade too, one tier up (fresh World,
+        // mirroring dirtFixRamps' own team/tier setup).
+        {
+            const string madeUsefulMirrorJson =
+                """
+                { "events": [
+                  { "id": "bad_batch_mirror", "scope": "avatar", "weight": 1.0, "cooldown_days": 500,
+                    "prerequisites": [ { "flag_active": "bad_product", "min_days_since": 10 } ],
+                    "choices": [ { "id": "make_it_right", "consequences": [ { "type": "set_flag", "flag": "in_the_life" } ] } ] },
+                  { "id": "made_useful_mirror", "scope": "avatar", "weight": 1.0,
+                    "prerequisites": [ { "flag_active": "in_the_life" }, { "flag_inactive": "compromised_syndicate" },
+                      { "field": "tier", "op": ">=", "value": 2 }, { "flag_inactive": "on_the_hook" }, { "flag_inactive": "syndicate_marked" } ],
+                    "choices": [ { "id": "let_them_in", "consequences": [ { "type": "set_flag", "flag": "compromised_syndicate" } ] } ] }
+                ] }
+                """;
+            using World world = World.Create("dirtProductTurfMadeUseful", GrittyEventJson.Parse(madeUsefulMirrorJson));
+            var baseball = new BaseballQueries(world.Db);
+            baseball.InsertTeam(new TeamRow { TeamId = 701, City = "Testville", Name = "Hustlers", Abbreviation = "HST", League = "MiLB", Division = "A" });
+            baseball.UpsertTeamTier(701, LeagueTier.MinorA);
+
+            world.AddPlayer("proHustler", age: 24, teamId: 701);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "proHustler");
+            world.Players.SetFlag("proHustler", "bad_product", true, 0);
+            world.Dispatcher.PollOnce(); // boot day 1
+
+            world.Clock.AdvanceDays(9); // day 10: bad_batch_mirror fires -> in_the_life
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            world.Clock.AdvanceDay(); // day 11: made_useful_mirror fires (in_the_life set day10, tier>=2, no blockers)
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            var flagRows = new List<EntityFlagRow>();
+            world.Players.LoadActiveFlags("proHustler", flagRows);
+            Check("CONVERGENCE (3/3): the pure-hustle subject's in_the_life reaches DIRT-2's dirt_made_useful shape at tier>=2, setting compromised_syndicate",
+                flagRows.Exists(f => f.FlagName == "compromised_syndicate"));
         }
     }
 
