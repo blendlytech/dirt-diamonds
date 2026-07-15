@@ -1049,6 +1049,79 @@ internal static class Program
         Check("robbery EV band: mean detection accrual rises with recklessness of policy",
             cautious.MeanDetect < moderate.MeanDetect && moderate.MeanDetect < reckless.MeanDetect,
             $"detect: cautious={cautious.MeanDetect:F1} moderate={moderate.MeanDetect:F1} reckless={reckless.MeanDetect:F1}");
+
+        // --- JewelryExchange, the fourth rung (docs/design/hustles_robbery_high_stakes_target.md §5) ---
+        RobberyState jewelryUncased = RobberyHustle.ChooseApproach(
+            RobberyHustle.CaseTarget(in ctx, RobberyTarget.JewelryExchange, caseIt: false), in ctx, RobberyApproach.SoloQuiet);
+        Check("robbery jewelry: the top rung is harder and pays more than the warehouse (ladder extends, §5.1)",
+            RobberyHustle.ComputeExecuteSuccessProbability(in jewelryUncased, in ctx)
+                < RobberyHustle.ComputeExecuteSuccessProbability(in hardMark, in ctx)
+            && jewelryUncased.FullScore > hardMark.FullScore,
+            $"success={RobberyHustle.ComputeExecuteSuccessProbability(in jewelryUncased, in ctx):F2} vs warehouse {RobberyHustle.ComputeExecuteSuccessProbability(in hardMark, in ctx):F2}, score={jewelryUncased.FullScore:F0} vs {hardMark.FullScore:F0}");
+
+        RobberyState jewelryCased = RobberyHustle.CaseTarget(in ctx, RobberyTarget.JewelryExchange, caseIt: true);
+        RobberyState jewelryApproached = RobberyHustle.ChooseApproach(in jewelryCased, in ctx, RobberyApproach.SoloQuiet);
+        ulong jewelryGrabSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.Execute(in jewelryApproached, in ctx, ref rng).Stage == RobberyStage.Grabbed;
+        });
+        var jewelryGrabRng = new RngState(jewelryGrabSeed);
+        RobberyState jewelryGrabbed = RobberyHustle.Execute(in jewelryApproached, in ctx, ref jewelryGrabRng);
+        ulong jewelryBustSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            return RobberyHustle.PressLuck(in jewelryGrabbed, in ctx, ref rng).Stage == RobberyStage.Busted;
+        });
+        var jewelryBustRng = new RngState(jewelryBustSeed);
+        RobberyState jewelryBusted = RobberyHustle.PressLuck(in jewelryGrabbed, in ctx, ref jewelryBustRng);
+        double jewelryLegalCost = RobberyHustle.RobberyProfile.BustLegalCostFrac * 3600; // JewelryExchange base score
+        Check("robbery jewelry: the biggest score sets the biggest bail (25% of 3600 = 900, §5.5)",
+            jewelryBusted.FundsDelta == -jewelryLegalCost,
+            $"funds={jewelryBusted.FundsDelta} (want {-jewelryLegalCost})");
+        var jewelryBrokeRng = new RngState(jewelryBustSeed);
+        RobberyState jewelryBrokeBusted = RobberyHustle.PressLuck(in jewelryGrabbed, in brokeCtx, ref jewelryBrokeRng);
+        Check("robbery jewelry: the 900 bail still clamps to funds on hand (never indebts)",
+            jewelryBrokeBusted.FundsDelta == -100, $"funds={jewelryBrokeBusted.FundsDelta} (want -100)");
+
+        RobberyState jewelryBailed = RobberyHustle.GrabAndRun(in jewelryGrabbed);
+        ulong jewelryCleanSeed = FindSeed(s =>
+        {
+            var rng = new RngState(s);
+            RobberyState g = RobberyHustle.Getaway(in jewelryBailed, in ctx, ref rng);
+            return g.FundsDelta == jewelryBailed.PartialTake; // full take banked ⇒ no botch
+        });
+        var jewelryCleanRng = new RngState(jewelryCleanSeed);
+        RobberyState jewelryClean = RobberyHustle.Getaway(in jewelryBailed, in ctx, ref jewelryCleanRng);
+        Check("robbery jewelry: a clean getaway books CaseHeatCost + BaseHeat(15) = 17 detection and arms hot_goods (§5.6)",
+            jewelryClean.Stage == RobberyStage.Resolved && jewelryClean.HotGoodsFlag && !jewelryClean.RobberyBustFlag
+            && jewelryClean.DetectionRiskDelta == RobberyHustle.RobberyProfile.CaseHeatCost + 15, // JewelryExchange baseHeat
+            $"stage={jewelryClean.Stage} detect={jewelryClean.DetectionRiskDelta} (want {RobberyHustle.RobberyProfile.CaseHeatCost + 15})");
+
+        RobberyState warehouseCasedSolo = RobberyHustle.ChooseApproach(
+            RobberyHustle.CaseTarget(in ctx, RobberyTarget.Warehouse, caseIt: true), in ctx, RobberyApproach.SoloQuiet);
+        Check("robbery jewelry: press-your-luck odds are target-independent (jewelry == warehouse at same approach/casing, §5.7)",
+            RobberyHustle.ComputePressLuckBustProbability(in jewelryApproached, in ctx)
+                == RobberyHustle.ComputePressLuckBustProbability(in warehouseCasedSolo, in ctx));
+
+        var careful = Band(RobberyTarget.JewelryExchange, caseIt: true, RobberyApproach.SoloQuiet, alwaysPress: false, 40_000_000UL);
+        var committed = Band(RobberyTarget.JewelryExchange, caseIt: true, RobberyApproach.SoloQuiet, alwaysPress: true, 50_000_000UL);
+        var jewelryReckless = Band(RobberyTarget.JewelryExchange, caseIt: false, RobberyApproach.StrongArm, alwaysPress: true, 60_000_000UL);
+
+        Console.WriteLine("--- Robbery jewelry-exchange bands (mid-career avatar, N=20,000/policy) ---");
+        Console.WriteLine($"  Careful   (jewelry, cased, quiet, bail):  mean={careful.MeanFunds,7:F1}  bust={careful.BustRate:P1}  detect={careful.MeanDetect:F1}");
+        Console.WriteLine($"  Committed (jewelry, cased, quiet, press): mean={committed.MeanFunds,7:F1}  bust={committed.BustRate:P1}  detect={committed.MeanDetect:F1}");
+        Console.WriteLine($"  Reckless  (jewelry, blind, arm, press):   mean={jewelryReckless.MeanFunds,7:F1}  bust={jewelryReckless.BustRate:P1}  detect={jewelryReckless.MeanDetect:F1}\n");
+
+        Check("robbery jewelry band: the careful cased-solo-bail line is still +EV at the top rung (ladder invariant, §5.2)",
+            careful.MeanFunds > 0 && careful.BustRate > 0.50 && careful.BustRate < 0.62,
+            $"mean={careful.MeanFunds:F1} bust={careful.BustRate:P1}");
+        Check("robbery jewelry band: the committed line extends the frontier past the bookie — more reward, more tail (§5.3)",
+            committed.MeanFunds > moderate.MeanFunds && committed.BustRate > moderate.BustRate,
+            $"mean={committed.MeanFunds:F1} (moderate {moderate.MeanFunds:F1}), bust={committed.BustRate:P1} (moderate {moderate.BustRate:P1})");
+        Check("robbery jewelry band: the blind strong-arm press is the deepest trap on the board (§5.4)",
+            jewelryReckless.MeanFunds < reckless.MeanFunds && jewelryReckless.BustRate > reckless.BustRate,
+            $"mean={jewelryReckless.MeanFunds:F1} (warehouse-reckless {reckless.MeanFunds:F1}), bust={jewelryReckless.BustRate:P1} (warehouse-reckless {reckless.BustRate:P1})");
     }
 
     // ------------------------------------------------------------------

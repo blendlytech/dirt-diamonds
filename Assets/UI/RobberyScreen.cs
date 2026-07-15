@@ -45,6 +45,7 @@ public sealed partial class RobberyScreen : Control
     private Button _storeButton = null!;
     private Button _bookieButton = null!;
     private Button _warehouseButton = null!;
+    private Button _jewelryButton = null!;
     private CheckBox _caseItCheckBox = null!;
 
     private VBoxContainer _approachPanel = null!;
@@ -82,6 +83,7 @@ public sealed partial class RobberyScreen : Control
         _storeButton = GetNode<Button>("Panel/Layout/CasePanel/StoreButton");
         _bookieButton = GetNode<Button>("Panel/Layout/CasePanel/BookieButton");
         _warehouseButton = GetNode<Button>("Panel/Layout/CasePanel/WarehouseButton");
+        _jewelryButton = GetNode<Button>("Panel/Layout/CasePanel/JewelryButton");
         _caseItCheckBox = GetNode<CheckBox>("Panel/Layout/CasePanel/CaseItCheckBox");
 
         _approachPanel = GetNode<VBoxContainer>("Panel/Layout/ApproachPanel");
@@ -108,6 +110,7 @@ public sealed partial class RobberyScreen : Control
         _storeButton.Pressed += () => OnTargetPicked(RobberyTarget.ConvenienceStore);
         _bookieButton.Pressed += () => OnTargetPicked(RobberyTarget.BookieStash);
         _warehouseButton.Pressed += () => OnTargetPicked(RobberyTarget.Warehouse);
+        _jewelryButton.Pressed += () => OnTargetPicked(RobberyTarget.JewelryExchange);
         _soloQuietButton.Pressed += () => OnApproachPicked(RobberyApproach.SoloQuiet);
         _strongArmButton.Pressed += () => OnApproachPicked(RobberyApproach.StrongArm);
         _crewButton.Pressed += () => OnApproachPicked(RobberyApproach.Crew);

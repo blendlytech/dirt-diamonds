@@ -42,6 +42,7 @@ public enum RobberyTarget : byte
     ConvenienceStore,
     BookieStash,
     Warehouse,
+    JewelryExchange,
 }
 
 /// <summary>How the job is run (§5.1.2) — sets the score/bust/health/heat curve for the execute + getaway rolls.</summary>
@@ -188,6 +189,7 @@ public static class RobberyHustle
         RobberyTarget.ConvenienceStore => new TargetProfile(baseScore: 350, difficulty: 0.20, baseHeat: 3),
         RobberyTarget.BookieStash => new TargetProfile(baseScore: 900, difficulty: 0.40, baseHeat: 6),
         RobberyTarget.Warehouse => new TargetProfile(baseScore: 1800, difficulty: 0.60, baseHeat: 10),
+        RobberyTarget.JewelryExchange => new TargetProfile(baseScore: 3600, difficulty: 0.70, baseHeat: 15),
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, null),
     };
 

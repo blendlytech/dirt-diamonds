@@ -63,6 +63,10 @@ text = "Bookie's Stash (moderate)"
 layout_mode = 2
 text = "Warehouse (big, dangerous)"
 
+[node name="JewelryButton" type="Button" parent="Panel/Layout/CasePanel"]
+layout_mode = 2
+text = "Jewelry Exchange (the big score — diamonds)"
+
 [node name="CaseItCheckBox" type="CheckBox" parent="Panel/Layout/CasePanel"]
 layout_mode = 2
 text = "Case it first (small heat cost, better odds)"
