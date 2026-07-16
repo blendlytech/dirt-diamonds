@@ -1,5 +1,5 @@
 {
-  "//": "DIRT-1 'The On-Ramp' (docs/design/criminal_underworld_content_arc.md §5), Sonnet 5. First batch of the criminal-underworld content arc: a gambling-debt spiral that converges into the SHIPPED compromised_syndicate -> syndicate_shakedown cascade (core_events.json), giving that cascade a second, content-authored on-ramp alongside back_alley_bribe. All 11 events are scope:'avatar' per the authoring contract §4.3 (sidesteps the scope:any weight-blast-radius and NULL-team tier-leak hazards for free). Flag lifecycle (owes_the_book -> dodging_debt/running_errands -> in_the_life, converging on compromised_syndicate) follows §5.1's table exactly; no orphaned flags, no dead-end set_flags (in_the_life is a disclosed DIRT-2 forward hook but is already read three times within this batch). detection_risk is never read or written anywhere in this file -- collision #1 in §2: DIRT-* tracks legal jeopardy with boolean flags only (owes_the_book/dodging_debt/running_errands/been_lifting/in_the_life), never the PED meter. The syndicate stays faceless on 'unknown' (dirt_debt_sold); the one new NAMED associate is the_bookie ('Sal'), added to contacts.json in this change (role:friend, zero registry code touch). Cooldown additions beyond the design doc's explicit numbers (the doc left these unspecified for several slots): dirt_the_marker (14d -- 'work it off'/'duck the call' both leave owes_the_book active, so the marker gate stays satisfied and needs pacing), dirt_lookout (30d -- none of its choices clear its gate), dirt_busted (30d -- 'fight it' keeps been_lifting active), dirt_family_finds_out (40d -- by design 'a promise is not an exit', nothing clears in_the_life), dirt_street_rep (40d -- same), dirt_clean_break (30d -- 'one last score' deliberately keeps in_the_life so the pull-back-in can recur, per the doc's own note). Every other event either clears its own gate on at least one branch or was given an explicit cooldown/min_days_since by the doc; check_event_graph_integrity #4 (no unpaced loops) holds throughout. REVIEW FIX (Fable 5, doc S5.3): dirt_sticky_fingers additionally gates on hs_started+14d (dirt_lookout's belt-and-braces idiom) -- the Destitute backstory tier starts at $50, so its funds<200 gate alone COULD hold on day 2 of a fresh save, and since this file sorts alphabetically before hs_onboarding_events.json the dispatcher's first-satisfied-in-file-order sweep would give it a weight-0.08 roll at stealing the avatar's day-2 slot from the weight-1.0 hs_first_day. The anchor flag costs nothing at any later tier (hs_started stays active for the life of every avatar who passed through HS); the one disclosed dead branch is a hypothetical future avatar who never fired hs_first_day. dirt_hot_merch's optional bad_product engine-flag tie-in (doc §5.2 item 9, 'author's call, disclose if used') was NOT used -- kept as pure fencing-flavor texture, no HustleService coupling in this batch. dirt_busted's contact is 'unknown' (booking is faceless, mirroring roster_availability_events.json's narcotics_arrest) rather than agent_diaz, since this beat is tier-agnostic petty crime, not the pro-era legal-jeopardy triad. Weights: highest is dirt_debt_sold at 0.5 (avatar scope, single subject -- the ×136-subject blast-radius concern in check #6 doesn't apply), everything else <=0.30, matching §5.1's ceiling. || DIRT-2 'The Fix' (docs/design/criminal_underworld_dirt2_the_fix.md, Opus 4.8 spec; Sonnet 5 build), appended to this same file per §5's author's-call (arc stays one document). 11 new events, all scope:'avatar', every one additionally gated 'field tier >= 2' (§4 item 3 -- immune to the NULL-team -1 sentinel, and structurally inert during the tier-0 HS onboarding phase in playtest, so no day-1/2 slot-theft hazard like DIRT-1 had). Two ramps converge on the same fix cascade: dirt_the_ask (flag_active compromised_syndicate, the primary 'they own you' ramp) and dirt_made_useful (flag_active in_the_life + flag_inactive compromised_syndicate, the second ramp -- its let_them_in choice is a NEW third writer of compromised_syndicate, back-feeding the shipped +365 syndicate_shakedown one tier up, mirroring DIRT-1's own two-on-ramps-one-deep-end shape). Flag lifecycle exactly per spec §5.1: on_the_hook (set by dirt_the_ask/dirt_made_useful engage choices; read by dirt_the_tip, dirt_shave_runs, dirt_turn_informant_a, dirt_walk_away_clean; cleared by dirt_walk_away_clean, dirt_turn_informant_*, dirt_league_investigation's take_the_suspension), shaving_runs (set by dirt_shave_runs' shave/throw branches; read by dirt_teammate_knows, dirt_league_investigation, dirt_turn_informant_b; cleared by dirt_league_investigation's take_the_suspension and dirt_turn_informant_*), threw_a_game (set by dirt_shave_runs' throw branch only; read by dirt_permanent_ban; cleared by dirt_permanent_ban and dirt_league_investigation's take_the_suspension -- belt-and-braces per spec), banned_for_life (set by dirt_permanent_ban, NEVER cleared -- terminal by design per §4 item 4; read as a gate by dirt_league_investigation/dirt_permanent_ban/dirt_turn_informant_a+b (flag_inactive, so a banned player can't re-enter the cascade) AND as flag_active by dirt_blacklisted -- an in-batch reader, stronger than the disclosed forward-hook floor), cooperated_with_league (set by dirt_turn_informant_a+b's cooperate choice; disclosed DIRT-4 forward hook, no in-batch reader, legal per check #3). syndicate_marked gets two NEW writers (dirt_the_ask's tell_them_no, dirt_turn_informant_*'s cooperate -- informing IS defiance) feeding the shipped syndicate_enforcers @ +14d untouched. detection_risk is never touched anywhere in this batch (§2 collision #1 continued -- a fixer who never juiced must never draw caught_juicing). dirt_turn_informant is authored as TWO events (_a gates flag_active on_the_hook + flag_inactive shaving_runs; _b gates flag_active shaving_runs) per §5.2 item 9's explicit instruction -- prerequisites are OR-shaped so the framework's §3 rule (OR is two events, never a single leaf) requires the split; both share identical consequences on their 'cooperate'/'stay_in' choices. Cooldowns beyond the doc's explicit numbers: dirt_league_investigation (30d -- 'deny and stonewall' deliberately keeps shaving_runs active, mirroring DIRT-1's dirt_busted 'fight it' pacing precedent) and dirt_permanent_ban (30d belt-and-braces, though its single lawyer_it_down choice already self-blocks by clearing threw_a_game). No orphaned prerequisites: every flag read here is set somewhere in the whole Content folder (compromised_syndicate/in_the_life/syndicate_marked pre-exist from DIRT-1/core; on_the_hook/shaving_runs/threw_a_game/banned_for_life are new, all set within this same batch). Contacts: zero contacts.json touch (§6) -- agent_diaz carries every suspension/legal-jeopardy beat (mirroring roster_availability_events.json's suspended_* precedent verbatim, vs. 'unknown' for tier-agnostic petty crime), 'unknown' carries the faceless syndicate ask/tip/shave beats, coach_reyes/family_mom carry the two door-out epilogues. CareerManager reads zero Entity_Flags today (§2 collision #2, verified) -- banned_for_life's real teeth in THIS batch are the season-length suspension + the rival/league edge + dirt_blacklisted's epilogue, never a claimed career-ending mechanic. Zero Assets/Simulation/ touch by construction (§4 item 1) -- 'shave a run'/'throw a game' are pure consequence bundles plus a complicity flag, never an AtBatResolver/LeagueSimulator hook. || DIRT-3 'Product & Turf' (docs/design/criminal_underworld_dirt3_product_and_turf.md, Opus 4.8 spec; Sonnet 5 build), appended to this same file per §8 item 5's author's-call (the arc stays one document, as DIRT-2 did). 9 new events, all scope:'avatar', category:'hustle', weight <=0.12 -- REACTIVE content, not an authored cascade: every gate reads one of the seven HustleService engine flags (verified against Assets/Economy/Hustles/HustleService.cs this pass) rather than a content-written flag. Corrected against the stale arc-doc §8 outline (spec §2): the turf flag is controls_turf_local, NOT controls_turf_f/controls_turf_<n>; hot_goods/robbery_bust/spoiled_goods/gambling_bust postdate the outline entirely. Companion edit landed in the SAME change: check_event_graph_integrity/SKILL.md's engine-flag allowlist paragraph corrected + extended to all seven names (zero C# touch) -- required so check #2 doesn't mis-read these gates as orphaned prerequisites. Introduces ZERO new content flags (spec §4 item 1): the only set_flag emitted anywhere in these 9 events is in_the_life (the convergence -- hustling becomes the arc's THIRD on-ramp into the shipped dirt_family_finds_out/dirt_clean_break and, at tier>=2, DIRT-2's dirt_made_useful), and the only clear_flag emitted is on two engine flags -- the one disclosed inverse-of-usual interaction (spec §4 item 2): dirt_robbery_fallout's take_the_plea clears robbery_bust, dirt_give_up_the_corner's walk_away_from_the_corner clears controls_turf_local, both mechanically identical to HustleService's own SetFlag(...,false,day) writer. No other engine flag is ever set or cleared by content -- content reads engine state, never fabricates it. Tier-agnostic by design (spec §4 item 4, unlike DIRT-2's tier>=2 floor): no event carries a tier gate, since narcotics/robbery/fencing/Hold'em are all playable pre-pro. Fresh-save safety is STRUCTURAL rather than an anchor flag or tier floor -- every gate requires an engine flag only a played hustle run can set, and a fresh avatar has run none, so no DIRT-3 gate can hold on any day of a fresh save (harness-proven against an empty flag set, not just day 1-2 like DIRT-1 needed). detection_risk is never read or written anywhere in this batch (§2 collision #1 continued -- these boolean hustle flags are the only heat texture). No relationship kind:rival target:crew is authored anywhere (§2 collision #4 -- no such target exists in the closed vocabulary; the mechanical turf rival, when one exists, already comes from NarcoticsHustle's own crew-rep push, carried onto the field by the Phase-6 transport). dirt_turf_dispute's stand_your_ground carries an injury absence with NO accompanying health_ceiling consequence -- the roster-availability engine computes rust from live health_ceiling at apply time, so authoring a rating debuff alongside would double up (roster_availability_notes precedent, reused verbatim from DIRT-1's dirt_busted). dirt_give_up_the_corner is the turf-shaped door out (spec §5.2 item 3): NEITHER branch touches in_the_life (set or clear) -- it resolves only the turf half, converging into (never duplicating) the shipped dirt_clean_break for the full-life exit; one_more_season deliberately mirrors dirt_clean_break's one_last_score pull-back-in shape. Two more branches are deliberate non-convergent 'clean/minor' outs, matching the doc's own 'minor by design' framing: dirt_dead_weight's dump_it (stress relief only, no funds, does NOT set in_the_life) and dirt_sitting_on_hot_goods's sit_on_it (keeps hot_goods, does NOT set in_the_life) -- every other choice across the 9 events (14 of 18 total) sets in_the_life. dirt_lying_low deliberately shares its narc_watchlist gate with the shipped narcotics_arrest (roster_availability_events.json) per spec §8.1 -- the arrest is the hard teeth and clears the flag, this beat is soft paranoia texture that never clears it; whichever fires first on a given cycle is correct, not a race. dirt_sitting_on_hot_goods reads hot_goods but never clears it (§8.2) -- Fencing's FreshFromAJob acquisition is the sole consumer (HustleService.cs, consume-on-use); this beat only narrates a nudge toward fencing it. Cooldowns (all durable-flag gates, five of seven engine flags never self-clear so cooldown is the sole pacing mechanism per spec §4 item 3): dirt_turf_dispute 30, dirt_the_corner_earns 21, dirt_give_up_the_corner 30, dirt_bad_batch_comes_back 30, dirt_lying_low 21, dirt_dead_weight 30, dirt_robbery_fallout 30 (fight_it keeps robbery_bust active), dirt_sitting_on_hot_goods 14, dirt_card_room_raided 30. Contacts: zero contacts.json touch (spec §6) -- reuses unknown (faceless crews/heat/booking, mirroring dirt_busted's precedent for dirt_robbery_fallout), the_bookie/Sal (dirt_the_corner_earns, dirt_dead_weight, dirt_sitting_on_hot_goods), and coach_reyes (dirt_give_up_the_corner, mirroring dirt_clean_break's door-out voice).",
+  "//": "DIRT-1 'The On-Ramp' (docs/design/criminal_underworld_content_arc.md §5), Sonnet 5. First batch of the criminal-underworld content arc: a gambling-debt spiral that converges into the SHIPPED compromised_syndicate -> syndicate_shakedown cascade (core_events.json), giving that cascade a second, content-authored on-ramp alongside back_alley_bribe. All 11 events are scope:'avatar' per the authoring contract §4.3 (sidesteps the scope:any weight-blast-radius and NULL-team tier-leak hazards for free). Flag lifecycle (owes_the_book -> dodging_debt/running_errands -> in_the_life, converging on compromised_syndicate) follows §5.1's table exactly; no orphaned flags, no dead-end set_flags (in_the_life is a disclosed DIRT-2 forward hook but is already read three times within this batch). detection_risk is never read or written anywhere in this file -- collision #1 in §2: DIRT-* tracks legal jeopardy with boolean flags only (owes_the_book/dodging_debt/running_errands/been_lifting/in_the_life), never the PED meter. The syndicate stays faceless on 'unknown' (dirt_debt_sold); the one new NAMED associate is the_bookie ('Sal'), added to contacts.json in this change (role:friend, zero registry code touch). Cooldown additions beyond the design doc's explicit numbers (the doc left these unspecified for several slots): dirt_the_marker (14d -- 'work it off'/'duck the call' both leave owes_the_book active, so the marker gate stays satisfied and needs pacing), dirt_lookout (30d -- none of its choices clear its gate), dirt_busted (30d -- 'fight it' keeps been_lifting active), dirt_family_finds_out (40d -- by design 'a promise is not an exit', nothing clears in_the_life), dirt_street_rep (40d -- same), dirt_clean_break (30d -- 'one last score' deliberately keeps in_the_life so the pull-back-in can recur, per the doc's own note). Every other event either clears its own gate on at least one branch or was given an explicit cooldown/min_days_since by the doc; check_event_graph_integrity #4 (no unpaced loops) holds throughout. REVIEW FIX (Fable 5, doc S5.3): dirt_sticky_fingers additionally gates on hs_started+14d (dirt_lookout's belt-and-braces idiom) -- the Destitute backstory tier starts at $50, so its funds<200 gate alone COULD hold on day 2 of a fresh save, and since this file sorts alphabetically before hs_onboarding_events.json the dispatcher's first-satisfied-in-file-order sweep would give it a weight-0.08 roll at stealing the avatar's day-2 slot from the weight-1.0 hs_first_day. The anchor flag costs nothing at any later tier (hs_started stays active for the life of every avatar who passed through HS); the one disclosed dead branch is a hypothetical future avatar who never fired hs_first_day. dirt_hot_merch's optional bad_product engine-flag tie-in (doc §5.2 item 9, 'author's call, disclose if used') was NOT used -- kept as pure fencing-flavor texture, no HustleService coupling in this batch. dirt_busted's contact is 'unknown' (booking is faceless, mirroring roster_availability_events.json's narcotics_arrest) rather than agent_diaz, since this beat is tier-agnostic petty crime, not the pro-era legal-jeopardy triad. Weights: highest is dirt_debt_sold at 0.5 (avatar scope, single subject -- the ×136-subject blast-radius concern in check #6 doesn't apply), everything else <=0.30, matching §5.1's ceiling. || DIRT-2 'The Fix' (docs/design/criminal_underworld_dirt2_the_fix.md, Opus 4.8 spec; Sonnet 5 build), appended to this same file per §5's author's-call (arc stays one document). 11 new events, all scope:'avatar', every one additionally gated 'field tier >= 2' (§4 item 3 -- immune to the NULL-team -1 sentinel, and structurally inert during the tier-0 HS onboarding phase in playtest, so no day-1/2 slot-theft hazard like DIRT-1 had). Two ramps converge on the same fix cascade: dirt_the_ask (flag_active compromised_syndicate, the primary 'they own you' ramp) and dirt_made_useful (flag_active in_the_life + flag_inactive compromised_syndicate, the second ramp -- its let_them_in choice is a NEW third writer of compromised_syndicate, back-feeding the shipped +365 syndicate_shakedown one tier up, mirroring DIRT-1's own two-on-ramps-one-deep-end shape). Flag lifecycle exactly per spec §5.1: on_the_hook (set by dirt_the_ask/dirt_made_useful engage choices; read by dirt_the_tip, dirt_shave_runs, dirt_turn_informant_a, dirt_walk_away_clean; cleared by dirt_walk_away_clean, dirt_turn_informant_*, dirt_league_investigation's take_the_suspension), shaving_runs (set by dirt_shave_runs' shave/throw branches; read by dirt_teammate_knows, dirt_league_investigation, dirt_turn_informant_b; cleared by dirt_league_investigation's take_the_suspension and dirt_turn_informant_*), threw_a_game (set by dirt_shave_runs' throw branch only; read by dirt_permanent_ban; cleared by dirt_permanent_ban and dirt_league_investigation's take_the_suspension -- belt-and-braces per spec), banned_for_life (set by dirt_permanent_ban, NEVER cleared -- terminal by design per §4 item 4; read as a gate by dirt_league_investigation/dirt_permanent_ban/dirt_turn_informant_a+b (flag_inactive, so a banned player can't re-enter the cascade) AND as flag_active by dirt_blacklisted -- an in-batch reader, stronger than the disclosed forward-hook floor), cooperated_with_league (set by dirt_turn_informant_a+b's cooperate choice; disclosed DIRT-4 forward hook, no in-batch reader, legal per check #3). syndicate_marked gets two NEW writers (dirt_the_ask's tell_them_no, dirt_turn_informant_*'s cooperate -- informing IS defiance) feeding the shipped syndicate_enforcers @ +14d untouched. detection_risk is never touched anywhere in this batch (§2 collision #1 continued -- a fixer who never juiced must never draw caught_juicing). dirt_turn_informant is authored as TWO events (_a gates flag_active on_the_hook + flag_inactive shaving_runs; _b gates flag_active shaving_runs) per §5.2 item 9's explicit instruction -- prerequisites are OR-shaped so the framework's §3 rule (OR is two events, never a single leaf) requires the split; both share identical consequences on their 'cooperate'/'stay_in' choices. Cooldowns beyond the doc's explicit numbers: dirt_league_investigation (30d -- 'deny and stonewall' deliberately keeps shaving_runs active, mirroring DIRT-1's dirt_busted 'fight it' pacing precedent) and dirt_permanent_ban (30d belt-and-braces, though its single lawyer_it_down choice already self-blocks by clearing threw_a_game). No orphaned prerequisites: every flag read here is set somewhere in the whole Content folder (compromised_syndicate/in_the_life/syndicate_marked pre-exist from DIRT-1/core; on_the_hook/shaving_runs/threw_a_game/banned_for_life are new, all set within this same batch). Contacts: zero contacts.json touch (§6) -- agent_diaz carries every suspension/legal-jeopardy beat (mirroring roster_availability_events.json's suspended_* precedent verbatim, vs. 'unknown' for tier-agnostic petty crime), 'unknown' carries the faceless syndicate ask/tip/shave beats, coach_reyes/family_mom carry the two door-out epilogues. CareerManager reads zero Entity_Flags today (§2 collision #2, verified) -- banned_for_life's real teeth in THIS batch are the season-length suspension + the rival/league edge + dirt_blacklisted's epilogue, never a claimed career-ending mechanic. Zero Assets/Simulation/ touch by construction (§4 item 1) -- 'shave a run'/'throw a game' are pure consequence bundles plus a complicity flag, never an AtBatResolver/LeagueSimulator hook. || DIRT-3 'Product & Turf' (docs/design/criminal_underworld_dirt3_product_and_turf.md, Opus 4.8 spec; Sonnet 5 build), appended to this same file per §8 item 5's author's-call (the arc stays one document, as DIRT-2 did). 9 new events, all scope:'avatar', category:'hustle', weight <=0.12 -- REACTIVE content, not an authored cascade: every gate reads one of the seven HustleService engine flags (verified against Assets/Economy/Hustles/HustleService.cs this pass) rather than a content-written flag. Corrected against the stale arc-doc §8 outline (spec §2): the turf flag is controls_turf_local, NOT controls_turf_f/controls_turf_<n>; hot_goods/robbery_bust/spoiled_goods/gambling_bust postdate the outline entirely. Companion edit landed in the SAME change: check_event_graph_integrity/SKILL.md's engine-flag allowlist paragraph corrected + extended to all seven names (zero C# touch) -- required so check #2 doesn't mis-read these gates as orphaned prerequisites. Introduces ZERO new content flags (spec §4 item 1): the only set_flag emitted anywhere in these 9 events is in_the_life (the convergence -- hustling becomes the arc's THIRD on-ramp into the shipped dirt_family_finds_out/dirt_clean_break and, at tier>=2, DIRT-2's dirt_made_useful), and the only clear_flag emitted is on two engine flags -- the one disclosed inverse-of-usual interaction (spec §4 item 2): dirt_robbery_fallout's take_the_plea clears robbery_bust, dirt_give_up_the_corner's walk_away_from_the_corner clears controls_turf_local, both mechanically identical to HustleService's own SetFlag(...,false,day) writer. No other engine flag is ever set or cleared by content -- content reads engine state, never fabricates it. Tier-agnostic by design (spec §4 item 4, unlike DIRT-2's tier>=2 floor): no event carries a tier gate, since narcotics/robbery/fencing/Hold'em are all playable pre-pro. Fresh-save safety is STRUCTURAL rather than an anchor flag or tier floor -- every gate requires an engine flag only a played hustle run can set, and a fresh avatar has run none, so no DIRT-3 gate can hold on any day of a fresh save (harness-proven against an empty flag set, not just day 1-2 like DIRT-1 needed). detection_risk is never read or written anywhere in this batch (§2 collision #1 continued -- these boolean hustle flags are the only heat texture). No relationship kind:rival target:crew is authored anywhere (§2 collision #4 -- no such target exists in the closed vocabulary; the mechanical turf rival, when one exists, already comes from NarcoticsHustle's own crew-rep push, carried onto the field by the Phase-6 transport). dirt_turf_dispute's stand_your_ground carries an injury absence with NO accompanying health_ceiling consequence -- the roster-availability engine computes rust from live health_ceiling at apply time, so authoring a rating debuff alongside would double up (roster_availability_notes precedent, reused verbatim from DIRT-1's dirt_busted). dirt_give_up_the_corner is the turf-shaped door out (spec §5.2 item 3): NEITHER branch touches in_the_life (set or clear) -- it resolves only the turf half, converging into (never duplicating) the shipped dirt_clean_break for the full-life exit; one_more_season deliberately mirrors dirt_clean_break's one_last_score pull-back-in shape. Two more branches are deliberate non-convergent 'clean/minor' outs, matching the doc's own 'minor by design' framing: dirt_dead_weight's dump_it (stress relief only, no funds, does NOT set in_the_life) and dirt_sitting_on_hot_goods's sit_on_it (keeps hot_goods, does NOT set in_the_life) -- every other choice across the 9 events (14 of 18 total) sets in_the_life. dirt_lying_low deliberately shares its narc_watchlist gate with the shipped narcotics_arrest (roster_availability_events.json) per spec §8.1 -- the arrest is the hard teeth and clears the flag, this beat is soft paranoia texture that never clears it; whichever fires first on a given cycle is correct, not a race. dirt_sitting_on_hot_goods reads hot_goods but never clears it (§8.2) -- Fencing's FreshFromAJob acquisition is the sole consumer (HustleService.cs, consume-on-use); this beat only narrates a nudge toward fencing it. Cooldowns (all durable-flag gates, five of seven engine flags never self-clear so cooldown is the sole pacing mechanism per spec §4 item 3): dirt_turf_dispute 30, dirt_the_corner_earns 21, dirt_give_up_the_corner 30, dirt_bad_batch_comes_back 30, dirt_lying_low 21, dirt_dead_weight 30, dirt_robbery_fallout 30 (fight_it keeps robbery_bust active), dirt_sitting_on_hot_goods 14, dirt_card_room_raided 30. Contacts: zero contacts.json touch (spec §6) -- reuses unknown (faceless crews/heat/booking, mirroring dirt_busted's precedent for dirt_robbery_fallout), the_bookie/Sal (dirt_the_corner_earns, dirt_dead_weight, dirt_sitting_on_hot_goods), and coach_reyes (dirt_give_up_the_corner, mirroring dirt_clean_break's door-out voice). || DIRT-4 'The Bust & The Door Out' (docs/design/criminal_underworld_dirt4_the_bust_and_the_door_out.md, Opus 4.8 spec; Sonnet 5 build) -- the FINALE, appended to this same file per §5's author's-call. This is the content half only; the engine half (PromotionManager reading record_arrest/banned_for_life, Fable 5) ships and reviews separately per the spec's model split. 6 new events, all scope:'avatar': the pro-scale bust as an OR-split pair (dirt_the_indictment_a gates flag_active cooperated_with_league for the lighter DIRT-2-cooperator deal, dirt_the_indictment_b gates flag_inactive cooperated_with_league for the full-weight case -- disjoint gates, shared shape, fulfilling DIRT-2 §8.2's disclosed forward hook: _a's plea absence (2d) is deliberately shorter than _b's (5d), and _a's fight-it (4d) shorter than _b's (7d), the informant's discount holding at every branch), dirt_the_record_follows (the narrative face of the engine teeth -- gates flag_active record_arrest, pure texture, NO rating/promotion consequence of its own by design, per the spec's explicit two-systems-one-flag-never-same-tick note), the pro-scale door-out split into dirt_going_straight (the ordinary exit: clear in_the_life, big funds cost) and dirt_going_straight_buyout (gates the ADDITIONAL flag_active compromised_syndicate, since EventChoice carries no per-choice prerequisite -- the spec's own sanctioned author's-call for an 'awkward per-choice conditional'; its buy_the_marker_back is the one and only content clear of compromised_syndicate in the whole arc, mechanically identical to HustleService's own SetFlag(...,false,day) writer), and the optional heir-pivot dirt_the_next_generation (author's call: taken; gates ONLY flag_active record_arrest, not the spec's disclosed record_arrest-OR-banned_for_life alternative, since prerequisites AND rather than OR within one event and a second OR-split event for pure flavor text felt like an unearned complication -- pure texture, sets/clears nothing, orphan-free by construction since it only reads an already-multiply-read terminal flag). record_arrest is now set by SEVEN choices total across the arc: narcotics_arrest (pre-existing, unedited -- its one surviving branch already carried it), dirt_busted's both branches and dirt_robbery_fallout's both branches (the §5.4 consolidation edits, additive set_flags onto two existing DIRT-1/DIRT-3 events, no gate/weight/id change), and both dirt_the_indictment_* events' both branches -- and is read by dirt_the_record_follows plus (proven in the engine harness, not here) PromotionManager. Neither record_arrest nor banned_for_life is ever cleared by any DIRT-4 branch (both terminal by design, per spec §1/§4 item 2) -- the RunDirtProductTurfArcChecks 'DIRT-3 sets ONLY in_the_life' assertion was updated in this same change to admit record_arrest as the second and only other flag DIRT-3's two consolidated events now set, since that check predates this batch. PED re-theme (spec §2.1 item 1, optional): NOT taken -- the four detection_risk-gated PED events (caught_juicing + the three suspended_* tiers) are untouched, ids/gates/consequences/weights byte-identical, left for a future pass. detection_risk is never read or written by any DIRT-4 event (the collision #1 discipline continues unbroken through the arc's last batch). Cooldowns: all six new events carry an explicit nonzero cooldown_days (45 for the indictment pair/record-follows/going-straight pair, matching DIRT-2/DIRT-3's belt-and-braces pacing on flags that never self-clear; 60 for the heir beat, mirroring dirt_street_rep/dirt_family_finds_out's slower family-beat cadence) -- check #4 (no unpaced loop) holds throughout. Weights: every new event <=0.10, under spec §5.3's explicit ceiling for this batch. Contacts: zero contacts.json touch -- reuses agent_diaz (the pro-era lawyer, dirt_the_indictment_a), unknown (the DA's case + the faceless scout/GM, dirt_the_indictment_b/dirt_the_record_follows), family_mom (dirt_going_straight, the door-out voice precedent from dirt_clean_break's coach_reyes -- deliberately the OTHER parent this time), coach_reyes (dirt_going_straight_buyout, the syndicate-connections angle), and family_dad (dirt_the_next_generation, the household's other established parent thread). Zero Assets/Simulation touch on the content side (this file); the companion PromotionManager/PromotionProfile engine edit is a SEPARATE Fable 5 change, reviewed and gated independently per spec §7.B.",
   "events": [
     {
       "id": "dirt_high_stakes_game",
@@ -208,19 +208,21 @@
       ],
       "choices": [
         { "id": "take_the_plea", "autopilot_weight": 2, "label": "Take the plea",
-          "outcome": "A lawyer you can barely afford gets it down to a fine and a slap on the wrist. It still costs you two days you don't get back.",
+          "outcome": "A lawyer you can barely afford gets it down to a fine and a slap on the wrist. It still costs you two days you don't get back, and a record that wasn't there before.",
           "consequences": [
             { "type": "absence", "reason": "arrest", "days": 2 },
             { "type": "funds", "amount": -300 },
             { "type": "clear_flag", "flag": "been_lifting" },
+            { "type": "set_flag", "flag": "record_arrest" },
             { "type": "person_stat", "stat": "reputation", "amount": -4 },
             { "type": "stress", "amount": 10 }
           ] },
         { "id": "fight_it", "autopilot_weight": 1, "label": "Fight it",
-          "outcome": "You fight the charge on principle. It costs more, takes longer, and the outcome is about the same.",
+          "outcome": "You fight the charge on principle. It costs more, takes longer, and the outcome is about the same -- a record on your name either way.",
           "consequences": [
             { "type": "absence", "reason": "arrest", "days": 3 },
             { "type": "funds", "amount": -700 },
+            { "type": "set_flag", "flag": "record_arrest" },
             { "type": "stress", "amount": 25 }
           ] }
       ]
@@ -884,6 +886,7 @@
             { "type": "absence", "reason": "arrest", "days": 3 },
             { "type": "funds", "amount": -420 },
             { "type": "clear_flag", "flag": "robbery_bust" },
+            { "type": "set_flag", "flag": "record_arrest" },
             { "type": "person_stat", "stat": "reputation", "amount": -4 },
             { "type": "stress", "amount": 16 },
             { "type": "set_flag", "flag": "in_the_life" }
@@ -893,6 +896,7 @@
           "consequences": [
             { "type": "absence", "reason": "arrest", "days": 4 },
             { "type": "funds", "amount": -850 },
+            { "type": "set_flag", "flag": "record_arrest" },
             { "type": "stress", "amount": 26 },
             { "type": "set_flag", "flag": "in_the_life" }
           ] }
@@ -949,6 +953,190 @@
             { "type": "person_stat", "stat": "morality", "amount": -3 },
             { "type": "stress", "amount": -5 },
             { "type": "set_flag", "flag": "in_the_life" }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_the_indictment_a",
+      "scope": "avatar",
+      "weight": 0.10,
+      "cooldown_days": 45,
+      "contact": "agent_diaz",
+      "category": "hustle",
+      "prompt": "The indictment finally lands. Your lawyer already worked the one angle that matters: you talked first. 'This is the version where we ask for time served, not time.'",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 30 },
+        { "field": "tier", "op": ">=", "value": 2 },
+        { "flag_inactive": "banned_for_life" },
+        { "flag_active": "cooperated_with_league" }
+      ],
+      "choices": [
+        { "id": "take_the_deal", "autopilot_weight": 2, "label": "Take the deal",
+          "outcome": "Cooperating early buys exactly what your lawyer promised it would -- a short bench instead of a long one, a fine instead of a sentence, and a record that's now permanently yours either way.",
+          "text_message": { "body": "Your cooperation was noted. That's the whole reason this isn't worse.", "delay_days": 1 },
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 2 },
+            { "type": "funds", "amount": -300 },
+            { "type": "set_flag", "flag": "record_arrest" },
+            { "type": "person_stat", "stat": "reputation", "amount": -2 },
+            { "type": "stress", "amount": 10 }
+          ] },
+        { "id": "fight_it_anyway", "autopilot_weight": 1, "label": "Fight it anyway",
+          "outcome": "Even the guy who talked can't resist litigating the number. It costs you more than the deal would have, and the league doesn't forget you made them work for something you'd already handed them.",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 4 },
+            { "type": "funds", "amount": -700 },
+            { "type": "set_flag", "flag": "record_arrest" },
+            { "type": "stress", "amount": 25 },
+            { "type": "relationship", "kind": "rival", "affinity": -30, "target": "league" }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_the_indictment_b",
+      "scope": "avatar",
+      "weight": 0.10,
+      "cooldown_days": 45,
+      "contact": "unknown",
+      "category": "hustle",
+      "prompt": "The indictment lands with the full weight of a case built without any help from you. There's no cooperation credit softening this number.",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 30 },
+        { "field": "tier", "op": ">=", "value": 2 },
+        { "flag_inactive": "banned_for_life" },
+        { "flag_inactive": "cooperated_with_league" }
+      ],
+      "choices": [
+        { "id": "take_the_plea", "autopilot_weight": 2, "label": "Take the plea",
+          "outcome": "Your lawyer gets it down to something survivable, but nowhere near the deal a cooperator would have gotten. It's a real bill and a real bench, and a record that's now permanently yours.",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 5 },
+            { "type": "funds", "amount": -1200 },
+            { "type": "set_flag", "flag": "record_arrest" },
+            { "type": "person_stat", "stat": "reputation", "amount": -4 },
+            { "type": "stress", "amount": 18 }
+          ] },
+        { "id": "fight_it", "autopilot_weight": 1, "label": "Fight it",
+          "outcome": "You make the case go the distance. It's the costliest survival in the whole arc, and the record at the end of it looks exactly the same as if you'd taken the deal on day one.",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 7 },
+            { "type": "funds", "amount": -2000 },
+            { "type": "set_flag", "flag": "record_arrest" },
+            { "type": "stress", "amount": 32 },
+            { "type": "relationship", "kind": "rival", "affinity": -50, "target": "league" }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_the_record_follows",
+      "scope": "avatar",
+      "weight": 0.10,
+      "cooldown_days": 45,
+      "contact": "unknown",
+      "category": "baseball",
+      "prompt": "Somebody else got the callback you were quietly hoping for. Nobody says why out loud, but a scout's note about 'makeup concerns' doesn't leave much to read between the lines.",
+      "prerequisites": [
+        { "flag_active": "record_arrest", "min_days_since": 30 }
+      ],
+      "choices": [
+        { "id": "let_it_go", "autopilot_weight": 2, "label": "Let it go",
+          "outcome": "You don't get an explanation, and you don't ask for one. You just notice which name went up on the board instead of yours.",
+          "consequences": [
+            { "type": "person_stat", "stat": "reputation", "amount": -2 },
+            { "type": "stress", "amount": 8 }
+          ] },
+        { "id": "push_back", "autopilot_weight": 1, "label": "Push back on it",
+          "outcome": "You corner someone about it anyway. Nobody confirms anything, nobody denies anything, and it doesn't change which name went up on the board.",
+          "consequences": [
+            { "type": "person_stat", "stat": "reputation", "amount": -1 },
+            { "type": "stress", "amount": 12 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_going_straight",
+      "scope": "avatar",
+      "weight": 0.08,
+      "cooldown_days": 45,
+      "contact": "family_mom",
+      "category": "hustle",
+      "prompt": "Mom doesn't yell anymore. She just says she's tired of being scared every time you don't pick up. That lands harder than any lecture would've.",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 60 },
+        { "field": "tier", "op": ">=", "value": 2 }
+      ],
+      "choices": [
+        { "id": "get_out_for_good", "autopilot_weight": 2, "label": "Get out for good",
+          "outcome": "You make every call that ends it and pay whatever it costs to make it stick. It's the most expensive thing you've ever bought, and it doesn't touch the record -- that part stays yours either way.",
+          "consequences": [
+            { "type": "clear_flag", "flag": "in_the_life" },
+            { "type": "funds", "amount": -5000 },
+            { "type": "stress", "amount": -30 },
+            { "type": "person_stat", "stat": "morality", "amount": 5 },
+            { "type": "person_stat", "stat": "maturity", "amount": 5 }
+          ] },
+        { "id": "one_more_season", "autopilot_weight": 1, "label": "One more season on top",
+          "outcome": "You tell her one more season. You've told her that before, too.",
+          "consequences": [
+            { "type": "funds", "amount": 600 },
+            { "type": "person_stat", "stat": "morality", "amount": -4 },
+            { "type": "stress", "amount": 6 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_going_straight_buyout",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 45,
+      "contact": "coach_reyes",
+      "category": "hustle",
+      "prompt": "Coach Reyes knows people who know people. 'If you want out for real -- all the way out, marker and all -- there's a number. It is not a small one.'",
+      "prerequisites": [
+        { "flag_active": "in_the_life", "min_days_since": 60 },
+        { "flag_active": "compromised_syndicate" },
+        { "field": "tier", "op": ">=", "value": 2 }
+      ],
+      "choices": [
+        { "id": "buy_the_marker_back", "autopilot_weight": 1, "label": "Buy the marker back",
+          "outcome": "It costs more than you've ever paid for anything in your life. When it clears, for the first time since the marker changed hands, nobody owns you -- and the record still does.",
+          "consequences": [
+            { "type": "clear_flag", "flag": "in_the_life" },
+            { "type": "clear_flag", "flag": "compromised_syndicate" },
+            { "type": "funds", "amount": -12000 },
+            { "type": "stress", "amount": -20 },
+            { "type": "person_stat", "stat": "morality", "amount": 5 }
+          ] },
+        { "id": "not_worth_it_yet", "autopilot_weight": 2, "label": "Not worth it yet",
+          "outcome": "You do the math twice and put the number away for another day. Whatever this costs you, it isn't nothing either.",
+          "consequences": [
+            { "type": "stress", "amount": 4 }
+          ] }
+      ]
+    },
+    {
+      "id": "dirt_the_next_generation",
+      "scope": "avatar",
+      "weight": 0.06,
+      "cooldown_days": 60,
+      "contact": "family_dad",
+      "category": "family",
+      "prompt": "Dad brings up your kid's Little League registration, then goes quiet a second too long. 'They're gonna hear your name from someone eventually. Better it's from you.'",
+      "prerequisites": [
+        { "flag_active": "record_arrest", "min_days_since": 60 }
+      ],
+      "choices": [
+        { "id": "own_it_for_them", "autopilot_weight": 2, "label": "Own it for them, before someone else does",
+          "outcome": "You tell your kid the truth before anyone else gets the chance to tell it wrong. It's not a fun conversation. It's an honest one.",
+          "consequences": [
+            { "type": "person_stat", "stat": "morality", "amount": 3 },
+            { "type": "stress", "amount": -6 }
+          ] },
+        { "id": "change_the_subject", "autopilot_weight": 1, "label": "Change the subject",
+          "outcome": "You talk about the season instead. Somewhere down the line, that's still going to be somebody else's conversation to have.",
+          "consequences": [
+            { "type": "person_stat", "stat": "morality", "amount": -2 },
+            { "type": "stress", "amount": 6 }
           ] }
       ]
     }

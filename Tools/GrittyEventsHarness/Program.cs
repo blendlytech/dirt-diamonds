@@ -74,6 +74,7 @@ internal static class Program
             RunDirtUnderworldArcChecks();
             RunDirtTheFixArcChecks();
             RunDirtProductTurfArcChecks();
+            RunDirtTheBustArcChecks();
             RunChildDevelopmentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
@@ -247,7 +248,7 @@ internal static class Program
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
             batchFiles.Length >= 10
-            && wholeFolder.Count == 110
+            && wholeFolder.Count == 116
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -346,7 +347,13 @@ internal static class Program
             && wholeFolder.TryGetById("dirt_dead_weight", out _)
             && wholeFolder.TryGetById("dirt_robbery_fallout", out _)
             && wholeFolder.TryGetById("dirt_sitting_on_hot_goods", out _)
-            && wholeFolder.TryGetById("dirt_card_room_raided", out _),
+            && wholeFolder.TryGetById("dirt_card_room_raided", out _)
+            && wholeFolder.TryGetById("dirt_the_indictment_a", out _)
+            && wholeFolder.TryGetById("dirt_the_indictment_b", out _)
+            && wholeFolder.TryGetById("dirt_the_record_follows", out _)
+            && wholeFolder.TryGetById("dirt_going_straight", out _)
+            && wholeFolder.TryGetById("dirt_going_straight_buyout", out _)
+            && wholeFolder.TryGetById("dirt_the_next_generation", out _),
             $"{batchFiles.Length} files, {wholeFolder.Count} events");
     }
 
@@ -410,7 +417,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 110 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 116 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -2720,9 +2727,13 @@ internal static class Program
             dirt.Events.Any(e => ReadsFlagActive(e, "threw_a_game") || ReadsFlagInactive(e, "threw_a_game")));
         Check("banned_for_life is read by at least one prerequisite in the batch",
             dirt.Events.Any(e => ReadsFlagActive(e, "banned_for_life") || ReadsFlagInactive(e, "banned_for_life")));
-        Check("cooperated_with_league is a disclosed DIRT-4 forward hook (set, never read in this batch) -- legal per check #3",
+        // Was a disclosed DIRT-4 forward hook (set, never read) until DIRT-4
+        // landed in this same file -- dirt_the_indictment_a/b now read it
+        // (RunDirtTheBustArcChecks pins the OR-split eligibility precisely);
+        // this assertion is updated to prove the hook is fulfilled, not orphaned.
+        Check("cooperated_with_league's DIRT-2 forward hook is fulfilled: set here, and now read by DIRT-4's dirt_the_indictment_a/b",
             dirt.Events.Any(e => e.Choices.Any(c => SetsFlag(c, "cooperated_with_league")))
-            && !dirt.Events.Any(e => ReadsFlagActive(e, "cooperated_with_league") || ReadsFlagInactive(e, "cooperated_with_league")));
+            && dirt.Events.Any(e => ReadsFlagActive(e, "cooperated_with_league") || ReadsFlagInactive(e, "cooperated_with_league")));
 
         // Standing check: every new event carries an explicit, nonzero
         // cooldown (belt-and-braces pacing even on self-blocking flags, per
@@ -3012,8 +3023,12 @@ internal static class Program
                     }
                 }
             }
-            Check("DIRT-3 sets ONLY in_the_life (zero new content flags, §4 item 1) and clears ONLY robbery_bust/controls_turf_local (the two disclosed engine-clears, §4 item 2)",
-                setFlags.Count == 1 && setFlags.Contains("in_the_life") && clearFlags.SetEquals(new[] { "robbery_bust", "controls_turf_local" }),
+            // DIRT-4's §5.4 consolidation edit additively set_flag'd record_arrest
+            // onto dirt_robbery_fallout's two branches (criminal_underworld_dirt4_
+            // the_bust_and_the_door_out.md §5.4) -- this DIRT-3-scoped assertion
+            // predates that edit and is updated here to admit the second flag.
+            Check("DIRT-3 sets ONLY in_the_life and (post-DIRT-4 consolidation) record_arrest, and clears ONLY robbery_bust/controls_turf_local (the two disclosed engine-clears, §4 item 2)",
+                setFlags.SetEquals(new[] { "in_the_life", "record_arrest" }) && clearFlags.SetEquals(new[] { "robbery_bust", "controls_turf_local" }),
                 $"sets=[{string.Join(",", setFlags)}] clears=[{string.Join(",", clearFlags)}]");
         }
 
@@ -3201,6 +3216,201 @@ internal static class Program
             world.Players.LoadActiveFlags("proHustler", flagRows);
             Check("CONVERGENCE (3/3): the pure-hustle subject's in_the_life reaches DIRT-2's dirt_made_useful shape at tier>=2, setting compromised_syndicate",
                 flagRows.Exists(f => f.FlagName == "compromised_syndicate"));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4h8. DIRT-4 "The Bust & The Door Out" -- content half only
+    // (criminal_underworld_dirt4_the_bust_and_the_door_out.md §5-7.A). The
+    // engine half (PromotionManager reading record_arrest/banned_for_life)
+    // is Fable 5's separate MonteCarloHarness slice, not this file.
+    // ------------------------------------------------------------------
+
+    private static readonly string[] DirtTheBustEventIds =
+    {
+        "dirt_the_indictment_a", "dirt_the_indictment_b", "dirt_the_record_follows",
+        "dirt_going_straight", "dirt_going_straight_buyout", "dirt_the_next_generation",
+    };
+
+    private static void RunDirtTheBustArcChecks()
+    {
+        Console.WriteLine("--- DIRT-4 'The Bust & The Door Out' (criminal_underworld_dirt4_the_bust_and_the_door_out.md) ---");
+
+        string dirtJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "dirt_underworld_events.json"));
+        GrittyEventLibrary dirt = GrittyEventJson.Parse(dirtJson);
+
+        static bool SetsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.SetFlag && k.FlagName == flag);
+        static bool ClearsFlag(EventChoice c, string flag) =>
+            c.Consequences.Any(k => k.Kind == ConsequenceKind.ClearFlag && k.FlagName == flag);
+        static bool ReadsFlagActive(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == flag);
+
+        dirt.TryGetById("dirt_the_indictment_a", out GrittyEventDefinition indictmentA);
+        dirt.TryGetById("dirt_the_indictment_b", out GrittyEventDefinition indictmentB);
+        dirt.TryGetById("dirt_the_record_follows", out GrittyEventDefinition recordFollows);
+        dirt.TryGetById("dirt_going_straight", out GrittyEventDefinition goingStraight);
+        dirt.TryGetById("dirt_going_straight_buyout", out GrittyEventDefinition goingStraightBuyout);
+        dirt.TryGetById("dirt_busted", out GrittyEventDefinition busted);
+        dirt.TryGetById("dirt_robbery_fallout", out GrittyEventDefinition robberyFallout);
+
+        // §5: all 6 events resolve and are avatar-scoped (§4 item 3's avatar-only
+        // discipline, the same NULL-team-sentinel immunity as DIRT-2).
+        int avatarScopedCount = DirtTheBustEventIds.Count(id =>
+            dirt.TryGetById(id, out GrittyEventDefinition e) && e.Scope == EventScope.Avatar);
+        Check("all 6 DIRT-4 events resolve and are avatar-scoped",
+            avatarScopedCount == DirtTheBustEventIds.Length, $"{avatarScopedCount}/{DirtTheBustEventIds.Length}");
+
+        // §2 collision #1 continued, one last time: the finale never touches
+        // detection_risk either -- the PED re-gate trap (§2.1) is sidestepped
+        // by leaving detection_risk out of this batch entirely.
+        Check("DIRT-4 never reads or writes detection_risk (the PED meter, not a heat gauge -- §2.1's ruling)",
+            !dirt.Events.Where(e => DirtTheBustEventIds.Contains(e.Id)).Any(e =>
+                e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.DetectionRisk)
+                || e.Choices.Any(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.DetectionRisk))));
+
+        // §7.A.3 bullet 1 (THE COOPERATE HOOK): the OR-split is mutually
+        // exclusive on the cooperated_with_league flag, and the informant's
+        // discount is real -- _a's absences are shorter than _b's at every rung.
+        {
+            const long day = 1000;
+            var subject = new PollPlayerRow
+            {
+                PlayerId = "subject", Age = 27, TeamId = 1, Funds = 5000, HealthCeiling = 100,
+                Recklessness = 20, BaseballInterest = 100, DetectionRisk = 0, Strictness = 50,
+                TeammateExOfPartner = false, Tier = 2, Gpa = 2.5,
+            };
+            var withCooperate = new Dictionary<(string PlayerId, string FlagName), long>
+            {
+                [("subject", "in_the_life")] = day - 40,
+                [("subject", "cooperated_with_league")] = day - 40,
+            };
+            Check("WITH cooperated_with_league: dirt_the_indictment_a is eligible, dirt_the_indictment_b is NOT",
+                ConditionEvaluator.AllHold(indictmentA.Prerequisites, in subject, withCooperate, day)
+                && !ConditionEvaluator.AllHold(indictmentB.Prerequisites, in subject, withCooperate, day));
+
+            var withoutCooperate = new Dictionary<(string PlayerId, string FlagName), long>
+            {
+                [("subject", "in_the_life")] = day - 40,
+            };
+            Check("WITHOUT cooperated_with_league: dirt_the_indictment_b is eligible, dirt_the_indictment_a is NOT (disjoint OR-split, framework §3)",
+                ConditionEvaluator.AllHold(indictmentB.Prerequisites, in subject, withoutCooperate, day)
+                && !ConditionEvaluator.AllHold(indictmentA.Prerequisites, in subject, withoutCooperate, day));
+        }
+
+        EventChoice takeDealA = indictmentA.Choices.Single(c => c.Id == "take_the_deal");
+        EventChoice fightAnywayA = indictmentA.Choices.Single(c => c.Id == "fight_it_anyway");
+        EventChoice takePleaB = indictmentB.Choices.Single(c => c.Id == "take_the_plea");
+        EventChoice fightItB = indictmentB.Choices.Single(c => c.Id == "fight_it");
+        static double AbsenceDays(EventChoice c) => c.Consequences.Single(k => k.Kind == ConsequenceKind.Absence).Amount;
+        Check("the informant's discount is real: _a's plea absence is shorter than _b's, and _a's fight-it is shorter than _b's",
+            AbsenceDays(takeDealA) < AbsenceDays(takePleaB) && AbsenceDays(fightAnywayA) < AbsenceDays(fightItB));
+
+        // §7.A.3 bullet 2: every arrest marks the record -- the consolidation.
+        string rosterJson = File.ReadAllText(Path.Combine(
+            _repoRoot, "Assets", "Narrative", "Events", "Content", "roster_availability_events.json"));
+        GrittyEventLibrary roster = GrittyEventJson.Parse(rosterJson);
+        roster.TryGetById("narcotics_arrest", out GrittyEventDefinition narcoticsArrest);
+        Check("narcotics_arrest's surviving branch already sets record_arrest (no edit needed, §5.4)",
+            narcoticsArrest.Choices.All(c => SetsFlag(c, "record_arrest")));
+        Check("every arrest marks the record: dirt_busted (both branches, §5.4 consolidation) and dirt_robbery_fallout (both branches, §5.4 consolidation) now set_flag record_arrest",
+            busted.Choices.All(c => SetsFlag(c, "record_arrest")) && robberyFallout.Choices.All(c => SetsFlag(c, "record_arrest")));
+        Check("both dirt_the_indictment_* events set_flag record_arrest on EVERY branch",
+            indictmentA.Choices.All(c => SetsFlag(c, "record_arrest")) && indictmentB.Choices.All(c => SetsFlag(c, "record_arrest")));
+        Check("record_arrest is READ by dirt_the_record_follows (the narrative face of the engine teeth, which reads it separately in PromotionManager)",
+            ReadsFlagActive(recordFollows, "record_arrest"));
+
+        // §4 item 2: record_arrest and banned_for_life are terminal -- never
+        // cleared by ANY content branch anywhere in the whole Content folder,
+        // not just this file (the "load together" discipline from RunContentChecks).
+        {
+            string contentDir = Path.Combine(_repoRoot, "Assets", "Narrative", "Events", "Content");
+            string[] batchFiles = Directory.GetFiles(contentDir, "*.json");
+            var batchDocuments = new string[batchFiles.Length];
+            for (int i = 0; i < batchFiles.Length; i++) batchDocuments[i] = File.ReadAllText(batchFiles[i]);
+            GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
+            bool recordEverCleared = wholeFolder.Events.Any(e => e.Choices.Any(c => ClearsFlag(c, "record_arrest")));
+            bool banEverCleared = wholeFolder.Events.Any(e => e.Choices.Any(c => ClearsFlag(c, "banned_for_life")));
+            Check("record_arrest and banned_for_life are permanent: NEITHER is ever cleared by any content branch, anywhere in the Content folder (the arc's closing invariant)",
+                !recordEverCleared && !banEverCleared);
+        }
+
+        // §7.A.3 bullet 3: the door-out clears the right flags and NOT the record.
+        Check("dirt_going_straight_buyout additionally gates flag_active compromised_syndicate (the per-choice-conditional workaround, §5.2 item 4 -- EventChoice carries no prerequisite of its own)",
+            ReadsFlagActive(goingStraightBuyout, "in_the_life") && ReadsFlagActive(goingStraightBuyout, "compromised_syndicate"));
+        EventChoice getOutForGood = goingStraight.Choices.Single(c => c.Id == "get_out_for_good");
+        EventChoice buyMarkerBack = goingStraightBuyout.Choices.Single(c => c.Id == "buy_the_marker_back");
+        Check("dirt_going_straight's get_out_for_good clears in_the_life; dirt_going_straight_buyout's buy_the_marker_back ADDITIONALLY clears compromised_syndicate; NEITHER clears record_arrest or banned_for_life",
+            ClearsFlag(getOutForGood, "in_the_life") && !ClearsFlag(getOutForGood, "record_arrest") && !ClearsFlag(getOutForGood, "banned_for_life")
+            && ClearsFlag(buyMarkerBack, "in_the_life") && ClearsFlag(buyMarkerBack, "compromised_syndicate")
+            && !ClearsFlag(buyMarkerBack, "record_arrest") && !ClearsFlag(buyMarkerBack, "banned_for_life"));
+        Check("dirt_going_straight_buyout's buy_the_marker_back is the ONLY content branch in the file clearing compromised_syndicate (§5.2 item 4's one disclosed content clear)",
+            dirt.Events.Count(e => e.Choices.Any(c => ClearsFlag(c, "compromised_syndicate"))) == 1);
+
+        // §7.A.3 bullet 4 (structural): fresh-save inert -- the pro-scale
+        // beats gate tier>=2 (unreachable pre-promotion), and the record/
+        // heir beats gate an arrest flag only an arrest can set, so a fresh
+        // tier-0, no-flags avatar holds zero DIRT-4 gates at any day.
+        {
+            var freshAvatar = new PollPlayerRow
+            {
+                PlayerId = "freshBustNoFlags", Age = 16, TeamId = 1, Funds = 50, HealthCeiling = 100,
+                Recklessness = 0, BaseballInterest = 100, DetectionRisk = 0, Strictness = 50,
+                TeammateExOfPartner = false, Tier = 0, Gpa = 2.5,
+            };
+            var noFlags = new Dictionary<(string PlayerId, string FlagName), long>();
+            foreach (long day in new long[] { 2, 9999 })
+            {
+                int holdable = DirtTheBustEventIds.Count(id =>
+                    dirt.TryGetById(id, out GrittyEventDefinition e) && ConditionEvaluator.AllHold(e.Prerequisites, in freshAvatar, noFlags, day));
+                Check($"no DIRT-4 gate can hold for a fresh tier-0 avatar with an EMPTY flag set at day {day}",
+                    holdable == 0, $"{holdable} gate(s) holdable");
+            }
+        }
+
+        // §7.A.3 bullet 5 (check #4): every DIRT-4 event carries an explicit
+        // nonzero cooldown -- record_arrest/banned_for_life never self-clear,
+        // so cooldown is the sole pacing mechanism, same as DIRT-2's terminal flags.
+        int cooldownedCount = DirtTheBustEventIds.Count(id => dirt.TryGetById(id, out GrittyEventDefinition e) && e.CooldownDays > 0);
+        Check("every DIRT-4 event carries an explicit nonzero cooldown (check #4 -- no unpaced loop)",
+            cooldownedCount == DirtTheBustEventIds.Length, $"{cooldownedCount}/{DirtTheBustEventIds.Length}");
+
+        // Numeric teeth: the isolated-single-choice-mirror technique
+        // (dirtBustedAbsence/investigation_mirror precedent) proves the exact
+        // until_day math for the two indictment extremes -- the cooperator's
+        // lightest plea and the non-cooperator's costliest fight.
+        {
+            using World world = World.Create("dirtIndictmentADeal", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "deal_mirror", "scope": "any", "weight": 1.0, "choices": [ { "id": "take_the_deal", "consequences": [ { "type": "absence", "reason": "arrest", "days": 2 } ] } ] } ] }"""));
+            world.AddPlayer("cooperator", age: 27, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("cooperator", out PlayerAbsenceRow absence);
+            Check("dirt_the_indictment_a's take_the_deal lands until_day = fire_day(2) + days(2) + 1 -- the cooperator's light plea",
+                hasAbsence && absence.Reason == AbsenceReason.Arrest && absence.UntilDay == 5,
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
+        }
+        {
+            using World world = World.Create("dirtIndictmentBFight", GrittyEventJson.Parse(
+                """{ "events": [ { "id": "fight_mirror", "scope": "any", "weight": 1.0, "choices": [ { "id": "fight_it", "consequences": [ { "type": "absence", "reason": "arrest", "days": 7 } ] } ] } ] }"""));
+            world.AddPlayer("litigator", age: 27, teamId: 1);
+            world.Dispatcher.PollOnce();
+
+            world.Clock.AdvanceDay(); // day 2: fires
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+
+            bool hasAbsence = world.Players.TryGetAbsence("litigator", out PlayerAbsenceRow absence);
+            Check("dirt_the_indictment_b's fight_it lands until_day = fire_day(2) + days(7) + 1 -- the costliest survival in the whole arc",
+                hasAbsence && absence.Reason == AbsenceReason.Arrest && absence.UntilDay == 10,
+                hasAbsence ? $"until={absence.UntilDay}" : "no absence row");
         }
     }
 

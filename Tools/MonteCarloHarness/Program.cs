@@ -76,6 +76,7 @@ internal static class Program
         string promoScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promo_{Guid.NewGuid():N}.db");
         string promoStreamScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promostream_{Guid.NewGuid():N}.db");
         string promoAvatarScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promoavatar_{Guid.NewGuid():N}.db");
+        string promoRecordScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_promorecord_{Guid.NewGuid():N}.db");
         string devScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_dev_{Guid.NewGuid():N}.db");
         string devStreamScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_devstream_{Guid.NewGuid():N}.db");
         string practiceScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_practice_{Guid.NewGuid():N}.db");
@@ -108,6 +109,7 @@ internal static class Program
             RunPromotionSweepSuite(schemaPath, promoScratchPath);
             RunPromotionStreamSuite(schemaPath, promoStreamScratchPath);
             RunPromotionAvatarSuite(schemaPath, promoAvatarScratchPath);
+            RunPromotionRecordSuite(schemaPath, promoRecordScratchPath);
             RunDevelopmentCurveSuite();
             RunDevelopmentArcSuite(schemaPath, devScratchPath);
             RunDevelopmentStreamSuite(schemaPath, devStreamScratchPath);
@@ -173,7 +175,8 @@ internal static class Program
                 {
                     promoScratchPath, promoScratchPath + ".detA", promoScratchPath + ".detB",
                     promoStreamScratchPath, promoStreamScratchPath + ".bare", promoStreamScratchPath + ".promo",
-                    promoAvatarScratchPath,
+                    promoAvatarScratchPath, promoAvatarScratchPath + ".gradgate",
+                    promoRecordScratchPath + ".ban", promoRecordScratchPath + ".dock",
                     devScratchPath, devScratchPath + ".detA", devScratchPath + ".detB",
                     devStreamScratchPath, devStreamScratchPath + ".bare", devStreamScratchPath + ".dev",
                     practiceScratchPath + ".seam", practiceScratchPath + ".practiced", practiceScratchPath + ".idle",
@@ -5210,6 +5213,184 @@ internal static class Program
                 TierLadderInvariantHolds(gbaseball, out string gGradDetail)
                 && !gdb.IsBatchActive && gdb.RunIntegrityCheck() == "ok" && gdb.RunForeignKeyCheck() == 0,
                 gGradDetail);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // DIRT-4 record teeth: the avatar's criminal record gates the climb
+    // (docs/design/criminal_underworld_dirt4_the_bust_and_the_door_out.md
+    // §5-teeth / §7.B)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the held-back suite's no-op world (spread-0, ages pinned,
+    /// gameless — the NPC pass provably moves nobody) with a batter avatar of
+    /// the given ratings on HS team 101, aged past the amateur cap so the
+    /// grade gate lets it compete, potential pinned to current (headroom 0,
+    /// the same zeroed projection every spread-0 NPC reads) so its A is the
+    /// exact closed form 50 + talent/3 against the cohort's flat 100.
+    /// </summary>
+    private static (DatabaseManager Db, PlayerQueries Players, BaseballQueries Baseball,
+        CareerManager Career, PromotionManager Promo, string AvatarId)
+        BuildRecordTeethWorld(string schemaPath, string path, int batRating, ulong seedSalt)
+    {
+        var db = new DatabaseManager(path);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var rng = new RngState(LeagueSeed + seedSalt);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref rng);
+        LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref rng);
+
+        var pin = new List<RosterPlayerRow>();
+        db.RunInBatch(() =>
+        {
+            for (int t = 0; t < LeagueDirectory.TierCount; t++)
+            {
+                baseball.LoadRosterByTier((LeagueTier)t, pin);
+                int pinnedAge = (LeagueTier)t switch
+                {
+                    LeagueTier.HS => 16,
+                    LeagueTier.College => 20,
+                    _ => 25,
+                };
+                foreach (RosterPlayerRow row in pin)
+                {
+                    players.SetAge(row.PlayerId, pinnedAge);
+                }
+            }
+        });
+
+        var state = new GlobalState();
+        var gameState = new GameStateQueries(db);
+        var normalizer = new StatsNormalizer(db, baseball);
+        var leagues = new LeagueDirectory();
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            var sim = new LeagueSimulator(
+                db, baseball, normalizer, new RngState(SeasonSeed + seedSalt + (ulong)t), (LeagueTier)t);
+            sim.Initialize();
+            leagues.Register(sim); // registered for the avatar plumbing, not attached — gameless
+        }
+        var micro = new MicroGame(db, baseball);
+        micro.Initialize();
+        var career = new CareerManager(
+            db, players, baseball, gameState, state, leagues, micro, new RngState(0xD1274CA1UL + seedSalt));
+        var promo = new PromotionManager(
+            db, players, baseball, gameState, leagues, micro, new RngState(0xD1274003UL + seedSalt));
+        promo.Career = career;
+
+        career.CreateAvatar("Record", "Holder", 101, new PlayerRatingsRow
+        {
+            IsPitcher = false,
+            BatPower = batRating, BatContact = batRating, BatDiscipline = batRating,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+        });
+        string avatarId = career.AvatarPlayerId;
+        players.SetAge(avatarId, SchoolGrades.SeniorAge + 1);
+        baseball.UpsertPotential(new PlayerPotentialRow
+        {
+            PlayerId = avatarId,
+            BatPower = batRating, BatContact = batRating, BatDiscipline = batRating,
+            PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+        });
+        return (db, players, baseball, career, promo, avatarId);
+    }
+
+    private static void RunPromotionRecordSuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- DIRT-4 record teeth: banned_for_life blocks the climb, record_arrest docks it (§5-teeth/§7.B) ---");
+
+        // ---- the ban is terminal (and dominates the dock): a MAX-built
+        // avatar that WOULD graduate is promotion-ineligible while
+        // banned_for_life is active — held on its team, never relegated,
+        // never removed. Clearing ONLY the ban (record_arrest stays) lets the
+        // same avatar promote, proving (a) the ban was the sole cause, (b)
+        // the ban dominates the dock, and (c) the dock is a handicap, not a
+        // wall — a genuinely elite line still climbs through it. ----
+        {
+            (DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
+                CareerManager career, PromotionManager promo, string avatarId) =
+                BuildRecordTeethWorld(schemaPath, scratchPath + ".ban", batRating: 100, seedSalt: 411);
+            using (db)
+            {
+                players.SetFlag(avatarId, PromotionManager.BannedForLifeFlagName, true, 1);
+                players.SetFlag(avatarId, PromotionManager.RecordArrestFlagName, true, 1);
+                promo.RunOffseason(StartYear);
+                PromotionSummary banRun = promo.LastRun;
+                bool heldInHs = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier banTier)
+                    && banTier == LeagueTier.HS;
+                Check("§5-teeth.2 ban blocks the climb: a MAX-built avatar with banned_for_life is promotion-ineligible — a complete no-op, team+tier kept (blocked, not relegated, not removed)",
+                    !banRun.AvatarPromoted && banRun.Promotions == 0 && banRun.Relegations == 0
+                    && banRun.Removals == 0 && banRun.Intake == 0
+                    && career.AvatarTeamId == 101 && heldInHs,
+                    $"avatar team {career.AvatarTeamId} ({banTier}), promoted {banRun.AvatarPromoted}");
+
+                players.SetFlag(avatarId, PromotionManager.BannedForLifeFlagName, false, 2);
+                promo.RunOffseason(StartYear + 1);
+                PromotionSummary liftRun = promo.LastRun;
+                bool inCollege = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier liftTier)
+                    && liftTier == LeagueTier.College;
+                Check("§5-teeth.2 the ban was the cause and DOMINATES the dock: ban lifted (record_arrest still active), the same elite avatar promotes through the dock — exactly the one matched avatar↔incumbent swap moves",
+                    liftRun.AvatarPromoted && inCollege
+                    && liftRun.Promotions == 1 && liftRun.Relegations == 1
+                    && liftRun.Removals == 0 && liftRun.Intake == 0,
+                    $"avatar team {career.AvatarTeamId} ({liftTier}), moves {liftRun.Promotions}/{liftRun.Relegations}");
+                Check("ban world: roster invariant, integrity, FK, no open batch",
+                    TierLadderInvariantHolds(baseball, out string banDetail)
+                    && !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0,
+                    banDetail);
+            }
+        }
+
+        // ---- the dock costs exactly the borderline call-up: an avatar whose
+        // A clears the merit bar by LESS than RecordArrestPenalty promotes
+        // without a record and does NOT with one. Closed form in this world:
+        // every P is exactly 100 (gameless — no line reads 100), NPC S is a
+        // flat 100 (talent 150, headroom 0), so the bar is 105 (SwapMargin)
+        // and a 56/56/56 headroom-0 avatar sits at A = 50 + 168/3 = 106:
+        // over the bar by 1, docked to 103 — under it by 2. ----
+        {
+            (DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
+                CareerManager career, PromotionManager promo, string avatarId) =
+                BuildRecordTeethWorld(schemaPath, scratchPath + ".dock", batRating: 56, seedSalt: 431);
+            using (db)
+            {
+                double incumbentA = PromotionScore.Combine(
+                    100.0, PromotionScore.Scouting(150, 20, 0));
+                double bar = incumbentA + PromotionProfile.SwapMargin;
+                double avatarA = PromotionScore.Combine(
+                    100.0, PromotionScore.Scouting(56 * 3, SchoolGrades.SeniorAge + 1, 0));
+                Check("dock fixture guard: the avatar's A clears the merit bar by less than RecordArrestPenalty (retuning any constant re-margins this fixture loudly)",
+                    avatarA > bar && avatarA - PromotionProfile.RecordArrestPenalty <= bar,
+                    $"A {avatarA:F2}, bar {bar:F2}, penalty {PromotionProfile.RecordArrestPenalty}");
+
+                players.SetFlag(avatarId, PromotionManager.RecordArrestFlagName, true, 1);
+                promo.RunOffseason(StartYear);
+                PromotionSummary dockRun = promo.LastRun;
+                bool dockHeld = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier dockTier)
+                    && dockTier == LeagueTier.HS;
+                Check("§5-teeth.2 the rap sheet costs the marginal call-up: record_arrest docks the just-above-the-bar avatar below it — not promoted, a complete no-op",
+                    !dockRun.AvatarPromoted && dockRun.Promotions == 0 && dockRun.Relegations == 0
+                    && dockRun.Removals == 0 && dockRun.Intake == 0
+                    && career.AvatarTeamId == 101 && dockHeld,
+                    $"avatar team {career.AvatarTeamId} ({dockTier}), promoted {dockRun.AvatarPromoted}");
+
+                players.SetFlag(avatarId, PromotionManager.RecordArrestFlagName, false, 2);
+                promo.RunOffseason(StartYear + 1);
+                PromotionSummary clearRun = promo.LastRun;
+                bool clearCollege = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier clearTier)
+                    && clearTier == LeagueTier.College;
+                Check("§5-teeth.2 the dock was the cause: record cleared, the SAME marginal avatar promotes — the record read changes only the avatar's decision, nothing else moves",
+                    clearRun.AvatarPromoted && clearCollege
+                    && clearRun.Promotions == 1 && clearRun.Relegations == 1
+                    && clearRun.Removals == 0 && clearRun.Intake == 0,
+                    $"avatar team {career.AvatarTeamId} ({clearTier}), moves {clearRun.Promotions}/{clearRun.Relegations}");
+                Check("dock world: roster invariant, integrity, FK, no open batch",
+                    TierLadderInvariantHolds(baseball, out string dockDetail)
+                    && !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0,
+                    dockDetail);
+            }
         }
     }
 

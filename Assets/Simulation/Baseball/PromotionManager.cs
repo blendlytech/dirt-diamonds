@@ -102,6 +102,18 @@ public static class PromotionProfile
     /// <summary>§3.2 HS intake ages: the young end of the HS generation window (15–16), so fresh prospects have a full amateur runway.</summary>
     public const int IntakeMinAge = 15;
     public const int IntakeAgeSpan = 2;
+
+    /// <summary>
+    /// DIRT-4 §5-teeth.2 record dock: A-points subtracted from the AVATAR's
+    /// advancement score when its record_arrest flag is active (and it is not
+    /// banned outright) — a scout's makeup ding, not a wall: enough to lose a
+    /// marginal call-up (it exceeds nothing on its own; sits under the 5-point
+    /// SwapMargin so only genuinely borderline climbs die), never enough to
+    /// sink a real talent gap. First-pass, tunable behind run_monte_carlo_batch
+    /// like every constant above. Avatar-only by construction (NPCs never
+    /// carry the flag and the sweep never reads it for them).
+    /// </summary>
+    public const double RecordArrestPenalty = 3.0;
 }
 
 /// <summary>
@@ -331,6 +343,12 @@ public readonly struct PromotionSummary
 /// </summary>
 public sealed class PromotionManager
 {
+    /// <summary>DIRT-4 §5-teeth: the canonical criminal-record flag — active means an A-score dock (<see cref="PromotionProfile.RecordArrestPenalty"/>).</summary>
+    public const string RecordArrestFlagName = "record_arrest";
+
+    /// <summary>DIRT-4 §5-teeth: the terminal mark — active means the avatar is promotion-ineligible for good (blocks the rise, never relegates).</summary>
+    public const string BannedForLifeFlagName = "banned_for_life";
+
     private static readonly PitcherRole[] SweepRoles =
     {
         PitcherRole.None, PitcherRole.Starter, PitcherRole.Reliever,
@@ -495,6 +513,32 @@ public sealed class PromotionManager
             && !career.HasPendingSuccessionChoice
             && !career.IsLineageOver;
 
+        // ---- DIRT-4 §5-teeth record read: the avatar's criminal record gates
+        // the climb — AVATAR-ONLY, once per pass, via the already-indexed flag
+        // query. banned_for_life ends the rise for good (excluded from the
+        // sweep exactly like the pending-succession skip: keeps its tier and
+        // team, never promoted, never relegated — the v1 stance). Otherwise
+        // record_arrest docks the avatar's A before ranking (the sweep applies
+        // PromotionProfile.RecordArrestPenalty). NPCs never carry these flags
+        // and are never read for them, so a no-record world — and every
+        // NPC-only harness world, where the reads don't even run — stays
+        // bit-identical: pure reads, no RNG, no writes.
+        bool avatarRecordArrest = false;
+        if (avatarEligible)
+        {
+            var recordIds = new List<string>();
+            _baseball.LoadActiveFlagPlayerIds(BannedForLifeFlagName, recordIds);
+            if (recordIds.Contains(avatarId!))
+            {
+                avatarEligible = false;
+            }
+            else
+            {
+                _baseball.LoadActiveFlagPlayerIds(RecordArrestFlagName, recordIds);
+                avatarRecordArrest = recordIds.Contains(avatarId!);
+            }
+        }
+
         // ---- the three role sweeps (roles never change via promotion, §11) ----
         var teamWrites = new List<(string PlayerId, int? TeamId)>();
         var intake = new List<(PitcherRole Role, int TeamId)>();
@@ -507,7 +551,7 @@ public sealed class PromotionManager
         foreach (PitcherRole role in SweepRoles)
         {
             SweepRole(role, roster, tierByTeam, ageHealthById, potentialById, batById, pitById,
-                leagueOps, leagueEra, avatarId, avatarEligible,
+                leagueOps, leagueEra, avatarId, avatarEligible, avatarRecordArrest,
                 teamWrites, intake, ref removals, ref promotions, ref relegations,
                 ref avatarPromoted, ref avatarTeamId);
         }
@@ -596,7 +640,7 @@ public sealed class PromotionManager
         Dictionary<string, SeasonBattingLine> batById,
         Dictionary<string, SeasonPitchingLine> pitById,
         ReadOnlySpan<double> leagueOps, ReadOnlySpan<double> leagueEra,
-        string? avatarId, bool avatarEligible,
+        string? avatarId, bool avatarEligible, bool avatarRecordArrest,
         List<(string PlayerId, int? TeamId)> teamWrites, List<(PitcherRole Role, int TeamId)> intake,
         ref int removals, ref int promotions, ref int relegations,
         ref bool avatarPromoted, ref int avatarTeamId)
@@ -674,11 +718,18 @@ public sealed class PromotionManager
                     in bat, leagueOps[tier],
                     PromotionProfile.BatterPaShrinkFor((LeagueTier)tier));
             }
+            double score = PromotionScore.Combine(p, PromotionScore.Scouting(talent, age, headroom));
+            if (isAvatar && avatarRecordArrest)
+            {
+                // DIRT-4 §5-teeth.2: the rap sheet is a makeup ding applied
+                // before ranking — the avatar can still out-climb it.
+                score -= PromotionProfile.RecordArrestPenalty;
+            }
             pools[tier].Add(new Candidate
             {
                 PlayerId = row.PlayerId,
                 TeamId = row.TeamId,
-                Score = PromotionScore.Combine(p, PromotionScore.Scouting(talent, age, headroom)),
+                Score = score,
                 AgeOutPending = !isAvatar && age > PromotionProfile.AgeCapFor((LeagueTier)tier),
                 IsAvatar = isAvatar,
             });
