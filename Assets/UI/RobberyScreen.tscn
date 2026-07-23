@@ -37,7 +37,7 @@ layout_mode = 2
 [node name="TitleLabel" type="Label" parent="Panel/Layout"]
 theme_type_variation = &"HeadingLabel"
 layout_mode = 2
-text = "Robbery"
+text = "The Job"
 
 [node name="StatusLabel" type="Label" parent="Panel/Layout"]
 layout_mode = 2
@@ -53,23 +53,23 @@ text = "Pick a mark:"
 
 [node name="StoreButton" type="Button" parent="Panel/Layout/CasePanel"]
 layout_mode = 2
-text = "Convenience Store (small, safe)"
+text = "The Kwik-Stop on Route 9"
 
 [node name="BookieButton" type="Button" parent="Panel/Layout/CasePanel"]
 layout_mode = 2
-text = "Bookie's Stash (moderate)"
+text = "Sal's Back-Room Count"
 
 [node name="WarehouseButton" type="Button" parent="Panel/Layout/CasePanel"]
 layout_mode = 2
-text = "Warehouse (big, dangerous)"
+text = "The Bonded Freight Depot"
 
 [node name="JewelryButton" type="Button" parent="Panel/Layout/CasePanel"]
 layout_mode = 2
-text = "Jewelry Exchange (the big score — diamonds)"
+text = "Castellano's Jewelry Exchange"
 
 [node name="CaseItCheckBox" type="CheckBox" parent="Panel/Layout/CasePanel"]
 layout_mode = 2
-text = "Case it first (small heat cost, better odds)"
+text = "Case it first (a little heat now, better odds inside)"
 
 [node name="ApproachPanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
@@ -80,29 +80,45 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
+[node name="ApproachFlavorLabel" type="Label" parent="Panel/Layout/ApproachPanel"]
+layout_mode = 2
+autowrap_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.78, 1)
+text = ""
+
 [node name="ApproachLabel" type="Label" parent="Panel/Layout/ApproachPanel"]
 layout_mode = 2
-text = "Choose your approach:"
+text = "How do you want to run it?"
 
 [node name="SoloQuietButton" type="Button" parent="Panel/Layout/ApproachPanel"]
 layout_mode = 2
-text = "Solo &amp; Quiet (low risk, low take)"
+text = "Slip In Quiet"
 
 [node name="StrongArmButton" type="Button" parent="Panel/Layout/ApproachPanel"]
 layout_mode = 2
-text = "Strong-Arm (bigger take, health risk)"
+text = "Kick the Door In"
 
 [node name="CrewButton" type="Button" parent="Panel/Layout/ApproachPanel"]
 layout_mode = 2
-text = "Crew Job (biggest take, split + standing)"
+text = "Bring the Crew"
 
 [node name="ExecutePanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
 visible = false
 
+[node name="JobLabel" type="Label" parent="Panel/Layout/ExecutePanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ExecuteOddsLabel" type="Label" parent="Panel/Layout/ExecutePanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
 [node name="ExecuteButton" type="Button" parent="Panel/Layout/ExecutePanel"]
 layout_mode = 2
-text = "Go"
+text = "Do It"
 
 [node name="GrabbedPanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
@@ -113,27 +129,59 @@ layout_mode = 2
 autowrap_mode = 2
 text = ""
 
+[node name="PressOddsLabel" type="Label" parent="Panel/Layout/GrabbedPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
 [node name="PressLuckButton" type="Button" parent="Panel/Layout/GrabbedPanel"]
 layout_mode = 2
-text = "Press Your Luck (go for it all)"
+text = "Push For the Rest"
 
 [node name="GrabAndRunButton" type="Button" parent="Panel/Layout/GrabbedPanel"]
 layout_mode = 2
-text = "Grab and Run (bank what you have)"
+text = "Take It and Go"
 
 [node name="GetawayPanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
 visible = false
 
+[node name="GetawayFlavorLabel" type="Label" parent="Panel/Layout/GetawayPanel"]
+layout_mode = 2
+autowrap_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.78, 1)
+text = "Out the back, heart pounding. Sirens somewhere. No numbers on a getaway — just drive."
+
 [node name="GetawayButton" type="Button" parent="Panel/Layout/GetawayPanel"]
 layout_mode = 2
-text = "Make the Getaway"
+text = "Drive"
 
 [node name="ResultPanel" type="VBoxContainer" parent="Panel/Layout"]
 layout_mode = 2
 visible = false
 
-[node name="ResultLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+[node name="HeadlineLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+theme_type_variation = &"HeadingLabel"
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="TakeLabel" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = ""
+
+[node name="LineA" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="LineB" type="Label" parent="Panel/Layout/ResultPanel"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="LineC" type="Label" parent="Panel/Layout/ResultPanel"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""

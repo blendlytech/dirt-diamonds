@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -37,6 +38,15 @@ namespace DirtAndDiamonds.UI;
 /// delta folds through <see cref="FoldAccrued"/>, and a refusal or walk ends
 /// the session with no run today (forfeit-to-no-deal). Re-ups re-haggle: each
 /// run is its own supply buy, at trust nudged by the session's accrual.
+///
+/// P0 Hustle Feel Pass (UI layer only): panels fade in, results land through
+/// the staged <see cref="ResultReveal"/> (the night's money counts up, then
+/// heat/toxicity/stress drop line-by-line), and <see cref="UiSfx"/> stings
+/// mark the locked deal, the seizure, and the payout. The resolver exposes no
+/// pure seize/faction probability method, so this screen shows no odds number
+/// — surfacing invented odds would need a resolver touch, which this pass
+/// forbids. Zero resolver/sim calls were added; harness bands stay
+/// byte-identical by construction.
 /// </summary>
 public sealed partial class NarcoticsHustleScreen : Control
 {
@@ -46,26 +56,46 @@ public sealed partial class NarcoticsHustleScreen : Control
     public string CantAffordText { get; set; } = "Not enough funds/trust to run this hustle today.";
 
     [Export]
-    public string BustedFormat { get; set; } = "Busted! Lost ${0:F0}. Detection +{1}, Stress +{2:F0}.";
+    public string HaggleAskFormat { get; set; } = "\"${0:F2} a unit. Street says ${1:F0}. Take it or talk fast.\" Patience: {2}.";
 
     [Export]
-    public string ResolvedFormat { get; set; } =
-        "Deal done. Net funds {0:+0;-0;0}. Detection {1:+0;-0;0}, Health {2:+0;-0;0}, Stress {3:+0;-0;0:F0}.";
+    public string HaggleDealFormat { get; set; } = "Locked in at ${0:F2}/unit. He'll front up to ${1:F0}. How deep do you go?";
+
+    [Export]
+    public string ResolvedHeadlineText { get; set; } = "THE CORNER PAID OUT";
+
+    [Export]
+    public string BustedHeadlineText { get; set; } = "SEIZED.";
+
+    [Export]
+    public string NoDealHeadlineText { get; set; } = "NO DEAL.";
+
+    [Export]
+    public string TakeFormat { get; set; } = "{0:+$#,##0;-$#,##0;$0}";
+
+    [Export]
+    public string BustCostFormat { get; set; } = "-${0:N0} — product and cash, gone";
+
+    [Export]
+    public string HeatLineFormat { get; set; } = "The block noticed — heat {0:+0;-0;0}.";
+
+    [Export]
+    public string BustHeatLineFormat { get; set; } = "They know your name now — heat +{0}.";
+
+    [Export]
+    public string HealthLineFormat { get; set; } = "Your own product is cutting into you — health {0}.";
+
+    [Export]
+    public string StressLineFormat { get; set; } = "Sleep doesn't come easy — stress +{0:0}.";
+
+    [Export]
+    public string SupplierRefusedText { get; set; } = "You pushed too hard. He pockets the sample and walks off. No run today.";
+
+    [Export]
+    public string SupplierWalkedText { get; set; } = "You passed on today's price. The corner stays quiet.";
 
     [Export]
     public string RunTallyFormat { get; set; } = "Session total so far: funds {0:+0;-0;0}, detection {1:+0;-0;0}.";
-
-    [Export]
-    public string HaggleAskFormat { get; set; } = "The supplier wants ${0:F2}/unit (street price ${1:F0}). Patience: {2}.";
-
-    [Export]
-    public string HaggleDealFormat { get; set; } = "Locked in ${0:F2}/unit. He'll front up to ${1:F0}.";
-
-    [Export]
-    public string SupplierRefusedText { get; set; } = "You pushed too hard — the supplier walks off. No run today.";
-
-    [Export]
-    public string SupplierWalkedText { get; set; } = "You passed on today's price. No run today.";
 
     private Label _statusLabel = null!;
     private VBoxContainer _hagglePanel = null!;
@@ -89,7 +119,11 @@ public sealed partial class NarcoticsHustleScreen : Control
     private Button _encroachButton = null!;
     private Button _takeOverButton = null!;
     private VBoxContainer _resultPanel = null!;
-    private Label _resultLabel = null!;
+    private Label _headlineLabel = null!;
+    private Label _takeLabel = null!;
+    private Label _lineA = null!;
+    private Label _lineB = null!;
+    private Label _lineC = null!;
     private Label _runTallyLabel = null!;
     private Button _reUpButton = null!;
     private Button _doneButton = null!;
@@ -105,6 +139,7 @@ public sealed partial class NarcoticsHustleScreen : Control
     private double _dealBuyInMult;
     private HustleResolution _accrued;
     private int _runsUsed;
+    private ResultReveal? _reveal;
 
     public override void _Ready()
     {
@@ -130,7 +165,11 @@ public sealed partial class NarcoticsHustleScreen : Control
         _encroachButton = GetNode<Button>("Panel/Layout/PostCutPanel/EncroachButton");
         _takeOverButton = GetNode<Button>("Panel/Layout/PostCutPanel/TakeOverButton");
         _resultPanel = GetNode<VBoxContainer>("Panel/Layout/ResultPanel");
-        _resultLabel = GetNode<Label>("Panel/Layout/ResultPanel/ResultLabel");
+        _headlineLabel = GetNode<Label>("Panel/Layout/ResultPanel/HeadlineLabel");
+        _takeLabel = GetNode<Label>("Panel/Layout/ResultPanel/TakeLabel");
+        _lineA = GetNode<Label>("Panel/Layout/ResultPanel/LineA");
+        _lineB = GetNode<Label>("Panel/Layout/ResultPanel/LineB");
+        _lineC = GetNode<Label>("Panel/Layout/ResultPanel/LineC");
         _runTallyLabel = GetNode<Label>("Panel/Layout/ResultPanel/RunTallyLabel");
         _reUpButton = GetNode<Button>("Panel/Layout/ResultPanel/ReUpButton");
         _doneButton = GetNode<Button>("Panel/Layout/ResultPanel/DoneButton");
@@ -173,6 +212,10 @@ public sealed partial class NarcoticsHustleScreen : Control
             && session.Activity == WorkActivity.Narcotics;
         if (!isPending)
         {
+            if (_sessionActive)
+            {
+                KillReveal();
+            }
             Visible = false;
             _sessionActive = false;
             return;
@@ -197,6 +240,12 @@ public sealed partial class NarcoticsHustleScreen : Control
         BeginRun();
     }
 
+    private void KillReveal()
+    {
+        _reveal?.Kill();
+        _reveal = null;
+    }
+
     /// <summary>
     /// Starts one run (the first, or a re-up): rebuilds <see cref="_ctx"/> from
     /// the base snapshot nudged by everything <see cref="_accrued"/> so far —
@@ -209,6 +258,7 @@ public sealed partial class NarcoticsHustleScreen : Control
     /// </summary>
     private void BeginRun()
     {
+        KillReveal();
         _state = null;
         _haggle = null;
         double liveFunds = Math.Max(0, _baseCtx.Funds + _accrued.FundsDelta);
@@ -246,6 +296,7 @@ public sealed partial class NarcoticsHustleScreen : Control
         _postDropPanel.Visible = ReferenceEquals(panel, _postDropPanel);
         _postCutPanel.Visible = ReferenceEquals(panel, _postCutPanel);
         _resultPanel.Visible = ReferenceEquals(panel, _resultPanel);
+        HustleFeel.FadeIn(panel);
     }
 
     private void RefreshHaggleLabel()
@@ -257,6 +308,7 @@ public sealed partial class NarcoticsHustleScreen : Control
 
     private void OnHaggleCounterPressed()
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         _haggle = NarcoticsHustle.HaggleCounter(_haggle!.Value, _bidSlider.Value);
         AdvanceHaggle();
     }
@@ -283,6 +335,7 @@ public sealed partial class NarcoticsHustleScreen : Control
                 RefreshHaggleLabel();
                 break;
             case HaggleOutcomeKind.Deal:
+                UiSfx.Instance.Play(UiSound.Confirm);
                 FoldAccrued(haggle.ToResolution());
                 _dealUnitCost = haggle.DealUnitCost;
                 _dealBuyInMult = haggle.BuyInMaxMult;
@@ -292,19 +345,25 @@ public sealed partial class NarcoticsHustleScreen : Control
                 break;
             case HaggleOutcomeKind.Refused:
             case HaggleOutcomeKind.Walked:
+            {
                 // No run today (§3.1 forfeit-to-no-deal): a refusal still costs
                 // trust, a walk costs nothing — either way the session ends and
                 // whatever earlier runs accrued applies on Done.
                 FoldAccrued(haggle.ToResolution());
-                _resultLabel.Text = haggle.Outcome == HaggleOutcomeKind.Refused
-                    ? SupplierRefusedText
-                    : SupplierWalkedText;
-                _reUpButton.Visible = false;
+                bool refused = haggle.Outcome == HaggleOutcomeKind.Refused;
                 _runTallyLabel.Text = _runsUsed > 0
                     ? string.Format(RunTallyFormat, _accrued.FundsDelta, _accrued.DetectionRiskDelta)
                     : string.Empty;
                 ShowPanel(_resultPanel);
+                KillReveal();
+                _reveal = ResultReveal.Begin(_resultPanel)
+                    .Clear(_takeLabel, _lineB, _lineC, _reUpButton)
+                    .Headline(_headlineLabel, NoDealHeadlineText, UiColors.Warning,
+                        refused ? UiSound.Error : UiSound.Back)
+                    .Line(_lineA, refused ? SupplierRefusedText : SupplierWalkedText)
+                    .Footer(BuildFooter(includeTally: _runsUsed > 0, includeReUp: false));
                 break;
+            }
         }
     }
 
@@ -323,6 +382,7 @@ public sealed partial class NarcoticsHustleScreen : Control
 
     private void OnCommitPressed()
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         _state = NarcoticsHustle.DropInventory(
             in _ctx, _buyInSlider.Value, _dealUnitCost, _dealBuyInMult, ref _rng);
         _cutSlider.Value = _cutSlider.MinValue;
@@ -331,6 +391,7 @@ public sealed partial class NarcoticsHustleScreen : Control
 
     private void OnCutPressed()
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         _state = NarcoticsHustle.CutProduct(_state!.Value, in _ctx, _cutSlider.Value, ref _rng);
         Advance();
     }
@@ -367,26 +428,66 @@ public sealed partial class NarcoticsHustleScreen : Control
                 ShowPanel(_postCutPanel);
                 break;
             case HustleStage.Busted:
-                _resultLabel.Text = string.Format(
-                    BustedFormat, -state.FundsDelta, state.DetectionRiskDelta, state.StressDelta);
                 // A seizure ends the session outright — no re-up after a bust
                 // (you're already burned; §3.2 only offers re-up after a clean resolve).
-                _reUpButton.Visible = false;
-                _runTallyLabel.Text = string.Empty;
                 ShowPanel(_resultPanel);
+                KillReveal();
+                _reveal = ResultReveal.Begin(_resultPanel)
+                    .Clear(_runTallyLabel, _reUpButton)
+                    .Headline(_headlineLabel, BustedHeadlineText, UiColors.Danger, UiSound.Error)
+                    .CountUp(_takeLabel, BustCostFormat, -state.FundsDelta)
+                    .Line(_lineA, string.Format(BustHeatLineFormat, state.DetectionRiskDelta))
+                    .Line(_lineB, string.Format(StressLineFormat, state.StressDelta))
+                    .Line(_lineC, null)
+                    .Footer(BuildFooter(includeTally: false, includeReUp: false));
                 break;
             case HustleStage.Resolved:
-                _resultLabel.Text = string.Format(
-                    ResolvedFormat, state.FundsDelta, state.DetectionRiskDelta, state.HealthCeilingDelta, state.StressDelta);
+            {
                 _runsUsed++;
                 HustleResolution runningTotal = CombineAccrued(state);
-                _reUpButton.Visible = _runsUsed < MaxRunsPerDay;
                 _runTallyLabel.Text = _runsUsed > 1
                     ? string.Format(RunTallyFormat, runningTotal.FundsDelta, runningTotal.DetectionRiskDelta)
                     : string.Empty;
                 ShowPanel(_resultPanel);
+                KillReveal();
+                _reveal = ResultReveal.Begin(_resultPanel)
+                    .Headline(_headlineLabel, ResolvedHeadlineText,
+                        state.FundsDelta >= 0 ? UiColors.Success : UiColors.Warning,
+                        state.FundsDelta >= 0 ? UiSound.Cash : UiSound.DayTick)
+                    .CountUp(_takeLabel, TakeFormat, state.FundsDelta)
+                    .Line(_lineA, string.Format(HeatLineFormat, state.DetectionRiskDelta))
+                    .Line(_lineB, state.HealthCeilingDelta != 0
+                        ? string.Format(HealthLineFormat, state.HealthCeilingDelta)
+                        : null)
+                    .Line(_lineC, string.Format(StressLineFormat, state.StressDelta))
+                    .Footer(BuildFooter(includeTally: _runsUsed > 1, includeReUp: _runsUsed < MaxRunsPerDay));
                 break;
+            }
         }
+    }
+
+    /// <summary>The footer controls this result should end with; anything excluded is hidden outright.</summary>
+    private Control[] BuildFooter(bool includeTally, bool includeReUp)
+    {
+        var footer = new List<Control>(3);
+        if (includeTally)
+        {
+            footer.Add(_runTallyLabel);
+        }
+        else
+        {
+            _runTallyLabel.Visible = false;
+        }
+        if (includeReUp)
+        {
+            footer.Add(_reUpButton);
+        }
+        else
+        {
+            _reUpButton.Visible = false;
+        }
+        footer.Add(_doneButton);
+        return footer.ToArray();
     }
 
     /// <summary>Folds the current run's terminal state into <see cref="_accrued"/> without committing — the in-memory INV-1 accumulator.</summary>
@@ -410,7 +511,11 @@ public sealed partial class NarcoticsHustleScreen : Control
         return _accrued;
     }
 
-    private void OnReUpPressed() => BeginRun();
+    private void OnReUpPressed()
+    {
+        UiSfx.Instance.Play(UiSound.Tap);
+        BeginRun();
+    }
 
     private void OnDonePressed()
     {
@@ -428,6 +533,8 @@ public sealed partial class NarcoticsHustleScreen : Control
         {
             gm.Hustles.ApplyNarcoticsResolution(gm.Career.AvatarPlayerId, _accrued, _sessionDay);
         }
+        UiSfx.Instance.Play(UiSound.Back);
+        KillReveal();
         gm.ClearPendingHustleSession();
         _sessionActive = false;
         Visible = false;

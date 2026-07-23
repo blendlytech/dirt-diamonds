@@ -20,24 +20,117 @@ namespace DirtAndDiamonds.UI;
 /// <see cref="NarcoticsHustleScreen"/>/<see cref="FencingScreen"/> (INV-1).
 /// Node paths verified against RobberyScreen.tscn (godot_scene_mapper) before
 /// this script was written.
+///
+/// P0 Hustle Feel Pass (UI layer only): authored mark/approach names and
+/// flavor, live odds surfaced from the resolver's existing pure
+/// <see cref="RobberyHustle.ComputeExecuteSuccessProbability"/> /
+/// <see cref="RobberyHustle.ComputePressLuckBustProbability"/> before each
+/// commit point (the getaway deliberately shows no number — the resolver
+/// exposes no getaway probability and this pass adds none), a staged
+/// <see cref="ResultReveal"/> (take counts up, consequences land line-by-line),
+/// and <see cref="UiSfx"/> stings. Zero resolver/sim touch: every probability
+/// shown comes from a pure preview call with no RNG draw, so the harness
+/// bands stay byte-identical by construction.
 /// </summary>
 public sealed partial class RobberyScreen : Control
 {
-    [Export]
-    public string TargetFormat { get; set; } = "{0} — score ${1:F0}, heat +{2}";
+    // --- Authored content (indexed by RobberyTarget / RobberyApproach enum order) ---
 
     [Export]
-    public string CrewUnavailableText { get; set; } = "(no crew rep available)";
+    public string[] TargetNames { get; set; } =
+    {
+        "The Kwik-Stop on Route 9",
+        "Sal's Back-Room Count",
+        "The Bonded Freight Depot",
+        "Castellano's Jewelry Exchange",
+    };
 
     [Export]
-    public string GrabbedFormat { get; set; } = "You've got ${0:F0} in hand. Push for the rest, or run?";
+    public string[] TargetHooks { get; set; } =
+    {
+        "a sleepy corner store",
+        "fight-night cash box",
+        "big freight, real guards",
+        "the diamond score",
+    };
 
     [Export]
-    public string BustedFormat { get; set; } = "Busted! Bail/legal fees ${0:F0}. Detection +{1}, Stress +{2:F0}.";
+    public string[] TargetFlavor { get; set; } =
+    {
+        "One bored clerk, a register, and a camera that hasn't worked since spring.",
+        "Fight night — the count room behind the barber shop will be heavy. And Sal knows your face.",
+        "Pallets of untraceable freight behind one padlocked dock door and a walking patrol.",
+        "Loose stones in a floor safe. Silent alarms, an armed guard, and everything to gain.",
+    };
 
     [Export]
-    public string ResolvedFormat { get; set; } =
-        "Clean getaway. Net funds {0:+0;-0;0}. Detection {1:+0;-0;0}, Health {2:+0;-0;0}, Stress {3:+0;-0;0:F0}.";
+    public string[] ApproachNames { get; set; } =
+    {
+        "Slip In Quiet",
+        "Kick the Door In",
+        "Bring the Crew",
+    };
+
+    [Export]
+    public string[] ApproachFlavor { get; set; } =
+    {
+        "Just you, gloves on, nobody gets hurt.",
+        "Fast and loud — take everything they've got, maybe take a beating.",
+        "A bigger haul split three ways, and the crew remembers who ran it.",
+    };
+
+    // --- Formats ---
+
+    [Export]
+    public string TargetButtonFormat { get; set; } = "{0} — {1}";
+
+    [Export]
+    public string TargetFormat { get; set; } = "{0} — up to ${1:N0} in the room, heat +{2}";
+
+    [Export]
+    public string ApproachButtonFormat { get; set; } = "{0} — {1:0}% clean";
+
+    [Export]
+    public string CrewUnavailableText { get; set; } = "Bring the Crew — (no crew rep available)";
+
+    [Export]
+    public string JobFormat { get; set; } = "You're outside {0}. {1}";
+
+    [Export]
+    public string ExecuteOddsFormat { get; set; } = "Odds you pull it off: {0:0}%";
+
+    [Export]
+    public string GrabbedFormat { get; set; } = "You've got ${0:N0} in hand. The rest is sitting right there.";
+
+    [Export]
+    public string PressOddsFormat { get; set; } = "Push for it all: {0:0}% chance the whole thing comes apart.";
+
+    [Export]
+    public string ResolvedHeadlineText { get; set; } = "CLEAN GETAWAY";
+
+    [Export]
+    public string BustedHeadlineText { get; set; } = "BUSTED.";
+
+    [Export]
+    public string TakeFormat { get; set; } = "{0:+$#,##0;-$#,##0;$0}";
+
+    [Export]
+    public string BustCostFormat { get; set; } = "-${0:N0} bail and legal fees";
+
+    [Export]
+    public string HeatLineFormat { get; set; } = "Word gets around — heat +{0}.";
+
+    [Export]
+    public string BustHeatLineFormat { get; set; } = "Booked, printed, photographed — heat +{0}.";
+
+    [Export]
+    public string StressLineFormat { get; set; } = "Your hands won't stop shaking — stress +{0:0}.";
+
+    [Export]
+    public string HealthLineFormat { get; set; } = "You took a beating in there — health {0}.";
+
+    [Export]
+    public string CrewLineFormat { get; set; } = "The crew talks you up — standing +{0}.";
 
     private Label _statusLabel = null!;
 
@@ -50,15 +143,19 @@ public sealed partial class RobberyScreen : Control
 
     private VBoxContainer _approachPanel = null!;
     private Label _approachTargetLabel = null!;
+    private Label _approachFlavorLabel = null!;
     private Button _soloQuietButton = null!;
     private Button _strongArmButton = null!;
     private Button _crewButton = null!;
 
     private VBoxContainer _executePanel = null!;
+    private Label _jobLabel = null!;
+    private Label _executeOddsLabel = null!;
     private Button _executeButton = null!;
 
     private VBoxContainer _grabbedPanel = null!;
     private Label _grabbedLabel = null!;
+    private Label _pressOddsLabel = null!;
     private Button _pressLuckButton = null!;
     private Button _grabAndRunButton = null!;
 
@@ -66,7 +163,11 @@ public sealed partial class RobberyScreen : Control
     private Button _getawayButton = null!;
 
     private VBoxContainer _resultPanel = null!;
-    private Label _resultLabel = null!;
+    private Label _headlineLabel = null!;
+    private Label _takeLabel = null!;
+    private Label _lineA = null!;
+    private Label _lineB = null!;
+    private Label _lineC = null!;
     private Button _doneButton = null!;
 
     private bool _sessionActive;
@@ -74,6 +175,7 @@ public sealed partial class RobberyScreen : Control
     private RobberyContext _ctx;
     private RngState _rng;
     private RobberyState _state;
+    private ResultReveal? _reveal;
 
     public override void _Ready()
     {
@@ -88,15 +190,19 @@ public sealed partial class RobberyScreen : Control
 
         _approachPanel = GetNode<VBoxContainer>("Panel/Layout/ApproachPanel");
         _approachTargetLabel = GetNode<Label>("Panel/Layout/ApproachPanel/ApproachTargetLabel");
+        _approachFlavorLabel = GetNode<Label>("Panel/Layout/ApproachPanel/ApproachFlavorLabel");
         _soloQuietButton = GetNode<Button>("Panel/Layout/ApproachPanel/SoloQuietButton");
         _strongArmButton = GetNode<Button>("Panel/Layout/ApproachPanel/StrongArmButton");
         _crewButton = GetNode<Button>("Panel/Layout/ApproachPanel/CrewButton");
 
         _executePanel = GetNode<VBoxContainer>("Panel/Layout/ExecutePanel");
+        _jobLabel = GetNode<Label>("Panel/Layout/ExecutePanel/JobLabel");
+        _executeOddsLabel = GetNode<Label>("Panel/Layout/ExecutePanel/ExecuteOddsLabel");
         _executeButton = GetNode<Button>("Panel/Layout/ExecutePanel/ExecuteButton");
 
         _grabbedPanel = GetNode<VBoxContainer>("Panel/Layout/GrabbedPanel");
         _grabbedLabel = GetNode<Label>("Panel/Layout/GrabbedPanel/GrabbedLabel");
+        _pressOddsLabel = GetNode<Label>("Panel/Layout/GrabbedPanel/PressOddsLabel");
         _pressLuckButton = GetNode<Button>("Panel/Layout/GrabbedPanel/PressLuckButton");
         _grabAndRunButton = GetNode<Button>("Panel/Layout/GrabbedPanel/GrabAndRunButton");
 
@@ -104,8 +210,17 @@ public sealed partial class RobberyScreen : Control
         _getawayButton = GetNode<Button>("Panel/Layout/GetawayPanel/GetawayButton");
 
         _resultPanel = GetNode<VBoxContainer>("Panel/Layout/ResultPanel");
-        _resultLabel = GetNode<Label>("Panel/Layout/ResultPanel/ResultLabel");
+        _headlineLabel = GetNode<Label>("Panel/Layout/ResultPanel/HeadlineLabel");
+        _takeLabel = GetNode<Label>("Panel/Layout/ResultPanel/TakeLabel");
+        _lineA = GetNode<Label>("Panel/Layout/ResultPanel/LineA");
+        _lineB = GetNode<Label>("Panel/Layout/ResultPanel/LineB");
+        _lineC = GetNode<Label>("Panel/Layout/ResultPanel/LineC");
         _doneButton = GetNode<Button>("Panel/Layout/ResultPanel/DoneButton");
+
+        _storeButton.Text = string.Format(TargetButtonFormat, TargetNames[0], TargetHooks[0]);
+        _bookieButton.Text = string.Format(TargetButtonFormat, TargetNames[1], TargetHooks[1]);
+        _warehouseButton.Text = string.Format(TargetButtonFormat, TargetNames[2], TargetHooks[2]);
+        _jewelryButton.Text = string.Format(TargetButtonFormat, TargetNames[3], TargetHooks[3]);
 
         _storeButton.Pressed += () => OnTargetPicked(RobberyTarget.ConvenienceStore);
         _bookieButton.Pressed += () => OnTargetPicked(RobberyTarget.BookieStash);
@@ -137,6 +252,10 @@ public sealed partial class RobberyScreen : Control
             && session.Activity == WorkActivity.Robbery;
         if (!isPending)
         {
+            if (_sessionActive)
+            {
+                KillReveal();
+            }
             Visible = false;
             _sessionActive = false;
             return;
@@ -156,10 +275,16 @@ public sealed partial class RobberyScreen : Control
         _ctx = gm.Hustles.BuildRobberyContext(gm.Career.AvatarPlayerId, day);
         _rng = new RngState(unchecked((ulong)System.Environment.TickCount64) ^ 0x524F42424552UL | 1UL);
 
+        KillReveal();
         _caseItCheckBox.ButtonPressed = false;
-        _crewButton.Disabled = !_ctx.HasCrew;
         _statusLabel.Text = string.Empty;
         ShowPanel(_casePanel);
+    }
+
+    private void KillReveal()
+    {
+        _reveal?.Kill();
+        _reveal = null;
     }
 
     private void ShowPanel(Control panel)
@@ -170,14 +295,48 @@ public sealed partial class RobberyScreen : Control
         _grabbedPanel.Visible = ReferenceEquals(panel, _grabbedPanel);
         _getawayPanel.Visible = ReferenceEquals(panel, _getawayPanel);
         _resultPanel.Visible = ReferenceEquals(panel, _resultPanel);
+        HustleFeel.FadeIn(panel);
     }
 
     private void OnTargetPicked(RobberyTarget target)
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         _state = RobberyHustle.CaseTarget(in _ctx, target, _caseItCheckBox.ButtonPressed);
-        _approachTargetLabel.Text = string.Format(TargetFormat, target, _state.FullScore, _state.DetectionRiskDelta);
+        _approachTargetLabel.Text = string.Format(
+            TargetFormat, TargetNames[(int)target], _state.FullScore, _state.DetectionRiskDelta);
+        _approachFlavorLabel.Text = TargetFlavor[(int)target];
+        RefreshApproachButtons();
         _statusLabel.Text = string.Empty;
         ShowPanel(_approachPanel);
+    }
+
+    /// <summary>
+    /// Previews each approach's execute odds on its own button before the
+    /// player commits (P0: odds at the commit point). Pure preview:
+    /// <see cref="RobberyHustle.ChooseApproach"/> +
+    /// <see cref="RobberyHustle.ComputeExecuteSuccessProbability"/> draw no RNG
+    /// and mutate nothing — the real transition only runs on the actual pick.
+    /// </summary>
+    private void RefreshApproachButtons()
+    {
+        SetApproachPreview(_soloQuietButton, RobberyApproach.SoloQuiet);
+        SetApproachPreview(_strongArmButton, RobberyApproach.StrongArm);
+        _crewButton.Disabled = !_ctx.HasCrew;
+        if (_ctx.HasCrew)
+        {
+            SetApproachPreview(_crewButton, RobberyApproach.Crew);
+        }
+        else
+        {
+            _crewButton.Text = CrewUnavailableText;
+        }
+    }
+
+    private void SetApproachPreview(Button button, RobberyApproach approach)
+    {
+        RobberyState preview = RobberyHustle.ChooseApproach(in _state, in _ctx, approach);
+        double pSuccess = RobberyHustle.ComputeExecuteSuccessProbability(in preview, in _ctx);
+        button.Text = string.Format(ApproachButtonFormat, ApproachNames[(int)approach], pSuccess * 100.0);
     }
 
     private void OnApproachPicked(RobberyApproach approach)
@@ -187,7 +346,15 @@ public sealed partial class RobberyScreen : Control
             _statusLabel.Text = CrewUnavailableText;
             return;
         }
+        UiSfx.Instance.Play(UiSound.Tap);
         _state = RobberyHustle.ChooseApproach(in _state, in _ctx, approach);
+
+        double pSuccess = RobberyHustle.ComputeExecuteSuccessProbability(in _state, in _ctx);
+        _jobLabel.Text = string.Format(
+            JobFormat, TargetNames[(int)_state.Target], ApproachFlavor[(int)approach]);
+        _executeOddsLabel.Text = string.Format(ExecuteOddsFormat, pSuccess * 100.0);
+        _executeOddsLabel.AddThemeColorOverride("font_color", HustleFeel.OddsColor(pSuccess));
+
         _statusLabel.Text = string.Empty;
         ShowPanel(_executePanel);
     }
@@ -206,6 +373,7 @@ public sealed partial class RobberyScreen : Control
 
     private void OnGrabAndRunPressed()
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         _state = RobberyHustle.GrabAndRun(in _state);
         Advance();
     }
@@ -221,21 +389,46 @@ public sealed partial class RobberyScreen : Control
         switch (_state.Stage)
         {
             case RobberyStage.Grabbed:
+            {
+                // The press-your-luck beat: the danger sting lands and the
+                // resolver's own bust probability is on the table before the
+                // player decides.
+                double pBust = RobberyHustle.ComputePressLuckBustProbability(in _state, in _ctx);
                 _grabbedLabel.Text = string.Format(GrabbedFormat, _state.PartialTake);
+                _pressOddsLabel.Text = string.Format(PressOddsFormat, pBust * 100.0);
+                _pressOddsLabel.AddThemeColorOverride("font_color", HustleFeel.RiskColor(pBust));
+                UiSfx.Instance.Play(UiSound.Alert);
                 ShowPanel(_grabbedPanel);
                 break;
+            }
             case RobberyStage.Escaping:
                 ShowPanel(_getawayPanel);
                 break;
             case RobberyStage.Busted:
-                _resultLabel.Text = string.Format(
-                    BustedFormat, -_state.FundsDelta, _state.DetectionRiskDelta, _state.StressDelta);
                 ShowPanel(_resultPanel);
+                KillReveal();
+                _reveal = ResultReveal.Begin(_resultPanel)
+                    .Headline(_headlineLabel, BustedHeadlineText, UiColors.Danger, UiSound.Error)
+                    .CountUp(_takeLabel, BustCostFormat, -_state.FundsDelta)
+                    .Line(_lineA, string.Format(BustHeatLineFormat, _state.DetectionRiskDelta))
+                    .Line(_lineB, string.Format(StressLineFormat, _state.StressDelta))
+                    .Line(_lineC, _state.HealthCeilingDelta != 0
+                        ? string.Format(HealthLineFormat, _state.HealthCeilingDelta)
+                        : null)
+                    .Footer(_doneButton);
                 break;
             case RobberyStage.Resolved:
-                _resultLabel.Text = string.Format(
-                    ResolvedFormat, _state.FundsDelta, _state.DetectionRiskDelta, _state.HealthCeilingDelta, _state.StressDelta);
                 ShowPanel(_resultPanel);
+                KillReveal();
+                _reveal = ResultReveal.Begin(_resultPanel)
+                    .Headline(_headlineLabel, ResolvedHeadlineText, UiColors.Success, UiSound.Cash)
+                    .CountUp(_takeLabel, TakeFormat, _state.FundsDelta)
+                    .Line(_lineA, string.Format(HeatLineFormat, _state.DetectionRiskDelta))
+                    .Line(_lineB, string.Format(StressLineFormat, _state.StressDelta))
+                    .Line(_lineC, _state.CrewStandingDelta > 0
+                        ? string.Format(CrewLineFormat, _state.CrewStandingDelta)
+                        : null)
+                    .Footer(_doneButton);
                 break;
         }
     }
@@ -247,6 +440,8 @@ public sealed partial class RobberyScreen : Control
         {
             gm.Hustles.ApplyRobberyResolution(gm.Career.AvatarPlayerId, _state.ToResolution(), _sessionDay);
         }
+        UiSfx.Instance.Play(UiSound.Back);
+        KillReveal();
         gm.ClearPendingHustleSession();
         _sessionActive = false;
         Visible = false;

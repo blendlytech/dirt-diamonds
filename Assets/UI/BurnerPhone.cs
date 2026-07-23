@@ -318,6 +318,7 @@ public sealed partial class BurnerPhone : PanelContainer
     private PortraitView _threadPortrait = null!;
     private Label _threadHeaderLabel = null!;
     private VBoxContainer _threadContainer = null!;
+    private int _messagesTabIndex = -1;
 
     private Label _fundsValueLabel = null!;
     private Label _costOfLivingLabel = null!;
@@ -481,6 +482,8 @@ public sealed partial class BurnerPhone : PanelContainer
         _historyContainer = GetNode<VBoxContainer>("Screen/ScreenLayout/PhoneTabs/History/HistoryLayout/HistoryScroll/HistoryContainer");
         _loadOlderButton.Pressed += OnLoadOlderPressed;
 
+        Control messagesTab = GetNode<Control>("Screen/ScreenLayout/PhoneTabs/Messages");
+        _messagesTabIndex = messagesTab.GetIndex();
         _contactList = GetNode<ItemList>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ContactList");
         _threadPortrait = GetNode<PortraitView>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadPortrait");
         _threadHeaderLabel = GetNode<Label>("Screen/ScreenLayout/PhoneTabs/Messages/MessagesLayout/ThreadPanel/ThreadHeaderRow/ThreadHeaderLabel");
@@ -730,7 +733,17 @@ public sealed partial class BurnerPhone : PanelContainer
     /// only on an explicit player tap — a new fire never auto-switches (the
     /// locked §5 decision honors the player's own tab choice).
     /// </summary>
-    private void OnAttentionBannerPressed() => _phoneTabs.CurrentTab = _eventsTabIndex;
+    private void OnAttentionBannerPressed()
+    {
+        GameManager gm = GameManager.Instance!;
+        _phoneTabs.CurrentTab = _messagesTabIndex;
+        if (gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending))
+        {
+            _activeContactId = pending.Definition.ContactId;
+            RefreshContactList(gm);
+            RenderThread(gm, pending.Definition.ContactId);
+        }
+    }
 
     private void OnContactSelected(long index)
     {
@@ -774,12 +787,25 @@ public sealed partial class BurnerPhone : PanelContainer
         }
     }
 
-    /// <summary>The Messages tab's contact list: most-recent-text-first, unread marker. Pending-choice sort-to-top no longer applies here — that lives on the Events tab now.</summary>
+    /// <summary>The Messages tab's contact list: most-recent-text-first, unread marker. Pending-choice contact is sorted to top with an action marker.</summary>
     private void RefreshContactList(GameManager gm)
     {
+        bool hasPending = gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending);
+        string? pendingContactId = hasPending ? pending.Definition.ContactId : null;
+
         _orderedContactIds.Clear();
         _orderedContactIds.AddRange(_messagesByContact.Keys);
+        if (pendingContactId != null && !_orderedContactIds.Contains(pendingContactId))
+        {
+            _orderedContactIds.Add(pendingContactId);
+        }
         _orderedContactIds.Sort((a, b) => LastDayFor(b).CompareTo(LastDayFor(a)));
+
+        if (pendingContactId != null)
+        {
+            _orderedContactIds.Remove(pendingContactId);
+            _orderedContactIds.Insert(0, pendingContactId);
+        }
 
         int selectedIndex = -1;
         _contactList.Clear();
@@ -788,7 +814,19 @@ public sealed partial class BurnerPhone : PanelContainer
             string contactId = _orderedContactIds[i];
             ContactDefinition contact = gm.Contacts.Resolve(contactId);
             bool unread = MessageCount(contactId) > _lastSeenCount.GetValueOrDefault(contactId);
-            _contactList.AddItem(unread ? UnreadMarker + contact.DisplayName : contact.DisplayName);
+            bool isPendingContact = (contactId == pendingContactId);
+
+            string itemText = contact.DisplayName;
+            if (isPendingContact)
+            {
+                itemText = UnreadMarker + "[ACTION] " + contact.DisplayName;
+            }
+            else if (unread)
+            {
+                itemText = UnreadMarker + contact.DisplayName;
+            }
+
+            _contactList.AddItem(itemText);
             if (contactId == _activeContactId)
             {
                 selectedIndex = i;
@@ -1071,7 +1109,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _historyScroll.ScrollVertical = 0;
     }
 
-    /// <summary>The Messages tab's selected thread: Text-kind rows only, one incoming bubble per companion text (no player-reply bubble — a text has no in-place answer, unlike the old embedded event choices).</summary>
+    /// <summary>The Messages tab's selected thread: renders message history and active event choices directly inside the conversation thread.</summary>
     private void RenderThread(GameManager gm, string contactId)
     {
         _activeContactId = contactId;
@@ -1091,6 +1129,46 @@ public sealed partial class BurnerPhone : PanelContainer
                 int dayOfSeason = GlobalState.DayOfSeasonForDay(row.GameDay);
                 AddBubble(row.Body, incoming: true, string.Format(TimestampFormat, row.SeasonYear, dayOfSeason));
             }
+        }
+
+        // Render pending event choice inside thread if this contact triggered the event!
+        if (gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending)
+            && pending.Definition.ContactId == contactId)
+        {
+            int dayOfSeason = GlobalState.DayOfSeasonForDay(pending.Fired.Day);
+            int seasonYear = gm.State.SeasonYearForDay(pending.Fired.Day);
+            string timestamp = string.Format(TimestampFormat, seasonYear, dayOfSeason);
+
+            string promptText = pending.Definition.Prompt;
+            if (pending.Definition.TextMessage is not null)
+            {
+                promptText += "\n\n" + pending.Definition.TextMessage;
+            }
+            AddBubble(promptText, incoming: true, timestamp);
+
+            var choicesBox = new VBoxContainer();
+            choicesBox.AddThemeConstantOverride("separation", 6);
+            EventChoice[] eventChoices = pending.Definition.Choices;
+            for (int i = 0; i < eventChoices.Length; i++)
+            {
+                int choiceIndex = i;
+                var button = new Button
+                {
+                    Text = eventChoices[i].Label,
+                    ThemeTypeVariation = "ReplyChip",
+                };
+                button.Pressed += () =>
+                {
+                    UiSfx.Instance.Play(UiSound.Tap);
+                    GameManager.Instance!.GrittyEventChoices.ResolveChoice(choiceIndex);
+                };
+                choicesBox.AddChild(button);
+            }
+
+            var choicesRow = new HBoxContainer();
+            choicesRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+            choicesRow.AddChild(choicesBox);
+            _threadContainer.AddChild(choicesRow);
         }
     }
 

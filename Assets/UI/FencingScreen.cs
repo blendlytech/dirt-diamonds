@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Economy.Hustles;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -49,34 +50,57 @@ namespace DirtAndDiamonds.UI;
 /// <see cref="_accrued"/> (still nothing hits the DB until Done — the flag's
 /// actual clear rides <see cref="_accrued"/>'s <c>SetConsumesHotGoodsFlag</c>
 /// through the same single Done commit as everything else, INV-1).
+///
+/// P0 Hustle Feel Pass (UI layer only): the per-lot sting risk is surfaced
+/// from the resolver's existing pure
+/// <see cref="FencingNegotiation.ComputeStingProbability"/> before the player
+/// closes a deal, results land through the staged <see cref="ResultReveal"/>
+/// (the sale counts up, the sting/heat line drops after), panels fade in, and
+/// <see cref="UiSfx"/> stings mark deals, stings, and walks. Zero resolver/sim
+/// touch — the probability shown is a pure read with no RNG draw.
 /// </summary>
 public sealed partial class FencingScreen : Control
 {
     private const int MaxLotsPerDay = 3;
 
     [Export]
-    public string AcquirePawnShopText { get; set; } = "Pawn Shop Overstock (low value, no heat)";
+    public string AcquirePawnShopText { get; set; } = "Pawn-Shop Overstock — legit-adjacent, low value, no heat";
 
     [Export]
-    public string AcquireTruckText { get; set; } = "Fell Off a Truck (mid value, some heat)";
+    public string AcquireTruckText { get; set; } = "Fell Off a Truck — mid value, still warm";
 
     [Export]
-    public string AcquireFreshJobText { get; set; } = "Fresh From a Job (high value, hot goods)";
+    public string AcquireFreshJobText { get; set; } = "Fresh From a Job — your own hot goods, top dollar";
 
     [Export]
-    public string OfferFormat { get; set; } = "Current offer: ${0:F0}";
+    public string OfferFormat { get; set; } = "His offer: ${0:N0}";
 
     [Export]
-    public string PatienceFormat { get; set; } = "Patience: {0}";
+    public string PatienceFormat { get; set; } = "Patience left: {0}";
 
     [Export]
-    public string DealFormat { get; set; } = "Deal at ${0:F0}. Net funds +${1:F0}{2}";
+    public string StingOddsFormat { get; set; } = "Word is buyers have been flipping — {0:0}% chance he's wired.";
 
     [Export]
-    public string StingSuffix { get; set; } = " (stung! Detection +{0})";
+    public string DealHeadlineText { get; set; } = "SOLD.";
 
     [Export]
-    public string WalkText { get; set; } = "The fence walked. Lot unsold.";
+    public string TakeFormat { get; set; } = "+${0:N0}";
+
+    [Export]
+    public string StingLineFormat { get; set; } = "He was wired — half the money's marked. Heat +{0}.";
+
+    [Export]
+    public string WarmGoodsLineFormat { get; set; } = "Moving warm goods leaves prints — heat +{0}.";
+
+    [Export]
+    public string CleanDealText { get; set; } = "No tails, no questions. Clean money.";
+
+    [Export]
+    public string WalkHeadlineText { get; set; } = "NO SALE.";
+
+    [Export]
+    public string WalkText { get; set; } = "He turns it over once, shrugs, and walks. The lot's still yours.";
 
     [Export]
     public string LotTallyFormat { get; set; } = "Session total so far: funds {0:+0;-0;0}, detection {1:+0;-0;0}.";
@@ -93,11 +117,14 @@ public sealed partial class FencingScreen : Control
     private Label _offerLabel = null!;
     private Label _patienceLabel = null!;
     private VBoxContainer _negotiatePanel = null!;
+    private Label _stingOddsLabel = null!;
     private SpinBox _askSpinBox = null!;
     private Button _counterButton = null!;
     private Button _acceptButton = null!;
     private VBoxContainer _resultPanel = null!;
-    private Label _resultLabel = null!;
+    private Label _headlineLabel = null!;
+    private Label _takeLabel = null!;
+    private Label _lineA = null!;
     private Label _runTallyLabel = null!;
     private Button _showAnotherButton = null!;
     private Button _doneButton = null!;
@@ -111,6 +138,7 @@ public sealed partial class FencingScreen : Control
     private HustleResolution _accrued;
     private int _lotsUsed;
     private bool _hotGoodsAvailable;
+    private ResultReveal? _reveal;
 
     public override void _Ready()
     {
@@ -121,11 +149,14 @@ public sealed partial class FencingScreen : Control
         _offerLabel = GetNode<Label>("Panel/Layout/OfferLabel");
         _patienceLabel = GetNode<Label>("Panel/Layout/PatienceLabel");
         _negotiatePanel = GetNode<VBoxContainer>("Panel/Layout/NegotiatePanel");
+        _stingOddsLabel = GetNode<Label>("Panel/Layout/NegotiatePanel/StingOddsLabel");
         _askSpinBox = GetNode<SpinBox>("Panel/Layout/NegotiatePanel/AskRow/AskSpinBox");
         _counterButton = GetNode<Button>("Panel/Layout/NegotiatePanel/CounterButton");
         _acceptButton = GetNode<Button>("Panel/Layout/NegotiatePanel/AcceptButton");
         _resultPanel = GetNode<VBoxContainer>("Panel/Layout/ResultPanel");
-        _resultLabel = GetNode<Label>("Panel/Layout/ResultPanel/ResultLabel");
+        _headlineLabel = GetNode<Label>("Panel/Layout/ResultPanel/HeadlineLabel");
+        _takeLabel = GetNode<Label>("Panel/Layout/ResultPanel/TakeLabel");
+        _lineA = GetNode<Label>("Panel/Layout/ResultPanel/LineA");
         _runTallyLabel = GetNode<Label>("Panel/Layout/ResultPanel/RunTallyLabel");
         _showAnotherButton = GetNode<Button>("Panel/Layout/ResultPanel/ShowAnotherButton");
         _doneButton = GetNode<Button>("Panel/Layout/ResultPanel/DoneButton");
@@ -161,6 +192,10 @@ public sealed partial class FencingScreen : Control
             && session.Activity == WorkActivity.Fencing;
         if (!isPending)
         {
+            if (_sessionActive)
+            {
+                KillReveal();
+            }
             Visible = false;
             _sessionActive = false;
             return;
@@ -186,6 +221,12 @@ public sealed partial class FencingScreen : Control
         BeginLot();
     }
 
+    private void KillReveal()
+    {
+        _reveal?.Kill();
+        _reveal = null;
+    }
+
     /// <summary>
     /// Starts one lot (the first, or "show him another"): rebuilds
     /// <see cref="_ctx"/> from the base snapshot with Heat nudged by every
@@ -198,18 +239,23 @@ public sealed partial class FencingScreen : Control
     /// </summary>
     private void BeginLot()
     {
+        KillReveal();
         double liveHeat = Math.Clamp(_baseCtx.Heat + _accrued.DetectionRiskDelta / 100.0, 0, 1);
         _ctx = new FencingContext(liveHeat, _baseCtx.FenceStanding);
 
         _freshJobButton.Disabled = !_hotGoodsAvailable;
         _acquirePanel.Visible = true;
+        _offerLabel.Visible = false;
+        _patienceLabel.Visible = false;
         _negotiatePanel.Visible = false;
         _resultPanel.Visible = false;
+        HustleFeel.FadeIn(_acquirePanel);
     }
 
     /// <summary>§4.1: the Acquire pick — draws the lot via <see cref="FencingNegotiation.AcquireLot"/> and starts the negotiation from it. FreshFromAJob spends the session's one-time <see cref="_hotGoodsAvailable"/> snapshot; the actual DB flag only clears on Done, via <see cref="_accrued"/>'s folded <c>SetConsumesHotGoodsFlag</c> (INV-1).</summary>
     private void OnAcquireSourcePressed(FencingSource source)
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         LotAcquisition acquisition = FencingNegotiation.AcquireLot(source, _hotGoodsAvailable, ref _rng);
         if (source == FencingSource.FreshFromAJob)
         {
@@ -217,10 +263,19 @@ public sealed partial class FencingScreen : Control
         }
         _state = FencingNegotiation.StartLot(in _ctx, in acquisition, ref _rng);
 
+        // P0: the wire risk is on the table before any deal can close — a pure
+        // read of the same probability CloseDeal will roll against.
+        double pSting = FencingNegotiation.ComputeStingProbability(in _ctx);
+        _stingOddsLabel.Text = string.Format(StingOddsFormat, pSting * 100.0);
+        _stingOddsLabel.AddThemeColorOverride("font_color", HustleFeel.RiskColor(pSting));
+
         _askSpinBox.Value = _state.CurrentOffer;
         _acquirePanel.Visible = false;
+        _offerLabel.Visible = true;
+        _patienceLabel.Visible = true;
         _negotiatePanel.Visible = true;
         _resultPanel.Visible = false;
+        HustleFeel.FadeIn(_negotiatePanel);
         RefreshNegotiationLabels();
     }
 
@@ -244,6 +299,7 @@ public sealed partial class FencingScreen : Control
 
     private void OnCounterPressed()
     {
+        UiSfx.Instance.Play(UiSound.Tap);
         _state = FencingNegotiation.Counter(in _state, in _ctx, _askSpinBox.Value, ref _rng);
         Advance();
     }
@@ -257,31 +313,69 @@ public sealed partial class FencingScreen : Control
                 break;
             case FencingOutcomeKind.Deal:
             {
-                string stingPart = _state.WatchlistFlag
-                    ? string.Format(StingSuffix, _state.DetectionRiskDelta)
-                    : string.Empty;
-                _resultLabel.Text = string.Format(DealFormat, _state.DealPrice, _state.FundsDelta, stingPart);
-                FinishLot();
+                string heatLine = _state.WatchlistFlag
+                    ? string.Format(StingLineFormat, _state.DetectionRiskDelta)
+                    : _state.DetectionRiskDelta > 0
+                        ? string.Format(WarmGoodsLineFormat, _state.DetectionRiskDelta)
+                        : CleanDealText;
+                UiSound heatSting = _state.WatchlistFlag ? UiSound.Error : UiSound.DayTick;
+                FinishLot()
+                    .Headline(_headlineLabel, DealHeadlineText, UiColors.Success, UiSound.Cash)
+                    .CountUp(_takeLabel, TakeFormat, _state.FundsDelta)
+                    .Line(_lineA, heatLine, heatSting)
+                    .Footer(BuildFooter());
                 break;
             }
             case FencingOutcomeKind.Walk:
-                _resultLabel.Text = WalkText;
-                FinishLot();
+                FinishLot()
+                    .Headline(_headlineLabel, WalkHeadlineText, UiColors.Warning, UiSound.Back)
+                    .Clear(_takeLabel)
+                    .Line(_lineA, WalkText)
+                    .Footer(BuildFooter());
                 break;
         }
     }
 
-    /// <summary>Folds the closed lot into <see cref="_accrued"/>, updates the running tally, and gates the re-offer per <see cref="MaxLotsPerDay"/>.</summary>
-    private void FinishLot()
+    /// <summary>Folds the closed lot into <see cref="_accrued"/>, swaps to the result panel, and starts the staged reveal the caller composes onto.</summary>
+    private ResultReveal FinishLot()
     {
         _lotsUsed++;
         HustleResolution runningTotal = CombineAccrued(in _state);
-        _showAnotherButton.Visible = _lotsUsed < MaxLotsPerDay;
         _runTallyLabel.Text = _lotsUsed > 1
             ? string.Format(LotTallyFormat, runningTotal.FundsDelta, runningTotal.DetectionRiskDelta)
             : string.Empty;
         _negotiatePanel.Visible = false;
+        _offerLabel.Visible = false;
+        _patienceLabel.Visible = false;
         _resultPanel.Visible = true;
+        HustleFeel.FadeIn(_resultPanel);
+        KillReveal();
+        _reveal = ResultReveal.Begin(_resultPanel);
+        return _reveal;
+    }
+
+    /// <summary>The footer controls this result should end with — the tally only once there's a tally, the re-offer only while lots remain.</summary>
+    private Control[] BuildFooter()
+    {
+        var footer = new List<Control>(3);
+        if (_lotsUsed > 1)
+        {
+            footer.Add(_runTallyLabel);
+        }
+        else
+        {
+            _runTallyLabel.Visible = false;
+        }
+        if (_lotsUsed < MaxLotsPerDay)
+        {
+            footer.Add(_showAnotherButton);
+        }
+        else
+        {
+            _showAnotherButton.Visible = false;
+        }
+        footer.Add(_doneButton);
+        return footer.ToArray();
     }
 
     /// <summary>Folds the current lot's terminal state into <see cref="_accrued"/> without committing — the in-memory INV-1 accumulator.</summary>
@@ -305,7 +399,11 @@ public sealed partial class FencingScreen : Control
         return _accrued;
     }
 
-    private void OnShowAnotherPressed() => BeginLot();
+    private void OnShowAnotherPressed()
+    {
+        UiSfx.Instance.Play(UiSound.Tap);
+        BeginLot();
+    }
 
     private void OnDonePressed()
     {
@@ -317,6 +415,8 @@ public sealed partial class FencingScreen : Control
         {
             gm.Hustles.ApplyFencingResolution(gm.Career.AvatarPlayerId, _accrued, _sessionDay);
         }
+        UiSfx.Instance.Play(UiSound.Back);
+        KillReveal();
         gm.ClearPendingHustleSession();
         _sessionActive = false;
         Visible = false;

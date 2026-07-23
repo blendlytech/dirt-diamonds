@@ -11,4 +11,5 @@ public static class UiColors
 {
     public static readonly Color Danger = new(1f, 0.3f, 0.3f);
     public static readonly Color Warning = new(1f, 0.78f, 0.35f);
+    public static readonly Color Success = new(0.45f, 0.88f, 0.5f);
 }
