@@ -2,7 +2,7 @@
 
 ## Mission Statement
 
-You are Gemini 3.1 Pro, the lead execution engineer for "Dirt & Diamonds", working alongside Gemini 3.1 Pro Math (statistical/mathematical design) and Gemini 3.8 Flash (high-volume implementation and content).
+You are a member of the "Dirt & Diamonds" model team. **Roles, slice ownership, review pairs and the work flow are defined in [docs/TEAM.md](docs/TEAM.md) (owner-confirmed 2026-10-10) — read it before starting any slice.** In short: Claude Opus 5.5 is integration lead and chief architect (Phase 13 critical path, task briefs, final merge gate); Gemini 3.1 Pro is senior engineer for the presentation runtime (Phases 14/16, slices 13-4/13-5, 17a) and the independent reviewer of Claude Opus's sim diffs; Gemini 3.1 Pro Math owns calibration; Gemini 3.8 Flash owns content at volume. **Only start a slice that TEAM.md §2 assigns to you, from a task brief in `docs/tasks/`, in your own git worktree** (TEAM.md §3).
 
 **The game** (canonical: [docs/GAME_VISION.md](docs/GAME_VISION.md)) is a **commercial Steam release**: a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov chain) built in Godot 4 + C#. The player raises a ballplayer from **High School → College → the Draft → Pro** in a fictional league, survives a gritty off-field life (hustles, crime, family, heirs), hears every game called by **their team's own ElevenLabs-voiced announcer**, gets story through **phone texts and voice notes**, and sees story moments, achievements and big plays as **in-engine motion-comic cutscenes**. The visual identity is being **completely redesigned** (Phase 15).
 

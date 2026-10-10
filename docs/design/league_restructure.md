@@ -1,6 +1,6 @@
 # League Restructure — HS → College → Draft → Pro (Phase 13)
 
-**Owner:** Gemini 3.1 Pro Math (this spec, calibration math) · Gemini 3.1 Pro (engine, schema, review) · Gemini 3.8 Flash (team content, UI slices, harness volume)
+**Owner:** per-slice authors and reviewers are in [TEAM.md](../TEAM.md) §2 (owner-confirmed 2026-10-10), which **overrides the "Owner" column in §15 below**. Summary: Claude Opus 5.5 (13-0…13-3, 13-6 engine) · Gemini 3.1 Pro (13-4, 13-5; reviews Opus's slices) · Gemini 3.1 Pro Math (calibration) · Gemini 3.8 Flash (team seed data) · Claude Sonnet 5.5 (league UI, 13-7)
 **Status:** design complete 2026-10-09; no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 and the user-authored source spec in [BUILD_PLAN.md](../BUILD_PLAN.md) ("Phase 13 Source Spec"). Where this doc *interprets* the source spec, §16 says so explicitly.
 **Supersedes:** [tier_league_environments.md](tier_league_environments.md) (6-tier ladder), [promotion_advancement_gates.md](promotion_advancement_gates.md) (tier-ladder promotion), and the league portions of [phase_8_9_interleave_plan.md](../phase_8_9_interleave_plan.md).
 
