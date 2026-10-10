@@ -1,6 +1,6 @@
 # Design — Criminal Underworld Content Arc ("The Dirt")
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. Key beats gain voice notes ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §8) and story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6).
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. Key beats gain story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6). (Voice notes were cut on 2026-10-10.)
 
 **Author:** Claude Opus 4.8 (narrative architecture) · **Slice:** Content arc, batch 1 of a multi-batch criminal spine · **Status:** spec written for Sonnet 5 to author `DIRT-1` against; Fable 5 reviews + gates. Companion to `docs/design/gritty_event_framework.md` (the content contract this obeys) and `docs/design/presentation_layer_narrative.md` (contacts/threads).
 

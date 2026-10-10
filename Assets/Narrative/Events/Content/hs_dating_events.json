@@ -310,13 +310,6 @@
             { "type": "person_stat", "stat": "maturity", "amount": 5 },
             { "type": "stress", "amount": 10 }
           ] },
-        { "id": "end_the_pregnancy", "autopilot_weight": 1, "label": "End the pregnancy",
-          "consequences": [
-            { "type": "clear_flag", "flag": "hs_expecting" },
-            { "type": "funds", "amount": -400 },
-            { "type": "person_stat", "stat": "morality", "amount": -6 },
-            { "type": "stress", "amount": -8 }
-          ] },
         { "id": "place_for_adoption", "autopilot_weight": 1, "label": "Carry it to term, place for adoption",
           "consequences": [
             { "type": "clear_flag", "flag": "hs_expecting" },

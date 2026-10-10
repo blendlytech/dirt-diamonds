@@ -11,7 +11,7 @@ Event JSON structure:
 - **Prerequisites** (e.g. Funds < 500 AND Recklessness > 75). `tier` uses `LeagueTier` ordinals: **HS 0, College 1, Pro 2** from schema v14.
 - **Probability weight** (chance of firing).
 - **Branching choices.**
-- **Delivery:** `contact` (the phone thread the event arrives on); optional **`voice_note`** (a clip id from the voice manifest; the note's script is the message text verbatim); optional **`cutscene`** (a cutscene id, on the event or on a choice).
+- **Delivery:** `contact` (the phone thread the event arrives on); **no `voice_note`** (voice is broadcasters only, 2026-10-10; check #9 rejects it); optional **`cutscene`** (a cutscene id, on the event or on a choice).
 
 Choices must write immediate consequences (e.g. deduct funds) AND write hidden flags to Entity_Flags to trigger cascading events years later.
 

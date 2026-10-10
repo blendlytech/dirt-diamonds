@@ -1,14 +1,14 @@
 # Cutscenes — In-Engine Motion Comics for Story, Achievements and Big Plays (Phase 16)
 
 **Owner:** Gemini 3.1 Pro (player, director, triggers, review) · Gemini 3.8 Flash (cutscene definitions, scripts, asset integration) · the user (story and art sign-off)
-**Status:** design complete 2026-10-09; no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5. User decision, 2026-10-09: **in-engine motion comic** (not pre-rendered video).
-**Depends on:** [visual_redesign.md](visual_redesign.md) (art direction, which must be approved first: cutscene art is made in the new style), [voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) (VO pipeline, `VoiceDirector`, announcer calls as audio beds), [league_restructure.md](league_restructure.md) §10 (milestone moments).
+**Status:** design complete 2026-10-09; **amended 2026-10-10** (no character voice-over: captions only, plus broadcaster calls as audio beds); no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5. User decision, 2026-10-09: **in-engine motion comic** (not pre-rendered video).
+**Depends on:** [visual_redesign.md](visual_redesign.md) (art direction, which must be approved first: cutscene art is made in the new style), [voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) (`VoiceDirector` booth calls as audio beds; voice is broadcasters only), [league_restructure.md](league_restructure.md) §10 (milestone moments).
 
 ---
 
 ## 1. What a cutscene is here
 
-A **motion comic**: layered 2D art staged in Godot and animated with camera pans, zooms, parallax depth, panel reveals, captions and simple layer motion (slide, fade, shake, flicker), with voice-over, SFX and music on top. It is **not** frame-by-frame animation or video.
+A **motion comic**: layered 2D art staged in Godot and animated with camera pans, zooms, parallax depth, panel reveals, captions and simple layer motion (slide, fade, shake, flicker), with SFX, music and, where it fits, a **broadcaster call** on top. **No character voice-over** (2026-10-10): every line a character says is a caption. It is **not** frame-by-frame animation or video.
 
 Why this format (decided):
 
@@ -43,7 +43,7 @@ Every cutscene can be skipped (the first view of a `story` cutscene included, af
                                          ▼
                                   CutscenePlayer  (permanent Main.tscn sibling, top overlay)
                                   ├─ Stage (layers, camera)   ├─ Captions/subtitles
-                                  └─ Audio cues → VoiceDirector (VO / call bed), UiSfx, Music
+                                  └─ Audio cues → VoiceDirector (booth call bed), UiSfx, Music
 ```
 
 - **`CutsceneDirector`** (`Assets/UI/Cutscenes/`, presentation layer) subscribes to bus events and the booth's `BigPlay`. It maps events to cutscene ids, fills slot values from DTOs, and enqueues.
@@ -80,7 +80,6 @@ One JSON file per cutscene under `Assets/Cutscenes/Definitions/` (content-team f
         { "slot": "drafting_team_logo", "depth": 0.8, "anchor": "center", "enter": "fade_up" }
       ],
       "camera": { "from": { "zoom": 1.15, "x": -0.05 }, "to": { "zoom": 1.0, "x": 0.0 }, "ease": "out_cubic" },
-      "voice":   [ { "clip": "ms_draft_night_commissioner_01", "at_ms": 400 } ],
       "captions":[ { "key": "ms_draft_night.c1", "at_ms": 400, "style": "lower_third" } ],
       "sfx":     [ { "sound": "crowd_murmur_swell", "at_ms": 0 } ]
     },
@@ -96,9 +95,9 @@ One JSON file per cutscene under `Assets/Cutscenes/Definitions/` (content-team f
 ```
 
 - **Art** comes from `Assets/Cutscenes/Art/<set>/`: layered PNGs at 1920×1080 base (oversized ~110% for camera moves), 3–5 depth layers per panel.
-- **Slots:** `avatar_portrait`, `avatar_name`, `avatar_number`, `avatar_position`, `team_logo`, `team_colors`, `opponent_logo`, `stat_line`, `score`, `season_year`, `draft_round`, `draft_pick`, `partner_portrait`, `child_portrait`, plus kind-specific slots. Slot values arrive as DTO fields, and missing values fall back to a generic silhouette or text.
-- **Voice:** a fixed clip, or `announcer_of: <team slot>` + `category`, which resolves to that team's booth (e.g. the drafting team's welcome call).
-- **Captions** are strings-table keys (localizable). Spoken lines are always captioned when subtitles are on.
+- **Slots:** `avatar_portrait`, `avatar_name`, `avatar_number`, `avatar_position`, `team_logo`, `team_colors`, `opponent_logo`, `stat_line`, `score`, `season_year`, `draft_round`, `draft_pick`, `partner_portrait`, `child_portrait`, `father_portrait`, `father_name` (the lineage reveal, [temptation_and_lineage.md](temptation_and_lineage.md) §4.4), plus kind-specific slots. Slot values arrive as DTO fields, and missing values fall back to a generic silhouette or text.
+- **Voice: broadcasters only (2026-10-10).** A `voice` entry is `announcer_of: <team slot>` + `category`, which resolves to that team's booth (e.g. the drafting team's welcome call), or a fixed `clip` **from an announcer bank**. No commissioner, coach, family or contact ever speaks; their lines are captions.
+- **Captions** are strings-table keys (localizable). Broadcaster calls are always captioned when subtitles are on.
 
 ---
 
@@ -139,7 +138,7 @@ New bus events are **additive, primitives-only Core events** (the house rule). P
 `Tools/CutsceneHarness` (headless, no Godot runtime needed for the data checks):
 
 1. Every definition parses; ids are unique; `kind` is valid; the sum of panel durations ≤ `max_duration_ms` ≤ the kind's cap (§2).
-2. Every `art` path exists; every `clip` exists in the voice manifest; every caption key exists in the strings table; `announcer_of` + `category` resolves for every College/Pro team.
+2. Every `art` path exists; every `clip` exists in the voice manifest **and belongs to an announcer bank** (any non-broadcaster voice fails); every caption key exists in the strings table; `announcer_of` + `category` resolves for every College/Pro team.
 3. Every `slot` used is in the definition's `slots` list and in the known slot vocabulary.
 4. **Reachability:** every gritty-event `cutscene` reference resolves to a definition; every achievement id has an achievement cutscene; every definition has at least one trigger (no orphans).
 5. Plus a live-boot smoke: play each definition headlessly through `CutscenePlayer` with dummy slot values; the error log stays empty.
@@ -156,4 +155,4 @@ New bus events are **additive, primitives-only Core events** (the house rule). P
 | **16b** | `CutsceneDirector` + new Core events (`AchievementUnlocked`, `DraftCompleted`, `RecruitingCommitted`, `ChampionshipWon`) + queue/rate limits + settings + clock soft-pause + at-bat beat integration | Pro | MC/Gritty inert (only additive event publishes); CoreLoop |
 | **16c** | Big-play kits wired to `BroadcastBooth` | Flash → Pro review | Manual playtest: call and animation land together |
 | **16d** | Achievement cards for the full achievement list | Flash | Harness reachability (#4) |
-| **16e** | Story + milestone content batches (art + VO + definitions), in arc order | Flash → Pro review → user story sign-off | Harness + GrittyEvents + check #10 |
+| **16e** | Story + milestone content batches (art + captions + definitions), in arc order | Flash → Pro review → user story sign-off | Harness + GrittyEvents + check #10 |

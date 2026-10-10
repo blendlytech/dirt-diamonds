@@ -4,7 +4,7 @@
 
 You are a member of the "Dirt & Diamonds" model team. **Roles, slice ownership, review pairs and the work flow are defined in [docs/TEAM.md](docs/TEAM.md) (owner-confirmed 2026-10-10) — read it before starting any slice.** In short: Claude Opus 5.5 is integration lead and chief architect (Phase 13 critical path, task briefs, final merge gate); Gemini 3.1 Pro is senior engineer for the presentation runtime (Phases 14/16, slices 13-4/13-5, 17a) and the independent reviewer of Claude Opus's sim diffs; Gemini 3.1 Pro Math owns calibration; Gemini 3.8 Flash owns content at volume. **Only start a slice that TEAM.md §2 assigns to you, from a task brief in `docs/tasks/`, in your own git worktree** (TEAM.md §3).
 
-**The game** (canonical: [docs/GAME_VISION.md](docs/GAME_VISION.md)) is a **commercial Steam release**: a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov chain) built in Godot 4 + C#. The player raises a ballplayer from **High School → College → the Draft → Pro** in a fictional league, survives a gritty off-field life (hustles, crime, family, heirs), hears every game called by **their team's own ElevenLabs-voiced announcer**, gets story through **phone texts and voice notes**, and sees story moments, achievements and big plays as **in-engine motion-comic cutscenes**. The visual identity is being **completely redesigned** (Phase 15).
+**The game** (canonical: [docs/GAME_VISION.md](docs/GAME_VISION.md)) is a **commercial Steam release**: a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov chain) built in Godot 4 + C#. The player raises a ballplayer from **High School → College → the Draft → Pro** in a fictional league, survives a gritty off-field life (hustles, crime, family, heirs), hears every game called by **their team's own ElevenLabs-voiced announcer**, gets story through **phone texts**, and sees story moments, achievements and big plays as **in-engine motion-comic cutscenes**. The visual identity is being **completely redesigned** (Phase 15).
 
 **Where we are:** Phases 0–12 are complete. The road to launch is Phases 13–17 in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). Every session starts by reading [docs/progress.md](docs/progress.md) and running `git status` + `git log` (an auto-committer and parallel sessions are active).
 
@@ -13,7 +13,7 @@ Primary objective: highly optimized, performant code with strict separation betw
 ## 1. Architectural Boundaries (STRICT)
 
 - **Life vs Baseball:** `/Assets/Simulation/Life/` and `/Assets/Simulation/Baseball/` MUST NOT reference each other's active game loops. They communicate only through the async event bus and the SQLite database.
-- **Presentation never drives simulation.** UI, announcers (`BroadcastBooth`, `VoiceDirector`), cutscenes (`CutsceneDirector`, `CutscenePlayer`) and voice notes consume DTOs and bus events and emit player-intent signals. They never write the DB or mutate sim state, and never use the sim's `RngState` (presentation randomness uses its own RNG).
+- **Presentation never drives simulation.** UI, announcers (`BroadcastBooth`, `VoiceDirector`), cutscenes (`CutsceneDirector`, `CutscenePlayer`) and the phone consume DTOs and bus events and emit player-intent signals. They never write the DB or mutate sim state, and never use the sim's `RngState` (presentation randomness uses its own RNG).
 - **Baseball engine:** data-oriented design for the macro sim; must process thousands of entities per frame.
 - **Life sim engine:** Utility-based AI for NPC and avatar off-field decisions; need decay is non-linear.
 
@@ -65,7 +65,7 @@ Primary objective: highly optimized, performant code with strict separation betw
 ## 9. Required Workflow Procedures
 
 - **Verify UI nodes:** before writing C# for any scene (hustle mini-games, the at-bat view, the phone, cutscene chrome), run `godot_scene_mapper` or the Godot MCP to verify node paths in the `.tscn`.
-- **Validate event integrity:** after any gritty-event content change, run `check_event_graph_integrity` (flags, dead ends, `contact`, `voice_note` and `cutscene` references).
+- **Validate event integrity:** after any gritty-event content change, run `check_event_graph_integrity` (flags, dead ends, `contact` and `cutscene` references; any `voice_note` fails, since voice is broadcasters only).
 - **Test stat matrices:** any change under `Assets/Simulation/` (the resolver, PED/tier weights, rosters, schedules, innings) must be followed by `run_monte_carlo_batch`. The resolver guard must stay byte-exact; re-baselining a season guard needs explicit sanction in a design doc.
 - **Validate audio:** after any voice/audio asset or manifest change, run `validate_audio_manifest`.
 - **Validate cutscenes:** after any cutscene definition change, run `Tools/CutsceneHarness`.

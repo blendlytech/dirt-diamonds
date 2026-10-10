@@ -20,6 +20,8 @@ Session-orientation file for the AI models. **Keep it lean:** at session end, ap
 
 **Decisions locked 2026-10-09 (user):** 56 unique announcers (College + Pro) plus 3 shared HS radio voices; in-engine motion-comic cutscenes; ElevenLabs voice for announcers, phone voice notes and cutscene VO; schema v14 is a clean break for old saves; a complete visual redesign is allowed.
 
+**Decisions locked 2026-10-10 (user):** voice is **broadcasters only** (no phone voice notes, no cutscene VO, no character dialogue; slice 14e cut); pregnancies never offer abortion; the lineage, temptation, Trailblazer and substances designs in [design/temptation_and_lineage.md](design/temptation_and_lineage.md) and [design/substances_and_addiction.md](design/substances_and_addiction.md) (decisions D1–D18 + §15).
+
 **Open for the user:** the art direction (15a); league/brand names; the spec interpretations in league_restructure §16 (College "+2 open spots", season lengths, Pro playoff field size, draft timing).
 
 ⚠ **Live save lost:** `dirt_and_diamonds.db` was found at 0 bytes on 2026-10-09 (last valid: a day-10 v13 save in the 2026-07-23 game log). No local backup was found. The user may try Windows Previous Versions before launching the game. Moot after v14 anyway.

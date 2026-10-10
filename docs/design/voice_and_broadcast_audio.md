@@ -1,8 +1,10 @@
-# Voice & Broadcast Audio — ElevenLabs Voices, Team Announcers, Phone Voice Notes (Phase 14)
+# Voice & Broadcast Audio — ElevenLabs Team Announcers (Phase 14)
 
-**Owner:** Gemini 3.1 Pro (audio runtime, pipeline tool, review) · Gemini 3.8 Flash (announcer personas, scripts, voice-note scripts, UI wiring) · Gemini 3.1 Pro Math (call-selection weights only)
-**Status:** design complete 2026-10-09; no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5 and §7.
-**Builds on:** [ui_audio_slice_d.md](ui_audio_slice_d.md) (the shipped `UiSfx` autoload, `SFX` bus, `user://settings.cfg` volume) and [at_bat_presentation.md](at_bat_presentation.md) (the beat sequencer the announcer rides on). Feeds [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (cutscene voice-over, big-play audio beds).
+**Owner:** Gemini 3.1 Pro (audio runtime, pipeline tool, review) · Gemini 3.8 Flash (announcer personas, scripts, UI wiring) · Gemini 3.1 Pro Math (call-selection weights only)
+**Status:** design complete 2026-10-09; **scope cut 2026-10-10** (below); no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5 and §7.
+
+> **2026-10-10 owner directive: voice is for broadcasters only.** ElevenLabs voice is restricted to `BroadcastBooth` and the announcers. There are **no** phone voice notes, **no** cutscene voice-over and **no** character dialogue; those stay text (bubbles, captions, subtitles). This doc has been amended throughout: §8 is removed, slice 14e is cut, and the `Voice` bus and `Dialogue` channel are gone. Cutscenes may still use a **broadcaster call** as their audio bed (big plays, Draft Night, championships).
+**Builds on:** [ui_audio_slice_d.md](ui_audio_slice_d.md) (the shipped `UiSfx` autoload, `SFX` bus, `user://settings.cfg` volume) and [at_bat_presentation.md](at_bat_presentation.md) (the beat sequencer the announcer rides on). Feeds [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (broadcaster calls as cutscene audio beds).
 
 ---
 
@@ -11,13 +13,13 @@
 **In scope at launch:**
 
 1. **Play-by-play announcers.** One signature play-by-play voice for each of the 56 College and Pro teams, plus **3 shared HS local-radio voices**. Sound bites only: calls, taglines and reactions. No continuous narration.
-2. **Phone voice notes.** Story-beat texts from key contacts carry a playable voice note.
-3. **Cutscene voice-over.** Lines spoken inside motion-comic cutscenes (the scripts live with each cutscene; production uses this doc's pipeline).
+2. **Broadcaster calls inside cutscenes.** A big-play, Draft Night or championship cutscene may use a booth's call as its audio bed (`announcer_of` + category, [cutscenes_motion_comic.md](cutscenes_motion_comic.md) §4). These are ordinary announcer clips from the banks below, not separate VO.
 
 **Explicit non-goals:**
 
+- **No character voices (2026-10-10).** No phone voice notes, no cutscene voice-over, no dialogue for any character, contact or NPC. All of it is text.
 - **No runtime AI.** The shipped game never calls ElevenLabs or any other service. Every clip is a file in the build.
-- **No spoken player names.** Pre-generated clips can't say a player-chosen avatar name or a procedurally generated NPC name. Announcers call by role and team ("the kid", "the Barons' shortstop", "number one on the depth chart"). The name appears in the subtitle line.
+- **No spoken player names or avatar pronouns.** Pre-generated clips can't say a player-chosen avatar name or a procedurally generated NPC name, and they can't know the avatar's gender (the avatar can be male or female, [temptation_and_lineage.md](temptation_and_lineage.md) §8). Announcers call by role and team ("the kid", "the Barons' shortstop", "number one on the depth chart"), never "he" or "she" for the avatar. The name appears in the subtitle line. The only gendered avatar lines are the Trailblazer route's own calls, gated on `trailblazer_route`.
 - **No real people.** No voice cloned from or imitating a real person or real broadcaster.
 - **No live commentary track** for background-simulated games (§7.5 covers the highlight reel instead).
 - **No color commentator at launch.** It's a stretch goal (§11).
@@ -40,11 +42,11 @@
              human listening pass (bump `take` per bad clip) →  AudioManifestHarness gate
 ```
 
-- **Tool:** `Tools/VoiceGen` (a C# console project, alongside the existing harnesses). Input is **script sheets**, one per bank: an announcer, a contact, or a cutscene. Each line has `clip_id`, `text`, `category`, `voice_profile`, optional delivery notes, and `take` (an integer, default 1; bumping it requests a retake, and because it is part of the content hash, the retake is idempotent). Task brief: [docs/tasks/voicegen_task_brief.md](../tasks/voicegen_task_brief.md).
+- **Tool:** `Tools/VoiceGen` (a C# console project, alongside the existing harnesses). Input is **script sheets**, one per announcer bank (a College/Pro booth or an HS pool voice). Each line has `clip_id`, `text`, `category`, `voice_profile`, optional delivery notes, and `take` (an integer, default 1; bumping it requests a retake, and because it is part of the content hash, the retake is idempotent). Task brief: [docs/tasks/voicegen_task_brief.md](../tasks/voicegen_task_brief.md).
 - **Voices:** created with ElevenLabs **Voice Design** (original synthetic voices) or taken from the Voice Library **only where that voice's terms permit commercial use**. Each voice profile records `elevenlabs_voice_id`, model, stability/similarity/style settings, and how it was created. Profiles live in `Tools/VoiceGen/voice_profiles.json`. Voice ids aren't secret; the API key is.
 - **API key:** read from the `ELEVENLABS_API_KEY` environment variable only. Never written to the repo, logs, the manifest or any build. Add the key name to `.gitignore`-adjacent docs, and add a pre-commit grep for `sk_` / `xi-api-key` (§10).
 - **Incremental:** each clip's content hash = hash(text + voice profile + settings + model). Unchanged hashes are skipped, so re-running after editing 10 lines costs 10 lines of credits.
-- **Mastering:** trim leading/trailing silence to 40 ms; **loudness target −18 LUFS integrated for dialogue, true peak ≤ −1 dBTP**; mono, 44.1 kHz, Ogg Vorbis ~q4 (about 64–80 kbps). The measured loudness and duration go into the manifest.
+- **Mastering:** trim leading/trailing silence to 40 ms; **loudness target −18 LUFS integrated for speech, true peak ≤ −1 dBTP**; mono, 44.1 kHz, Ogg Vorbis ~q4 (about 64–80 kbps). The measured loudness and duration go into the manifest.
 - **Licensing log:** every generation run appends to `docs/legal/elevenlabs_generation_log.md`: date, ElevenLabs plan tier (it must be a plan granting commercial rights at generation time), model, number of clips, and voice profiles used. This log is part of the Steam release package ([steam_commercial_release.md](steam_commercial_release.md) §4).
 - **Human review is mandatory.** Every clip gets a listening pass before it ships: mispronunciations, artifacts, wrong energy. Failures get their `take` bumped and re-render with a new seed (or adjusted settings).
 
@@ -55,11 +57,9 @@
 | Pro announcers | 32 | ~120 | ~3,840 |
 | College announcers | 24 | ~62 | ~1,490 |
 | HS radio pool | 3 | ~94 | ~280 |
-| Phone voice notes | — | — | ~200 |
-| Cutscene VO | — | — | ~300 |
-| **Total** | | | **~6,100 clips** |
+| **Total** | | | **~5,610 clips** |
 
-At about 70 characters per line, that's roughly 430k characters for one pass, so **plan for about 1M characters including retakes**. Pick the ElevenLabs plan tier from that figure at generation time. Ship size at about 2.5 s average per clip: **~150 MB** of Ogg audio.
+At about 70 characters per line, that's roughly 390k characters for one pass, so **plan for about 900k characters including retakes**. Pick the ElevenLabs plan tier from that figure at generation time. Ship size at about 2.5 s average per clip: **~140 MB** of Ogg audio. (The phone voice-note and cutscene VO banks, ~500 clips, were cut on 2026-10-10.)
 
 ---
 
@@ -73,19 +73,18 @@ The shipped layout (`Master → SFX`) is extended in `default_bus_layout.tres`:
 | :-- | :-- | :-- | :-- |
 | `Master` | — | everything | |
 | `SFX` | Master | UI tones (shipped), foley | Shipped in Slice D |
-| `Voice` | Master | voice notes, cutscene VO | |
 | `Announcer` | Master | play-by-play | Separate so players can turn the announcer down or off without losing story voice |
-| `Music` | Master | soundtrack (content TBD, §11) | `AudioEffectCompressor` sidechained to `Voice` + `Announcer`: ducks ~8 dB under speech |
+| `Music` | Master | soundtrack (content TBD, §11) | `AudioEffectCompressor` sidechained to `Announcer`: ducks ~8 dB under calls |
 | `Ambience` | Master | crowd beds, stadium/street room tone | Sidechain duck ~5 dB under `Announcer` |
 
-**Settings (phone → Settings, persisted in `user://settings.cfg` exactly like the shipped SFX slider):** Master, Music, SFX, Voice and Announcer volume sliders; an **Announcer on/off** toggle; **Subtitles** on/off (default **on**); **Voice-note autoplay** (default **off**).
+**Settings (phone → Settings, persisted in `user://settings.cfg` exactly like the shipped SFX slider):** Master, Music, SFX and Announcer volume sliders; an **Announcer on/off** toggle; **Subtitles** on/off (default **on**).
 
 ### 3.2 `VoiceDirector` (third autoload, `Assets/Audio/`)
 
 Same idiom as `UiSfx`: `Instance`, `ProcessMode.Always`, pooled `AudioStreamPlayer`s, no allocation on the play path.
 
-- **Two channels:** `Dialogue` (voice notes + cutscene VO) and `Booth` (announcer). Each plays one clip at a time.
-- **Priority** (higher interrupts lower with a 150 ms fade): cutscene VO > big-play call > voice note (user tapped play) > routine call.
+- **One channel:** `Booth` (announcer calls, including a call used as a cutscene's audio bed). It plays one clip at a time.
+- **Priority** (higher interrupts lower with a 150 ms fade): big-play call (or cutscene bed) > routine call.
 - **Loading:** `VoiceBank` resources are loaded asynchronously (`ResourceLoader.LoadThreadedRequest`). The avatar's team booth bank is preloaded at boot and whenever the avatar's team changes (about 120 clips, ~3–5 MB). Other banks (highlights, draft night, opponents' banks for highlights) load on demand and are released by LRU.
 - **Subtitles:** every play request publishes a `SubtitleRequested(speakerLabel, textKey, durationMs)` signal, which the active scene's subtitle strip renders. Subtitle text comes from the strings table, keyed by `clip_id`.
 - **Boundary:** `VoiceDirector` is presentation-only. It consumes beats and signals and never writes the DB or sim state. Its call-variant randomness uses its **own** presentation RNG, never the sim's `RngState`, so the baseball sim's determinism and the Monte Carlo guards are untouched.
@@ -233,13 +232,9 @@ Once per game day, the Dashboard's **Around the League** card lists up to 3 stan
 
 ---
 
-## 8. Phone voice notes
+## 8. ~~Phone voice notes~~ (removed 2026-10-10)
 
-- **Contacts:** `Assets/Narrative/Contacts/contacts.json` rows gain `"voice_profile": "<id>"`. Contacts without one stay text-only.
-- **Event JSON:** an optional `"voice_note": "vn_<event_id>_<n>"` on the event's opening message, on a choice outcome text, or on a delayed text (the framework's existing message seams, [gritty_event_framework.md](gritty_event_framework.md), [presentation_layer_narrative.md](presentation_layer_narrative.md) §4). **The voice note's script is the message text verbatim**, so the bubble doubles as the transcript.
-- **Phone UI:** the bubble shows a play button, duration and waveform. It plays on tap; autoplay is off by default. It never autoplays during an at-bat or cutscene. A notes-unread badge works like the shipped message badge.
-- **Variable people:** threads whose person can vary (e.g. `hs_sweetheart`, generated partners) need one take per voice profile they can map to (the profile chosen from the person's stored gender and age band). If that isn't authored, the message stays text-only. Never play a mismatched voice.
-- **Launch budget, about 200 notes, in priority order:** the DIRT arc's key beats (the ask, the indictment, going straight), coach moments (benched, made inactive, recruited, drafted), partner/family milestones (proposal, birth, a loss), and agent moments (declare, draft, signing bonus).
+Cut by owner directive: voice is broadcasters only. Phone messages stay text. There is no `voice_note` event field, no contact `voice_profile`, no voice-note bubble and no voice-note budget. Content that authors a `voice_note` fails `check_event_graph_integrity` #9.
 
 ---
 
@@ -259,12 +254,12 @@ Once per game day, the Dashboard's **Around the League** card lists up to 3 stan
 
 1. The manifest parses; every `file` exists; no `.ogg` under `Assets/Audio/Voice/` is missing from the manifest (no orphans).
 2. **Coverage:** every College/Pro announcer has every category at ≥ its minimum count (§6), and each signature tagline appears verbatim. Every HS pool voice has all 24 stingers.
-3. **Durations:** announcer clips ≤ 6 s; voice notes ≤ 25 s; cutscene VO ≤ the line's slot in its cutscene definition.
+3. **Durations:** announcer clips ≤ 6 s.
 4. **Loudness** within ±1 LU of −18 LUFS (measured values stored by VoiceGen).
-5. **References:** every `voice_note` in the event content, every cutscene VO line and every persona `voice_profile` resolves. Every `clip_id` has a strings-table subtitle.
+5. **References:** every cutscene `announcer_of` + category and every persona `voice_profile` resolves, and **every voice reference anywhere is an announcer-bank clip** (no non-broadcaster bank may exist). Every `clip_id` has a strings-table subtitle.
 6. **Secrets:** the repo contains no ElevenLabs API key pattern.
 
-`check_event_graph_integrity` gains check #9 (`voice_note` references resolve). The Monte Carlo and Gritty harnesses stay **inert** for every Phase 14 slice, because no `Assets/Simulation/` code is touched.
+`check_event_graph_integrity` check #9 is now the inverse: **no event may author a `voice_note`** (2026-10-10). The Monte Carlo and Gritty harnesses stay **inert** for every Phase 14 slice, because no `Assets/Simulation/` code is touched.
 
 ---
 
@@ -276,7 +271,7 @@ Once per game day, the Dashboard's **Around the League** card lists up to 3 stan
 | **14b** | `Tools/VoiceGen` + manifest + mastering + licensing log + `AudioManifestHarness` / `validate_audio_manifest` | Pro | Harness green on a 20-clip pilot bank |
 | **14c** | 56 personas + 3 HS pool personas + all announcer scripts | Flash → Pro review | Archetype distribution rule; tagline review by the user |
 | **14d** | `BroadcastBooth` + at-bat integration + Around the League card | Pro (Flash: card UI) | Manual playtest; inert MC |
-| **14e** | Voice notes: contact profiles, `voice_note` field, phone bubble UI, ~200 scripts | Flash → Pro review | GrittyEvents + check #9 |
+| ~~**14e**~~ | ~~Voice notes~~: **cut 2026-10-10** (broadcasters only) | — | — |
 | **14f** | Full generation run + listening QA + retakes | Flash (run) + user (taste) | `validate_audio_manifest` 100% |
 
 **Open items:** a Pro color commentator (a second voice per booth; stretch, doubles Pro cost); the **soundtrack** (licensed or commissioned music, not ElevenLabs; separate decision); **crowd/foley** beds for the Ambience bus (stock SFX libraries or ElevenLabs Sound Effects through the same pipeline and disclosure).

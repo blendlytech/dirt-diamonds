@@ -1,6 +1,6 @@
 # Design — Criminal Underworld Content Arc: `DIRT-3` "Product & Turf"
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No tier gates here, so schema v14 changes nothing. Key beats gain voice notes ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §8) and story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6).
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No tier gates here, so schema v14 changes nothing. Key beats gain story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6). (Voice notes were cut on 2026-10-10.)
 
 **Author:** Claude Opus 4.8 (narrative architecture) · **Slice:** Content arc, batch 3 of the criminal spine · **Status:** spec written for Sonnet 5 to author `DIRT-3` against; Fable 5 reviews + gates. Companion to `docs/design/criminal_underworld_content_arc.md` (the arc contract + `DIRT-1`) and `docs/design/criminal_underworld_dirt2_the_fix.md` (`DIRT-2`) — read both first — and to `docs/design/hustle_minigames_depth_pass.md` + `docs/design/hustles_narcotics_fencing.md` (the mini-games whose state this batch finally *reads*). Obeys `docs/design/gritty_event_framework.md` (the closed content vocabulary).
 

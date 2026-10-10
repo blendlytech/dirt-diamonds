@@ -235,13 +235,13 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 | :-- | :-- | :-- | :-- |
 | New game | HS team assigned | Opening story cutscene | — |
 | HS playoff clinch / State title | Dashboard + phone | Milestone (title only) | HS radio pool call |
-| Recruiting offers → Signing Day | Phone decision | **Signing Day** | Voice note from the new college coach |
+| Recruiting offers → Signing Day | Phone decision | **Signing Day** | Text from the new college coach |
 | First college game | At-bat view | Short milestone | College team announcer |
 | National Ranking milestones | Dashboard | — | — |
-| Declare for the Draft | Phone decision | — | Voice note (agent) |
+| Declare for the Draft | Phone decision | — | Text (agent) |
 | **Draft Night** | Phone + dashboard | **Draft Night** | Drafting team's announcer "we've drafted…" clip |
 | First Pro game | At-bat view | Milestone | Pro team announcer intro |
-| Made inactive this week | Phone (coach) | — | Optional voice note |
+| Made inactive this week | Phone (coach) | — | Coach text |
 | Team forfeits | Phone + dashboard | — | — |
 | Playoff series win / Championship | Dashboard | **Championship** | Announcer signature win call |
 

@@ -58,7 +58,7 @@ Phase 11's discipline holds: **every achievement traces to a bus event or persis
 
 **AI content disclosure (Steam content survey).** The game contains **pre-generated** AI content only, no live-generated content:
 
-- **Voice:** all announcer, voice-note and cutscene voice lines are synthesized with **ElevenLabs** during development, reviewed by humans, and shipped as audio files.
+- **Voice:** all announcer lines (the only voiced lines; voice is broadcasters only as of 2026-10-10) are synthesized with **ElevenLabs** during development, reviewed by humans, and shipped as audio files.
 - **Art:** any AI-assisted art (portraits, scene and cutscene art) is generated during development and curated and edited by humans.
 - **Guardrails to state:** no runtime generation; no voices or likenesses of real people; every line and image is human-reviewed before release.
 

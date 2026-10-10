@@ -2,7 +2,7 @@
 
 Lead: Gemini 3.1 Pro (orchestration + critical-path code). Delegates: Gemini 3.1 Pro Math (statistical/mathematical design), Gemini 3.8 Flash (high-volume, well-specified implementation). No phase begins until the previous phase's exit criteria pass (except where the Phase Dependency Map allows parallel slices).
 
-**The game:** see [GAME_VISION.md](GAME_VISION.md), the canonical pitch as of 2026-10-09 (it replaces the missing `GAME_IDEA.md`). In short: a commercial Steam game that raises a ballplayer HS → College → Draft → Pro in a fictional league, with a gritty life sim, ElevenLabs-voiced team announcers and phone voice notes, in-engine motion-comic cutscenes, and a completely redesigned visual identity. **Phases 0–12 are complete; Phases 13–17 are the road to launch.**
+**The game:** see [GAME_VISION.md](GAME_VISION.md), the canonical pitch as of 2026-10-09 (it replaces the missing `GAME_IDEA.md`). In short: a commercial Steam game that raises a ballplayer HS → College → Draft → Pro in a fictional league, with a gritty life sim, ElevenLabs-voiced team announcers (voice is broadcasters only, 2026-10-10), in-engine motion-comic cutscenes, and a completely redesigned visual identity. **Phases 0–12 are complete; Phases 13–17 are the road to launch.**
 
 ## Model Delegation Doctrine
 
@@ -205,12 +205,12 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 
 - **ElevenLabs, offline only:** `Tools/VoiceGen` renders script sheets into mastered Ogg clips plus a manifest; the API key comes from the environment and never enters the repo or a build; a licensing log records every run; a human listens to every clip.
 - **Play-by-play announcers:** 56 unique booths (24 College + 32 Pro), each with a fictional persona, archetype and **signature taglines** (home run, win, strikeout, grand slam, walk-off); ~120 clips per Pro booth, ~62 per College booth; **3 shared HS local-radio voices** with school-name stingers. Your team's booth calls your games as radio homers; other booths appear in Around the League highlights and on Draft Night. Sound bites only, and no spoken player names.
-- **Phone voice notes** on about 200 story-beat texts (`voice_note` field in event JSON; `voice_profile` on contacts).
+- ~~Phone voice notes~~ **cut 2026-10-10:** voice is broadcasters only. Phone messages and cutscene dialogue stay text.
 - **Runtime:** Voice / Announcer / Music / Ambience buses with sidechain ducking; a `VoiceDirector` autoload (presentation RNG only, so it's calibration-inert); a `BroadcastBooth` on the at-bat beat sequencer; a subtitle strip; volume sliders and toggles.
 
-**Slices:** 14a buses + VoiceDirector → 14b VoiceGen + manifest + AudioManifestHarness → 14c personas + scripts → 14d BroadcastBooth + highlights → 14e voice notes → 14f full generation + listening QA.
+**Slices:** 14a buses + VoiceDirector → 14b VoiceGen + manifest + AudioManifestHarness → 14c personas + scripts → 14d BroadcastBooth + highlights → ~~14e voice notes~~ (cut) → 14f full generation + listening QA.
 
-**Exit criteria:** every College/Pro team's announcer calls a live game with its taglines; HS games use the radio pool; voice notes play in the phone; `validate_audio_manifest` passes at 100% coverage; MC and Gritty harnesses untouched.
+**Exit criteria:** every College/Pro team's announcer calls a live game with its taglines; HS games use the radio pool; `validate_audio_manifest` passes at 100% coverage; MC and Gritty harnesses untouched.
 
 ## Phase 15 — Visual Redesign → Milestone M10 "The Look, Reborn"
 
@@ -234,7 +234,7 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 - **Four kinds:** story (~20), milestone (~10: Signing Day, Draft Night, first Pro game, championships…), **achievement** cards (one per achievement), and **big plays** (8 kits × 3 tier styles; the announcer's call is the audio bed).
 - `CutsceneDirector` triggers come from the bus (new additive events `AchievementUnlocked`, `DraftCompleted`, `RecruitingCommitted`, `ChampionshipWon`) and from `BroadcastBooth.BigPlay`. Queue and rate limits; the game clock soft-pauses; everything is skippable; reduce-motion supported.
 
-**Slices:** 16a player → 16b director + events → 16c big plays → 16d achievement cards → 16e story/milestone content. Depends on 14a/14b (VO) and 15a/15b (art direction).
+**Slices:** 16a player → 16b director + events → 16c big plays → 16d achievement cards → 16e story/milestone content. Depends on 14a/14b (booth calls as audio beds) and 15a/15b (art direction).
 
 **Exit criteria:** every launch cutscene plays from its real trigger; `CutsceneHarness` green (refs, durations, reachability); MC and Gritty harnesses inert.
 

@@ -1,6 +1,6 @@
 # Presentation Layer & Narrative Delivery — Design (Phase 10, "The Look")
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The visual identity (§3) and portrait house style (§6) are **superseded** by [visual_redesign.md](visual_redesign.md) (complete redesign). **Still in force:** the messages-as-narrative architecture (§2, §4) and the scouting grade curve (§5). Voice notes extend §4 ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §8); cutscenes in [cutscenes_motion_comic.md](cutscenes_motion_comic.md).
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The visual identity (§3) and portrait house style (§6) are **superseded** by [visual_redesign.md](visual_redesign.md) (complete redesign). **Still in force:** the messages-as-narrative architecture (§2, §4) and the scouting grade curve (§5). Messages stay text (voice notes were cut on 2026-10-10); cutscenes in [cutscenes_motion_comic.md](cutscenes_motion_comic.md).
 
 **Owner of this doc:** Opus 4.8 (design only — NO code). Phase 10 is the first phase whose
 center of gravity is UI, so the delegation inverts the usual split: **Sonnet 5 owns the

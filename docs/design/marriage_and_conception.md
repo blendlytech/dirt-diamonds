@@ -1,6 +1,6 @@
 # Design — Marriage & Conception: the `Partner` Writer and the `conceive_child` Life-Event Consequence
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. Proposal, wedding and birth are launch story cutscenes with voice notes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6).
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. Proposal, wedding and birth are launch story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6), captions only. **2026-10-10:** pregnancy (planned and unplanned, never abortion), placement for adoption, adopting in, and either-gender partners are extended in [temptation_and_lineage.md](temptation_and_lineage.md) §5–§6.
 
 **Author:** Claude Opus 4.8 (architecture) · **Phase:** 7 (Gritty Events — the deferred life-event consequence) · **Status:** design only — **no code written this pass.** This is the spec Fable 5 implements the engine plumbing against and Sonnet 5 authors the event content against (model split in §8). Companion to `gritty_event_framework.md` (which defers this in §4/§9) and `heir_mechanics.md` (which defers the partner system in §11.1/§11.2 and waits on it for the two-parent bloodline path).
 

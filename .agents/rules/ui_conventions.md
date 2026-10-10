@@ -38,9 +38,8 @@
 
 ## Audio, Voice & Subtitles (Phase 14 — `docs/design/voice_and_broadcast_audio.md`)
 
-- Play UI sounds through `UiSfx` and voice (announcer, voice notes, cutscene VO) through `VoiceDirector`. Never create `AudioStreamPlayer`s ad hoc in scenes.
+- Play UI sounds through `UiSfx` and announcer calls (including a call used as a cutscene bed) through `VoiceDirector`. Never create `AudioStreamPlayer`s ad hoc in scenes. Voice is broadcasters only: phone messages and cutscene dialogue are text.
 - Every spoken line shows a subtitle from the strings table (keyed by `clip_id`) when subtitles are on.
-- Voice notes never autoplay during an at-bat or cutscene.
 
 ## Cutscenes (Phase 16 — `docs/design/cutscenes_motion_comic.md`)
 

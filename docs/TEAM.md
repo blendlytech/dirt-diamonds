@@ -14,8 +14,8 @@
 | **Claude Opus 5.5** | **Integration lead and chief architect** | The Phase 13 critical path in the calibrated core (roster capacities, schedules, pipeline/draft, re-band); final merge gate for every slice; writing task briefs for other models; reviewing GPT and Gemini Pro work; narrative quality (story cutscene scripts, store copy); release-candidate test plan | Merging its own sim changes without an independent review; owner-only actions |
 | **Gemini 3.1 Pro** | **Senior engineer, presentation runtime** | Phase 14 runtime (`VoiceDirector`, buses, `BroadcastBooth`); Phase 16 runtime (`CutscenePlayer`, `CutsceneDirector`, new Core events); Phase 13 playoffs (13-4) and roster lock/forfeits (13-5); Phase 17a achievements/presence; **independent reviewer of Claude Opus's sim diffs** and of Sonnet's UI | Content writing at volume |
 | **Gemini 3.1 Pro Math** | **Calibration and math owner** | Every "is the number right" question: per-tier bands and the new Pro guard, College ranking weights, short-rest/overuse risk, draft-pool conservation, announcer call-density weights | Shipping code without the harness proving its math |
-| **Gemini 3.8 Flash** | **Content at volume** | Announcer personas and ~5,600 script lines (14c); ~200 voice-note scripts (14e); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
-| **Claude Sonnet 5.5** | **UI and feature engineer** | Phase 15 design system and screen rebuilds (15b, 15c, 15e); the Phase 13 league UI (bracket, draft board, recruiting, roster status, standings); 13-7 ripple fixes; the Around the League card and phone voice-note bubble | Calibrated-core changes |
+| **Gemini 3.8 Flash** | **Content at volume** | Announcer personas and ~5,600 script lines (14c); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
+| **Claude Sonnet 5.5** | **UI and feature engineer** | Phase 15 design system and screen rebuilds (15b, 15c, 15e); the Phase 13 league UI (bracket, draft board, recruiting, roster status, standings); 13-7 ripple fixes; the Around the League card | Calibrated-core changes |
 | **GPT 6 Astra Pro** | **Standalone tools and release paperwork** | Self-contained tools with their own test suites: `Tools/VoiceGen` (brief ready), `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`; the third-party notices generator; drafts of the Phase 17b legal/disclosure package | Game code under `Assets/`; real API runs; anything involving the live key |
 
 ---
@@ -36,7 +36,7 @@
 | **14b** VoiceGen + AudioManifestHarness | GPT Astra Pro | Claude Opus | Pilot run (your key) |
 | **14c** 56 personas + scripts | Flash | Claude Opus (voice/quality) | **Approve taglines** |
 | **14d** BroadcastBooth + highlights | Gemini Pro (+ Sonnet: card UI) | Claude Opus | Playtest |
-| **14e** voice notes | Flash (scripts) + Sonnet (bubble UI) | Claude Opus | — |
+| ~~**14e** voice notes~~ | **Cut 2026-10-10** (broadcasters only) | — | — |
 | **14f** full generation + QA | Flash (retake sheets) | — | **Listening QA** |
 | **15a** art direction | Claude Opus (direction briefs + prompt packs) | — | **Pick the direction** |
 | **15b** design system | Sonnet | Gemini Pro | Component gallery |

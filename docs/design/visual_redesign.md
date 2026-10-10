@@ -46,7 +46,7 @@ The title is the art direction. The player lives in two visual worlds, and **the
 One **Godot `Theme` resource family** under `Assets/UI/Theme/` is the single retrofit lever (same principle as Phase 10a, rebuilt from zero):
 
 - **Tokens:** color (neutral ramps; semantic success/warn/danger/info; DIAMOND and DIRT palettes; per-team triplets loaded from `Assets/Data/Teams/team_colors.json`), type scale (display / headline / title / body / caption / numeric), spacing (4-pt grid), radii, elevation, border styles, and motion durations/easings as `const`s in one `UiMotion` class.
-- **Components:** button (primary/secondary/ghost/danger), card, stat tile, meter/progress bar, tab bar, list row, message bubble (text / voice note / choice chips), scorebug, lower-third, bracket node, draft card, toast, modal, subtitle strip.
+- **Components:** button (primary/secondary/ghost/danger), card, stat tile, meter/progress bar, tab bar, list row, message bubble (text / choice chips), scorebug, lower-third, bracket node, draft card, toast, modal, subtitle strip.
 - **Fonts:** only licenses that permit commercial game distribution (SIL OFL or bought commercial licenses). Every font's license file is kept in `Assets/UI/Fonts/LICENSES/` and listed in the third-party notices ([steam_commercial_release.md](steam_commercial_release.md) §4).
 - **Accessibility built in:** a colorblind-safe semantic palette (outcome colors never rely on red/green alone), a text-size setting (100/115/130%), a reduce-motion setting (it also governs cutscene camera moves), subtitles default on, and focus outlines.
 
@@ -69,7 +69,7 @@ One **Godot `Theme` resource family** under `Assets/UI/Theme/` is the single ret
 | **Shell** | Home layout (DIAMOND dashboard + phone), top bar (date, clock, funds), time controls |
 | **Baseball** | At-bat view (broadcast scorebug, strike zone, pitch reveal, count/bases/score, subtitle strip for announcer), box score, standings (conferences/divisions), leaders, playoff bracket, National Ranking, Draft board / Draft Night, Recruiting offers, roster status (active/inactive), scouting report card, player page, team page |
 | **Life** | Schedule planner (hour blocks), calendar (weekly game days, postseason), needs panel, household board, school/GPA |
-| **Phone (DIRT portal)** | Lock screen, home, Messages (threads, bubbles, voice notes, choice chips), Events/History, Contacts, Bank, Marketplace/items, Calendar, Player, League, Settings, phone-tier skins (absorbs Slice E: each phone tier is a distinct physical model) |
+| **Phone (DIRT portal)** | Lock screen, home, Messages (threads, bubbles, choice chips), Events/History, Contacts, Bank, Marketplace/items, Calendar, Player, League, Settings, phone-tier skins (absorbs Slice E: each phone tier is a distinct physical model) |
 | **Hustles** | Narcotics, Fencing, Robbery, Texas Hold'em, Legal Work. Each gets its own environment art and a DIRT treatment while keeping the HustleFeel reveal timing |
 | **Overlays** | Event choice prominence (badge + banner), tutorial overlay, toasts, modals, cutscene player chrome (skip, subtitles) |
 

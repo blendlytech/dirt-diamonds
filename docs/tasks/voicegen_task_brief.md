@@ -8,7 +8,7 @@
 
 ## 1. Context (read this first)
 
-*Dirt & Diamonds* is a commercial Godot 4 + C# baseball and life-sim game heading to Steam. Every spoken line in the game (team play-by-play announcers, phone voice notes, cutscene voice-over) is **pre-generated offline** with the ElevenLabs text-to-speech API and shipped as Ogg Vorbis files. The shipped game never calls ElevenLabs.
+*Dirt & Diamonds* is a commercial Godot 4 + C# baseball and life-sim game heading to Steam. Every spoken line in the game is a **broadcaster** line (team play-by-play announcers and the HS radio pool; voice is broadcasters only as of 2026-10-10, with no voice notes or cutscene VO), **pre-generated offline** with the ElevenLabs text-to-speech API and shipped as Ogg Vorbis files. The shipped game never calls ElevenLabs.
 
 Your job is the offline tool that does the generating: a standalone C# console app that reads **script sheets** (JSON lists of lines to speak), calls ElevenLabs only for lines that are new or changed, masters the audio with ffmpeg, writes `.ogg` files into the game's asset folder, and maintains a **manifest** the game and validators read.
 
