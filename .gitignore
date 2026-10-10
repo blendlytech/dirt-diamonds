@@ -40,3 +40,7 @@ Desktop.ini
 
 # Local Claude settings (machine-specific permissions)
 .claude/settings.local.json
+
+# Environment Variables
+.env
+
