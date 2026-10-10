@@ -24,7 +24,8 @@ Read before starting (short):
 ## 2. Hard constraints
 
 - **Touch only:** `Tools/VoiceGen/**` (new), `DirtAndDiamonds.sln` (add the project under the existing `Tools` solution folder), `.gitignore` (temp folders only), and the sample files listed in §8. **Do not touch** `Assets/` code, `Assets/Simulation/`, `DirtAndDiamonds.csproj`, other tools, or game scenes.
-- **No secrets anywhere.** The API key is read **only** from the `ELEVENLABS_API_KEY` environment variable. Never write it to disk, the manifest, logs or console output, and never accept it as a CLI argument. Redact it in any error or HTTP dump.
+- **No secrets anywhere.** The API key comes from `ELEVENLABS_API_KEY`: first the process environment variable; if that's unset, the tool reads it from the **repo-root `.env` file** (git-ignored and untracked; the owner keeps the key there). Parse `.env` minimally: `KEY=value` lines, `#` comments, optional surrounding single or double quotes stripped, whitespace trimmed. Read only that one key and ignore the rest. Never write the key to disk, the manifest, logs or console output; never accept it as a CLI argument; never print `.env` contents; redact the key in any error or HTTP dump. If neither source has the key, a real `generate` exits 2 with a message naming both places to put it.
+- **Never stage or commit `.env`**, and never create a `.env` in the repo yourself.
 - **No network during self-test.** The self-test must pass on a machine with no API key and no internet.
 - **Project settings:** `net8.0`, `LangVersion 12.0`, `Nullable enable`, `ImplicitUsings enable`, `OutputType Exe`, `RootNamespace DirtAndDiamonds.Tools.VoiceGen`, matching the other `Tools/*` projects.
 - **Dependencies:** BCL only (`System.Net.Http`, `System.Text.Json`, `System.Security.Cryptography`, `System.Diagnostics.Process`). **No NuGet packages.** Audio processing shells out to `ffmpeg`. It's installed on the owner's machine (winget `Gyan.FFmpeg`, v9.x, on PATH); also allow an `--ffmpeg <path>` override.
@@ -175,7 +176,7 @@ Print one `PASS`/`FAIL` line per check and a **recap of every failed check name 
 4. Incremental: run twice and the second run makes zero client calls; edit one line's text and exactly one call is made; bump one `take` and exactly one call is made; `--force` + `--only` makes exactly one call.
 5. Retries: fake 429 ×2 then success → generated; fake 500 ×5 → that clip fails and the others continue (exit 1); fake 401 → run stops with exit 3 and the manifest still holds earlier successes.
 6. A `REPLACE_ME` profile is refused in a real run and allowed in a dry run.
-7. **Secret hygiene:** with `ELEVENLABS_API_KEY` set to a sentinel value, run a fake generate; the sentinel appears in **no** file the tool wrote (manifest, log, work files) and **not** in captured console output.
+7. **Secret hygiene:** with `ELEVENLABS_API_KEY` set to a sentinel value, run a fake generate; the sentinel appears in **no** file the tool wrote (manifest, log, work files) and **not** in captured console output. Repeat with the sentinel supplied only through a temp-dir `.env` (quoted with single quotes, with a comment line and an unrelated key present): the key resolves correctly, the environment variable wins when both are set, and the sentinel still never leaks. Never point this test at the real repo-root `.env`.
 8. Atomicity: simulate a crash mid-run (throw after N clips); the manifest on disk parses and contains exactly the completed clips.
 9. Manifest round-trip: write → read → identical; ordering is stable.
 10. Orphans: a clip removed from its sheet is reported by `status`; `--prune` deletes its file and entry; without `--prune`, nothing is deleted.
@@ -240,6 +241,6 @@ All self-test file output goes to a temp directory, never into `Assets/`.
 
 1. Review the diff (Gemini 3.1 Pro).
 2. In ElevenLabs, design the Ray Calloway voice (Voice Design, original), then put its voice id and the chosen model id into `voice_profiles.json`.
-3. Set `ELEVENLABS_API_KEY` in your environment (never in a file).
+3. Keep `ELEVENLABS_API_KEY` in the repo-root `.env` (git-ignored and untracked as of 2026-10-10) or in a system environment variable. Never commit it.
 4. Run `generate --plan-tier "<your plan>"` on the pilot sheet, listen to all 20 clips, bump `take` on any bad ones, re-run.
 5. Commit the tool, the sheet, the 20 `.ogg` files, their Godot `.import` files (after opening the editor) and the manifest. Then move on to slice 14c (the other announcers) and the AudioManifestHarness.

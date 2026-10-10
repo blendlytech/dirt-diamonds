@@ -41,7 +41,7 @@ Primary objective: highly optimized, performant code with strict separation betw
 ## 5. Audio & Voice (Phase 14, spec: [docs/design/voice_and_broadcast_audio.md](docs/design/voice_and_broadcast_audio.md))
 
 - **ElevenLabs is offline-only.** Clips are generated with `Tools/VoiceGen` and shipped as Ogg files with `Assets/Audio/Voice/voice_manifest.json`. The shipped game never calls an AI service.
-- **API keys live only in environment variables** (`ELEVENLABS_API_KEY`). Never write a key to the repo, logs, manifests or builds.
+- **API keys live only in environment variables or the repo-root `.env`** (`ELEVENLABS_API_KEY`). `.env` is git-ignored and must never be tracked or staged; the repo is **public** and an auto-committer pushes. Never write a key to the repo, logs, manifests or builds.
 - **No real people:** no voice cloned from or imitating a real person or broadcaster. No spoken player names; names appear in subtitles only.
 - Every generation run is logged in `docs/legal/elevenlabs_generation_log.md`. Every clip gets a human listening pass.
 - Buses: Master → SFX / Voice / Announcer / Music / Ambience. Every spoken line has a strings-table subtitle.

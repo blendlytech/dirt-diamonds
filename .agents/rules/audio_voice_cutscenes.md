@@ -5,7 +5,7 @@ Specs: `docs/design/voice_and_broadcast_audio.md` (Phase 14) and `docs/design/cu
 ## ElevenLabs Voice Production
 
 - **Offline only.** Voices are rendered with `Tools/VoiceGen` on a developer machine and shipped as Ogg Vorbis files listed in `Assets/Audio/Voice/voice_manifest.json`. No runtime TTS, no network calls from the game.
-- **Secrets:** the API key is read from `ELEVENLABS_API_KEY` only. Never commit, log or embed it. A key in the repo is a release blocker.
+- **Secrets:** the API key is `ELEVENLABS_API_KEY`, read from the environment or, failing that, the repo-root `.env` (git-ignored, **never tracked**; check with `git ls-files .env`, which must print nothing). Never commit, log, print or embed it. A key in the repo is a release blocker, and a key that ever reached git history must be revoked in ElevenLabs.
 - **Rights:** generate only on an ElevenLabs plan that grants commercial rights at generation time, and log every run in `docs/legal/elevenlabs_generation_log.md`. Use Voice Design (original) voices, or Voice Library voices whose terms allow commercial use.
 - **No real people:** never clone or imitate a real person, athlete or broadcaster. All announcers are fictional personas.
 - **No spoken names** of avatars or generated NPCs. Call by role and team; names go in subtitles.
