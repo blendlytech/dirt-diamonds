@@ -37,7 +37,7 @@ The `Kind == Read` branch of `PitchChain.SimulatePa` (and `ReadInputModel`) stop
 
 1. GEMINI.md (binding), docs/README.md, docs/progress.md, docs/TEAM.md, and the rule file `.agents/rules/` for the baseball engine.
 2. [G-2_pitching_context_pack.md](G-2_pitching_context_pack.md): a compact, verified map of the resolver, pitch chain, Read model and fatigue, with measured numbers.
-3. [pitching_mode.md](../design/pitching_mode.md) and [G-2_pitching_mode_review.md](../review/G-2_pitching_mode_review.md). Claude Fable 5.1 is revising the spec on `g2/fable-design`. If that revision has landed (`git log g2/fable-design`), read the revised spec; otherwise read the review alongside it.
+3. [pitching_mode.md](../design/pitching_mode.md) and [G-2_pitching_mode_review.md](../review/G-2_pitching_mode_review.md). The spec is at **rev 2** on branch `g2/spec-rev2`, with the review's B1–B3 and C1–C4 applied (see the review's "Resolution" section). Read it from that branch. **§3.5 (centering) and §4.4 (zero-mean anticipation terms) are the template for your own centering**: the "indicator minus reference probability" form carries over directly to a blind reader.
 4. The code: `Assets/Simulation/Baseball/PitchChain.cs` (`SimulatePa`, `ReadInputModel`), `InteractiveBatterPolicy.cs`, and `Tools/MonteCarloHarness/Program.cs` (the A0 sweep and suite 7).
 5. [at_bat_read_input_model.md](../reference/at_bat_read_input_model.md) (the shipped contract you're superseding) and [at_bat_presentation.md](../reference/at_bat_presentation.md) (what the reveal shows).
 

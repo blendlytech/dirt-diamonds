@@ -1,5 +1,7 @@
 # Task Brief: R-1 — Full-Project Review
 
+> **Status (2026-10-10): not started.** Claude Fable 5.1 was pointed at the narrower G-2 pitching-mode design first, and its prepaid API credit ran out after that ([pitching_mode.md](../design/pitching_mode.md) rev 1; rev 2 was applied by Claude Opus 5.5). No `docs/review/fable_5_1/` output exists. **Before anyone resumes R-1:** §6's "known issues" list is still accurate, but the owner has since decided O1 (the skill band; gameplay_core §6), and G-2 has a full design. Skip §5's `03_gameplay.md` pitching-mode critique beyond checking rev 2, and scope the run against the credit available (§3 estimates about 1.36M tokens). Who runs it is the owner's call (TEAM.md §2).
+
 **Recommended model:** Claude Fable 5.1
 **Reviewer / triage:** the owner + Claude Opus 5.5 (integration lead)
 **Owner gate:** the owner accepts or rejects each proposal

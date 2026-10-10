@@ -47,10 +47,10 @@
 | **16a/16b** CutscenePlayer + Director + events | Gemini Pro | Claude Opus | — |
 | **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
 | **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Gemini Pro (wiring) | **Story sign-off** |
-| **G-1** attribute audit (verify gameplay_core §1, settle weights) | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **How much skill is worth** |
+| **G-1** attribute audit (verify gameplay_core §1, settle weights) | Claude Fable 5.1 (in R-1; **blocked: R-1 not started**) → Gemini Pro Math | Claude Opus | ~~How much skill is worth~~ (decided, O1) |
 | *(sequencing)* G-2 engine and G-8 both touch `PitchChain.SimulatePa` | GPT 6 Astra Pro owns both, so one model sequences them: **G-8a design → G-2a → G-2b → G-8b**, or G-8b sharing G-2's tilt helper | — | — |
 | **G-8** Read v2 batting re-band to the ±.100 OPS skill band (owner O1, 2026-10-10) | GPT 6 Astra Pro (design G-8a, then engine G-8b) | Claude Opus (design + merge gate), Gemini Pro (sim diff), Math (constants) | Accept the design; playtest |
-| **G-2** pitching mode: **design** (brief: [tasks/G-2_pitching_design_fable_brief.md](tasks/G-2_pitching_design_fable_brief.md)) → engine | **Design: Claude Fable 5.1** (owner, 2026-10-10; prepaid API credit, $5 approval steps) → **engine: GPT 6 Astra Pro** (owner reassignment 2026-10-10: G-2a, G-2b and G-2d engine; supersedes the owner column of pitching_mode.md §10) + Math; UI (G-2c, G-2d UI): Claude Sonnet | Design: Claude Opus (feasibility) + Gemini Pro Math (curves); engine: Gemini Pro (sim diff) + Claude Opus (spec fidelity, merge gate) | Owner accepts the spec; playtest |
+| **G-2** pitching mode: **design** (brief: [tasks/G-2_pitching_design_fable_brief.md](tasks/G-2_pitching_design_fable_brief.md); **rev 2 done**: Fable's rev 1 plus the feasibility review applied by Claude Opus, since Fable's credit ran out; awaiting Math curve review) → engine | **Design: Claude Fable 5.1** (owner, 2026-10-10; prepaid API credit, $5 approval steps) → **engine: GPT 6 Astra Pro** (owner reassignment 2026-10-10: G-2a, G-2b and G-2d engine; supersedes the owner column of pitching_mode.md §10) + Math; UI (G-2c, G-2d UI): Claude Sonnet | Design: Claude Opus (feasibility) + Gemini Pro Math (curves); engine: Gemini Pro (sim diff) + Claude Opus (spec fidelity, merge gate) | Owner accepts the spec; playtest |
 | **G-3** at-bat view rebuild (batting + pitching UI) | Claude Sonnet | Gemini Pro | Screenshot review; playtest |
 | **G-4** venue catalog (68) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
 | **G-5** venue art | Owner + AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste** |
@@ -69,7 +69,7 @@
 | **S-2** substance magnitudes | Math | Claude Opus | — |
 | **S-3** substance content + PED re-gate | Claude Opus (scripts) → Flash | Gemini Pro | — |
 | **S-4** the asterisk (press + record book) | Gemini Pro + Flash | Claude Opus | — |
-| **R-1** full-project review | Claude Fable 5.1 | Claude Opus (triage) | **Accept / reject proposals** |
+| **R-1** full-project review — **not started** (Fable 5.1's API credit ran out after the G-2 design, 2026-10-10; `docs/review/fable_5_1/` does not exist) | Claude Fable 5.1 (**owner to confirm: refund credit or reassign**) | Claude Opus (triage) | **Accept / reject proposals** |
 | **17a** achievements + presence | Gemini Pro | Claude Opus | — |
 | **17b** legal + notices drafts | GPT Astra Pro | Claude Opus | **Legal sign-off, trademark** |
 | **17c** store copy + trailer script | Claude Opus | — | **Approve** |

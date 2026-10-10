@@ -55,7 +55,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 - **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots (field, clubhouse, office, training room, stands, lot) and their own art. The at-bat shows the home park. Park factors are optional (off at launch unless approved).
 - **Handoff protocol:** every task names its recommended model. Every model stops when its task is done and tells the human which model is suggested next (spec §5, [TEAM.md](TEAM.md) §3).
 
-**Slices:** **G-1** attribute audit (Fable 5.1 in R-1 → Math) · **G-2** pitching mode design + engine (Opus + Math) · **G-3** at-bat view rebuild (Sonnet) · **G-4** venue catalog + screens (Sonnet + Flash) · **G-5** venue art (owner + AI art, Flash integration; inside 15d) · **G-6** stadium mapping + optional park factors · **G-7** fielding moments (if approved).
+**Slices:** **G-1** attribute audit (Fable 5.1 in R-1, not started → Math) · **G-2** pitching mode design (Fable 5.1; rev 2 applied by Opus) + engine (GPT 6 Astra Pro + Math; TEAM.md §2) · **G-3** at-bat view rebuild (Sonnet) · **G-4** venue catalog + screens (Sonnet + Flash) · **G-5** venue art (owner + AI art, Flash integration; inside 15d) · **G-6** stadium mapping + optional park factors · **G-7** fielding moments (if approved).
 
 **Exit criteria:**
 

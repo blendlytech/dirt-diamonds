@@ -4,14 +4,14 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ---
 
-## Current status (2026-10-10): vision v2 locked, docs reconciled, full review next
+## Current status (2026-10-10): vision v2 locked, G-2 pitching spec at rev 2, full review (R-1) not started
 
-**The game is defined** in [GAME_VISION.md](GAME_VISION.md) **v2**, which covers everything start to finish, including the lineage, temptation, vice and Trailblazer systems. **Next:** Claude Fable 5.1's independent full-project review ([tasks/fable_5_1_full_review_brief.md](tasks/fable_5_1_full_review_brief.md)), then the build continues from its accepted proposals.
+**The game is defined** in [GAME_VISION.md](GAME_VISION.md) **v2**, which covers everything start to finish, including the lineage, temptation, vice and Trailblazer systems. **The full-project review (R-1) has not started:** Claude Fable 5.1's credit ran out after the G-2 pitching design, which is now at rev 2. Who runs R-1, and when, is an owner decision. Meanwhile Phase G (G-2 Math review, then G-8a) and Phase 13 (13-0 → 13-1) can proceed.
 
 | Phase | Spec | State | Very next action (owner) |
 | :-- | :-- | :-- | :-- |
 | **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | Design complete | **13-0:** the MC flake is root-caused (random `Guid.NewGuid()` ids in `CareerManager`); an in-flight counter fix needs one change before merge ([tasks/13-0_review_careermanager_ids.md](tasks/13-0_review_careermanager_ids.md)); repair the `sqlite` MCP to point at a scratch DB. Then **13-1** schema v14 + world-gen (Claude Opus). |
-| **G Gameplay Core** (**high priority**) | [design/gameplay_core.md](design/gameplay_core.md) | Design draft | **G-1** attribute audit (Fable 5.1 within R-1 → Math) and the **G-2** pitching-mode design (Claude Opus), alongside 13-0/13-1. |
+| **G Gameplay Core** (**high priority**) | [design/gameplay_core.md](design/gameplay_core.md) | Design draft; [pitching_mode.md](design/pitching_mode.md) **rev 2** (branch `g2/spec-rev2`, unmerged) | **G-2:** Gemini Pro Math curve review of rev 2, then owner acceptance; then the engine (GPT 6 Astra Pro, G-8a → G-2a → G-2b → G-8b). **G-8a** Read v2 design (GPT) can start now. **G-1** is blocked on R-1. |
 | **L Lineage, Temptation & Vice** | [design/temptation_and_lineage.md](design/temptation_and_lineage.md), [design/substances_and_addiction.md](design/substances_and_addiction.md) | Design complete; **L-0 done** | **L-1** after 13-1 (schema v15 + identity + legends + poverty). |
 | **14 Voice & Broadcast Audio** | [design/voice_and_broadcast_audio.md](design/voice_and_broadcast_audio.md) | Design complete (broadcasters only) | 14a buses + `VoiceDirector` (Gemini Pro); 14b `Tools/VoiceGen` pilot (GPT Astra Pro; needs the owner's commercial ElevenLabs plan). Can run alongside 13. |
 | **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md) | Design complete | 15a style frames for both worlds. **The owner picks the art direction.** |
@@ -64,13 +64,17 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Very next steps
 
-1. **Claude Fable 5.1: the full-project review**, with Phase G (gameplay) as its first focus (R-1, per its brief). It writes to `docs/review/fable_5_1/`.
-2. **Owner + Claude Opus: triage** the review's proposals. Accepted ones update GAME_VISION and the specs first, then become slices.
-3. **Claude Opus: 13-0 → 13-1**, the critical path, which resumes after triage (or in parallel, if the owner prefers).
+1. **Owner: merge the G-work branch chain** `g2/fable-pack` → `g2/fable-design` → `g8/read-v2-brief` → `g2/spec-rev2` (docs only, linear; nothing from it is on `main` yet), or tell Opus to.
+2. **Gemini 3.1 Pro Math: G-2 curve review** of [pitching_mode.md](design/pitching_mode.md) rev 2 (the §8 constants, the §7.3 estimates, the §3.5 centering), then **owner acceptance** of the spec.
+3. **GPT 6 Astra Pro: G-8a** Read v2 design, per its brief (unblocked: rev 2's §3.5/§4.4 is the centering template).
+4. **Claude Opus: 13-0 → 13-1**, the critical path.
+5. **Owner: R-1.** Refund Fable's credit, reassign it (GPT 6 Astra Pro has plentiful usage), or split it into per-subsystem passes. G-1 waits on it.
 
 ---
 
 ## Session Log (compact)
+
+- **2026-10-10 — Fable 5.1 check-up + G-2 spec rev 2 (Claude Opus 5.5, branch `g2/spec-rev2`; docs only, no code/sim touch):** audited what Fable 5.1 left. R-1 (full review) **was never started**. Fable's only output is the G-2 design (`6ba9055`), which is high quality and sound, but its revision pass never ran. Re-derived every number in the spec and in the feasibility review (all of the review's reproduce), then applied the review in place as **rev 2**: B1 centering (new §3.5: analytic `ExecCenter`, zero-mean "indicator minus reference" anticipation terms, G1 restated with a ≤ .008 second-order residual), B2 waste-preserving mixture, B3 closed-form Reference `pIn`, C1 (Challenge re-derived at ≈ .78–.81 vs .728), C2 doubles, engine answers Q1–Q10 + Q3b folded in (verified in code). New findings fixed: C3 (control-20 scatter numbers), C4 (max-mass bound), D1 (`aT` miss term used `ρT[type]`, not zero-mean). Updated TEAM.md (R-1 not started; G-1 blocked; G-2 rev 2), BUILD_PLAN G-1/G-2 owners, the G-8 brief (points to rev 2) and the R-1 brief (status banner). Gates not run (docs only). **Next: Gemini Pro Math curve review of rev 2 ∥ G-8a by GPT 6 Astra Pro ∥ 13-0 (Opus); the owner decides R-1.**
 
 - **2026-10-10 — G-2 engine reassigned (owner; Claude Opus 5.5 recorded it):** the G-2a/b/d pitching engine moves from Claude Opus to **GPT 6 Astra Pro**; G-2c/G-2d UI stays with Sonnet; reviews are Gemini Pro (sim diff) + Opus (merge gate). GPT owns both `SimulatePa` slices and sequences them G-8a → G-2a → G-2b → G-8b. Opus is freed for Phase 13. TEAM.md takes precedence over the owner column of pitching_mode.md §10. **Next: the G-2 engine brief (Opus) after Fable's revision lands.**
 - **2026-10-10 — O1 decided + G-8 brief (Claude Opus 5.5; docs only):** owner: re-tune batting to the ±.100 OPS band and use GPT 6 Astra Pro. New [tasks/G-8_read_v2_batting_reband_brief.md](tasks/G-8_read_v2_batting_reband_brief.md); TEAM.md (GPT role expanded, G-8 row), gameplay_core §4/§6 updated. **Next: Fable G-2 revision (in flight, `g2/fable-design`) ∥ G-8a design by GPT 6 Astra Pro in `..\dnd-gpt`.**

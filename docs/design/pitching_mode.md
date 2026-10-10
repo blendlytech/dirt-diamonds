@@ -1,7 +1,7 @@
 # Pitching Mode: "Work the Book"
 
-**Status:** DESIGN (G-2), for feasibility review by Claude Opus 5.5 and curve review by Gemini 3.1 Pro Math; the owner accepts the spec.
-**Author:** Claude Fable 5.1, 2026-10-10, from [G-2_pitching_context_pack.md](../tasks/G-2_pitching_context_pack.md) (code facts as of `f983692`).
+**Status:** DESIGN **rev 2** (G-2). Feasibility review done ([G-2_pitching_mode_review.md](../review/G-2_pitching_mode_review.md)); its blockers B1–B3 and corrections C1–C4 are applied here. Next: Gemini 3.1 Pro Math curve review, then owner acceptance.
+**Author:** Claude Fable 5.1, 2026-10-10 (rev 1, `6ba9055`), from [G-2_pitching_context_pack.md](../tasks/G-2_pitching_context_pack.md) (code facts as of `f983692`). **Rev 2:** Claude Opus 5.5, 2026-10-10. Fable's API credit ran out before its revision pass, so the integration lead applied the review in place (§3.5 is new; §3.3, §4.4, §4.6, §5, §7.2, §8, §9.1, §9.3, §10 and §12 are edited). The design and its decisions are Fable's.
 **Scope:** the player-facing pitching mode for attended games when the avatar pitches. Self-contained: an engineer can implement from this file and Pro Math can tune from the constants table (§8) and the harness (§7).
 **Related:** [gameplay_core.md](gameplay_core.md) (Phase G), the shipped "Read the Pitch" batting model (pack §5).
 
@@ -29,7 +29,7 @@ Pitcher attributes, each felt per pitch: **stuff** → whiff tilt (through p* pl
 | :-- | :-- | :-- |
 | `Type` | `PitchType` from the arsenal (Fastball / Breaking / Offspeed as shipped) | Mixing types is the first thing the book reads, and velocity/movement live on the type. |
 | `TargetCell` | 0..16 (§2.1): 0..8 zone 3×3, 9..16 chase ring | Location is the second thing the book reads; corners vs heart vs chase is the execution skill, and control decides whether you get what you aimed at. |
-| `Effort` | float ∈ [−1, +1], UI snaps to {−1, −0.5, 0, +0.5, +1} | The one trade-off dial: +effort buys stuff and pays in scatter and fatigue; −effort tightens location and saves the tank. Mirrors batting's `approach`. |
+| `Effort` | `double` ∈ [−1, +1], UI snaps to {−1, −0.5, 0, +0.5, +1} | The one trade-off dial: +effort buys stuff and pays in scatter and fatigue; −effort tightens location and saves the tank. Mirrors batting's `approach`. |
 
 No fourth input. Sequencing (changing speeds, tunneling) and reading the book are *skills the player exercises through these three*, not extra controls. Pickoffs, holds, pitch-outs and intentional walks are out of scope for G-2 (owner Q4).
 
@@ -84,7 +84,7 @@ With first-pass constants (control 50, effort 0): `M = 1.10`. The in-zone probab
 | Ring side (9..12) | 0.15 | 0.15 |
 | Ring corner (13..16) | 0.02 | 0.28 |
 
-A corner target at control 50 lands in the zone 72% of the time, which matches the shipped binary `acc = 0.75`. At control 80, `M = 0.77`: corners 88%, ring sides 6% in zone and 6% waste. At control 20 (or a fatigued 50): `M = 1.43`: corners 56%, ring sides 24% in and 24% waste. Waste pitches are where wild pitches and hit batters come from (§9.1), so poor control *and* chasing the ring with a tired arm are both felt.
+A corner target at control 50 lands in the zone 72% of the time, which matches the shipped binary `acc = 0.75`. At control 80, `M = 0.77`: corners 88%, ring sides 6% in zone and 6% waste. At control 20 (or a fatigued 50): `M = 1.43`: corners 62%, ring sides 21% in and 21% waste. (Tail mass beyond 0.5 cells is `(M − 0.5)²/(2M²)`; rev 2 corrected these two numbers, C3.) Waste pitches are where wild pitches and hit batters come from (§9.1), so poor control *and* chasing the ring with a tired arm are both felt.
 
 **Max-effort cost:** `+1` effort widens `M` by 20% and costs 1.4 pitches of fatigue (§9.3); `−1` tightens it 20% and costs 0.6.
 
@@ -96,7 +96,7 @@ The executed cell gives `inZone` directly; **no `zDraw`/`zRef` location draw hap
 
 ## 3. Pitch quality and the Model branch
 
-### 3.1 Per-pitch terms (all ≈ 0 at the reference)
+### 3.1 Per-pitch terms (centered to zero mean at the reference, §3.5)
 
 | Term | Definition | Range |
 | :-- | :-- | :-- |
@@ -139,15 +139,19 @@ Location grades:
 | Side | 0 | 0 | 0 | the reference zone pitch |
 | Corner | −0.10 | +0.05 | −0.05 | painted |
 | Chase | −0.25 | +0.10 | −0.10 | swung at only when chased; weak contact |
-| Waste | forced Ball (§9.1) | | | never swung at |
+| Waste | Ball (§3.3 mixture, §9.1) | | | never swung at |
 
 ### 3.3 Resolution (one pitch)
 
 ```
 (ball, strike, inPlay) = neutral location-conditioned rates for this count/zRef/inZone   // exactly pack §4.3, s = 0.55
+if !inZone:                                    // waste-preserving mixture (rev 2, B2)
+  w        = WasteRef[count][type]             // E_ref[P(waste | out-of-zone, count, type)], §3.5
+  ballChase = max(0, (ball − w)/(1 − w))       // so w·1 + (1 − w)·ballChase = ball (the neutral out-of-zone rate)
+  k'        = (1 − ballChase)/(1 − ball);  strike *= k';  inPlay *= k';  ball = ballChase
 if loc == Waste: class = Ball (then §9.1 HBP draw)
 else:
-  wB = ball·exp(xBall);  wS = strike·exp(xStrike);  wP = inPlay·exp(xPlay);  normalize
+  wB = ball·exp(xBall);  wS = strike·exp(xStrike);  wP = inPlay·exp(xPlay);  normalize     // x's are the centered sums, §3.5
   class = draw(wB, wS, wP)                      // 1 NextDouble
   Ball   → ball
   Strike → at two strikes: foul with FoulShareOfStrikes (0.68, shipped) self-loops; else strike   // same draw as the neutral branch
@@ -155,7 +159,9 @@ else:
 flavor = presentation-only sub-result draw (§3.4)  // 1 NextDouble, never affects the class
 ```
 
-At the reference (`x = 0`, `q = 0`, in-zone rate = `zRef`) this reproduces the neutral chain's marginal and therefore p*. That is what gate G1 (§7.4) checks numerically; it holds analytically for the class draw and the BIP draw, and only the executed in-zone rate of the Reference bot is approximate (§7.2).
+**Why the mixture:** a Waste pitch is a certain ball, so treating it as an extra ball on top of the neutral out-of-zone rate would inflate the Reference walk rate (at 0-0, zRef .51: P(ball | out) .486 → .537 / .588 / .640 at 10 / 20 / 30% waste share). Instead the reference's own waste share is carved *out of* the neutral ball rate. A pitcher who throws more waste than the reference pays in walks; one who throws less earns chases. If `w > ball`, `ballChase` clamps at 0 and the Reference line drifts toward more walks in that cell. That needs low control in a pitcher-ahead count (estimated: control_eff ≲ 25 at two strikes, under 2% of Reference pitches); suite 8 reports the clamp rate.
+
+**What G1 claims (restated, rev 2):** with every term centered (§3.5), the waste mixture, and the Reference bot's executed in-zone rate equal to `zRef(count, type)` exactly (§7.2), the Reference bot reproduces the neutral chain's per-(count, in/out) class marginals and therefore p* **to first order**. Two second-order residuals remain, both bounded and expected well inside G1's ±.020: (1) Jensen's gap, since centered exponents still have `E[exp(x)] ≈ 1 + Var(x)/2` (first-pass σ(x) ≈ 0.15 gives about 1% relative weight inflation, mostly cancelled by renormalization), and the same convexity in `DrawBallInPlay` over centered `q`; (2) anticipation products such as `aZ·[inZone]`, which are zero-mean given the lean but correlate weakly with type through `typeShift`. Expected total: ≤ .008 opp OPS. G-2a runs G1 with no book (anticipation ≡ 0), so it isolates (1); G-2b re-runs it with the book.
 
 ### 3.4 Swing flavor (presentation-only)
 
@@ -171,15 +177,34 @@ InPlay  → Swing
 
 Pro Math can ignore this draw. It exists so the reveal (§9) can say "froze him" vs "swung through it" without a second resolution model.
 
+### 3.5 Centering at the Reference (rev 2, blocker B1)
+
+Rev 1 claimed the Reference bot sits at `x = 0` by construction. It doesn't: `t ≥ 0` (E_ref[t] ≈ 0.50), `vRel⁺ ≥ 0` (≈ +0.175 for the fastball), the location grades have a nonzero mean under the Reference's executed mix, and the anticipation leans are one-sided. Uncentered, the Reference bot lands about .03–.05 *better* than ratings and G1 fails. The fix has three parts.
+
+**1. Execution terms: subtract their reference expectation.** Split each class exponent and `q` into an *execution* part (effort, velocity, timing, movement, location grade, chase-cell bias) and an *anticipation* part (`aZ`, `aT`, `aC`). Then center the execution part of each output per count and in/out:
+
+```
+x_k  = (exec_k − ExecCenter[count][inZone][k]) + antic_k          k ∈ {Ball, Strike, Play, Q}
+ExecCenter[c][z][k] = E_ref[exec_k | count = c, inZone = z]
+```
+
+`ExecCenter` is **computed analytically at `BeginPa`**, with no warm-up run. Every input is a closed form there: the type mix `ρT`; the Reference target rule (§7.2); and the triangular scatter, whose per-axis CDF is piecewise quadratic, so `P(executed cell | target, M)` is exact. That gives `P(type, loc | count, in/out)`. On the first pitch (count 0-0) `t` uses `velocityPrev = velocityMean`; at other counts the previous type is drawn from `ρT`, independent of the current pitch under Reference. Effort is 0 for Reference, so effort terms contribute nothing to the center and stay a pure lever. The table is 12 counts × 2 × 4 = 96 doubles plus `WasteRef[12][3]` (§3.3), held in the preallocated book buffer (§5.3), so no allocation. Because `M` is fixed per PA (control_eff snapshots at PA start), one evaluation per PA is exact. Cost: about 2k flops per PA.
+
+**2. Anticipation terms: "indicator minus reference probability" form** (§4.4). That makes each one exactly zero-mean whenever the next pitch is independent of the book's state, which holds for Reference by construction, since its draws never read the book.
+
+**3. Location-grade centering.** The Reference's in-zone mix (§7.2) is 1/9 heart, 4/9 side and 4/9 corner targets, with scatter. So "painting more than the reference" earns, and "grooving more than the reference" pays. That is the intent of §3.2 restated relative to the reference, not relative to the Side grade.
+
+`mRel` is already zero-mean over usage, but **not** conditional on in/out (`typeShift` correlates type with location), so it is centered with the rest of the execution part. `sPitch` and `EffortWhiffGain·e` are zero at Reference and need no centering.
+
 ---
 
 ## 4. The batter AI: the book
 
 ### 4.1 Shape
 
-`struct BookBatterPolicy : IBatterPolicy`, one instance per **human pitcher per game**, held by `MicroGame` for the half-innings where `humanPitching` is true, and shared by every NPC batter on the opposing team (the dugout talks). It is reset when a new pitcher enters. Nothing is heap-allocated: fixed buffers only.
+`struct BookBatterPolicy : IBatterPolicy`, one instance per **human pitcher per game**, shared by every NPC batter on the opposing team (the dugout talks). It is reset when a new pitcher enters. Its tables live in one `double[]` buffer allocated once in `MicroGame.Initialize` (§5.3), so nothing is allocated per game or per pitch.
 
-Tables (pseudo-counts, `float`), decayed by `BookDecay` per observation in the row:
+Tables (pseudo-counts, `double`, matching every rate in `PitchChain`; rev 2, C2), decayed by `BookDecay` per observation in the row:
 
 | Table | Shape | Keyed by |
 | :-- | :-- | :-- |
@@ -231,18 +256,22 @@ leanCell = clamp(that maximum · readScale, 0, LeanCapCell)
 readScale = clamp(1 + BookApplyConGain·dCon + BookApplyDisGain·dDis, 0.6, 1.4)
 ```
 
-The intent is `BatterIntent.Model(sitType, sitCell, leanType, leanZone, leanCell)`: three bytes and three floats. The chain turns it into anticipation terms once it knows the executed pitch.
+The intent is `BatterIntent.Model(sitType, sitCell, leanType, leanZone, leanCell)`: three bytes and three doubles. The chain turns it into anticipation terms once it knows the executed pitch.
 
 ### 4.4 Anticipation terms (computed by the chain)
 
 ```
-aT = type == sitType ?  leanType / LeanScale
-                     : −leanType · ρT[type] / (1 − ρT[sitType]) / LeanScale        // mass the sit took away from the thrown type
-aZ = inZone ?  leanZone / LeanScale  :  −leanZone / LeanScale
+// rev 2: every term is "indicator − reference probability", so E_ref[a] = 0 given the lean (§3.5)
+aT = leanType · ([type == sitType] − ρT[sitType]) / (1 − ρT[sitType]) / LeanScale
+       // hit: +leanType/LeanScale (as rev 1); miss: −leanType·ρT[sitType]/(1 − ρT[sitType])/LeanScale
+       // rev 1 used ρT[type] on a miss, which is not zero-mean
+aZ = 2 · leanZone · ([inZone] − pRef) / LeanScale,   pRef = zRef(count, type)
+       // equals rev 1's ±leanZone/LeanScale at pRef = 0.5
 aC = (side of executed cell == side of sitCell)
-       ? leanCell · (credit(sitCell, cell) − CreditRef) / (1 − CreditRef) / LeanScale
+       ? leanCell · (credit(sitCell, cell) − CreditRef[sitCell]) / (1 − CreditRef[sitCell]) / LeanScale
        : 0                                                                         // the zone term already covers a wrong side
-credit = 1.0 same cell · 0.5 adjacent (Chebyshev 1, within the same side) · 0.2 otherwise;  CreditRef = 0.30
+credit = 1.0 same cell · 0.5 adjacent (Chebyshev 1, within the same side) · 0.2 otherwise
+CreditRef[sitCell] = E_ref[credit(sitCell, executed cell) | same side]   // 17 values, analytic at BeginPa (§3.5); rev 1 used a flat 0.30
 all three clamped to [−1, 1]
 ```
 
@@ -251,7 +280,7 @@ Positive = the batter was on it; negative = fooled. The signs flow into §3.2: `
 ### 4.5 Anti-exploit bounds, by construction
 
 - **No oracle.** The policy's `NextPitch` receives a `PitchLook` like every batter policy, but the pitching path passes `PitchLook.Hidden` (cue = none, zone probability = ρZone) and the policy reads only its tables. The current pitch's type, cell and effort are invisible until `OnPitchResolved`.
-- **Sharpness is capped twice.** Decay bounds the effective sample to `1/(1 − BookDecay) = 10` observations per row, and the prior adds `α` pseudo-counts, so the maximum mass on any type after any history is `(α·ρ + 10)/(α + 10)`. With `α = 6`: a 55%-usage fastball can reach 0.83 (lean 0.28 → `aT = 0.56`); a 15% pitch can reach 0.68 (lean 0.53, capped at `LeanCapType = 0.5` → `aT = 1.0`). Being read on your *rare* pitch is possible only if you throw it ten times running in the same situation. Cells have `α = 12` over 17 cells, so a single cell needs 4–5 repeats in a bucket before `leanCell` clears 0.2.
+- **Sharpness is capped twice.** Decay bounds the effective sample to `1/(1 − BookDecay) = 10` observations per row, and the prior adds `α` pseudo-counts, so the maximum mass on any type after any history is `(α·ρ + 10)/(α + 10)`. With `α = 6`: a 55%-usage fastball can reach 0.83 (lean 0.28 → `aT = 0.56`); a 15% pitch can reach 0.68 (lean 0.53, capped at `LeanCapType = 0.5` → `aT = 1.0`). Being read on your *rare* pitch is possible only if you throw it ten times running in the same situation. (Rev 2 precision, C4: `πT` also adds `BookSeqWeight·typeBySeq` and `BookGlobalWeight·typeGlobal`, each with up to 10 effective observations, so the true ceiling is `(α·ρ + 20)/(α + 20)`, about 0.90 for the fastball. The binding bound is the `LeanCap*` clamp, not the decay.) Cells have `α = 12` over 17 cells, so a single cell needs 4–5 repeats in a bucket before `leanCell` clears 0.2.
 - **Leans are clamped before use** (`LeanCapType/Zone/Cell`), and the tilt gains are a fixed budget, so the fully-read pitcher sits at the band floor and no lower (§7.3).
 - **No fixed pattern is dominant.** Any policy that is a function of (count bucket) or (previous type) is learned by the two type tables within ~5 repeats; a pattern that keeps bucket and 2-gram statistics flat but skews marginals is caught by `typeGlobal`; a pattern that keeps *all* of these at the reference is, to the batter, indistinguishable from the reference and earns the reference line, not a bonus. The book is a minimax opponent whose value is the reference: predictability costs up to the floor, and out-thinking the book (throwing what it is not sitting on) earns a bounded edge that shrinks as the book re-learns. The positive half of the band comes mostly from **execution** (location, sequencing, effort), not from mixing.
 - **The book is never shown before the pitch.** The reveal exposes the sit after the pitch, and the scouting hint (§9) summarizes tendencies the *pitcher* has shown, never the book's internal numbers.
@@ -261,11 +290,17 @@ Positive = the batter was on it; negative = fooled. The signs flow into §3.2: `
 Suite 7 shows the binary seam's problem: always-in-zone walks 3.1% vs 9% neutral, and nothing pushes back. On this design, a pitcher who throws random types to random zone cells drives `πZone` toward 0.9 within a dozen pitches (`leanZone ≈ 0.45`, capped; `aZ ≈ 0.9`). On every in-zone pitch:
 
 ```
-xStrike = −0.45·0.9 = −0.41,   xPlay = +0.35·0.9 = +0.32
-in-zone rates (ball .162, strike .52, inPlay .20) → weights .162, .345, .276 → ball .21, strike .44, inPlay .35
+xStrike = −0.45·0.9 = −0.405,   xPlay = +0.35·0.9 = +0.315
+in-zone neutral rates at s = 0.55 (ball .139, strike .639, inPlay .222; any zRef)
+  → weights .139, .426, .304 → ball .160, strike .490, inPlay .350
+out-of-zone (19% of Challenge pitches at M = 1.10), after the §3.3 mixture and xBall = −0.45 (a known strike chased):
+  → ball .275, strike .538, inPlay .187
+per pitch → ball .182, strike .499, inPlay .319
 ```
 
-Balls in play per pitch nearly double, called strikes vanish, and the PA ends in play ~80% of the time with `q ≈ 0` (random zone cells average `LocQ ≈ −0.01`). Estimated line: AVG ≈ .28, OBP ≈ .31 (walks are down but so are strikeouts, ~12%), SLG ≈ .46, **opp OPS ≈ .77 vs .727 reference**, even before the batter's `aC` on the predictable cells. The physical justification is real: a batter who knows the pitch is a strike doesn't take it. Meanwhile the Reference bot stays at .727 and the Perfect bot (§7.2) lands near .63, so Challenge is dominated in both directions. Gate G4 pins this.
+(Rev 2, C1: rev 1 used in-zone rates that didn't sum to 1. The numbers above come from the shipped `SolveNeutral` at the all-50 matchup, which absorbs to BB .090 / K .225 / BIP .685.)
+
+Through the count chain that gives BB ≈ 1%, K ≈ 12%, BIP ≈ 87%. Called strikes vanish and almost every PA ends in play. At `q = 0`: AVG .288, OBP .296, SLG .481, **opp OPS ≈ .78**. With `ZoneKnownQ·aZ ≈ +0.036` on in-zone pitches: **≈ .81, against .728 for Reference**, and that's before the batter's `aC` on the predictable cells. The physical justification is real: a batter who knows the pitch is a strike doesn't take it. Meanwhile the Reference bot stays at .727 and the Perfect bot (§7.2) lands near .63, so Challenge is dominated in both directions. Gate G4 pins this.
 
 ---
 
@@ -280,10 +315,10 @@ public readonly struct PitchCall {
     public readonly bool TargetInZone;    // shipped: legacy binary target (harness suite 7, InteractivePitcherPolicy.Throw)
     public readonly bool HasCell;         // NEW: false in Neutral and legacy calls
     public readonly byte TargetCell;      // NEW: 0..16
-    public readonly float Effort;         // NEW: [-1, 1]
+    public readonly double Effort;        // NEW: [-1, 1] (double, C2)
     public static PitchCall Neutral => default;                        // unchanged meaning: all false/zero
     public static PitchCall Throw(PitchType t, bool inZone) ...        // legacy, HasCell = false
-    public static PitchCall ThrowAt(PitchType t, byte cell, float effort) ... // HasCell = true, TargetInZone = cell < 9
+    public static PitchCall ThrowAt(PitchType t, byte cell, double effort) ... // HasCell = true, TargetInZone = cell < 9
 }
 ```
 
@@ -295,13 +330,15 @@ Add `void OnPitchResolved(in PitchResult result);` (explicit implementation; no-
 
 ### 5.3 `BatterIntent` / `IBatterPolicy`
 
-- `BatterIntentKind.Model` (new enum value). `BatterIntent.Model(PitchType sitType, byte sitCell, float leanType, float leanZone, float leanCell)`. The struct must stay blittable; three floats and three bytes fit beside the Read fields (open Q7).
+- `BatterIntentKind.Model` (new enum value). `BatterIntent.Model(PitchType sitType, byte sitCell, double leanType, double leanZone, double leanCell)`. `BatterIntent` is a plain readonly struct (Kind, GuessType, GuessCell, Approach, ReadIsScripted, two bools, ScriptedLocAcc), not a union, so the Model fields are added with zero defaults and `BatterIntentKind` takes a new value (Q7, verified).
 - `BookBatterPolicy : IBatterPolicy` (new, struct, explicit members). `BeginPa` records the batter's `dCon/dDis` and resets `prevType`; `NextPitch` returns the Model intent (no RNG); `OnPitchResolved` learns (§4.2); `OnPaResolved` no-op.
-- `PitchResult` gains: `TargetCell` (byte, 255 if none), `ExecutedCell` (byte, 0..17), `Effort` (float), `Flavor` (enum, §3.4), `LocGrade` (enum), `AnticipationZ/T/C` (3 floats, or 3 sbytes in tenths), `TimingDisruption` (float), `SitType`, `SitCell`, `LeanBucket` (0..3). All default-zero; adding fields changes no draw.
+- **Where the book lives (Q3, verified).** `PlayHalfInning` builds a fresh `NeutralBatterPolicy` per half-inning (`MicroGame.cs`), so the book can't live there. Its tables, plus the §3.5 centering tables, sit in **one `double[]` (≈ 250 doubles) allocated once in `MicroGame.Initialize`**. `BookBatterPolicy` is a struct holding that reference. It is passed by `ref` through `PlayGame` → `PlayHalfInning` and reset (cleared, not reallocated) on a pitching change. That's zero allocation per game and per pitch. The Contrarian and Perfect bots (§7.2) read the same buffer read-only.
+- **Batter ratings for the book (Q3b, verified).** `HumanPaContext` carries no batter ratings, and the `humanPitching` branch of `MicroGame` currently calls only `pitcherPolicy.BeginPa`. The book's `dCon/dDis` come from `PitchMatchup.BatterContact/BatterDiscipline` (already populated), and that branch **adds a `book.BeginPa(...)` call** beside `pitcherPolicy.BeginPa`.
+- `PitchResult` gains: `TargetCell` (byte, 255 if none), `ExecutedCell` (byte, 0..17), `Effort` (double), `Flavor` (enum, §3.4), `LocGrade` (enum), `AnticipationZ/T/C` (3 doubles), `TimingDisruption` (double), `SitType`, `SitCell`, `LeanBucket` (0..3). All default-zero; adding fields changes no draw. `PitchResult` is a `readonly struct` passed `in`; add the fields through a new constructor overload and keep the shipped 7-arg and 9-arg constructors, defaulting the new fields (Q1, verified).
 
 ### 5.4 `SimulatePa` and `PitchMatchup`
 
-`PitchMatchup` (or the per-PA context) gains the arsenal summary the path needs, computed once per PA at `BeginPa`: `velocityMean`, `movementMean`, `ρT[3]`, and `velocityPrev` state. Zero-alloc: three floats and a 3-float buffer.
+`PitchMatchup` (or the per-PA context) gains the arsenal summary the path needs, computed once per PA at `BeginPa`: `velocityMean`, `movementMean`, `ρT[3]`, and `velocityPrev` state. Zero-alloc: `PitcherArsenal` is already a byte struct on `PitchMatchup`, so the means and `ρT` are arithmetic (Q5, verified). `ExecCenter`, `WasteRef` and `CreditRef` (§3.5) are filled into the book buffer at the same point.
 
 The per-pitch loop gains **one early branch**:
 
@@ -318,16 +355,16 @@ For determinism review, in order, per pitch:
 1. `pitcher.NextPitch` (human: no sim draws; bots: their own, documented).
 2. Scatter: 4 × `NextDouble` (§2.2).
 3. `batter.NextPitch(PitchLook.Hidden, count, rng)`: `BookBatterPolicy` draws nothing (a scripted batter on this path may).
-4. Class draw: 1 × `NextDouble` (§3.3). Waste: skipped (forced Ball) then HBP draw 1 × `NextDouble` if inside-waste (§9.1).
+4. Class draw: 1 × `NextDouble` (§3.3). Waste: skipped (Ball, no class draw), then an HBP draw of 1 × `NextDouble` if inside-waste (§9.1). The §3.3 mixture and the §3.5 centering are arithmetic and draw nothing.
 5. Two-strike foul draw: 1 × `NextDouble` (shipped constant).
 6. In play: `DrawBallInPlay(p*, q)` (shipped).
 7. Flavor draw: 1 × `NextDouble` (§3.4).
-8. `batter.OnPitchResolved`, `pitcher.OnPitchResolved`, `fatigue.AddPitch` (+ effort accumulator, §9.3).
+8. `batter.OnPitchResolved`, `pitcher.OnPitchResolved`, `fatigue.AddPitches(1 + EffortFatigueGain·effort)` (§9.3).
 
 ### 5.6 Invariant N, by construction
 
 - The branch in §5.4 is taken only when `call.HasCell`. `PitchCall.Neutral` and legacy `Throw(type, inZone)` have `HasCell = false`, so **every existing path runs the shipped code with the shipped draw order**: Neutral batter + Neutral call (calibration), Neutral batter + legacy call (suite 7), Read batter + Neutral call (human batting, A0 sweep).
-- `BookBatterPolicy` is constructed only in the `humanPitching` half-inning branch of `PlayHalfInning`; `NeutralBatterPolicy` is untouched.
+- `BookBatterPolicy` is used only in the `humanPitching` half-inning branch of `PlayHalfInning`. Its buffer is allocated once in `MicroGame.Initialize`, which consumes no RNG. `NeutralBatterPolicy` is untouched.
 - The Model branch is a new `case` in the intent switch; `Neutral` and `Read` cases are not edited. Struct field additions have zero-defaults and are never read on the old paths.
 - `AtBatResolver` is not touched; p* is computed exactly as today and consumed by `DrawBallInPlay` exactly as today.
 - Gate G5 (§7.4) re-runs suites 5/6/7, the A0 sweep and the resolver guard and requires byte-identical lines.
@@ -357,7 +394,7 @@ Target: **poor vs excellent ≈ ±.100 OPS around the ratings line** for an aver
 | Contrarian | .69–.72 | mixing lever alone |
 | **Reference** | **.727 ± .02** | self-consistency anchor |
 | CoinFlip | .73–.76 | "no skill", slightly worse than ratings (one third of pitches are ring targets → walks) |
-| Challenge | .76–.79 | the shipped exploit, now dominated |
+| Challenge | .78–.81 | the shipped exploit, now dominated (rev 2 re-derivation, §4.6) |
 | PredictableCorner | .78–.83 | well-located but read |
 | PredictableHeart | .84–.87 | floor (cap) |
 
@@ -369,7 +406,7 @@ All bots implement `IPitcherPolicy` as structs and run 20,000 PAs against `BookB
 
 | Bot | Type | Target | Effort |
 | :-- | :-- | :-- | :-- |
-| **Reference** | ~ usage (1 draw) | in-zone with probability `pIn(bucket)` then uniform of 9, else uniform of 8 ring (2 draws). `pIn` is solved in a 2,000-pitch warm-up so the *executed* in-zone rate matches `ρZone(bucket)` | 0 |
+| **Reference** | ~ usage (1 draw) | zone target with probability `pIn(count, type)`, then uniform of 9; else uniform of 8 ring (2 draws). **Rev 2 (B3):** `pIn` is solved **exactly** per (count, type) so the *executed* in-zone rate equals `zRef(count, type, control_eff)`, the quantity the §3.3 mixture identity is defined on: `pIn = clamp((zRef − pRing)/(pZone − pRing), 0, 1)`, where `pZone`/`pRing` are the mean in-zone rates of a uniform zone/ring target under the closed-form scatter at this PA's `M` (at M = 1.10: .811 / .086, which covers zRef's [.20, .80]). No warm-up run, and identical across arsenals. `ρZone(bucket)` stays the **book's prior only** (Q6). | 0 |
 | **CoinFlip** | uniform of 3 | uniform of 17 | 0 |
 | **Challenge** | ~ usage | uniform of 9 zone cells | 0 |
 | **Paint** | ~ usage | uniform of 8 ring cells | 0 |
@@ -451,7 +488,8 @@ G1–G4 and G8–G9 are *self-consistency and spread* gates, never a batting-ave
 | `CellKnownQ / Whiff / Play` | 0.06 / 0.04 / 0.03 | 0–0.12 | sitting on the spot |
 | `LeanScale` | 0.5 | 0.3–0.7 | +0.5 mass over the prior = fully "on it" |
 | `LeanCapType / Zone / Cell` | 0.50 / 0.45 / 0.50 | 0.3–0.7 | the omniscience bound after `readScale` |
-| `CreditRef` | 0.30 | 0.2–0.4 | expected credit of a random same-side cell |
+| `CreditRef[sitCell]` | computed (rev 2) | – | not a knob: E_ref of credit on the sit's side, analytic at `BeginPa` (§3.5, §4.4); rev 1's flat 0.30 was not zero-mean |
+| `ExecCenter[12][2][4]`, `WasteRef[12][3]` | computed (rev 2) | – | not knobs: reference expectations of the execution terms and of the waste share, analytic at `BeginPa` (§3.3, §3.5) |
 | `BookPriorType / Zone / Cell` | 6 / 6 / 12 | 3–20 | pseudo-counts; cells learn slower (17 bins) |
 | `BookDecay` | 0.90 | 0.85–0.95 | effective memory 10 observations per row |
 | `BookSeqWeight` | 0.5 | 0–1 | 2-gram table weight |
@@ -474,7 +512,7 @@ G1–G4 and G8–G9 are *self-consistency and spread* gates, never a batting-ave
 
 ### 9.1 Waste pitches, HBP, wild pitches
 
-- A **Waste** pitch is a forced Ball, never swung at. On an *inside* waste pitch the chain draws HBP with `HbpOnInsideWaste`; HBP ends the PA as `PaOutcome.Walk` (as today) with `PitchResult.Flavor = HitByPitch` so the UI and announcer show it. Nothing else in the sim changes (no injury at launch; owner Q3).
+- A **Waste** pitch is a Ball, never swung at. The reference waste share is carved out of the neutral out-of-zone ball rate (§3.3), so only waste *beyond* the reference costs walks. On an *inside* waste pitch the chain draws HBP with `HbpOnInsideWaste`; HBP ends the PA as `PaOutcome.Walk` (as today) with `PitchResult.Flavor = HitByPitch` so the UI and announcer show it. Nothing else in the sim changes (no injury at launch; owner Q3).
 - **Wild pitches** need a runner-advance hook in `MicroGame` that the pack doesn't confirm (open Q4). **Deferred:** the DTO carries `IsWaste` from slice G-2a so the UI can show the catcher scrambling, and `WildPitchOnWaste` ships at 0 until the runner model has an "advance all one base" event.
 
 ### 9.2 Two-strike foul loop
@@ -483,7 +521,7 @@ Unchanged: `FoulShareOfStrikes = 0.68` self-loops on the strike class. The tilts
 
 ### 9.3 Fatigue within an outing
 
-`PitcherFatigue` semantics are unchanged: effective ratings snapshot at PA start, `AddPitch()` per pitch. Effort adds a fractional cost: the pitching path keeps a `float effortDebt` in the per-PA context, adds `EffortFatigueGain·effort` per pitch, and calls `AddPitch()` once more each time the debt crosses +1 (or skips one call when it crosses −1). If `PitcherFatigue` counts in floats, prefer an `AddPitches(float)` overload (open Q2). The reveal shows tank remaining as a percentage of capacity (presentation reads it from the snapshot; it never writes).
+`PitcherFatigue` semantics are unchanged: effective ratings snapshot at PA start. Its counter `_pitchesThrown` is already a `double` (`AddPitch` adds 1.0, `AddNpcPa` adds 3.9), so rev 2 adds **`AddPitches(double n)`** and the pitching path calls `AddPitches(1 + EffortFatigueGain·effort)` per pitch: 1.4 at max effort, 0.6 at finesse. Rev 1's effort-debt accumulator is dropped (Q2, verified). The neutral and legacy paths keep calling `AddPitch()`. The reveal shows tank remaining as a percentage of capacity (presentation reads it from the snapshot; it never writes).
 
 ### 9.4 Shadowed, pulled, absent
 
@@ -525,12 +563,14 @@ The teaching loop is the hint plus the sit: the player learns that mixing beats 
 
 ## 10. Engine slices
 
+*The owner column below is rev 1's proposal. Current assignments live in [TEAM.md](../TEAM.md) §2, which takes precedence: the G-2a/b/d engine is assigned to GPT 6 Astra Pro, sequenced with G-8 as G-8a → G-2a → G-2b → G-8b.*
+
 | Slice | Owner | Content | Gate |
 | :-- | :-- | :-- | :-- |
 | **G-2a Execution and the Model branch** | Claude Opus 5.5 | `PitchCall` cell/effort; scatter and quantization; `PitchResult` fields; `IPitcherPolicy.OnPitchResolved`; the pitching-mode path with the Model branch at `a = 0` (no book yet); `Reference`, `CoinFlip`, `Challenge`, `Paint`, `PredictableHeart/Corner` bots; suite 8 skeleton | G1, G5, G6, G7; Challenge and Paint lines recorded (expected: Challenge still favourable, the book comes next) |
-| **G-2b The book** | Claude Opus 5.5, Gemini 3.1 Pro Math tunes | `BookBatterPolicy`, anticipation, `Contrarian` and `Perfect` bots, 30/30 and 85/85 and fatigue runs | G2, G3, G4, G8, G9; Pro Math signs the constants table |
+| **G-2b The book** | Claude Opus 5.5, Gemini 3.1 Pro Math tunes | `BookBatterPolicy`, anticipation, `Contrarian` and `Perfect` bots, 30/30 and 85/85 and fatigue runs | G2, G3, G4, G8, G9; Pro Math signs the constants table. **G3 is expected to fail on the first run:** Perfect lands at about −.20 before clamps (§7.3), by design. Treat it as a tuning signal, not a regression. |
 | **G-2c Pitching UI** | Claude Sonnet 5.5 | 17-cell picker, pitch selector, effort dial, `AwaitPitchCall` overload, `PitchRevealDto`, reveal panel, book hints, focus navigation, theme-driven styling; `godot_scene_mapper` on the at-bat scene first | build 0/0; a scripted UI run through 3 PAs; no sim writes (review) |
-| **G-2d Edges and broadcast** | Claude Opus 5.5 (engine), Claude Sonnet 5.5 (UI) | effort fatigue debt, HBP, waste/wild-pitch DTO, `BroadcastBooth` events, achievement mapping, HS tier line, optional wild pitches if Q4 is yes | G1–G9 re-run; `validate_audio_manifest` if lines are added; achievements map to bus events |
+| **G-2d Edges and broadcast** | Claude Opus 5.5 (engine), Claude Sonnet 5.5 (UI) | `AddPitches` effort cost, HBP, waste/wild-pitch DTO, `BroadcastBooth` events, achievement mapping, HS tier line, optional wild pitches if Q4 is yes | G1–G9 re-run; `validate_audio_manifest` if lines are added; achievements map to bus events |
 
 G-2a is independently shippable and already fixes the binary seam's worst case for the harness (cells + location grades). G-2b is where the owner's "predictable pitchers get hit" lands.
 
@@ -564,32 +604,33 @@ Control now earns its value where the design intent says it should (attended loc
 
 ### 11.7 Fatigue stays PA-granular
 
-Agree with the pack's shipped semantics; per-pitch fatigue inside a PA would touch `PitcherFatigue` on both branches for a feel gain nobody will notice at ~4 pitches per PA. The effort debt (§9.3) gives effort its cost without that change.
+Agree with the pack's shipped semantics; per-pitch fatigue inside a PA would touch `PitcherFatigue` on both branches for a feel gain nobody will notice at ~4 pitches per PA. `AddPitches(1 + EffortFatigueGain·effort)` (§9.3) gives effort its cost without that change.
 
 ---
 
 ## 12. Open questions
 
-### 12.1 For Claude Opus 5.5 (engine)
+### 12.1 Engine questions: answered (rev 2, verified in code by Claude Opus 5.5, 2026-10-10)
 
-| # | Question | Recommended answer |
+| # | Answer | Folded into |
 | :-- | :-- | :-- |
-| Q1 | Current `PitchResult` fields; is it passed `in` to policies only, or also stored in a per-game log (allocation)? | Add the §5.3 fields; if a log exists, keep it a fixed-capacity struct array. |
-| Q2 | Is `PitcherFatigue`'s pitch counter an int? | If int, use the debt accumulator (§9.3); if float, add `AddPitches(float)`. |
-| Q3 | Where should the per-game `BookBatterPolicy` live so it persists across PAs and half-innings and resets on a pitching change? | A field on `MicroGame`, keyed by the current human pitcher id, reset in the pitching-change path. |
-| Q4 | Does `MicroGame` have a runner-advance primitive that a wild pitch could call without touching the neutral path? | If yes, ship WP in G-2d behind `WildPitchOnWaste`; if no, defer and leave the DTO flag. |
-| Q5 | Is the arsenal (velocity/movement/usage per type) a struct reachable on the hot path, and can `velocityMean/movementMean/ρT` be computed at `BeginPa` without allocation? | Expect yes; otherwise cache on `PitchMatchup`. |
-| Q6 | Which `ZoneProbability` arguments define `ρZone(bucket)`: use the representative counts 0-0 / 0-1 / 1-0 / 1-2 with the Fastball shift? | Yes; it's a prior, not a calibration quantity. |
-| Q7 | Does `BatterIntent` have room (blittable) for 3 floats + 3 bytes beside the Read fields, and a spare `BatterIntentKind` value? | Expect yes; if the struct is a union-style layout, overlay the Read fields. |
-| Q8 | Confirm the pitching-mode branch sits *after* `pitcher.NextPitch` and *before* any shared draw so §5.5's order holds and the neutral sequence is untouched. | Yes by construction; the harness G5 run proves it. |
-| Q9 | `PitchLook.Hidden`: is `PitchLook` a struct that can carry a "no cue" marker without changing the Read path? | Add a static `Hidden` with cue = Fastball and the Model policy contractually ignoring it; document the contract on `IBatterPolicy`. |
-| Q10 | HBP as `PaOutcome.Walk` with a display flag: does the box score need a separate column at launch? | No; flag only. |
+| Q1 | `PitchResult` is a `readonly struct` passed `in` to `OnPitchResolved`. The interactive bridge enqueues copies into a `Queue<PitchResult>` (off the zero-GC path, allowed). There's no per-game pitch log on the hot path. Add fields through a new constructor overload; the 7-arg and 9-arg constructors stay and default the new fields. | §5.3 |
+| Q2 | `PitcherFatigue._pitchesThrown` is already a `double`. Add `AddPitches(double)`; the effort-debt accumulator is dropped. | §9.3, §5.5 |
+| Q3 | `PlayHalfInning` builds a fresh `NeutralBatterPolicy` per half-inning, so the book must outlive it. One `double[]` buffer allocated in `MicroGame.Initialize`; `BookBatterPolicy` is a struct holding it, passed by `ref` through `PlayGame` → `PlayHalfInning` and reset on a pitching change. Bots read it read-only. | §4.1, §5.3 |
+| Q3b | `HumanPaContext` has no batter ratings. The book reads `PitchMatchup.BatterContact/BatterDiscipline`, and the `humanPitching` branch adds a `book.BeginPa` call. | §5.3 |
+| Q4 | Out of scope for G-2. Wild pitches stay deferred behind the `IsWaste` DTO flag, and `WildPitchOnWaste` ships at 0. | §9.1 |
+| Q5 | Yes. `PitcherArsenal` is a byte struct on `PitchMatchup`; the means and `ρT` are arithmetic at `BeginPa`. | §5.4 |
+| Q6 | Yes, `ρZone(bucket)` is the book's prior only. The Reference bot targets `zRef(count, type)` exactly (B3). | §7.2 |
+| Q7 | `BatterIntent` is a plain readonly struct, not a union. Add the Model fields with zero defaults; `BatterIntentKind` has room. | §5.3 |
+| Q8 | Confirmed. The branch right after `pitcher.NextPitch` precedes every shared draw (`DrawType`, zone, blur), so the neutral sequence is untouched. | §5.4–§5.6 |
+| Q9 | Yes. `PitchLook` is a readonly struct (Cue, ZoneProbability); add `static Hidden`, which the Model policy contractually ignores. | §4.5 |
+| Q10 | Flag only at launch, no box-score column. | §9.1 |
 
 ### 12.2 For the owner
 
 | # | Question | Recommended answer |
 | :-- | :-- | :-- |
-| O1 | Confirm the pitching band at ±.100 OPS (40-vs-70), average player ≈ ratings, and authorize a batting **Read v2** re-band to the same band (§11.1). | Yes to both; batting re-band as its own slice after G-2b. |
+| O1 | Confirm the pitching band at ±.100 OPS (40-vs-70), average player ≈ ratings, and authorize a batting **Read v2** re-band to the same band (§11.1). | Yes to both. **Resolved:** recorded as decided in [gameplay_core.md](gameplay_core.md) §6 item 1 (2026-10-10). The batting re-band is slice G-8 ([brief](../tasks/G-8_read_v2_batting_reband_brief.md)). |
 | O2 | Book scope: within one game only (reset per game), or a season-long scouting book on the avatar? | Within-game at launch. A season book is a good Phase G+ feature tied to press and scouting, with its own caps. |
 | O3 | HBP: resolve as Walk with a flag (no injury, no ejection) at launch? | Yes. Injury links belong to the life sim later, through the bus. |
 | O4 | Pickoffs, holds, pitch-outs, intentional walks: out of G-2? | Yes; intentional walk as a UI shortcut (four Waste pitches) can come with G-2d. |

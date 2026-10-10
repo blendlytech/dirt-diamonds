@@ -55,3 +55,23 @@ Edit `pitching_mode.md` in place:
 - update §9.3 (Q2) and §5.3/§5.4 (Q3, Q3b).
 
 Don't restructure other sections. Keep edits targeted.
+
+---
+
+## Resolution (rev 2, Claude Opus 5.5, 2026-10-10)
+
+Claude Fable 5.1's prepaid API credit ran out before its revision pass, so the integration lead applied this review to [pitching_mode.md](../design/pitching_mode.md) in place (branch `g2/spec-rev2`). Every number above was re-derived independently first; all reproduced.
+
+| Item | Status | Where |
+| :-- | :-- | :-- |
+| B1 centering | **Applied.** Execution terms are centered by `ExecCenter[count][in/out][class]`, analytic at `BeginPa`. Anticipation terms are rewritten as "indicator minus reference probability". G1 is restated as first-order exact, with a second-order residual (Jensen's gap, anticipation × zone correlation) estimated at ≤ .008 OPS. | §3.3, §3.5, §4.4 |
+| B2 waste mixture | **Applied.** `ballChase = max(0, (ballOut − w)/(1 − w))`, with clamp frequency reported by suite 8. | §3.3, §9.1 |
+| B3 Reference targeting | **Applied.** `pIn` is solved in closed form per (count, type); the warm-up run is dropped. | §7.2 |
+| C1 §4.6 arithmetic | **Applied.** Re-derived through the count chain: Challenge is ≈ .78–.81 opp OPS, against .728 for Reference. The conclusion is stronger than rev 1's. | §4.6, §7.1 |
+| C2 `double` | **Applied** throughout. | §1, §4, §5 |
+| Engine answers | **Folded in**; §12.1 replaced. | §5.3–§5.5, §9.3, §12.1 |
+| **C3 (new)** | §2.2 control-20 scatter was wrong: corners .62 (not .56), ring sides .21 in and .21 waste (not .24). | §2.2 |
+| **C4 (new)** | §4.5's max-mass bound ignored the seq and global tables: the true ceiling is `(α·ρ + 20)/(α + 20)`. The `LeanCap*` clamp is the binding bound. | §4.5 |
+| **D1 (new defect)** | §4.4 `aT` on a miss used `ρT[type]`, which isn't zero-mean. Corrected to `ρT[sitType]`, and `aZ`/`CreditRef` likewise, as part of B1. | §4.4 |
+
+**Still open:** the Gemini 3.1 Pro Math curve review (the constants table and the §7.3 estimates), then the owner's acceptance. Owner questions O2–O6 in §12.2 stand; O1 is resolved.
