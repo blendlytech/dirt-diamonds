@@ -48,7 +48,7 @@
 | **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
 | **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Gemini Pro (wiring) | **Story sign-off** |
 | **G-1** attribute audit (verify gameplay_core §1, settle weights) | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **How much skill is worth** |
-| **G-2** pitching mode design + engine | Claude Opus + Math | Gemini Pro | Playtest |
+| **G-2** pitching mode: **design** (brief: [tasks/G-2_pitching_design_fable_brief.md](tasks/G-2_pitching_design_fable_brief.md)) → engine | **Design: Claude Fable 5.1** (owner, 2026-10-10; prepaid API credit, $5 approval steps) → engine: Claude Opus + Math | Design: Claude Opus (feasibility) + Gemini Pro Math (curves); engine: Gemini Pro | Owner accepts the spec; playtest |
 | **G-3** at-bat view rebuild (batting + pitching UI) | Claude Sonnet | Gemini Pro | Screenshot review; playtest |
 | **G-4** venue catalog (68) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
 | **G-5** venue art | Owner + AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste** |

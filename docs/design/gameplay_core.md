@@ -75,7 +75,7 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
   - The swing is emergent: belief versus a discipline-set threshold, plus the approach.
   - Contact quality `q` scales with `R` and **contact**. **Power** enters through the resolver anchor.
   - **Reads are decisive.** A perfect read with high contact gives peak damage; a fooled swing gives weak contact or a whiff.
-- **Pitching:** today there is **none**. The attended game uses `NeutralPitcherPolicy`, so a pitcher player only watches. §2.2 designs it.
+- **Pitching:** no player-facing mode yet. The career path passes `NeutralPitcherPolicy`, so a pitcher player only watches. An engine seam does exist: `PitchCall` (type + in/out-of-zone target, control-driven execution) and `InteractivePitcherPolicy`, but it is unused and NPC batters stay neutral against it. See [G-2 context pack](../tasks/G-2_pitching_context_pack.md) §6. §2.2 designs the mode.
 - **Background games** use ratings only (no skill), so the league stays calibrated.
 - **How much should skill be worth?** *Proposal (owner to confirm):* for an average-rated avatar, the gap between a poor and an excellent player-skill game should be about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS). It's capped so skill can't make a 30-rated player elite, or ruin an 85.
   - This is the human branch only. The neutral, calibrated branch never changes (Invariant N in the read-input spec).
@@ -166,7 +166,7 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 | Slice | Content | Recommended model | Reviewer | Gate |
 | :-- | :-- | :-- | :-- | :-- |
 | **G-1** | Attribute audit: verify §1 against code, settle the macro weights of discipline and control, decide the needs/stress and person-stat proposals | **Claude Fable 5.1** (in review R-1) → **Gemini Pro Math** (numbers) | Claude Opus | Owner: "how much skill is worth" |
-| **G-2** | Pitching mode design → engine (`IPitcherPolicy` human branch, scatter model, batter tendency read) | **Claude Opus 5.5** (engine) + **Gemini Pro Math** (scatter/whiff curves) | Gemini Pro | MC bit-identical on the neutral branch; skill-bot spread |
+| **G-2** | Pitching mode design → engine (`IPitcherPolicy` human branch, scatter model, batter tendency read) | **Claude Fable 5.1** (design, owner 2026-10-10: [brief](../tasks/G-2_pitching_design_fable_brief.md)) → **Claude Opus 5.5** (engine) + **Gemini Pro Math** (scatter/whiff curves) | Gemini Pro | MC bit-identical on the neutral branch; skill-bot spread |
 | **G-3** | At-bat view rebuild for batting + pitching (§2.1, §2.2 UI) | **Claude Sonnet 5.5** | Gemini Pro | Screenshot review; playtest |
 | **G-4** | Venue catalog (68 entries) + venue screen runtime + hotspots | **Claude Sonnet 5.5** (screen) + **Gemini 3.8 Flash** (catalog data) | Claude Opus | Every team resolves a venue; no missing-art fallbacks |
 | **G-5** | Venue art production | **Owner + AI art tools**, **Gemini 3.8 Flash** (integration) | Claude Opus (consistency) | **Owner taste** |

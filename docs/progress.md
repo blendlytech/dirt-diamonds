@@ -70,6 +70,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Session Log (compact)
 
+- **2026-10-10 — G-2 Fable handoff pack (Claude Opus 5.5; docs only, no code/sim touch):** the owner assigned the G-2 pitching-mode **design** to Claude Fable 5.1 on prepaid API credit ($13.06, $5 approval steps). New [tasks/G-2_pitching_context_pack.md](tasks/G-2_pitching_context_pack.md) (verified code facts, so Fable reads nothing else) and [tasks/G-2_pitching_design_fable_brief.md](tasks/G-2_pitching_design_fable_brief.md). TEAM.md §2 and gameplay_core §4 G-2 rows updated. gameplay_core §1.4 corrected: an unused engine pitching seam exists (`PitchCall`, `InteractivePitcherPolicy`); the career path passes `NeutralPitcherPolicy`. **Finding:** the shipped batting A0 spread is perfect 1.898 / random .439 / fooled .101 OPS, far wider than the §1.4 "±.100 OPS" skill target, and a blind guesser bats well below the ratings-only .727. This is an owner/Math decision, and the Fable spec must take a position. MC 352/352. **Next: G-2 design by Claude Fable 5.1 (new session, API key, its own worktree) → Opus feasibility review → Fable revision.**
 - **2026-10-10 — Vision v2 + full docs reconciliation (Claude Opus 5.5; docs only, no code/sim touch):**
   - GAME_VISION rewritten as v2, start to finish, with D1–D21.
   - BUILD_PLAN condensed (Phases 0–12 into one table) and Phase L added; the stale delegation doctrine is gone.
