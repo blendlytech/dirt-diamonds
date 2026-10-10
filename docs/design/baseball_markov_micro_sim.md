@@ -1,5 +1,7 @@
 # Design — Markov Micro-Simulation (Interactive At-Bat / Pitch-Level Model)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The 25-state model is unchanged. Regulation innings become per tier (HS 7), and roster sizes become capacities ([league_restructure.md](league_restructure.md) §4–§5).
+
 **Author:** Claude Opus 4.8 (statistical/mathematical design) · **Phase:** 4 (Baseball Micro-Sim, "when the player's avatar is in-game") · **Status:** design complete; no C# written yet.
 
 This is the mathematical specification for the **micro-sim** — the model that runs when the player's own avatar is batting (or pitching) in a live game, exposed through the interactive at-bat scene. It is the companion to [`baseball_pa_outcome_model.md`](baseball_pa_outcome_model.md) (the macro-sim / background-league model) and is written to be read alongside it. Per `.claude/rules/baseball_engine.md §2`, the micro-sim tracks **exactly 25 base-out states per half-inning** and drives them with **per-event 25×25 transition matrices**, blending the player's real-time **timing/location inputs** with their database attributes.

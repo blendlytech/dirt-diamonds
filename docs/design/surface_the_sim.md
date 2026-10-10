@@ -1,5 +1,7 @@
 # Surface the Sim — Dashboard Read-Model Placement (Phase 12c)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The standings and leaders cards must handle conferences/divisions, the College National Ranking and playoffs ([league_restructure.md](league_restructure.md)), and are visually redesigned ([visual_redesign.md](visual_redesign.md)).
+
 **Owner of this doc:** Opus 4.8 (placement design only — NO code). Per the standing Phase-12
 split, Opus owes this placement sketch *before* Sonnet 5 builds the card volume; **Fable 5** wires
 the new seams and reviews. 12c is the "surface-the-sim" step of the Phase-12 "Saleable" arc

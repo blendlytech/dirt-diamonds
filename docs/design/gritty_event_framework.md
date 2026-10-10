@@ -1,5 +1,7 @@
 # Design — Gritty Event Framework (Dispatcher, Condition Model & Content Schema)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): New delivery fields: `voice_note` ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §8) and `cutscene` ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §5). Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro.
+
 **Author:** Claude Fable 5 (dispatcher skeleton + spec) · **Phase:** 7 (Gritty Event Framework) · **Status:** spec written alongside the implementation it describes; the seed content in `Assets/Narrative/Events/Content/core_events.json` doubles as the pipeline fixture set. Companion to the four existing design docs, same house style.
 
 Per `.claude/rules/gritty_events.md`: the dispatcher **runs on a background polling loop checking the Entity_Flags and Players tables**; events are JSON with **prerequisites, a probability weight, and branching choices**; choices write **immediate consequences AND hidden flags** that trigger cascading events years later. This doc turns that mandate into a threading model, a condition algebra, a consequence vocabulary (the first rivalry/affinity/interest **writers**), and the content contract Sonnet 5 authors event batches against (validated per batch by `check_event_graph_integrity`).

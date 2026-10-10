@@ -1,5 +1,7 @@
 # Event-Choice Prominence & Immersion Pass
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged. Pending choices may carry a voice note ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §8) or lead to a story cutscene.
+
 **Model:** Opus 4.8 (design) → build (Fable 5 or Sonnet 5 per §9) → Fable 5 review.
 **Status:** P-1/P-2/P-3 BUILT (Sonnet 5) + **Fable 5 review SIGNED OFF 2026-07-11** (one fix: `PortraitView` pre-tree NRE — `SetIdentity` now defers its apply to `_Ready`; banner home resolved per §10). §5 locked (badge + banner, no auto-switch). P-4 parked. Remaining exit: user eye-gate playtest (§8).
 **Touches:** `Assets/UI/` only. Zero `Assets/Simulation/` touch, zero schema change, zero content edit, no change to the resolution/forfeit *mechanics*.

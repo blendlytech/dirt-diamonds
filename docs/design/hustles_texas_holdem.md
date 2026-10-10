@@ -1,5 +1,7 @@
 # Design — Hustle: Texas Hold'em (pot-odds / bluffing math + card simulation)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged.
+
 **Author:** Claude Opus 4.8 (pot-odds/bluffing math + hand-evaluation + betting state machine) · **Phase:** 8d (per `docs/phase_8_9_interleave_plan.md`) · **Status:** design only — no C# in this pass; **sim/math core only, the `.tscn`/UI is a deferred follow-on slice** (this session's confirmed scope). Sonnet 5 implements against this contract; Fable 5 reviews. Companion to `hustles_narcotics_fencing.md` (shares its three-layer architecture, its `HustleContext`→`HustleResolution` seam, its consequence-writer vocabulary, and the same rules doc, `.claude/rules/gritty_events.md`).
 
 Per `.claude/rules/gritty_events.md`: *"Texas Hold'em: Direct mathematical card simulation evaluating pot odds."* This doc turns that one line into (a) a deterministic 7-card hand evaluator, (b) an equity engine that *is* the mandated "direct card simulation" (Monte-Carlo runout on `RngState`), (c) the pot-odds / minimum-defense-frequency / bluffing math that drives both the opponent AI and the headless hero autopilot, (d) a no-limit betting state machine with side-pot resolution, and (e) the daily-clock/session integration and the accumulated-risk-state it writes for 8c — all in the project's established pure-resolver shape so the math is `HoldemHarness`-provable in isolation.

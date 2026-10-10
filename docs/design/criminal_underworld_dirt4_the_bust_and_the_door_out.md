@@ -1,5 +1,7 @@
 # Design — Criminal Underworld Content Arc: `DIRT-4` "The Bust & The Door Out"
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. The indictment and going straight are launch story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6) with voice notes.
+
 **Author:** Claude Opus 4.8 (narrative architecture + the engine hook) · **Slice:** Content arc, batch 4 of 4 — **the finale**. Companion to `docs/design/criminal_underworld_content_arc.md` (the arc contract + `DIRT-1`), `docs/design/criminal_underworld_dirt2_the_fix.md` (`DIRT-2`), `docs/design/criminal_underworld_dirt3_product_and_turf.md` (`DIRT-3`) — read all three first — and to `docs/design/promotion_advancement_gates.md` (the ladder this batch finally lets a record bite). Obeys `docs/design/gritty_event_framework.md` (the closed content vocabulary) for its narrative half.
 
 This is the promotion of the arc doc's §8 `DIRT-4` outline into a full buildable spec, and it is **different in kind from every batch before it.** `DIRT-1..3` were *calibration-inert content* — they touched zero `Assets/Simulation/` files by construction. `DIRT-4` is the batch where the user chose to finally make the arc's thesis *mechanically* true: **crime can take the diamonds away — permanently.** So it has two halves that ship together:

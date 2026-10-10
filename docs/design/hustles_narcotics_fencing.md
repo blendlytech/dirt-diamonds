@@ -1,5 +1,7 @@
 # Design — Hustles: Narcotics State Machine & Fencing Negotiation
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged. Hustle characters may gain VO later; at launch voice is limited to announcers, phone voice notes and cutscenes.
+
 **Author:** Claude Opus 4.8 (risk/reward math + state machine) · **Phase:** 8b (per `docs/phase_8_9_interleave_plan.md`) · **Status:** design only — no C# in this pass. Sonnet 5 implements against this contract; Fable 5 reviews (the risk stats this writes feed the PED-style modifier layer and 8c's triad). Companion to `gritty_event_framework.md` (shares its consequence vocabulary and the same rules doc, `.claude/rules/gritty_events.md`).
 
 Per `.claude/rules/gritty_events.md`: *"Hustles operate as isolated interactive nodes. Narcotics: 3-tier system (Inventory Drop → Profit/Toxicity Cut → Territory Control vs Factions)."* This doc turns that one line into (a) a deterministic risk/reward resolver in the project's established pure-math shape, (b) a negotiation resolver for Fencing (structure was left "TBD by Opus's design" in the interleave plan), (c) the daily-clock integration seam, and (d) the **accumulated-risk-state contract** 8c's arrest/injury/suspension triad will consume.

@@ -1,5 +1,7 @@
 # High School Person Layer (HS-0 design)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The HS season becomes 10 Friday games plus a playoff bracket ([league_restructure.md](league_restructure.md) §3, §8.1), and HS graduation feeds college recruiting (§9.1). The person layer itself is unchanged.
+
 **Owner: Opus 4.8 (design). Implemented by HS-1…HS-6** per the approved plan
 (`review-docs-game-idas-high-school-md-and-sequential-pillow.md`). This is the
 contract the whole High School arc builds against: it fixes the semantics of the

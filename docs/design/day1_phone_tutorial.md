@@ -1,5 +1,7 @@
 # Day-1 Phone Tutorial — Design Contract
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged. The tutorial must also cover weekly game days, roster status, recruiting and the Draft.
+
 **Author:** Claude Opus 4.8 (architecture) · **Date:** 2026-07-11 · **Slice:** GAME_IMPROVEMENTS roadmap item #2 ("Tutorial phone thread")
 **Status:** DESIGN COMPLETE — this is the authoring contract Sonnet 5 builds Stage 2 against. No code here.
 **Implements:** `docs/game-idas/GAME_IMPROVEMENTS.md` lines 37–38 ("Add a tutorial on how to play the game" / "Add a section on how to play the game in cellphone at the very start of the game to teach players the basics").

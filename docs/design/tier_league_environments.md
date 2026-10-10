@@ -1,5 +1,7 @@
 # Design — Tier League Offensive Environments (6-Tier Ladder, Macro-Sim)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **SUPERSEDED** by [league_restructure.md](league_restructure.md) §11. The 6-tier ladder becomes HS / College / Pro. The HS (−20) and College (−16) rows carry forward, MLB (0) becomes Pro, and the three minor-league rows are retired. Runs are banded per 9 innings because HS plays 7. Kept as the derivation record for the delta method.
+
 **Author:** Claude Opus 4.8 (statistical/mathematical design) · **Phase:** 9a (Tier Schema + Multi-Tier Macro-Sim) · **Status:** design complete; C# not yet written. Fable 5 implements per `docs/phase_8_9_interleave_plan.md §9a`.
 
 This document specifies the per-tier **offensive-environment deltas** for the 6-tier league ladder — `HS, College, MinorA, MinorAA, MinorAAA, MLB`. Each tier is an independent 8-team league running the **same** `AtBatResolver` + `LeagueSimulator` macro-sim (`docs/design/baseball_pa_outcome_model.md`). Players in every tier are generated on the same 0–100 rating scale centered at 50, so ratings are **tier-relative**: a rating-50 hitter is an average hitter *for that tier*. What must differ between tiers is the league **run environment** — HS ball plays sloppy and high-scoring; the environment tightens as you climb; MLB is the shipped calibration, untouched.

@@ -1,5 +1,7 @@
 # Continuing Dirt & Diamonds: Phase 8/9 Interleave Plan
 
+> **HISTORICAL** (executed 2026-07-04…06; every step shipped). **2026-10-09 vision update:** the league model this plan built (6 tiers including minor leagues, 8 teams per tier, uniform 9+5+3 rosters, tier-ladder promotion) is **superseded** by Phase 13 ([design/league_restructure.md](design/league_restructure.md)). Kept as a record of how the daily clock and hustles were sequenced.
+
 ## Context
 
 `BUILD_PLAN.md` lays out 11 phases; `docs/progress.md` (849 lines) shows Phases 0–7 shipped and fully harness-proven as of 2026-07-04 — database core, event bus, Monte Carlo macro-sim (M1), Markov micro-sim (M2), career/avatar wiring with bullpens+arsenals+schema v4, the life-sim needs/utility engine (M3), relationships/rivalry/heir-mechanics/succession (Phase 6, 3-generation run proven), and the full Gritty Event framework including marriage/conception (Phase 7). Schema is at v6. The log's own last line: *"The project has no open items pending fresh direction."* One small uncommitted retune (RivalryEffects ±16 + a harness rewrite) is already verified and just needs a commit.

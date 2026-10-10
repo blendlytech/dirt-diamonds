@@ -6,7 +6,27 @@ Session-orientation file for the AI models. **Keep it lean:** at session end, ap
 
 ---
 
-## Current Status (2026-07-11)
+## Current Status (2026-10-09): new vision, road to launch
+
+**The vision changed.** Canonical pitch: [GAME_VISION.md](GAME_VISION.md). Plan: [BUILD_PLAN.md](BUILD_PLAN.md) Phases 13–17. All design docs for the new phases are written; **no code has started.**
+
+| Phase | Spec | State | Very next action (owner) |
+| :-- | :-- | :-- | :-- |
+| **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | Design complete | **13-0:** repair the `sqlite` MCP (point it at a scratch DB, not the live save); add the FAILED-check recap to `Tools/MonteCarloHarness` and seed the 344/345 flake (Gemini 3.1 Pro). Then 13-1 schema v14 + world-gen. |
+| **14 Voice & Broadcast Audio** | [design/voice_and_broadcast_audio.md](design/voice_and_broadcast_audio.md) | Design complete | 14a buses + `VoiceDirector` (Pro); 14b `Tools/VoiceGen` pilot bank (Pro, needs the user's ElevenLabs commercial plan + `ELEVENLABS_API_KEY`). Can run alongside 13. |
+| **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md) | Design complete | 15a style frames for both worlds. **User picks the art direction.** Can run alongside 13. |
+| **16 Cutscenes** | [design/cutscenes_motion_comic.md](design/cutscenes_motion_comic.md) | Design complete | Blocked on 14a/14b + 15a/15b. |
+| **17 Steam Commercial Release** | [design/steam_commercial_release.md](design/steam_commercial_release.md) | Design complete | Early user actions: Steamworks account/app, trademark screen of the title, league and team names, Coming Soon page timing. |
+
+**Decisions locked 2026-10-09 (user):** 56 unique announcers (College + Pro) plus 3 shared HS radio voices; in-engine motion-comic cutscenes; ElevenLabs voice for announcers, phone voice notes and cutscene VO; schema v14 is a clean break for old saves; a complete visual redesign is allowed.
+
+**Open for the user:** the art direction (15a); league/brand names; the spec interpretations in league_restructure §16 (College "+2 open spots", season lengths, Pro playoff field size, draft timing).
+
+⚠ **Live save lost:** `dirt_and_diamonds.db` was found at 0 bytes on 2026-10-09 (last valid: a day-10 v13 save in the 2026-07-23 game log). No local backup was found. The user may try Windows Previous Versions before launching the game. Moot after v14 anyway.
+
+**Tooling migration (2026-10-09, `e8c0b6b`):** `CLAUDE.md` → `GEMINI.md`, `.claude/{rules,skills}` → `.agents/`. Legacy role names below (Fable/Opus/Sonnet) map to Gemini 3.1 Pro / 3.1 Pro Math / 3.8 Flash (table in BUILD_PLAN's Model Delegation Doctrine). `.mcp.json`'s `filesystem` path was fixed (it pointed at a nonexistent folder).
+
+## Status as of 2026-07-11 (prior, superseded by the table above)
 
 **All prior arcs COMPLETE and committed.** Current focus: the `docs/game-idas/GAME_IMPROVEMENTS.md` UI/content roadmap (Slices A+B shipped; **Onboarding-2 tutorial-overlay slice COMPLETE + SIGNED OFF**; **content arc DIRT-1 "The On-Ramp" COMPLETE — Sonnet build REVIEWED + SIGNED OFF with one review fix (Fable, 2026-07-11); user playtests remain**; D–F, DIRT-2+, hustle minigames remain — see Roadmap below).
 
@@ -22,7 +42,9 @@ Session-orientation file for the AI models. **Keep it lean:** at session end, ap
 
 ---
 
-## ROADMAP — remaining work (dependency-ordered, model-tagged)
+## ROADMAP — prior (2026-07-11 → 07-15), superseded by BUILD_PLAN Phases 13–17
+
+*Kept for history. Its open items are absorbed: D-2/D-3 audio → Phase 14; Slice E/F → Phase 15; the practice-lever retune → slice 13-3; college/pro calendars → slice 13-3; the MC flake → slice 13-0; user playtests continue until Phase 13 changes the build.*
 
 Source: `docs/game-idas/GAME_IMPROVEMENTS.md` (user-refreshed 2026-07-11). Already resolved from that doc: text messages = DONE; item-popup removal = MOOT (no popup infra exists); autosave-per-event = DONE by architecture (surfaced in Slice B's note).
 
@@ -59,6 +81,10 @@ Source: `docs/game-idas/GAME_IMPROVEMENTS.md` (user-refreshed 2026-07-11). Alrea
 ---
 
 ## Session Log (compact — full detail in the archive)
+
+- **2026-10-09 — New vision documented (docs only, no code/sim touch):** user directive to rebuild the league per the source spec, ship for sale on Steam, add ElevenLabs voice (per-team announcers with taglines, phone voice notes, cutscene VO), animated cutscenes for story/achievements/big plays, and a completely new visual design. New: `GAME_VISION.md` (replaces the missing `GAME_IDEA.md`); design docs `league_restructure.md` (P13), `voice_and_broadcast_audio.md` (P14), `visual_redesign.md` (P15), `cutscenes_motion_comic.md` (P16), `steam_commercial_release.md` (P17). BUILD_PLAN gets Phases 13–17 and a dependency map; GEMINI.md rewritten; rules updated (baseball_engine, database_schema, ui_conventions, gritty_events, new audio_voice_cutscenes); skills updated (check_event_graph_integrity checks #9/#10 and tier ordinals, run_monte_carlo_batch Phase 13 note, new validate_audio_manifest); all 33 prior design docs bannered with what changed; checklist, GAME_IMPROVEMENTS, interleave plan and Steam README annotated. Gates not run (no code touched). **Next: 13-0 (sqlite MCP + MC flake), 15a style frames for the user, 14a/14b pilot.**
+
+- **2026-10-09 — Docs reconciliation (docs only, no code/sim touch):** BUILD_PLAN phase statuses corrected (8/9, 10, 11 COMPLETE; Phase 12 + post-12 arcs added), legacy→Gemini role table added, the user's league spec framed as **Phase 13 — League Restructure (PROPOSED)** with its conflicts against shipped code enumerated (tier collapse + save migration, `const` roster sizes vs `MicroGame` stackalloc, HS 1-game/week vs the 26-game calendar, `PromotionManager` → draft, MLB guard re-sanction). Gates not run (no code touched). **Next: repair `sqlite` MCP → MC flake recap/seed → Phase 13 design doc (Gemini 3.1 Pro Math).**
 
 - **2026-07-15 — P0 Hustle Feel Pass BUILT (Fable 5, no spec — user-directed, uncommitted at build time — `git log` first), UI layer ONLY:** the three crime screens made to feel like crimes. New shared `Assets/UI/HustleFeel.cs` (modulate-only panel fade-ins, odds tinting via new `UiColors.Success`, and the fluent `ResultReveal` builder: headline lands with a `UiSfx` sting → take counts up via `TweenMethod` → consequences drop line-by-line → footer buttons fade in last; per-result allocation only, killed on session restart/evaporation/Done). **Robbery:** authored marks (Kwik-Stop / Sal's Back-Room Count / Bonded Freight Depot / Castellano's) + approach names/flavor; per-approach execute odds previewed ON the approach buttons via pure `ChooseApproach`+`ComputeExecuteSuccessProbability` (no RNG draw), execute-panel odds line, press-your-luck beat surfaces `ComputePressLuckBustProbability` + Alert sting; getaway deliberately shows NO number (resolver exposes no getaway probability and this pass adds none — flavor line says so). **Fencing:** per-lot wire risk from `ComputeStingProbability` on the negotiate panel, staged SOLD/NO SALE reveals (sting line lands with Error). **Narcotics:** flavor pass (The Corner, supplier voice), Confirm on locked deal, staged THE CORNER PAID OUT / SEIZED. / NO DEAL. reveals — no odds number shown because the resolver exposes no seize/faction probability method and surfacing one would need a resolver touch (forbidden this pass). **Zero resolver/sim touch by construction:** diff = 7 files all under `Assets/UI/` (3 .cs + 3 .tscn + UiColors) + new HustleFeel.cs. Gates: build 0/0 (full sln); **HustleHarness 95/95, every band byte-identical** (jewelry +469.7/63.8%, careful +144.4/55.4%, trap −360.7/87.0% all unchanged); MC/Gritty not re-run (nothing under `Assets/Simulation` or `Assets/Narrative` touched); headless console-exe boot clean (day-10 save, schema v13, "gritty events 116", UiSfx pool up, errors empty ⇒ every new GetNode path resolves in the permanent siblings' `_Ready`). Honest gate limit (N-1/R-2 precedent): no headless click-through of tweens/sounds — **exit: user playtest** (reveal pacing, sting audibility, odds tint readability; all timings are consts in `HustleFeel`, copy is `[Export]`s — retunes are data edits, Sonnet-safe). Hold'em untouched (already reads as a card game; no Compute* surface named for it). **Next: user playtests the three screens; any pacing/copy complaints = Sonnet 5 data edits; D-2 global button-tap auto-wiring remains parked at the back of the queue per the 2026-07-11 pivot.**
 

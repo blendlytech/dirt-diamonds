@@ -1,5 +1,7 @@
 # Design — Non-Linear Need-Decay Curves (Life Sim / Utility AI)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. HS/College schedules have more practice days and fewer game days ([league_restructure.md](league_restructure.md) §3).
+
 **Author:** Claude Opus 4.8 (mathematical design) · **Phase:** 5 (Life Sim: Needs Engine & Utility AI → Milestone M3 "Life Happens") · **Status:** design formalized retroactively; first-pass curves already ship in `Assets/Simulation/Life/NeedsEngine.cs` and pass `simulate_utility_decay` 14/14. This doc is the spec that implementation was tuned against; it also closes the gaps the empirical first pass left open (§4 modifier semantics, §6 recovery, §7 Utility coupling).
 
 This document is the mathematical specification for how the five life-sim needs **decay** over time. Per `.claude/rules/life_sim_ai.md`, needs decay by non-linear math that **accelerates as the value approaches zero, to simulate desperation**, following `New_Need = Old_Need − (Base_Decay · Environmental_Multiplier · Stress_Modifier)`. This doc turns that one-line mandate into a calibrated, testable curve model, and specifies the two modifiers the mandate names but does not define.

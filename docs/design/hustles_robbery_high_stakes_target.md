@@ -1,5 +1,7 @@
 # Design — Robbery Hustle: One New High-Stakes Target ("The Jewelry Exchange")
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged.
+
 **Author:** Claude Opus 4.8 (mechanical/calibration architecture) · **Slice:** Hustle depth, one target added to one hustle · **Status:** spec written for Sonnet 5 **or** Fable 5 to build against; Fable 5 reviews + gates. Companion to `docs/design/hustle_minigames_depth_pass.md` §5 (the Robbery contract this extends) and `docs/design/hustles_narcotics_fencing.md` (the shared resolver shape). Mirrors the section rigor of `docs/design/criminal_underworld_dirt3_product_and_turf.md`, adapted for a calibration spec.
 
 This is the smallest, safest possible content slice: **add exactly one new `RobberyTarget`** — a new enum value plus one new row in the `Target(...)` switch — to the four-stage Robbery resolver. The stage machine, `ApproachProfile`, and every `Execute`/`PressLuck`/`Getaway`/`Bust` formula are already generic over any `TargetProfile`; this pass confirms that (against shipped code, §2) and adds a fourth rung to the target ladder that continues the established score/difficulty/heat progression. **Nothing else is touched** — not the other three targets, not the approaches, not Narcotics/Fencing/Hold'em, not the DIRT-3 narrative layer, not the schema. It is the "new mechanical content within an existing system" the user asked for, at minimum blast radius.

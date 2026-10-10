@@ -103,6 +103,11 @@ English set — wording is 11e's to polish, the token ids are the contract:
 - `#Tier_MinorAAA` — `Triple-A`
 - `#Tier_MLB` — `MLB`
 
+> **Planned change (Phase 13 slice 13-7 / Phase 17 slice 17a, `docs/design/steam_commercial_release.md` §3):**
+> the league collapses to HS / College / Pro with no minor leagues. The token set becomes `#Tier_HS` — `High School`,
+> `#Tier_College` — `College`, `#Tier_Pro` — `Pro`, plus `#Phase_Playoffs` and `#Phase_DraftNight`. The
+> `#Tier_MinorA/AA/AAA` and `#Tier_MLB` tokens are retired. Until that slice ships, the code still emits the list above.
+
 (The tier display names mirror `BaseballDashboard`'s exported `TierNamesCsv` defaults
 so the friends list and the in-game scouting card agree.)
 

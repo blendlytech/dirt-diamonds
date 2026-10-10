@@ -1,5 +1,7 @@
 # Design — Hustle Mini-Games Depth Pass (+ Robberies, net-new)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged. The shipped `HustleFeel` reveal timing carries into the new motion toolkit ([visual_redesign.md](visual_redesign.md) §7).
+
 **Author:** Claude Opus 4.8 (design) · **Status:** design only — no C# this pass; **§5.1 robbery stage list and §3.1 haggle EV-neutrality target LOCKED (Opus, on recommendations)**; **§11 open seams resolved to their recommended defaults**. Build flow per §10 (Fable 5 for any `Assets/Simulation/Hustles/` core touch + all reviews; Sonnet 5 for UI-only sub-slices). First build slice = **R-1** (robbery pure resolver + `HustleHarness` band, Fable 5). Companion to the two shipped hustle docs: `hustles_narcotics_fencing.md` (8b) and `hustles_texas_holdem.md` (8d). This doc **extends** those; it does not restate their architecture.
 
 **Source of the ask:** `docs/game-idas/GAME_IMPROVEMENTS.md` lines 54–56 —

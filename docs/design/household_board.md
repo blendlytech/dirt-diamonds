@@ -1,5 +1,7 @@
 # Household Board — parents cover a wealth-tier share of food & living costs
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged.
+
 *Spec + build: Fable 5, 2026-07-12 (user-directed, from the A2b playtest conversation: "Eating food should be taken care of by parents if the kid isn't poor, but if poor the kid needs to find a way to eat"). Single-session slice: spec, build, and gates together.*
 
 ## 1. Problem

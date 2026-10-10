@@ -2,7 +2,26 @@
 
 ## Overview
 
-This document contains the game improvement ideas for the game Dirt & Diamonds.  
+This document contains the game improvement ideas for the game Dirt & Diamonds.
+
+> **2026-10-09 vision update:** these ideas are now tracked inside the new phase plan. See [GAME_VISION.md](../GAME_VISION.md) and [BUILD_PLAN.md](../BUILD_PLAN.md) Phases 13–17. Status at a glance:
+>
+> - **Done:** calendar/clock/save/options in the phone, real-time clock with pause/speed, text messages, tutorial, interactive Hold'em/narcotics/fencing/robbery mini-games, autosave by architecture.
+> - **Phase 14 (Voice & Broadcast Audio):** sound for all UI elements (D-2/D-3), team play-by-play announcers, phone voice notes.
+> - **Phase 15 (Visual Redesign):** complete new visual design, more immersive UI per location, UI animations, stylized phone models per tier.
+> - **Phase 16 (Cutscenes):** animated motion-comic cutscenes for story moments, achievements and big plays.
+> - **Phase 13 (League Restructure):** HS → College → Draft → Pro, playoffs, roster rules.
+> - **Phase 17 (Steam Commercial Release):** for sale on Steam.
+> - **Still open / content backlog:** more storylines, activities, collectibles, upgrades.
+
+## New Vision Additions (2026-10-09)
+
+- League restructure: HS (12 teams) → College (24) → Draft → Pro (32); no minor leagues; playoffs at every level; Sunday roster lock and forfeits in Pro.
+- ElevenLabs voice clips across the game (pre-generated): announcers, phone voice notes, cutscene voice-over.
+- Each College and Pro team has its own play-by-play announcer with a personality and taglines for home runs, big plays and wins (sound bites). HS games use shared local-radio voices.
+- Animated cutscenes (in-engine motion comics) for story moments, achievements and big plays.
+- A completely new visual design.
+- Ship for sale on Steam.
 
 ## Story Line
 

@@ -1,5 +1,7 @@
 # Onboarding Tutorial Overlay (Day 1) + Self-Explaining Needs UI
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged. The tutorial must also cover weekly game days, roster status, recruiting and the Draft ([league_restructure.md](league_restructure.md)).
+
 **Status:** Design (Opus 4.8) — supersedes the delivery mechanism of `day1_phone_tutorial.md`, not its intent.
 **Date:** 2026-07-11
 **Slice:** Onboarding-2 ("teach the game in the first two days, especially Needs")

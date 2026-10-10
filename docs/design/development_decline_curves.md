@@ -1,5 +1,7 @@
 # Development & Decline Curves (Phase 9d)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The tier gradient becomes HS < College < Pro (minor-league rungs retired) and gets re-checked in slice 13-3 ([league_restructure.md](league_restructure.md) §11.3). HS now plays 1 game a week, so practice days rise; the parked practice-lever retune folds into that slice.
+
 **Owner split: Opus 4.8 (this design — the curve model, the potential/ceiling
 concept, the Practice lever, the season-boundary pass, the `AgeBonus` seam
 evolution); Sonnet 5 (the tuning harness — calibrating growth/decline/potential/

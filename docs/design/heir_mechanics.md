@@ -1,5 +1,7 @@
 # Design — Heir Mechanics: Genetic Blending, Hidden Interest, Succession & Lineage Failure
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): An heir enters the pipeline at HS like any new career ([league_restructure.md](league_restructure.md) §9). Succession and lineage-over are launch story cutscenes ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6).
+
 **Author:** Claude Opus 4.8 (architecture / mathematical design) · **Phase:** 6 (Legacy & Lineage — second bullet; exit criteria = a simulated 3-generation run with succession handoffs) · **Status:** design only — **no code written this pass.** This document is the spec Claude Sonnet 5 implements the blending math / heir generation / queries / harness checks against, and Claude Fable 5 implements the succession handoff + 3-generation harness suite against (model split in §9.4).
 
 This document specifies how the player's bloodline continues across generations: how an heir's baseball attributes are **genetically blended** from their parents, how the hidden `Players.baseball_interest` stat is rolled and **revealed**, how the avatar **retires and hands off** to an heir, and when a lineage **fails and ends the game**.

@@ -27,3 +27,22 @@
 
 - Thin vertical slices: every phase ships its UI as a minimal but demoable scene; no big-bang UI phase.
 - Player-facing text lives in scene/resource files or a strings table, not in C# string literals, to keep future localization possible.
+
+## Visual Redesign (Phase 15 — `docs/design/visual_redesign.md`)
+
+- The shipped thin-slice look is not the shipping look. All styling comes from the Theme family in `Assets/UI/Theme/` (tokens + components). Per-scene style overrides are a review-blocking defect.
+- Team colors come from `Assets/Data/Teams/team_colors.json` through theme variations.
+- Every interactive control has focus neighbors and a visible focus state (keyboard, controller and Steam Deck reachability).
+- Layouts must work at 16:9 and 16:10 (1280×800 minimum).
+- Accessibility settings are honored everywhere: text size, reduce motion, subtitles, a colorblind-safe semantic palette.
+
+## Audio, Voice & Subtitles (Phase 14 — `docs/design/voice_and_broadcast_audio.md`)
+
+- Play UI sounds through `UiSfx` and voice (announcer, voice notes, cutscene VO) through `VoiceDirector`. Never create `AudioStreamPlayer`s ad hoc in scenes.
+- Every spoken line shows a subtitle from the strings table (keyed by `clip_id`) when subtitles are on.
+- Voice notes never autoplay during an at-bat or cutscene.
+
+## Cutscenes (Phase 16 — `docs/design/cutscenes_motion_comic.md`)
+
+- Cutscenes play only through the permanent `CutscenePlayer` overlay, requested via `CutsceneDirector`. Scenes don't spawn their own cinematic overlays.
+- Every cutscene is skippable and honors reduce-motion. The game clock soft-pauses while one plays.

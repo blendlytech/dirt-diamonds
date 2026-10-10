@@ -1,5 +1,7 @@
 # UI Audio Foundation — Slice D
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **Extended** by [voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) (Phase 14): new Voice / Announcer / Music / Ambience buses and a `VoiceDirector` autoload. §8's non-goals "no voice/dialogue" and "no music" are lifted. D-2/D-3 fold into slice 14a. The `UiSfx` service and `user://settings.cfg` volume persistence stay as shipped.
+
 **Owner of this doc:** Opus 4.8 (architecture/design only — NO code). Per the standing roadmap split,
 Opus owes this design *before* any build. Slice D is tagged in [game-improvements-roadmap] /
 `docs/progress.md` as **"UI audio foundation — greenfield (NO audio infra/assets exist anywhere):

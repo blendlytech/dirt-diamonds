@@ -1,5 +1,7 @@
 # At-Bat Presentation — Making the Micro-Sim Read as Baseball (Phase 12d)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Phase 13 makes regulation innings per tier (HS 7). Phase 14 adds `BroadcastBooth` on this beat sequencer: announcer calls, with `PaReveal` held up to 4 s for the call ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §7). Phase 16 adds big-play cutscenes as one more beat ([cutscenes_motion_comic.md](cutscenes_motion_comic.md)). The layout is redesigned in Phase 15.
+
 **Owner of this doc:** Opus 4.8 (presentation architecture + the sim seam — NO code). Per the standing
 Phase-12 split this is the pending Opus pass 12a/12b/12c flagged (`surface_the_sim.md` §8 names 12d
 "the sibling step, with its own pending Opus design pass — not designed here"). 12d is the

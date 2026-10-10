@@ -1,5 +1,7 @@
 # High School Onboarding Events — Design Contract
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. The `rookie_season` batch's `tier >= 2` floor now means a **Pro rookie season**; review copy that describes minor-league life. HS games are now Fridays, 10 per season plus playoffs ([league_restructure.md](league_restructure.md) §3).
+
 **Author:** Opus 4.8 (architecture) · **Date:** 2026-07-10 · **Arc:** Act 1 fix (HS onboarding + rookie-batch tier gate)
 **Status:** DESIGN COMPLETE — this is the authoring contract Sonnet 5 builds Stage 2 against. No code here.
 **Plan of record:** `C:\Users\DELL\.claude\plans\let-s-look-at-act-jazzy-kay.md`

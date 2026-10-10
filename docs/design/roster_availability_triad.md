@@ -1,5 +1,7 @@
 # Design — Roster Availability & the Arrest / Injury / Suspension Triad (Phase 8c)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **Phase 13 change** ([league_restructure.md](league_restructure.md) §7): the nameless replacement-level call-up is **retired**, so an absence now leaves a hole. Pro's Sunday lock forbids inactive replacements, and any team that can't field 9 position players plus a pitcher forfeits. The content contract (§2) is unchanged.
+
 **Author:** Claude Fable 5 (engine surface, shipped 2026-07-05) · **Phase:** 8c per `docs/phase_8_9_interleave_plan.md` · **Status:** engine COMPLETE and harness-proven; this doc is the contract for **Sonnet 5's content half** (the event JSON that actually fires arrests, injuries and suspensions). Companion to `gritty_event_framework.md` (whose §4 deferral note reserved exactly this consequence type) and `hustles_narcotics_fencing.md` §8/§12 (the risk stats 8b writes, and the tail-pricing frame).
 
 Until 8c, a rostered player was unconditionally in every game — `LeagueSimulator`/`MicroGame` build fixed lineup/rotation/bullpen slots at `Initialize()` and no `IsAvailable` concept existed anywhere. This pass adds the availability dimension end to end without touching the per-PA hot path or the calibrated core.

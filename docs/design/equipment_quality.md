@@ -1,5 +1,7 @@
 # Equipment Quality (Phase 8e)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. The shop screen is redesigned in Phase 15 ([visual_redesign.md](visual_redesign.md)).
+
 **Owner: Fable 5 (design + implementation + review).** Turns the interleave plan's one-liner —
 "purchasable gear tiers as effective-ratings modifiers, same precedent as PED/fatigue/rivalry —
 never touching `AtBatResolver`'s calibration tables directly, behind the `run_monte_carlo_batch`

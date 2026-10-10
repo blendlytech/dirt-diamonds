@@ -1,5 +1,7 @@
 # Real-Time Clock & Time Controls — Slice G
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Cutscenes soft-pause the clock exactly like hustle sessions ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §3). Weekly game days follow the new tier calendars ([league_restructure.md](league_restructure.md) §3).
+
 **Owner of this doc:** Opus 4.8 (architecture/design only — NO code). Per the standing roadmap
 split, Opus owes this design *before* any build. Slice G is flagged in
 [game-improvements-roadmap] / `docs/progress.md` as **"architecturally significant: the sim is

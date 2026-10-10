@@ -1,5 +1,7 @@
 # Promotion & Advancement Gates (Phase 9c)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **SUPERSEDED** by [league_restructure.md](league_restructure.md) §9. `PromotionManager` is retired in favor of `PipelineManager` (graduation, recruiting, the Draft). **Kept:** §2's advancement score as the recruit/draft value function and §6's avatar tier-transfer handoff (reused for Signing Day and the Draft). **Retired:** the one-tier-per-offseason ladder sweep (§3–§5).
+
 **Owner split: Opus 4.8 (this design — the promotion model, performance + scouting);
 Fable 5 (the tier-transfer handoff — the avatar changes team *and* tier mid-save,
 the succession-handoff's sibling, same roster-invariant discipline).** Turns the

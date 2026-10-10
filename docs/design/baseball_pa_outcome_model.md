@@ -1,5 +1,7 @@
 # Design — Plate-Appearance Outcome Probability Model (Macro-Sim / Monte Carlo)
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Unchanged. This calibration **is** the Pro tier in the new league ([league_restructure.md](league_restructure.md) §11). Its §8 batch remains the byte-exact resolver guard.
+
 **Author:** Claude Opus 4.8 (statistical/mathematical design) · **Phase:** 3 (Baseball Macro-Sim → Milestone M1 "The League Lives") · **Status:** design complete, backing schema (v3) shipped; C# resolver/simulator not yet written.
 
 This document is the mathematical specification for the background-league plate-appearance (PA) model. It is a **spec, not code** — `AtBatResolver.cs` and `LeagueSimulator.cs` (Fable 5, next session) implement it. Per `.claude/rules/baseball_engine.md §1`, the macro-sim does **not** simulate pitch-by-pitch; it resolves each PA to one terminal outcome from empirical, matchup-adjusted probabilities. The pitch-level Markov micro-sim (Phase 4) is a separate model and lives in a separate doc.

@@ -1,5 +1,7 @@
 # At-Bat "Read the Pitch" Input Model
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Mechanics unchanged. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](visual_redesign.md)); the mechanics here are unchanged.
+
 **Status:** DESIGN (Opus 4.8, 2026-07-07). No code. Supersedes the v4 Swing/Take
 batter input inside `PitchChain.SimulatePa` for the *human* path only.
 

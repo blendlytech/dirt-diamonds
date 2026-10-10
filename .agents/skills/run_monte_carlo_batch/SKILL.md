@@ -4,7 +4,15 @@ description: Tests the baseball simulation engine's statistical accuracy in isol
 ---
 # run_monte_carlo_batch
 
-**Purpose:** Tests the baseball simulation engine's statistical accuracy in isolation. Mandatory after **every** change to `AtBatResolver.cs` or the PED modifier weights (CLAUDE.md §Required Workflow Procedures).
+**Purpose:** Tests the baseball simulation engine's statistical accuracy in isolation. Mandatory after **every** change under `Assets/Simulation/`: `AtBatResolver.cs`, PED/tier weights, rosters, schedules, innings (GEMINI.md §9).
+
+> **Phase 13 changes (league restructure, `docs/design/league_restructure.md` §11 / §15), applied as the slices land:**
+>
+> - Tiers collapse to **HS / College / Pro**. Per-tier band checks reuse the shipped HS, College and MLB rows; **runs are banded per 9 innings** (HS plays 7).
+> - The **resolver guard** (§5 fixtures + §8 batch below) must stay **byte-exact**; the resolver isn't touched.
+> - The **season-pipeline bit-identity guard** (PA 48384 / H 10969 / ER 5237, tied to the 8-team, 154-game MLB season) is **retired in slice 13-3** and replaced by a **new Pro guard** recorded once on the first fully green 32-team, 64-game run (sanctioned in the spec). Byte-exact from then on.
+> - Sections 3, 7 and 9 below that assume `9+5+3` rosters, a 154-game season or one 8-team league are rewritten in slices 13-2/13-3 (roster capacities, regulation innings, schedule-driven play, forfeits, playoffs).
+> - **Prerequisite (13-0):** add a FAILED-check recap at the tail of the output and seed the rare stochastic check behind the historical 344/345 flake.
 
 **Execution:**
 

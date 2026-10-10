@@ -1,5 +1,7 @@
 # Steam & Publishing — Design (Phase 11, "Ship It")
 
+> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Still the **technical reference** (Facepunch, natives, cloud saves, degradation). The commercial launch, achievement refresh ("The Show" redefined as the first Pro game, "Went Pro" removed, new league achievements), new rich-presence tokens and the expanded AI disclosure (ElevenLabs voices) are in [steam_commercial_release.md](steam_commercial_release.md) (Phase 17).
+
 **Owner of this doc:** Opus 4.8 (design only — NO code). Per the standing split and
 `CLAUDE.md`'s Steamworks directive, **Fable 5 owns the implementation volume** (Facepunch.Steamworks
 wiring, native-library targeting, export presets, `validate_steamworks_native`); Opus owns exactly
