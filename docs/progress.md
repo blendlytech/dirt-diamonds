@@ -20,6 +20,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 **Owner decisions (canonical record: GAME_VISION v2; detail: temptation §0 D1–D21):**
 
+- **2026-10-10 — G-2 pitching-mode design (Claude Fable 5.1, branch `g2/fable-design`; docs only, no code/sim touch):** new [design/pitching_mode.md](design/pitching_mode.md): three inputs (type, 17-cell target, effort), triangular scatter from control/effort/movement/fatigue, a new `BatterIntentKind.Model` branch that tilts the neutral chain's location-conditioned rates resolver-style (reference pitcher = ratings by construction, band = gain budget ±.100 OPS), an NPC tendency book with capped leans as the anti-omniscience bound, "always challenge" dominated because known strikes lose called strikes, Invariant N by an early `HasCell` branch, 8 scripted bots + 9 gates (suite 8), 50-row constants table for Pro Math, 4 engine slices (G-2a/b Opus, G-2c Sonnet, G-2d both). Disagreement: batting as shipped (1.8 OPS spread) needs a Read v2 re-band to the same idiom. Gates not run (no code). **Next: G-2 feasibility review by Claude Opus 5.5 (+ Gemini Pro Math on the curves), then a Fable revision pass.**
 - **2026-10-09:** 56 unique announcers plus 3 HS radio voices; in-engine motion-comic cutscenes; schema v14 is a clean break for old saves; a complete visual redesign is allowed.
 - **2026-10-10:**
   - Voice is **broadcasters only**.
