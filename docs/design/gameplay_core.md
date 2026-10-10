@@ -121,7 +121,7 @@ The avatar's `fielding` rating only feeds the team average today, and listed pos
 
 *Proposal:* occasional **defensive moments** for the avatar's listed position: a quick read-and-react prompt on a ball hit to them, graded against fielding.
 - It's opt-in in Settings, attended games only, on the human branch only.
-- This would make listed position mean something on the field. It's an owner call and a Fable 5.1 review item, because positions are currently story-only by design (temptation §3.1).
+- This would make listed position mean something on the field. It's an owner call and an R-1 review item, because positions are currently story-only by design (temptation §3.1).
 
 ---
 
@@ -165,7 +165,7 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 
 | Slice | Content | Recommended model | Reviewer | Gate |
 | :-- | :-- | :-- | :-- | :-- |
-| **G-1** | Attribute audit: verify §1 against code, settle the macro weights of discipline and control, decide the needs/stress and person-stat proposals | **Claude Fable 5.1** (in review R-1) → **Gemini Pro Math** (numbers) | Claude Opus | Owner: "how much skill is worth" |
+| **G-1** | Attribute audit: verify §1 against code, settle the macro weights of discipline and control, decide the needs/stress and person-stat proposals | **GPT 6 Astra Pro** (in review R-1; reassigned from Claude Fable 5.1, 2026-10-10) → **Gemini Pro Math** (numbers) | Claude Opus | Owner: "how much skill is worth" |
 | **G-2** | Pitching mode design → engine (`IPitcherPolicy` human branch, scatter model, batter tendency read) | **Claude Fable 5.1** (design, owner 2026-10-10: [brief](../tasks/G-2_pitching_design_fable_brief.md)) → **GPT 6 Astra Pro** (engine; owner reassignment 2026-10-10) + **Gemini Pro Math** (scatter/whiff curves); UI: **Claude Sonnet 5.5** | Gemini Pro (sim diff) + Claude Opus (merge gate) | MC bit-identical on the neutral branch; skill-bot spread |
 | **G-3** | At-bat view rebuild for batting + pitching (§2.1, §2.2 UI) | **Claude Sonnet 5.5** | Gemini Pro | Screenshot review; playtest |
 | **G-4** | Venue catalog (68 entries) + venue screen runtime + hotspots | **Claude Sonnet 5.5** (screen) + **Gemini 3.8 Flash** (catalog data) | Claude Opus | Every team resolves a venue; no missing-art fallbacks |
