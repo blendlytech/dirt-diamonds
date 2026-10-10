@@ -11,7 +11,7 @@ namespace DirtAndDiamonds.UI;
 
 /// <summary>
 /// Always-present overlay (permanent sibling under Main, per Main.tscn) for an
-/// armed Poker <see cref="PendingHustleSession"/> (docs/design/hustles_texas_holdem.md
+/// armed Poker <see cref="PendingHustleSession"/> (docs/reference/hustles_texas_holdem.md
 /// §10/§8d Layer 3): a stakes/buy-in start panel seats a <see cref="HoldemSessionState"/>,
 /// then the table panel drives the interactive
 /// <see cref="HoldemHandState.StartHand"/>/<see cref="HoldemHandState.SubmitHeroAction"/>

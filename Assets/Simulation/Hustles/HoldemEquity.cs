@@ -5,7 +5,7 @@ namespace DirtAndDiamonds.Simulation.Hustles;
 
 /// <summary>
 /// The mandated "direct mathematical card simulation evaluating pot odds"
-/// (docs/design/hustles_texas_holdem.md §5): a bounded Monte-Carlo runout
+/// (docs/reference/hustles_texas_holdem.md §5): a bounded Monte-Carlo runout
 /// estimates an agent's win probability (ties counted as fractional wins)
 /// given its hole cards, the live board, and a count of live opponents with
 /// unknown holes. Every draw comes from the caller's <c>ref RngState</c>, so

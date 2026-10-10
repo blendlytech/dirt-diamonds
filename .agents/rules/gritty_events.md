@@ -1,6 +1,6 @@
 # **Gritty Events & Hustle Mechanics**
 
-Full contract: `docs/design/gritty_event_framework.md`. Validate every batch with `check_event_graph_integrity`.
+Full contract: `docs/reference/gritty_event_framework.md`. Validate every batch with `check_event_graph_integrity`.
 
 ## **Event Dispatcher**
 

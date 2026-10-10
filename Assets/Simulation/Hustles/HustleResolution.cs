@@ -5,7 +5,7 @@ namespace DirtAndDiamonds.Simulation.Hustles;
 /// (Fencing) applies to the subject player — the same primitive vocabulary
 /// gritty events already write (funds/stress/flags), plus the two risk
 /// writers 8b introduces (detection_risk/health_ceiling) and the faction
-/// affinity deltas Narcotics alone produces (docs/design/hustles_narcotics_fencing.md
+/// affinity deltas Narcotics alone produces (docs/reference/hustles_narcotics_fencing.md
 /// §5). Fencing's resolution leaves SupplierTrustDelta/CrewStandingDelta/
 /// SetBadProductFlag/SetControlsTurfFlag at their defaults (0/false) — a
 /// harmless no-op when <see cref="Economy.Hustles.HustleService"/> applies it,
@@ -33,10 +33,10 @@ public readonly struct HustleResolution
     public readonly bool SetSpoiledGoodsFlag;
     public readonly bool SetControlsTurfFlag;
 
-    /// <summary>Hold'em only (docs/design/hustles_texas_holdem.md §9/§11) — set on a raid, the poker analogue of Fencing's sting flag ("gambling_bust").</summary>
+    /// <summary>Hold'em only (docs/reference/hustles_texas_holdem.md §9/§11) — set on a raid, the poker analogue of Fencing's sting flag ("gambling_bust").</summary>
     public readonly bool SetGamblingBustFlag;
 
-    /// <summary>Robbery only (docs/design/hustle_minigames_depth_pass.md §5.2) — set on a botched execute/getaway, the robbery analogue of the sting/raid flags ("robbery_bust"). The R-2 <see cref="Economy.Hustles.HustleService"/> apply path consumes it; leaving it defaulted keeps every other hustle a no-op, exactly like the four flags above.</summary>
+    /// <summary>Robbery only (docs/reference/hustle_minigames_depth_pass.md §5.2) — set on a botched execute/getaway, the robbery analogue of the sting/raid flags ("robbery_bust"). The R-2 <see cref="Economy.Hustles.HustleService"/> apply path consumes it; leaving it defaulted keeps every other hustle a no-op, exactly like the four flags above.</summary>
     public readonly bool SetRobberyBustFlag;
 
     /// <summary>Fencing only (§4.1/§5.2/§11) — set when an acquired lot's source was <c>FencingSource.FreshFromAJob</c>, clearing the <c>hot_goods</c> flag on apply (consume-on-use). Every other hustle leaves this at its default, the same no-op discipline as the flags above.</summary>

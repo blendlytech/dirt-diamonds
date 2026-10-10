@@ -2,7 +2,7 @@
 
 **Owner:** Gemini 3.1 Pro (achievements/presence code, builds, RC QA) · Gemini 3.8 Flash (store copy drafts, checklists, notices file) · **the user** (Steamworks account, payments, legal sign-off, pricing, every external submission)
 **Status:** design complete 2026-10-09. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §6.
-**Builds on:** [steam_publishing_ship_it.md](steam_publishing_ship_it.md) (Phase 11, shipped): Facepunch.Steamworks only, native library resolver, graceful degradation when Steam is absent, achievements as a bus consumer, cloud saves with the WAL checkpoint, rich presence, Windows + Linux export presets. That doc stays the technical reference; this doc covers what it takes to **sell** the game.
+**Builds on:** [steam_publishing_ship_it.md](../reference/steam_publishing_ship_it.md) (Phase 11, shipped): Facepunch.Steamworks only, native library resolver, graceful degradation when Steam is absent, achievements as a bus consumer, cloud saves with the WAL checkpoint, rich presence, Windows + Linux export presets. That doc stays the technical reference; this doc covers what it takes to **sell** the game.
 
 > **Verify against current Steamworks documentation at submission time.** Steam's fees, review times, asset sizes and survey wording change. The figures here are planning values, not authority.
 
@@ -96,7 +96,7 @@ Phase 11's discipline holds: **every achievement traces to a bus event or persis
 ## 7. Release-candidate QA (17d)
 
 - **Gate suite green:** MonteCarlo (per-tier bands + Pro guard), GrittyEvents, CoreLoop, NeedsDecay, SchemaValidator, HustleHarness, HoldemHarness, PipelineHarness, AudioManifestHarness, CutsceneHarness.
-- **Full-career playthrough** (manual checklist, extending `docs/hs_manual_playtest_checklist.md`): new career → HS seasons and playoffs → recruiting → college → declare → Draft Night → Pro seasons, lock weeks, a forfeit, playoffs → a crime arc to arrest and the door out → marriage and child → retirement → succession → the heir's first game.
+- **Full-career playthrough** (manual checklist, extending `docs/reference/hs_manual_playtest_checklist.md`): new career → HS seasons and playoffs → recruiting → college → declare → Draft Night → Pro seasons, lock weeks, a forfeit, playoffs → a crime arc to arrest and the door out → marriage and child → retirement → succession → the heir's first game.
 - **Platform:** clean installs on Windows 10/11 and a mainstream Linux distro; Steam Deck smoke test; Steam running vs not running (graceful degradation); Steam Cloud round-trip across two machines, including the conflict prompt.
 - **Budgets:** cold boot to title < 10 s on the minimum spec; no frame drops below 60 fps in the shell or cutscenes on the recommended spec; **install size < 2 GB** (planning: about 1 GB with ~150 MB of voice); a day-advance batch transaction within its benchmark.
 - **Stability:** a 10-season soak test with no crash; logs at `user://logs`, with a "Open log folder" button in Settings for bug reports.

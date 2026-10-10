@@ -2,7 +2,7 @@
 
 **Owner:** Gemini 3.1 Pro (theme architecture, scene rebuilds, review) · Gemini 3.8 Flash (screen builds from approved frames, asset integration) · the user (art-direction sign-off at every gate)
 **Status:** design complete 2026-10-09; no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5. User directive, 2026-10-09: *"It can use a complete new design visually."*
-**Supersedes:** the visual parts of [presentation_layer_narrative.md](presentation_layer_narrative.md) §3 (theme) and §6 (portrait house style), [scene_art_guide.md](scene_art_guide.md) (house style), and the deprioritized Slice E (phone tier theming) and Slice F (animation pass), both absorbed here as 15f/15e. The *architecture* parts of those docs (scene isolation, read-only UI, bus signals) stay in force.
+**Supersedes:** the visual parts of [presentation_layer_narrative.md](../reference/presentation_layer_narrative.md) §3 (theme) and §6 (portrait house style), [scene_art_guide.md](../archive/scene_art_guide.md) (house style), and the deprioritized Slice E (phone tier theming) and Slice F (animation pass), both absorbed here as 15f/15e. The *architecture* parts of those docs (scene isolation, read-only UI, bus signals) stay in force.
 
 ---
 
@@ -83,7 +83,7 @@ Every screen goes through the same loop: **style frame → user approval → bui
 | :-- | :-- | :-- |
 | Team logos + color triplets | 68 | Original marks; trademark-screened |
 | Ballparks / fields | ~10 kits | HS field kit (4 variants), college park kit (3), pro stadium kit (3), team-tinted |
-| Location scenes | existing list in [scene_art_guide.md](scene_art_guide.md) + new | Home, school, clubhouse, street corner, pawn shop, jail, hospital, etc., in the new style |
+| Location scenes | existing list in [scene_art_guide.md](../archive/scene_art_guide.md) + new | Home, school, clubhouse, street corner, pawn shop, jail, hospital, etc., in the new style |
 | Contact and player portraits | about 40 authored + procedural fallback | Re-done in the new style; the existing Midjourney portraits are retired or restyled |
 | Icons | ~120 | One icon family covering both worlds |
 | Cutscene art kits | per [cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6 | Produced with the same direction |

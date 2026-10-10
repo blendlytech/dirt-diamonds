@@ -20,7 +20,7 @@ public enum ItemPurchaseFailure : byte
 
 /// <summary>
 /// Layer 2 purchase orchestration for the item catalog
-/// (docs/design/high_school_person_layer.md §5) — the exact
+/// (docs/reference/high_school_person_layer.md §5) — the exact
 /// <see cref="Equipment.EquipmentService"/> discipline: validate against the
 /// current DB state, write funds + ownership in this service's own batch,
 /// commit, and only then publish the funds impulse so the Life sim's

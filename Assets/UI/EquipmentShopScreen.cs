@@ -6,7 +6,7 @@ using Godot;
 namespace DirtAndDiamonds.UI;
 
 /// <summary>
-/// Phase 8e's Layer 3: the gear shop (docs/design/equipment_quality.md §7).
+/// Phase 8e's Layer 3: the gear shop (docs/reference/equipment_quality.md §7).
 /// 12b: an on-demand modal following the hustle screens' scrim + centered
 /// Card idiom (it was a permanently-visible corner palette before, which
 /// floated over the scouting card) — opened via the Burner Phone Bank tab's

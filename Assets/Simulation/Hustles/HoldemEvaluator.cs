@@ -3,7 +3,7 @@ using System;
 namespace DirtAndDiamonds.Simulation.Hustles;
 
 /// <summary>
-/// Best-5-of-7 hand evaluation (docs/design/hustles_texas_holdem.md §4.2): every
+/// Best-5-of-7 hand evaluation (docs/reference/hustles_texas_holdem.md §4.2): every
 /// hand collapses to one comparable <c>int</c> <c>HandScore</c> — higher wins,
 /// equal is a tie (split pot):
 /// <code>

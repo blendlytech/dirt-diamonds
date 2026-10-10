@@ -8,7 +8,7 @@ public enum Street : byte { Preflop, Flop, Turn, River }
 public enum SeatStatus : byte { Active, Folded, AllIn }
 
 /// <summary>
-/// One action a seat takes at a decision point (docs/design/hustles_texas_holdem.md
+/// One action a seat takes at a decision point (docs/reference/hustles_texas_holdem.md
 /// §8.2): Fold, CheckOrCall (resolves to a check if nothing is owed, else a
 /// call — capping at all-in if the seat is short), or RaiseTo(total) — the
 /// TOTAL amount the seat is betting/raising TO this street, not the
@@ -77,7 +77,7 @@ public readonly struct HandResult
 public delegate HeroAction PokerPolicy(HoldemHandState hand, int seat, ref RngState rng);
 
 /// <summary>
-/// The no-limit betting state machine for one hand (docs/design/hustles_texas_holdem.md
+/// The no-limit betting state machine for one hand (docs/reference/hustles_texas_holdem.md
 /// §8): streets, side-pot-correct all-in resolution, and the interactive
 /// contract (<see cref="StartHand"/>/<see cref="SubmitHeroAction"/>) that
 /// advances to the next hero decision point (or hand end) on each call,

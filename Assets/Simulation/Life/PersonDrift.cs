@@ -4,7 +4,7 @@ namespace DirtAndDiamonds.Simulation.Life;
 
 /// <summary>
 /// The twelve integer person stats of the schema-v11 Player_Person row
-/// (docs/design/high_school_person_layer.md §2), in the row's own column order
+/// (docs/reference/high_school_person_layer.md §2), in the row's own column order
 /// (gpa excluded — it is REAL and moves only through the §2.2 weekly drift,
 /// never through the per-hour effect channel). CONTRACT: these ordinals are
 /// mirrored by PersonQueries.AdjustStat's column table on the Data side (the

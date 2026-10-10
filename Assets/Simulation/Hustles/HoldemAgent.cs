@@ -4,7 +4,7 @@ using DirtAndDiamonds.Simulation.Baseball;
 namespace DirtAndDiamonds.Simulation.Hustles;
 
 /// <summary>
-/// Pot-odds/MDF/bluff decision math (docs/design/hustles_texas_holdem.md §6)
+/// Pot-odds/MDF/bluff decision math (docs/reference/hustles_texas_holdem.md §6)
 /// and the archetype-driven decision procedure (§7) shared by every opponent
 /// seat and, at TAG tunables reck-interpolated toward Maniac, the hero
 /// autopilot (§7.3). Pure — reads the live <see cref="HoldemHandState"/> but

@@ -6,7 +6,7 @@ You are a member of the "Dirt & Diamonds" model team. **Roles, slice ownership, 
 
 **The game** (canonical: [docs/GAME_VISION.md](docs/GAME_VISION.md)) is a **commercial Steam release**: a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov chain) built in Godot 4 + C#. The player raises a ballplayer from **High School → College → the Draft → Pro** in a fictional league, survives a gritty off-field life (hustles, crime, family, heirs), hears every game called by **their team's own ElevenLabs-voiced announcer**, gets story through **phone texts**, and sees story moments, achievements and big plays as **in-engine motion-comic cutscenes**. The visual identity is being **completely redesigned** (Phase 15).
 
-**Where we are:** Phases 0–12 are complete. The road to launch is Phases 13–17 in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). Every session starts by reading [docs/progress.md](docs/progress.md) and running `git status` + `git log` (an auto-committer and parallel sessions are active).
+**Where we are:** Phases 0–12 are complete. The road to launch is Phases 13–17 in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). Docs are organized by authority in [docs/README.md](docs/README.md) (active specs in `docs/design/`, shipped-system specs in `docs/reference/`, superseded docs in `docs/archive/`). Every session starts by reading [docs/progress.md](docs/progress.md) and running `git status` + `git log` (an auto-committer and parallel sessions are active).
 
 Primary objective: highly optimized, performant code with strict separation between the deterministic sports systems, the stochastic narrative systems, and the presentation layer.
 

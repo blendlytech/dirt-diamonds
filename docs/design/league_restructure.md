@@ -2,7 +2,7 @@
 
 **Owner:** per-slice authors and reviewers are in [TEAM.md](../TEAM.md) §2 (owner-confirmed 2026-10-10), which **overrides the "Owner" column in §15 below**. Summary: Claude Opus 5.5 (13-0…13-3, 13-6 engine) · Gemini 3.1 Pro (13-4, 13-5; reviews Opus's slices) · Gemini 3.1 Pro Math (calibration) · Gemini 3.8 Flash (team seed data) · Claude Sonnet 5.5 (league UI, 13-7)
 **Status:** design complete 2026-10-09; no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 and the user-authored source spec in [BUILD_PLAN.md](../BUILD_PLAN.md) ("Phase 13 Source Spec"). Where this doc *interprets* the source spec, §16 says so explicitly.
-**Supersedes:** [tier_league_environments.md](tier_league_environments.md) (6-tier ladder), [promotion_advancement_gates.md](promotion_advancement_gates.md) (tier-ladder promotion), and the league portions of [phase_8_9_interleave_plan.md](../phase_8_9_interleave_plan.md).
+**Supersedes:** [tier_league_environments.md](../archive/tier_league_environments.md) (6-tier ladder), [promotion_advancement_gates.md](../archive/promotion_advancement_gates.md) (tier-ladder promotion), and the league portions of [phase_8_9_interleave_plan.md](../archive/phase_8_9_interleave_plan.md).
 
 ---
 
@@ -198,7 +198,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 ### 9.1 HS graduation and recruiting
 
 - HS grade comes from age via the shipped `SchoolGrade` (freshman start, merit-based graduation, held-back mechanic all unchanged).
-- **Recruiting (each fall, for seniors):** each College program has `OpenSpots` (graduating seniors plus departures). Programs rank recruits by **recruit value** = the shipped 9c advancement score (performance `P` + scouting `S`, [promotion_advancement_gates.md](promotion_advancement_gates.md) §2, kept as the value function). Better programs (by last season's national rank) pick first. Each program extends offers to recruits within its band.
+- **Recruiting (each fall, for seniors):** each College program has `OpenSpots` (graduating seniors plus departures). Programs rank recruits by **recruit value** = the shipped 9c advancement score (performance `P` + scouting `S`, [promotion_advancement_gates.md](../archive/promotion_advancement_gates.md) §2, kept as the value function). Better programs (by last season's national rank) pick first. Each program extends offers to recruits within its band.
 - **Avatar:** in senior fall, the avatar receives **1–5 offers** through the phone (`coach_hs` / `agent_diaz` threads) and chooses one. That's **Signing Day**, a cutscene. Guarantee: if no program offers, the avatar gets a **walk-on** offer from the lowest-ranked program, so the career always continues.
 - **Population gap (disclosed):** 12 HS teams graduate about 55 seniors a year, but 24 College teams need about 150 freshmen. The remainder are **generated recruits from outside the simulated HS league** (same rating bell, slightly lower mean). The pipeline is strictly linear for the avatar and every simulated HS player. The wider world fills the rest.
 
@@ -251,7 +251,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 
 ### 11.1 Tier environments
 
-The tier-delta mechanism ([tier_league_environments.md](tier_league_environments.md) §2) carries over **unchanged in kind**, now with three rows. The HS and College values stay; Pro takes the MLB row:
+The tier-delta mechanism ([tier_league_environments.md](../archive/tier_league_environments.md) §2) carries over **unchanged in kind**, now with three rows. The HS and College values stay; Pro takes the MLB row:
 
 | Tier | pitStuff / pitControl / teamDefense delta | Batter deltas |
 | :-- | :-- | :-- |
@@ -424,4 +424,4 @@ Places where the source spec was ambiguous. Each is a recommended default that t
 | North | Crestwood Cardinals (CRW) · Lakeside Longhorns (LKS) · Fairview Falcons (FRV) · Oak Ridge Owls (OKR) · Brookhaven Bulldogs (BRK) *new* · Cedar Grove Comets (CDG) *new* |
 | South | Pinehurst Panthers (PNH) · Westfield Warhawks (WSF) · Summit Spartans (SMT) · Riverton Rams (RVT) · Granite Falls Gators (GRF) *new* · Hillcrest Hurricanes (HLC) *new* |
 
-The 4 new HS schools need `schools.json` entries and art (logo / school / field) per [scene_art_guide.md](scene_art_guide.md). Every College and Pro team needs a logo, a `home_park` name, and an announcer persona ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §5).
+The 4 new HS schools need `schools.json` entries and art (logo / school / field) per [scene_art_guide.md](../archive/scene_art_guide.md). Every College and Pro team needs a logo, a `home_park` name, and an announcer persona ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §5).

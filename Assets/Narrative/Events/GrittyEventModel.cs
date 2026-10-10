@@ -89,7 +89,7 @@ public enum PrerequisiteKind : byte
 /// Relationship_History self-join — the graph-reaching prerequisite
 /// hs_clubhouse_cancer gates on.
 ///
-/// Tier and Gpa (the HS onboarding arc, docs/design/hs_onboarding_events.md
+/// Tier and Gpa (the HS onboarding arc, docs/reference/hs_onboarding_events.md
 /// §1) follow the exact same poll-join shape: Tier LEFT JOINs Team_Tiers
 /// (COALESCEd to MLB(5) for a rostered team missing its row, the v6→v7
 /// backfill convention — but a NULL team_id reads as sentinel −1). The

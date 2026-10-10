@@ -21,7 +21,7 @@ public enum PhoneActionFailure : byte
 }
 
 /// <summary>
-/// The §4.2 smartphone minutes economy (docs/design/high_school_person_layer.md):
+/// The §4.2 smartphone minutes economy (docs/reference/high_school_person_layer.md):
 /// hardware tier gates features (the UI's concern), plan + minutes meter usage
 /// (this service's concern). Minutes gate ONLY player-initiated actions —
 /// the §4.3 hard invariant is structural: nothing in the Narrative pipeline

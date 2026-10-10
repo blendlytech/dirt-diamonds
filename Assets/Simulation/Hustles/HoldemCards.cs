@@ -4,7 +4,7 @@ using DirtAndDiamonds.Simulation.Baseball;
 namespace DirtAndDiamonds.Simulation.Hustles;
 
 /// <summary>
-/// A single playing card packed into one byte (docs/design/hustles_texas_holdem.md
+/// A single playing card packed into one byte (docs/reference/hustles_texas_holdem.md
 /// §4.1): <c>Code = (Rank&lt;&lt;2)|Suit</c>, Rank ∈ [2,14] (11=J,12=Q,13=K,14=A),
 /// Suit ∈ [0,3]. Compact and alloc-free — decks and hand buffers are
 /// <c>Span&lt;Card&gt;</c>/<c>stackalloc</c> throughout the Hold'em resolvers.

@@ -57,7 +57,7 @@ public readonly struct PitcherRatings
 
 /// <summary>
 /// Pure, allocation-free plate-appearance resolver implementing
-/// docs/design/baseball_pa_outcome_model.md: log-linear matchup modulation of
+/// docs/reference/baseball_pa_outcome_model.md: log-linear matchup modulation of
 /// MLB-calibrated baselines, renormalized, sampled with a single uniform draw.
 /// Every number is a named calibration table — tuning for run_monte_carlo_batch
 /// is a data edit here, never a logic edit (§9).

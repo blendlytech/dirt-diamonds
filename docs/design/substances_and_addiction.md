@@ -2,8 +2,8 @@
 
 **Author:** Claude Opus 5.5 (architecture + narrative) · **Status:** design draft 2026-10-10. No code yet. Owner decisions resolved (§9).
 **Authority:** owner decision D18 ([temptation_and_lineage.md](temptation_and_lineage.md) §0): each substance gives a **dramatic** boost in one area that really helps, with **real** consequences that differ for each.
-**Builds on:** the shipped PED hooks ([baseball_pa_outcome_model.md](baseball_pa_outcome_model.md) §6, [baseball_markov_micro_sim.md](baseball_markov_micro_sim.md)), the PED event arc (`roster_availability_events.json`, `career_arc_events.json`), the narcotics hustle's `uses_product` hook ([hustles_narcotics_fencing.md](hustles_narcotics_fencing.md) §3.2), and the shared `Active_Effects` layer ([temptation_and_lineage.md](temptation_and_lineage.md) §6.4).
-**Closes:** the known gap in [criminal_underworld_dirt4_the_bust_and_the_door_out.md](criminal_underworld_dirt4_the_bust_and_the_door_out.md) §2.1, where `ped_active` has **no gameplay writer**, so the shipped 1.5× multiplier never fires in the live game.
+**Builds on:** the shipped PED hooks ([baseball_pa_outcome_model.md](../reference/baseball_pa_outcome_model.md) §6, [baseball_markov_micro_sim.md](../reference/baseball_markov_micro_sim.md)), the PED event arc (`roster_availability_events.json`, `career_arc_events.json`), the narcotics hustle's `uses_product` hook ([hustles_narcotics_fencing.md](../reference/hustles_narcotics_fencing.md) §3.2), and the shared `Active_Effects` layer ([temptation_and_lineage.md](temptation_and_lineage.md) §6.4).
+**Closes:** the known gap in [criminal_underworld_dirt4_the_bust_and_the_door_out.md](../reference/criminal_underworld_dirt4_the_bust_and_the_door_out.md) §2.1, where `ped_active` has **no gameplay writer**, so the shipped 1.5× multiplier never fires in the live game.
 
 ---
 

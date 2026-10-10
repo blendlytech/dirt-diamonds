@@ -32,7 +32,7 @@ public readonly struct EquipmentShopState
 }
 
 /// <summary>
-/// Layer 2 purchase orchestration (Phase 8e, docs/design/equipment_quality.md
+/// Layer 2 purchase orchestration (Phase 8e, docs/reference/equipment_quality.md
 /// §6) — the HustleService application discipline: validate, then DB writes in
 /// this service's own batch (funds via <see cref="PlayerQueries.AdjustFunds"/>,
 /// the atomic floor-clamped writer — never UpdateFunds), commit, and only then

@@ -3,7 +3,7 @@ using DirtAndDiamonds.Simulation.Baseball;
 
 namespace DirtAndDiamonds.Simulation.Hustles;
 
-/// <summary>Snapshot inputs for one Hold'em session (docs/design/hustles_texas_holdem.md §9) — simpler than Narcotics'/Fencing's contexts: no faction reps at all (§1).</summary>
+/// <summary>Snapshot inputs for one Hold'em session (docs/reference/hustles_texas_holdem.md §9) — simpler than Narcotics'/Fencing's contexts: no faction reps at all (§1).</summary>
 public readonly struct HoldemContext
 {
     public readonly double Funds;

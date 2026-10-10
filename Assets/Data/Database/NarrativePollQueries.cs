@@ -17,7 +17,7 @@ namespace DirtAndDiamonds.Data;
 /// poll thread's read-only DB view, never the main-thread RelationshipGraph
 /// (hs_clubhouse_cancer, high_school_person_layer.md §9 disclosure (2)).
 ///
-/// Tier and Gpa (the HS onboarding arc, docs/design/hs_onboarding_events.md
+/// Tier and Gpa (the HS onboarding arc, docs/reference/hs_onboarding_events.md
 /// §1) are the third/fourth additions. Tier LEFT JOINs Team_Tiers: a
 /// rostered team missing its tier row COALESCEs to MLB(5) (the v6→v7
 /// backfill convention), but an UNROSTERED subject (NULL team_id — the
@@ -79,7 +79,7 @@ public sealed class NarrativePollQueries
     // v11 — MCP-validated against the live save 2026-07-10): tier's CASE
     // reads a NULL p.team_id as sentinel −1 BEFORE the COALESCE-to-MLB(5)
     // convention would otherwise apply, so an unrostered subject can never
-    // read as MLB tier (docs/design/hs_onboarding_events.md §1.1). gpa is a
+    // read as MLB tier (docs/reference/hs_onboarding_events.md §1.1). gpa is a
     // plain PK LEFT JOIN + COALESCE, the strictness precedent exactly.
     private const string SqlSelectPollPlayers =
         "WITH RelPairs AS (" +

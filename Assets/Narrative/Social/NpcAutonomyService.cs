@@ -14,7 +14,7 @@ namespace DirtAndDiamonds.Narrative.Social;
 public readonly record struct SocialSeed(string PlayerId, int? TeamId, int Charisma, int Teamwork);
 
 /// <summary>
-/// The HS-5 NPC autonomy tick (docs/design/high_school_person_layer.md §8):
+/// The HS-5 NPC autonomy tick (docs/reference/high_school_person_layer.md §8):
 /// NPCs form friendships, rivalries, and romances without the player, so the
 /// dating layer's "the rival's ex" is a person who actually exists. Weekly
 /// (the family-tick/CoL beat), deterministic on its own <see cref="RngState"/>

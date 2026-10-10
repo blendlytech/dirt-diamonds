@@ -2,7 +2,7 @@
 
 **Author:** Claude Opus 5.5 (architecture + narrative) · **Status:** design draft 2026-10-10. No code yet. Owner decisions D1–D15 are in; two confirmations remain (§15).
 **Authority:** owner decisions recorded in §0. They supersede the 16-1 brief ([../tasks/16-1_opening_sequence_brief.md](../tasks/16-1_opening_sequence_brief.md)) wherever the two disagree.
-**Builds on:** [marriage_and_conception.md](marriage_and_conception.md) (`conceive_child`, `ChildBornEvent`), [heir_mechanics.md](heir_mechanics.md) (succession), [high_school_person_layer.md](high_school_person_layer.md) (person stats → `PersonEffects`), [presentation_layer_narrative.md](presentation_layer_narrative.md) (phone threads), [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (Phase 16).
+**Builds on:** [marriage_and_conception.md](../reference/marriage_and_conception.md) (`conceive_child`, `ChildBornEvent`), [heir_mechanics.md](../reference/heir_mechanics.md) (succession), [high_school_person_layer.md](../reference/high_school_person_layer.md) (person stats → `PersonEffects`), [presentation_layer_narrative.md](../reference/presentation_layer_narrative.md) (phone threads), [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (Phase 16).
 
 ---
 

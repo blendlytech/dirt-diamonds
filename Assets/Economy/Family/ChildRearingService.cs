@@ -6,7 +6,7 @@ using DirtAndDiamonds.Data;
 namespace DirtAndDiamonds.Economy.Family;
 
 /// <summary>
-/// The weekly child-rearing tick (docs/design/high_school_person_layer.md
+/// The weekly child-rearing tick (docs/reference/high_school_person_layer.md
 /// §7.1) for the avatar's OWN children — the reverse direction from
 /// <see cref="FamilyService"/> (which pays the avatar allowance from THEIR
 /// parents and stops at graduation). This one keeps running into adulthood:

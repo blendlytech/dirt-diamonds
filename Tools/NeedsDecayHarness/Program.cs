@@ -847,7 +847,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Household board (docs/design/household_board.md): while a covered
+    // Household board (docs/reference/household_board.md): while a covered
     // high-schooler, the family pays a wealth-tier share of Eat's cost and
     // the weekly cost-of-living bill — and nothing else. Every OTHER check
     // in this harness runs at the -1 no-coverage default, which is the

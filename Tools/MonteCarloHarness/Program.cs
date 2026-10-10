@@ -14,7 +14,7 @@ namespace DirtAndDiamonds.Tools.MonteCarloHarness;
 ///
 /// Proves, in order:
 ///   1. The resolver reproduces the §5 numeric fixtures of
-///      docs/design/baseball_pa_outcome_model.md (incl. the §6 PED clamp),
+///      docs/reference/baseball_pa_outcome_model.md (incl. the §6 PED clamp),
 ///      is seed-deterministic, and allocates zero bytes per PA.
 ///   2. A ≥10k-PA average-vs-average Monte Carlo batch lands inside every §8
 ///      acceptance range (slash line, K%, BB%, HR/PA).
@@ -468,7 +468,7 @@ internal static class Program
 
     // ------------------------------------------------------------------
     // 4. Micro-sim analytics: §3 matrices, §4 run expectancy, §5 pitch chain
-    //    (micro doc docs/design/baseball_markov_micro_sim.md, §11 tests 1/3/6)
+    //    (micro doc docs/reference/baseball_markov_micro_sim.md, §11 tests 1/3/6)
     // ------------------------------------------------------------------
 
     private static void RunMicroAnalyticSuite()
@@ -2379,7 +2379,7 @@ internal static class Program
 
     // ------------------------------------------------------------------
     // 9. Phase 6 heir mechanics: genetic blending & hidden interest
-    //    (docs/design/heir_mechanics.md §7/§8 checks 1–6 — Sonnet 5's half;
+    //    (docs/reference/heir_mechanics.md §7/§8 checks 1–6 — Sonnet 5's half;
     //    the succession handoff + 3-generation suite, checks 7–11, is
     //    Fable 5's and is not exercised here). Checks 1–5 are pure math
     //    (HeirGenetics never touches the database); check 6 needs a real
@@ -3336,7 +3336,7 @@ internal static class Program
 
     // ------------------------------------------------------------------
     // 13. Phase 9a tier ladder: 6-tier world-gen, per-tier environments
-    //     (docs/design/tier_league_environments.md §2/§4/§5)
+    //     (docs/archive/tier_league_environments.md §2/§4/§5)
     // ------------------------------------------------------------------
 
     // ------------------------------------------------------------------
@@ -4234,7 +4234,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Phase 8e: equipment quality (docs/design/equipment_quality.md §8)
+    // Phase 8e: equipment quality (docs/reference/equipment_quality.md §8)
     // ------------------------------------------------------------------
 
     private static void RunEquipmentSuite(string schemaPath, string scratchPath)
@@ -5218,7 +5218,7 @@ internal static class Program
 
     // ------------------------------------------------------------------
     // DIRT-4 record teeth: the avatar's criminal record gates the climb
-    // (docs/design/criminal_underworld_dirt4_the_bust_and_the_door_out.md
+    // (docs/reference/criminal_underworld_dirt4_the_bust_and_the_door_out.md
     // §5-teeth / §7.B)
     // ------------------------------------------------------------------
 
@@ -5395,7 +5395,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Phase 9d: development/decline curves (docs/design/development_decline_curves.md)
+    // Phase 9d: development/decline curves (docs/reference/development_decline_curves.md)
     // ------------------------------------------------------------------
 
     private static void RunDevelopmentCurveSuite()

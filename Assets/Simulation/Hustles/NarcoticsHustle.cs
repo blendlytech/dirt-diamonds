@@ -4,7 +4,7 @@ using DirtAndDiamonds.Simulation.Baseball;
 namespace DirtAndDiamonds.Simulation.Hustles;
 
 /// <summary>
-/// Snapshot inputs for one Narcotics run (docs/design/hustles_narcotics_fencing.md
+/// Snapshot inputs for one Narcotics run (docs/reference/hustles_narcotics_fencing.md
 /// §3.0), read once at run start. Data-free/Baseball-free/engine-free — the
 /// same profile <see cref="AtBatResolver"/> and <see cref="HeirGenetics"/>
 /// keep, so <c>Tools/HustleHarness</c> drives it from hand-built fixtures with
@@ -68,7 +68,7 @@ public enum HaggleOutcomeKind : byte
 }
 
 /// <summary>
-/// One supplier haggle's live state (docs/design/hustle_minigames_depth_pass.md
+/// One supplier haggle's live state (docs/reference/hustle_minigames_depth_pass.md
 /// §3.1, slice N-2): the buyer-side inversion of <see cref="FencingState"/> —
 /// the supplier's ask descends toward a hidden floor as patience burns, and the
 /// player wants a LOW close. Hidden fields stay public for the harness, same as
@@ -137,7 +137,7 @@ public readonly record struct HustleState(
 
 /// <summary>
 /// Pure resolver for the Narcotics 3-stage state machine
-/// (docs/design/hustles_narcotics_fencing.md §3): Inventory Drop → Profit/
+/// (docs/reference/hustles_narcotics_fencing.md §3): Inventory Drop → Profit/
 /// Toxicity Cut → Territory Control vs Factions. One method per stage
 /// transition, each taking the current <see cref="HustleState"/>, the
 /// player's decision for that stage, and <c>ref</c> <see cref="RngState"/>,

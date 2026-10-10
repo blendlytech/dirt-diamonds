@@ -3,7 +3,7 @@
 `SteamIntegration.cs` is the **only** class in the codebase that calls the Steam SDK
 (Facepunch.Steamworks exclusively, per `CLAUDE.md`). Everything else goes through its
 `IsAvailable`-guarded wrappers — a missing Steam client is the normal development state,
-never an error (`docs/design/steam_publishing_ship_it.md` §2).
+never an error (`docs/reference/steam_publishing_ship_it.md` §2).
 
 ## `lib/` — vendored managed assemblies (committed)
 

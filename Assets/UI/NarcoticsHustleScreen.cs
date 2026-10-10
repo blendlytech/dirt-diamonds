@@ -17,11 +17,11 @@ namespace DirtAndDiamonds.UI;
 /// <see cref="HustleService.ApplyNarcoticsResolution"/> — an abandoned
 /// mid-session run (the day advances before Done is pressed) simply evaporates
 /// with nothing ever written, which IS the design's "no-deal default" forfeit
-/// (docs/design/hustles_narcotics_fencing.md §2), no special-casing needed.
+/// (docs/reference/hustles_narcotics_fencing.md §2), no special-casing needed.
 /// Node paths verified against NarcoticsHustleScreen.tscn (godot_scene_mapper)
 /// before this script was written.
 ///
-/// N-1 (docs/design/hustle_minigames_depth_pass.md §3.2, §11 flat-N default):
+/// N-1 (docs/reference/hustle_minigames_depth_pass.md §3.2, §11 flat-N default):
 /// after a run resolves, "Re-up &amp; Run Again" starts a fresh run from the
 /// *current* live context — <see cref="_accrued"/> carries every prior run's
 /// deltas in memory (INV-1: still nothing hits the DB until Done), and each

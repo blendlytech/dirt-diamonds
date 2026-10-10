@@ -5,7 +5,7 @@ namespace DirtAndDiamonds.Tools.HustleHarness;
 
 /// <summary>
 /// Acceptance checks for the Phase 8b Hustles pure resolvers
-/// (docs/design/hustles_narcotics_fencing.md §9, checks 1–8 — check 9, the
+/// (docs/reference/hustles_narcotics_fencing.md §9, checks 1–8 — check 9, the
 /// Layer-2/DB integration proof, lives in GrittyEventsHarness since it already
 /// compiles Data+Core+Life+Narrative headless). Data-free/Godot-free, like
 /// every Tools harness — this one compiles only Assets/Simulation/Hustles and
@@ -373,7 +373,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Check H — Supplier Haggle (docs/design/hustle_minigames_depth_pass.md §3.1, slice N-2)
+    // Check H — Supplier Haggle (docs/reference/hustle_minigames_depth_pass.md §3.1, slice N-2)
     // ------------------------------------------------------------------
 
     /// <summary>Drives one haggle under the §3.1 neutral autopilot: accept once the ask falls to the fixed fraction of the opening ask; otherwise bid half the live ask (deliberately low, so the ask concedes — the buyer-side mirror of RunNeutral's counter-at-2×).</summary>
@@ -671,7 +671,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Check 6b — Fencing acquisition (F-2, docs/design/hustle_minigames_depth_pass.md §4.1)
+    // Check 6b — Fencing acquisition (F-2, docs/reference/hustle_minigames_depth_pass.md §4.1)
     // ------------------------------------------------------------------
 
     private static void RunFencingAcquisitionChecks()
@@ -770,7 +770,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Check R — Robbery (docs/design/hustle_minigames_depth_pass.md §5, slice R-1)
+    // Check R — Robbery (docs/reference/hustle_minigames_depth_pass.md §5, slice R-1)
     // ------------------------------------------------------------------
 
     private static RobberyContext RobberyCtx(double funds = 5000, double heat = 0.20, double reck = 0.5, bool hasCrew = true) =>
@@ -1050,7 +1050,7 @@ internal static class Program
             cautious.MeanDetect < moderate.MeanDetect && moderate.MeanDetect < reckless.MeanDetect,
             $"detect: cautious={cautious.MeanDetect:F1} moderate={moderate.MeanDetect:F1} reckless={reckless.MeanDetect:F1}");
 
-        // --- JewelryExchange, the fourth rung (docs/design/hustles_robbery_high_stakes_target.md §5) ---
+        // --- JewelryExchange, the fourth rung (docs/reference/hustles_robbery_high_stakes_target.md §5) ---
         RobberyState jewelryUncased = RobberyHustle.ChooseApproach(
             RobberyHustle.CaseTarget(in ctx, RobberyTarget.JewelryExchange, caseIt: false), in ctx, RobberyApproach.SoloQuiet);
         Check("robbery jewelry: the top rung is harder and pays more than the warehouse (ladder extends, §5.1)",

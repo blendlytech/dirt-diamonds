@@ -5,7 +5,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
 /// Calibration knobs for the 9c promotion/advancement gates
-/// (docs/design/promotion_advancement_gates.md §2/§3) — constants, not
+/// (docs/archive/promotion_advancement_gates.md §2/§3) — constants, not
 /// literals, the <see cref="HeirGenetics.HeirGeneticsProfile"/>/<see cref="TierEffects"/>
 /// precedent: retuning any of these is a data edit behind run_monte_carlo_batch,
 /// never a logic edit. Retirement (42) / health-floor (40) are REUSED from

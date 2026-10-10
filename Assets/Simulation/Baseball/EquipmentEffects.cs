@@ -2,7 +2,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
 /// How purchased gear quality bends effective ratings (Phase 8e,
-/// docs/design/equipment_quality.md §2/§5). Follows the PED/fatigue/rivalry
+/// docs/reference/equipment_quality.md §2/§5). Follows the PED/fatigue/rivalry
 /// precedent exactly: adjust the effective ratings fed into the UNCHANGED
 /// <see cref="AtBatResolver"/>, never its calibration tables.
 ///

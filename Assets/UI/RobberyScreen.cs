@@ -9,7 +9,7 @@ namespace DirtAndDiamonds.UI;
 
 /// <summary>
 /// Always-present overlay (permanent sibling under Main, per Main.tscn) for an
-/// armed Robbery <see cref="PendingHustleSession"/> (docs/design/hustle_minigames_depth_pass.md
+/// armed Robbery <see cref="PendingHustleSession"/> (docs/reference/hustle_minigames_depth_pass.md
 /// §5, sub-slices R-2/R-3): the four-stage sequence (Case → Approach → Execute,
 /// with the live press-your-luck beat → Getaway) is driven entirely through the
 /// pure <see cref="RobberyHustle"/> resolver, entirely in memory, and only

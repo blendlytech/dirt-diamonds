@@ -11,7 +11,7 @@
     <!--
       Same trick as the other harnesses: compile the Hustles resolvers'
       exact engine-free sources headless — Data-free, Baseball-free (per
-      docs/design/hustles_narcotics_fencing.md §1, the resolvers reference
+      docs/reference/hustles_narcotics_fencing.md §1, the resolvers reference
       only RngState, folder-homed in Simulation/Baseball but pure math, the
       same established exception the Narrative dispatcher already relies on).
       If a Data/Godot type leaks into either resolver, this project stops

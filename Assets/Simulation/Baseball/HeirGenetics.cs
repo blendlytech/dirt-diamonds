@@ -4,7 +4,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
 /// Pure, engine-free genetic blending and hidden-interest rolling for heir
-/// generation (docs/design/heir_mechanics.md §2, §4). Deals only in
+/// generation (docs/reference/heir_mechanics.md §2, §4). Deals only in
 /// <see cref="PlayerRatingsRow"/> (Data) and <see cref="RngState"/> — never
 /// the Life sim, never the database — the same Data-clean, zero-DB profile
 /// as <see cref="AtBatResolver"/>. Every calibration knob lives in

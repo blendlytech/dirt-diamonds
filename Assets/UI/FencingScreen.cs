@@ -18,10 +18,10 @@ namespace DirtAndDiamonds.UI;
 /// The lot's hidden true value/reservation are never read by this script —
 /// only <see cref="FencingState.CurrentOffer"/>/<see cref="FencingState.PatienceRemaining"/>
 /// ever reach a label, per the design's "no twitch skill, standing only" rule
-/// (docs/design/hustles_narcotics_fencing.md §4). Node paths verified against
+/// (docs/reference/hustles_narcotics_fencing.md §4). Node paths verified against
 /// FencingScreen.tscn before this script was written.
 ///
-/// F-1 (docs/design/hustle_minigames_depth_pass.md §4.2, §11 flat-N default):
+/// F-1 (docs/reference/hustle_minigames_depth_pass.md §4.2, §11 flat-N default):
 /// after a lot closes or the fence walks, "Show Him Another Lot" starts a
 /// fresh <see cref="FencingNegotiation.StartLot"/> draw — <see cref="_accrued"/>
 /// folds every prior lot's deltas in memory (INV-1: nothing hits the DB until

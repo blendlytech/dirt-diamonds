@@ -4,7 +4,7 @@
 **Status:** design complete 2026-10-09; **scope cut 2026-10-10** (below); no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5 and §7.
 
 > **2026-10-10 owner directive: voice is for broadcasters only.** ElevenLabs voice is restricted to `BroadcastBooth` and the announcers. There are **no** phone voice notes, **no** cutscene voice-over and **no** character dialogue; those stay text (bubbles, captions, subtitles). This doc has been amended throughout: §8 is removed, slice 14e is cut, and the `Voice` bus and `Dialogue` channel are gone. Cutscenes may still use a **broadcaster call** as their audio bed (big plays, Draft Night, championships).
-**Builds on:** [ui_audio_slice_d.md](ui_audio_slice_d.md) (the shipped `UiSfx` autoload, `SFX` bus, `user://settings.cfg` volume) and [at_bat_presentation.md](at_bat_presentation.md) (the beat sequencer the announcer rides on). Feeds [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (broadcaster calls as cutscene audio beds).
+**Builds on:** [ui_audio_slice_d.md](../reference/ui_audio_slice_d.md) (the shipped `UiSfx` autoload, `SFX` bus, `user://settings.cfg` volume) and [at_bat_presentation.md](../reference/at_bat_presentation.md) (the beat sequencer the announcer rides on). Feeds [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (broadcaster calls as cutscene audio beds).
 
 ---
 

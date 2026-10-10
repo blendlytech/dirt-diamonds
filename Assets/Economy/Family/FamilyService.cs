@@ -8,7 +8,7 @@ using DirtAndDiamonds.Economy.Phone;
 namespace DirtAndDiamonds.Economy.Family;
 
 /// <summary>
-/// The weekly family tick (docs/design/high_school_person_layer.md §3/§3.2/§4.2)
+/// The weekly family tick (docs/reference/high_school_person_layer.md §3/§3.2/§4.2)
 /// for the avatar's household: pays the wealth-tier allowance, refills a
 /// Basic plan's minute allotment, runs the §3.2 parental auto-purchase, and
 /// bills the §4.2 long-distance-relationship upkeep. One batch per tick (the

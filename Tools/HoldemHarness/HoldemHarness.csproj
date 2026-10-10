@@ -11,7 +11,7 @@
     <!--
       Same trick as HustleHarness: compile the Hold'em resolvers' exact
       engine-free sources headless — Data-free, Baseball-free (per
-      docs/design/hustles_texas_holdem.md §1, referencing only RngState, the
+      docs/reference/hustles_texas_holdem.md §1, referencing only RngState, the
       same established pure-PRNG exception). If a Data/Godot type leaks into
       any of these, this project stops building.
     -->

@@ -4,7 +4,7 @@ using DirtAndDiamonds.Simulation.Baseball;
 namespace DirtAndDiamonds.Simulation.Hustles;
 
 /// <summary>
-/// Snapshot inputs for one Robbery run (docs/design/hustle_minigames_depth_pass.md
+/// Snapshot inputs for one Robbery run (docs/reference/hustle_minigames_depth_pass.md
 /// §5), read once at run start. Data-free/Baseball-free/engine-free — the same
 /// profile every hustle resolver keeps, so <c>Tools/HustleHarness</c> drives it
 /// from hand-built fixtures with no DB/graph setup. <see cref="HasCrew"/> is the
@@ -107,7 +107,7 @@ public readonly record struct RobberyState(
 
 /// <summary>
 /// Pure resolver for the Robbery four-stage state machine
-/// (docs/design/hustle_minigames_depth_pass.md §5): Case → Approach → Execute
+/// (docs/reference/hustle_minigames_depth_pass.md §5): Case → Approach → Execute
 /// (with a mid-execute press-your-luck beat) → Getaway. One method per stage
 /// transition, each taking the current <see cref="RobberyState"/>, the player's
 /// decision for that stage, and <c>ref</c> <see cref="RngState"/>, returning the

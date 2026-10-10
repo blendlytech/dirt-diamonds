@@ -4,7 +4,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
 /// One rolled founding-avatar origin — the §3 wealth-tier reality of
-/// docs/design/high_school_person_layer.md plus the two person-stat seeds the
+/// docs/reference/high_school_person_layer.md plus the two person-stat seeds the
 /// backstory owns (§2.1: attractiveness is a backstory roll, social_status is
 /// the family-tier seed). Everything an avatar-creation UI reveals (and may
 /// re-roll) before <see cref="CareerManager.CreateAvatar"/> persists it.

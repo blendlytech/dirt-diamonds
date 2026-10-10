@@ -12,7 +12,7 @@ Lead: Gemini 3.1 Pro (orchestration + critical-path code). Delegates: Gemini 3.1
 | **Gemini 3.1 Pro Math** | Mathematical & statistical design (design docs, not necessarily code) | PA outcome probability tables calibrated to MLB norms, 25×25 transition matrix math, PED multiplier calibration, non-linear need-decay curves, poker pot-odds AI |
 | **Gemini 3.8 Flash** | High-volume implementation from a precise spec; iteration & tuning loops | DTOs/query classes, StatsNormalizer, headless test harnesses for the project skills, gritty-event JSON content, UI scene wiring, populating rules docs, refactoring passes |
 
-**Legacy role names.** Everything before 2026-10-09 (this file's phase bodies, `docs/progress.md`, `docs/progress_archive.md`, every `docs/design/*.md`) names the earlier model roster. Read them as roles, not models:
+**Legacy role names.** Everything before 2026-10-09 (this file's phase bodies, `docs/progress.md`, `docs/archive/progress_archive.md`, every `docs/design/*.md`) names the earlier model roster. Read them as roles, not models:
 
 | Legacy name | Role | Current model |
 | :---- | :---- | :---- |
@@ -94,7 +94,7 @@ Nothing can compile until this is done. Owner: Fable 5 (system installs need use
 
 ## Phases 8 & 9 — Economy, Hustles, & Career Ladder (Interleaved) → Milestones M4 & M5 (COMPLETE)
 
-*Note: Per the `docs/phase_8_9_interleave_plan.md`, Phase 8 and 9 were interleaved to stand up a skeletal career clock before layering on hustles. All of 9a–9d and 8a–8e shipped and were signed off 2026-07-04…06 — see `docs/progress_archive.md`. The 6-tier / 8-team league model below is what shipped; Phase 13 proposes replacing it.*
+*Note: Per the `docs/archive/phase_8_9_interleave_plan.md`, Phase 8 and 9 were interleaved to stand up a skeletal career clock before layering on hustles. All of 9a–9d and 8a–8e shipped and were signed off 2026-07-04…06 — see `docs/archive/progress_archive.md`. The 6-tier / 8-team league model below is what shipped; Phase 13 proposes replacing it.*
 
 ### 9a — Tier Schema + Multi-Tier Macro-Sim
 
@@ -176,7 +176,7 @@ Every UI shipped to date is a deliberate thin slice of plain Godot controls. GAM
 
 ## Phase 12 — "Saleable" (COMPLETE)
 
-*12a–12d shipped 2026-07-07: render integrity + layout honesty, surface-the-sim cards (stat line, standings, leaders), and the at-bat presentation layer. Details in `docs/progress_archive.md`.*
+*12a–12d shipped 2026-07-07: render integrity + layout honesty, surface-the-sim cards (stat line, standings, leaders), and the at-bat presentation layer. Details in `docs/archive/progress_archive.md`.*
 
 ## Post-Phase-12 Arcs (COMPLETE, 2026-07-08 … 07-15)
 

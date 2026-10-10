@@ -5,7 +5,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
 /// Pure nurture blending for heir development
-/// (docs/design/high_school_person_layer.md §7): folds the accumulated
+/// (docs/reference/high_school_person_layer.md §7): folds the accumulated
 /// Child_Development axes into the fixed HeirGenetics nature roll at
 /// maturity/takeover. Same Data-clean, zero-DB profile as
 /// <see cref="HeirGenetics"/> — deals only in <see cref="ChildDevelopmentRow"/>

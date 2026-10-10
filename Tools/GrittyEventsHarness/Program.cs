@@ -1994,7 +1994,7 @@ internal static class Program
 
     // ------------------------------------------------------------------
     // 4h3. SubjectField.Tier / SubjectField.Gpa (HS onboarding arc,
-    // docs/design/hs_onboarding_events.md §1) — the load-bearing NULL-team
+    // docs/reference/hs_onboarding_events.md §1) — the load-bearing NULL-team
     // sentinel and the gpa report-card partition.
     // ------------------------------------------------------------------
 
@@ -2048,7 +2048,7 @@ internal static class Program
 
     // ------------------------------------------------------------------
     // 4h4. HS onboarding arc + rookie-batch tier gate (Act-1 fix,
-    // docs/design/hs_onboarding_events.md) — the shipped content batches
+    // docs/reference/hs_onboarding_events.md) — the shipped content batches
     // loaded together, exactly as GameManager.LoadGrittyEventContent loads
     // the whole Content folder, so the tier-gate interaction between the
     // two files is proven against the REAL shipped JSON, not a mirror.

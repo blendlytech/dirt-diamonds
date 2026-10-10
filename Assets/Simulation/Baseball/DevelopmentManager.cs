@@ -21,7 +21,7 @@ public enum RatingKind : byte
 
 /// <summary>
 /// Calibration knobs for the 9d development/decline curves
-/// (docs/design/development_decline_curves.md §2–§4) — constants, not
+/// (docs/reference/development_decline_curves.md §2–§4) — constants, not
 /// literals, the <see cref="PromotionProfile"/>/<see cref="HeirGenetics.HeirGeneticsProfile"/>
 /// precedent: retuning any of these is a data edit behind the tuning harness,
 /// never a logic edit. The career pivots — peak (27), youngest prospect (15),

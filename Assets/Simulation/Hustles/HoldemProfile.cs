@@ -2,14 +2,14 @@ using System;
 
 namespace DirtAndDiamonds.Simulation.Hustles;
 
-/// <summary>The five fixed opponent archetypes (docs/design/hustles_texas_holdem.md §7.1) — also the pool the hero autopilot (§7.3) and harness EV-band policies (§13) draw their tunables from.</summary>
+/// <summary>The five fixed opponent archetypes (docs/reference/hustles_texas_holdem.md §7.1) — also the pool the hero autopilot (§7.3) and harness EV-band policies (§13) draw their tunables from.</summary>
 public enum HoldemArchetype : byte { Nit, TAG, LAG, Station, Maniac }
 
 /// <summary>The hero's session-level stakes choice (§3) — controls blinds/buy-in/field quality/raid hazard.</summary>
 public enum StakesTier : byte { Low, Mid, High }
 
 /// <summary>
-/// Shared tunable constants for the Hold'em resolvers (docs/design/hustles_texas_holdem.md).
+/// Shared tunable constants for the Hold'em resolvers (docs/reference/hustles_texas_holdem.md).
 /// Retuning is a data edit here, never a logic edit — the same convention as
 /// <see cref="NarcoticsHustle.NarcoticsProfile"/>/<see cref="FencingNegotiation.FencingProfile"/>.
 /// 8d-1 populated only the equity-engine knob; 8d-2 adds the betting/rake/

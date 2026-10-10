@@ -3,7 +3,7 @@ using DirtAndDiamonds.Data;
 namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
-/// One ladder tier's league-environment shift (docs/design/tier_league_environments.md
+/// One ladder tier's league-environment shift (docs/archive/tier_league_environments.md
 /// §2): constant integer rating-point deltas applied to every player's
 /// EFFECTIVE ratings at roster-load time. Stamina is deliberately absent —
 /// the fatigue model is micro-sim-only and separately calibrated (doc §6).

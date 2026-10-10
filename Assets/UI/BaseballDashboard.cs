@@ -76,7 +76,7 @@ public sealed partial class BaseballDashboard : PanelContainer
 
     // Contextual-imagery card (the reorg's deliberately blank center slot).
     // The scene vocabulary + art file contract lives in
-    // docs/design/scene_art_guide.md — drop a PNG at the listed path and the
+    // docs/archive/scene_art_guide.md — drop a PNG at the listed path and the
     // matching scene starts rendering it; until then the card shows the
     // school-tinted text placeholder, so the slot is never empty.
     [Export]
@@ -345,7 +345,7 @@ public sealed partial class BaseballDashboard : PanelContainer
     /// an at-bat: a scene whose art exists renders the image + caption; a
     /// scene without authored art (most of them today) renders the caption as
     /// a big school-color placeholder instead — art lands file by file per
-    /// docs/design/scene_art_guide.md with zero code churn. Per-school
+    /// docs/archive/scene_art_guide.md with zero code churn. Per-school
     /// school/field art falls back to the generic scene file before falling
     /// back to the placeholder. Dirty-keyed on (day, scene, event category)
     /// so the per-frame cost is arithmetic only.

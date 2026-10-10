@@ -1,7 +1,7 @@
 namespace DirtAndDiamonds.Simulation.Life;
 
 /// <summary>
-/// Household board rule (docs/design/household_board.md): while the avatar is
+/// Household board rule (docs/reference/household_board.md): while the avatar is
 /// a high-schooler with a Family_Background row — the same population
 /// FamilyService's parentalSupport gate serves — the family covers a
 /// wealth-tier share of "board": the Eat action's FinancialCost and the

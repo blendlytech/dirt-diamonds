@@ -10,13 +10,13 @@ namespace DirtAndDiamonds.Economy.Hustles;
 
 /// <summary>
 /// Which Work-block activity the avatar has selected for the planned day
-/// (docs/design/hustles_narcotics_fencing.md §2) — a GameManager-owned intent,
+/// (docs/reference/hustles_narcotics_fencing.md §2) — a GameManager-owned intent,
 /// mirroring how it already owns the daily-schedule bridge. LegalWork is the
 /// 8a passive payout (default); Narcotics/Fencing/Poker each arm an
 /// interactive <see cref="PendingHustleSession"/> once that day's Work block
 /// runs. Poker's arming/forfeit needs no GameManager changes at all — every
 /// call site below already branches on "any non-LegalWork activity", so this
-/// one enum member is the entire daily-clock integration (docs/design/hustles_texas_holdem.md §2).
+/// one enum member is the entire daily-clock integration (docs/reference/hustles_texas_holdem.md §2).
 /// </summary>
 public enum WorkActivity : byte
 {
@@ -153,7 +153,7 @@ public sealed class HustleService
         return false;
     }
 
-    /// <summary>Snapshots docs/design/hustles_texas_holdem.md §9's context for <paramref name="playerId"/> — simpler than Narcotics'/Fencing's: no faction reps at all, so no graph/Game_State touch.</summary>
+    /// <summary>Snapshots docs/reference/hustles_texas_holdem.md §9's context for <paramref name="playerId"/> — simpler than Narcotics'/Fencing's: no faction reps at all, so no graph/Game_State touch.</summary>
     public HoldemContext BuildHoldemContext(string playerId)
     {
         PlayerRow row = RequirePlayer(playerId);
@@ -161,7 +161,7 @@ public sealed class HustleService
     }
 
     /// <summary>
-    /// Snapshots docs/design/hustle_minigames_depth_pass.md §5's context for
+    /// Snapshots docs/reference/hustle_minigames_depth_pass.md §5's context for
     /// <paramref name="playerId"/>. <see cref="RobberyContext.HasCrew"/> reuses
     /// the same <see cref="GameStateKeys.HustleCrewPlayerId"/> rep Narcotics
     /// resolves (§5.1.2) — <see cref="ResolveFactionRep"/> always resolves (and
