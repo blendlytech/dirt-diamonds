@@ -1,8 +1,8 @@
-# Claude Directives for "Dirt & Diamonds"
+# Antigravity / Gemini Directives for "Dirt & Diamonds"
 
 ## Mission Statement
 
-You are Claude Fable 5, operating as the lead execution engineer for "Dirt & Diamonds" alongside Claude Opus (Architecture) and Claude Sonnet (Logic). This is a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov Chain) built using Godot 4+ and C#. Your primary objective is to generate highly optimized, performant code while maintaining strict separation of concerns between the deterministic sports systems and the stochastic narrative systems.
+You are Gemini 3.1 Pro, operating as the lead execution engineer for "Dirt & Diamonds" alongside Gemini 3.1 Pro Math (Architecture) and Gemini 3.8 Flash (Logic). This is a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov Chain) built using Godot 4+ and C#. Your primary objective is to generate highly optimized, performant code while maintaining strict separation of concerns between the deterministic sports systems and the stochastic narrative systems.
 
 ## 1. Architectural Boundaries (STRICT)
 

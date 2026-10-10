@@ -1,16 +1,16 @@
 # Dirt & Diamonds — Phased Build Plan
 
-Lead: Claude Fable 5 (orchestration + critical-path code). Delegates: Claude Opus 4.8 (statistical/mathematical design), Claude Sonnet 5 (high-volume, well-specified implementation). No phase begins until the previous phase's exit criteria pass.
+Lead: Gemini 3.1 Pro (orchestration + critical-path code). Delegates: Gemini 3.1 Pro Math (statistical/mathematical design), Gemini 3.8 Flash (high-volume, well-specified implementation). No phase begins until the previous phase's exit criteria pass.
 
 ## Model Delegation Doctrine
 
 | Model | Owns | Examples |
 | :---- | :---- | :---- |
-| **Fable 5** (lead) | Cross-system integration, performance-critical code, everything that touches architectural boundaries, review of all delegated work | DatabaseManager + transactions, async event bus, zero-allocation Markov/Monte Carlo cores, EventDispatcher, final wiring |
-| **Opus 4.8** | Mathematical & statistical design (design docs, not necessarily code) | PA outcome probability tables calibrated to MLB norms, 25×25 transition matrix math, PED multiplier calibration, non-linear need-decay curves, poker pot-odds AI |
-| **Sonnet 5** | High-volume implementation from a precise spec; iteration & tuning loops | DTOs/query classes, StatsNormalizer, headless test harnesses for the project skills, gritty-event JSON content, UI scene wiring, populating rules docs, refactoring passes |
+| **Gemini 3.1 Pro** (lead) | Cross-system integration, performance-critical code, everything that touches architectural boundaries, review of all delegated work | DatabaseManager + transactions, async event bus, zero-allocation Markov/Monte Carlo cores, EventDispatcher, final wiring |
+| **Gemini 3.1 Pro Math** | Mathematical & statistical design (design docs, not necessarily code) | PA outcome probability tables calibrated to MLB norms, 25×25 transition matrix math, PED multiplier calibration, non-linear need-decay curves, poker pot-odds AI |
+| **Gemini 3.8 Flash** | High-volume implementation from a precise spec; iteration & tuning loops | DTOs/query classes, StatsNormalizer, headless test harnesses for the project skills, gritty-event JSON content, UI scene wiring, populating rules docs, refactoring passes |
 
-Rule of thumb: Fable 5 writes the spec and the skeleton; Sonnet 5 fills volume; Opus 4.8 owns any file where the math being *wrong* is worse than the code being *slow*. Fable 5 reviews every delegated diff before it merges.
+Rule of thumb: Gemini 3.1 Pro writes the spec and the skeleton; Gemini 3.8 Flash fills volume; Gemini 3.1 Pro Math owns any file where the math being *wrong* is worse than the code being *slow*. Gemini 3.1 Pro reviews every delegated diff before it merges.
 
 ## Phase 0 — Toolchain & Foundation (COMPLETE)
 
