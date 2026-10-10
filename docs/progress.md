@@ -44,6 +44,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 - the two owner-authored functions, `ChooseFatherFallback` and `DiscoveryChance`;
 - whether to keep the auto-committer (TEAM.md §5);
 - the five Phase G decisions (gameplay_core §6): how much skill is worth, needs and stress on the field, more person stats on the field, park factors, fielding moments.
+- **arcade physics vs gameplay_core:** adopt or archive the proposal [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) (2026-10-09). It replaces attended games with real-time physics (bat contact, ball flight, fielding), 16-bit art, and watch/skip. That conflicts with gameplay_core §2 and GEMINI.md §11.
 
 **Gate baseline (2026-10-10):**
 
@@ -69,6 +70,8 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 ---
 
 ## Session Log (compact)
+
+- **2026-10-13 — Arcade baseball overhaul pushed as a PROPOSAL (Claude Opus 5.5; docs only, no code/sim touch):** `docs/design/arcade_baseball_overhaul.md`, written 2026-10-09 from the owner's choices that day (true arcade physics, my player + team-takeover toggle, ratings shape physics, assisted fielding, 16-bit, full watch/skip). Rebased onto the Oct-10 reorganization and bannered **NOT ADOPTED**, because it conflicts with gameplay_core §2, GEMINI.md §11, the 3-tier league and the v14/v15 schema plan. Added to "Open for the owner". Gates not run (no code touched). **Next: owner decides adopt or archive. If adopted, Claude Opus reconciles GAME_VISION + gameplay_core first.**
 
 - **2026-10-10 — Vision v2 + full docs reconciliation (Claude Opus 5.5; docs only, no code/sim touch):**
   - GAME_VISION rewritten as v2, start to finish, with D1–D21.
