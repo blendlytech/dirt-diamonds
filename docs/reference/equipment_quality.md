@@ -1,6 +1,8 @@
 # Equipment Quality (Phase 8e)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. The shop screen is redesigned in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none.
+
+> **Planned changes (2026-10-09):** No mechanical change. The shop screen is redesigned in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)).
 
 **Owner: Fable 5 (design + implementation + review).** Turns the interleave plan's one-liner —
 "purchasable gear tiers as effective-ratings modifiers, same precedent as PED/fatigue/rivalry —

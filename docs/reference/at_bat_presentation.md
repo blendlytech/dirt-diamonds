@@ -1,6 +1,8 @@
 # At-Bat Presentation — Making the Micro-Sim Read as Baseball (Phase 12d)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Phase 13 makes regulation innings per tier (HS 7). Phase 14 adds `BroadcastBooth` on this beat sequencer: announcer calls, with `PaReveal` held up to 4 s for the call ([voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) §7). Phase 16 adds big-play cutscenes as one more beat ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md)). The layout is redesigned in Phase 15.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** avatar-facing announcer calls use roles, never names or pronouns; the Trailblazer adds gated calls ([temptation](../design/temptation_and_lineage.md) §8.4).
+
+> **Planned changes (2026-10-09):** Phase 13 makes regulation innings per tier (HS 7). Phase 14 adds `BroadcastBooth` on this beat sequencer: announcer calls, with `PaReveal` held up to 4 s for the call ([voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) §7). Phase 16 adds big-play cutscenes as one more beat ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md)). The layout is redesigned in Phase 15.
 
 **Owner of this doc:** Opus 4.8 (presentation architecture + the sim seam — NO code). Per the standing
 Phase-12 split this is the pending Opus pass 12a/12b/12c flagged (`surface_the_sim.md` §8 names 12d

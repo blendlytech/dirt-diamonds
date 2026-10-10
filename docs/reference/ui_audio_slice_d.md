@@ -1,6 +1,8 @@
 # UI Audio Foundation — Slice D
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **Extended** by [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) (Phase 14): new Voice / Announcer / Music / Ambience buses and a `VoiceDirector` autoload. §8's non-goals "no voice/dialogue" and "no music" are lifted. D-2/D-3 fold into slice 14a. The `UiSfx` service and `user://settings.cfg` volume persistence stay as shipped.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** the bus layout gains Announcer, Music and Ambience, and **no** Voice bus (voice is broadcasters only).
+
+> **Planned changes (2026-10-09):** **Extended** by [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) (Phase 14): new Voice / Announcer / Music / Ambience buses and a `VoiceDirector` autoload. §8's non-goals "no voice/dialogue" and "no music" are lifted. D-2/D-3 fold into slice 14a. The `UiSfx` service and `user://settings.cfg` volume persistence stay as shipped.
 
 **Owner of this doc:** Opus 4.8 (architecture/design only — NO code). Per the standing roadmap split,
 Opus owes this design *before* any build. Slice D is tagged in [game-improvements-roadmap] /

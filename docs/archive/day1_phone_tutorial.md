@@ -1,5 +1,7 @@
 # Day-1 Phone Tutorial — Design Contract
 
+> **ARCHIVED: superseded by the tutorial overlay ([link](../reference/onboarding_tutorial_overlay.md)). History only; never build from this.**
+
 > **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. The tutorial must also cover weekly game days, roster status, recruiting and the Draft.
 
 **Author:** Claude Opus 4.8 (architecture) · **Date:** 2026-07-11 · **Slice:** GAME_IMPROVEMENTS roadmap item #2 ("Tutorial phone thread")

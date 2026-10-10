@@ -1,188 +1,32 @@
 # Dirt & Diamonds — Phased Build Plan
 
-Lead: Gemini 3.1 Pro (orchestration + critical-path code). Delegates: Gemini 3.1 Pro Math (statistical/mathematical design), Gemini 3.8 Flash (high-volume, well-specified implementation). No phase begins until the previous phase's exit criteria pass (except where the Phase Dependency Map allows parallel slices).
-
-**The game:** see [GAME_VISION.md](GAME_VISION.md), the canonical pitch as of 2026-10-09 (it replaces the missing `GAME_IDEA.md`). In short: a commercial Steam game that raises a ballplayer HS → College → Draft → Pro in a fictional league, with a gritty life sim, ElevenLabs-voiced team announcers (voice is broadcasters only, 2026-10-10), in-engine motion-comic cutscenes, and a completely redesigned visual identity. **Phases 0–12 are complete; Phases 13–17 are the road to launch.**
-
-## Model Delegation Doctrine
-
-| Model | Owns | Examples |
-| :---- | :---- | :---- |
-| **Gemini 3.1 Pro** (lead) | Cross-system integration, performance-critical code, everything that touches architectural boundaries, review of all delegated work | DatabaseManager + transactions, async event bus, zero-allocation Markov/Monte Carlo cores, EventDispatcher, final wiring |
-| **Gemini 3.1 Pro Math** | Mathematical & statistical design (design docs, not necessarily code) | PA outcome probability tables calibrated to MLB norms, 25×25 transition matrix math, PED multiplier calibration, non-linear need-decay curves, poker pot-odds AI |
-| **Gemini 3.8 Flash** | High-volume implementation from a precise spec; iteration & tuning loops | DTOs/query classes, StatsNormalizer, headless test harnesses for the project skills, gritty-event JSON content, UI scene wiring, populating rules docs, refactoring passes |
-
-**Legacy role names.** Everything before 2026-10-09 (this file's phase bodies, `docs/progress.md`, `docs/archive/progress_archive.md`, every `docs/design/*.md`) names the earlier model roster. Read them as roles, not models:
-
-| Legacy name | Role | Current model |
-| :---- | :---- | :---- |
-| Fable 5 | Engine, calibrated core, review of every delegated build | Gemini 3.1 Pro |
-| Opus 4.8 | Design docs, math/statistical specs | Gemini 3.1 Pro Math |
-| Sonnet 5 | Content batches, data edits, UI builds, harnesses | Gemini 3.8 Flash |
-
-Rule of thumb: Gemini 3.1 Pro writes the spec and the skeleton; Gemini 3.8 Flash fills volume; Gemini 3.1 Pro Math owns any file where the math being *wrong* is worse than the code being *slow*. Gemini 3.1 Pro reviews every delegated diff before it merges.
-
-## Phase 0 — Toolchain & Foundation (COMPLETE)
-
-Nothing can compile until this is done. Owner: Fable 5 (system installs need user approval).
-
-1. Install .NET 8 SDK and Godot 4.x **.NET edition** (winget available).
-2. `git init` + Godot/C# `.gitignore` (repo is currently not version-controlled).
-3. Create `project.godot` + `DirtAndDiamonds.csproj` targeting the existing `/Assets` tree.
-4. **Repair `.mcp.json`** — three servers silently fail to connect.
-5. Populate the empty `database_rules.md` / `ui_conventions.md` rules files (Sonnet 5).
-
-**Exit criteria:** `dotnet build` succeeds; Godot opens the project; git history started; schema validation path (MCP or CLI) proven working.
-
-## Phase 1 — Database Core (single source of truth) (COMPLETE)
-
-- `SchemaDefinitions.sql`: Players, Batting_Stats, Pitching_Stats, Relationships, Entity_Flags, Game_Logs + indexes on high-traffic tables.
-- `DatabaseManager.cs`: connection lifecycle, parameterized queries only, `BEGIN TRANSACTION` batch API, pooled command objects.
-- `PlayerQueries.cs` + DTOs (Sonnet 5, from Fable 5's spec).
-- **Validate:** `validate_sqlite_schema` skill (build its checking script as part of this phase).
-
-**Exit criteria:** schema round-trips 10k generated players; FK integrity checks pass; batch day-advance transaction benchmarked.
-
-## Phase 2 — Core Loop, Time & Event Bus (COMPLETE)
-
-- `GameManager.cs`, `TimeManager.cs` (calendar advancement in transactions), `GlobalState.cs`.
-- The **async event dispatcher bus** — the only legal communication channel between Life and Baseball per CLAUDE.md. Getting this boundary right now prevents architectural rot later. Owner: Fable 5 exclusively.
-
-**Exit criteria:** headless "advance 365 days" run completes with zero cross-references between `/Simulation/Life/` and `/Simulation/Baseball/`.
-
-## Phase 3 — Baseball Macro-Sim (Monte Carlo) → Milestone M1 "The League Lives" (COMPLETE)
-
-- Opus 4.8 designs the PA outcome probability model (batter vs. pitcher vs. fielding → 1B/2B/HR/SO/BB percentages) calibrated to real MLB averages.
-- Fable 5 implements `LeagueSimulator.cs` + `AtBatResolver.cs`: structs, `Span<T>`, object pooling, zero GC pressure at thousands of entities/frame.
-- Sonnet 5: `StatsNormalizer.cs` + the headless harness behind `run_monte_carlo_batch`.
-- **Validate:** `run_monte_carlo_batch` — 10,000 at-bats must produce a realistic league slash line. Re-run after every AtBatResolver or PED-weight change (CLAUDE.md mandate).
-
-**Exit criteria:** full season simulates headless; league-wide AVG/OBP/SLG within MLB norms; GC allocation profile flat.
-
-## Phase 4 — Baseball Micro-Sim (Markov Chain) → Milestone M2 "You're in the Game" (COMPLETE)
-
-- 25 base-out states, 25×25 transition matrix per event (Opus 4.8 math design; Fable 5 struct-based implementation).
-- Player input blending (timing/location vs. DB attributes).
-- PED modifiers: 1.5× power/stamina during matrix calc; post-game `health_ceiling` deduction + `detection_risk` increment.
-- First thin UI slice: playable at-bat scene (verify nodes with `godot_scene_mapper` **before** writing UI logic — CLAUDE.md mandate).
-
-**Exit criteria:** micro-sim outcome distribution converges with macro-sim for identical players; `run_monte_carlo_batch` passes.
-
-## Phase 5 — Life Sim: Needs Engine & Utility AI → Milestone M3 "Life Happens" (COMPLETE)
-
-- `NeedsEngine.cs`: five needs, non-linear decay accelerating near zero (Opus 4.8 curve design).
-- `UtilityCalculator.cs`: Utility = Σ(Consideration × Weight); stress/emotion overlay that mutates weights and can force autonomous actions.
-- Sonnet 5: harness behind `simulate_utility_decay` + tuning iterations.
-- **Validate:** `simulate_utility_decay` — one simulated week must not starve an NPC during a 3-hour game.
-
-**Exit criteria:** NPCs self-manage needs over a simulated month; stress override provably fires.
-
-## Phase 6 — Relationships & Generational Legacy (COMPLETE)
-
-- `RelationshipGraph.cs`: bidirectional affinity graph backed by the Relationships table; rivalry scores feed baseball probability modifiers (via the event bus, never direct reference).
-- Heir mechanics: genetic stat blending, hidden `baseball_interest`, succession on retirement, game-over when lineage fails.
-
-**Exit criteria:** simulated 3-generation run with succession handoffs.
-
-## Phase 7 — Gritty Event Framework (COMPLETE)
-
-- `EventDispatcher.cs` background polling of Entity_Flags/Players; `ConditionEvaluator.cs` for prerequisite booleans; JSON event schema (prerequisites, probability weight, payload, branching choices, hidden flag writes).
-- Sonnet 5 authors event content at volume from Fable 5's schema.
-- **Validate:** `check_event_graph_integrity` after every content batch — no orphaned flags, no dead-end branches, no unreachable events.
-
-**Exit criteria:** cascading chain proven end-to-end (e.g., bribe → `compromised_syndicate` → syndicate event fires seasons later).
-
-## Phases 8 & 9 — Economy, Hustles, & Career Ladder (Interleaved) → Milestones M4 & M5 (COMPLETE)
-
-*Note: Per the `docs/archive/phase_8_9_interleave_plan.md`, Phase 8 and 9 were interleaved to stand up a skeletal career clock before layering on hustles. All of 9a–9d and 8a–8e shipped and were signed off 2026-07-04…06 — see `docs/archive/progress_archive.md`. The 6-tier / 8-team league model below is what shipped; Phase 13 proposes replacing it.*
-
-### 9a — Tier Schema + Multi-Tier Macro-Sim
-
-**Owner:** Fable 5
-
-- Schema v7: add a `tier` dimension to `Teams` (HS, College, MinorA, MinorAA, MinorAAA, MLB).
-- Query-layer tier filters for `BaseballQueries`.
-- `LeagueGenerator` seeds one independent 8-team league per tier.
-- Opus 4.8 designs offensive-baseline deltas; Fable 5 implements `tier → LeagueSimulator` map.
-- `CareerManager` tier rewiring for correct scheduling.
-- `StatsNormalizer` scoping per-tier.
-- New-game avatar creation defaults to an HS team.
-- **Validate:** `run_monte_carlo_batch` gains a per-tier band check and a regression guard for the existing MLB band.
-
-### 9b — Bare Daily-Clock Skeleton
-
-**Owner: Fable 5 engine, Sonnet 5 UI.**
-
-- Split the avatar out of `LifeSimManager`'s autopilot tick — avatar's hourly actions become player-chosen.
-- Schedule surface: allocate hours across Sleep / School / Practice / Game / Work blocks. Game reuses `CareerManager` flow. Practice/School are inert placeholders for now.
-- New UI scene: `Assets/UI/ScheduleScreen.tscn`.
-- **Validate:** Extend `NeedsDecayHarness` / new harness proving scripted manual block choices behave as expected and untouched autopilot reproduces pre-9b traces.
-
-### 8a — Survival Economy + Legal Work
-
-**Owner:** Sonnet 5
-
-- Recurring rent/food/gear drain on a calendar cadence, through `PlayerQueries.AdjustFunds`.
-- Legal Work becomes the first real Work-block payout (modest funds, energy/fitness drain).
-- **Validate:** `simulate_utility_decay` extended with funds-solvency check over a simulated month.
-
-### 8b — Narcotics (3-tier state machine) + Fencing Negotiation
-
-**Owner:** Opus 4.8 designs, Sonnet 5 implements, Fable 5 reviews.
-
-- Isolated Hustle scene nodes. Narcotics: Inventory Drop → Profit/Toxicity Cut → Territory Control. Fencing negotiation.
-
-### 8c — Arrest / Injury / Suspension Risk Triad
-
-**Owner:** Fable 5 (engine), Sonnet 5 (event content).
-
-- Roster/availability mutation type for Gritty Events.
-- Arrest (jail time-skip), Injury (availability/rating hit), Suspension (`detection_risk` benching).
-
-### 8d — Texas Hold'em, 8e — Equipment Quality
-
-- **8d owner:** Opus 4.8 (pot-odds math), Sonnet 5 (implementation).
-- **8e owner:** Fable 5 (gear tiers as effective-ratings modifiers).
-
-### 9c — Promotion / Advancement Gates, 9d — Player Development / Decline Curves
-
-- **9c owner:** Opus 4.8 (promotion model), Fable 5 (tier-transfer handoff).
-- **9d owner:** Opus 4.8 (growth/decline curves), Sonnet 5 (tuning harness). Practice block finally produces a real stat effect.
-
-**Exit criteria (Phases 8 & 9):** a generated player climbs from HS to the MLB across simulated seasons via performance + development; each tier's league line sits in its own calibrated band; the avatar's daily schedule measurably moves both stats and needs; full career loop playable (broke rookie → hustle income → stress consequences → gritty events → season play).
-
-## Phase 10 — Presentation Layer & Narrative Delivery → Milestone M6 "The Look" (COMPLETE)
-
-*10a–10e shipped 2026-07-06 (shell + theme, burner-phone messages, scouting dashboard, bank strip, portrait pipeline).* **2026-10-09:** the *visual* identity below is superseded by Phase 15 (complete redesign). The architecture (two worlds, messages as narrative delivery, read-only UI) carries forward.
-
-Every UI shipped to date is a deliberate thin slice of plain Godot controls. GAME_IDEA's entire hook is 100% UI/text: a dark-mode split between a **"Baseball Dashboard"** and a **"Burner Phone / Bank."** This phase makes the game *look* like the pitch — it is the visual/asset phase the plan otherwise never schedules.
-
-- **Two-panel shell**: the Baseball Dashboard (stats, scouting reports, calendar, progress bars) and the Burner Phone / Bank (contacts, illicit deals, bank balance, basic survival). Both stay read-only over sim state per `ui_conventions.md` — DTOs in, player-intent signals out, no scene reaching into another's tree. Owner: **Sonnet 5**.
-- **Narrative delivery as messages**: fired Gritty Events and relationship beats surface as **iMessage-style texts** from girlfriends, coaches, and shady contacts, threaded per-contact in the Burner Phone — the event-choice UI's dressed-up form, consuming the existing `GrittyEventFiredEvent` / choice seam. **Sonnet 5**, over the already-pinned Fired/Resolved contract.
-- **Scouting reports**: the Baseball Dashboard's read of the player's ratings and tier standing framed as a scout would (letter grades, projection), sourced from `Player_Ratings` + the Phase 9 tier/development state.
-- **Visual identity**: dark-mode theme, satisfying progress bars, calendar interface — a shared Godot theme resource, not per-scene styling, retrofitting the existing thin-slice scenes.
-- **Portrait pipeline**: pre-generated 2D contact portraits (Midjourney, gritty-polaroid / mugshot house style per GAME_IDEA) as an asset set keyed to `player_id`; the Steam-required **disclosure** of these pre-generated portraits carries into Phase 11's store copy.
-
-**Exit criteria:** the full loop is playable through the two-panel shell in the shipping visual identity; narrative events arrive as threaded messages; scenes still communicate only via the event bus / signals.
-
-## Phase 11 — Steam & Publishing → Milestone M7 "Ship It" (COMPLETE)
-
-*11a–11e shipped 2026-07-06 (native lifecycle, achievements, cloud saves, rich presence, export + compliance).* **2026-10-09:** the commercial launch (store page, disclosures, RC QA, achievement refresh) is Phase 17.
-
-- Facepunch.Steamworks **only** (Steamworks.NET forbidden): cloud saves for the SQLite DB, achievements hooked to the EventDispatcher, rich presence.
-- `NativeLibrary.SetDllImportResolver` for steam_api64.dll / libsteam_api.so; `.csproj` native-library copy targets.
-- **Steam content compliance (GAME_IDEA.md):** disclose the pre-generated AI portraits in the store submission; complete the mature-content questionnaire (drug dealing, gambling references) for the appropriate rating.
-- **Validate:** `validate_steamworks_native`; Windows + Linux export builds.
-
-## Phase 12 — "Saleable" (COMPLETE)
-
-*12a–12d shipped 2026-07-07: render integrity + layout honesty, surface-the-sim cards (stat line, standings, leaders), and the at-bat presentation layer. Details in `docs/archive/progress_archive.md`.*
-
-## Post-Phase-12 Arcs (COMPLETE, 2026-07-08 … 07-15)
-
-Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the High School arc HS-0…HS-6 (schema v11→v13), Act 1 onboarding + tutorial overlay, UI slices A/B/D-1/G (real-time clock), the event-choice prominence pass, the criminal-underworld content arc DIRT-1…DIRT-4, and the hustle depth pass (robberies, narcotics re-up/haggle, fencing multi-lot, hustle feel pass). Remaining exits on these are **user playtests**; the deprioritized polish is now absorbed: D-2/D-3 audio into Phase 14, Slice E phone theming and Slice F animation into Phase 15.
-
-## Phase 13 — League Restructure → Milestone M8 "The Pipeline" (ACTIVE: design complete, build next)
+**What we're building:** [GAME_VISION.md](GAME_VISION.md) (v2, canonical). **Who does what:** [TEAM.md](TEAM.md) (owner-confirmed; Claude Opus 5.5 is integration lead). **Where we are:** [progress.md](progress.md). **Docs map:** [README.md](README.md).
+
+No phase merges until its exit criteria pass. Slices run in parallel where the dependency map allows. **Phases 0–12 and the post-12 arcs are complete. The road to launch is Phases 13–17, plus Phase G (gameplay core, high priority) and Phase L (lineage, temptation and vice).**
+
+> **Historical author names.** Shipped specs in `reference/` and `archive/` name an earlier model roster as their authors ("Fable 5", "Opus 4.8", "Sonnet 5"). Those are past authors, not current roles, and they're unrelated to **Claude Fable 5.1**, which joins in 2026-10 as the independent full-project reviewer ([tasks/fable_5_1_full_review_brief.md](tasks/fable_5_1_full_review_brief.md)). Current roles live only in [TEAM.md](TEAM.md).
+
+## Completed: Phases 0–12 and the post-12 arcs
+
+Full history: [archive/progress_archive.md](archive/progress_archive.md). Each system's contract is in its [reference/](reference/) spec.
+
+| Phase | Delivered | Reference spec(s) |
+| :-- | :-- | :-- |
+| 0 Toolchain | .NET 8, Godot 4 .NET, git, project files, MCP repair | — |
+| 1 Database core | `SchemaDefinitions.sql` (now v13), `DatabaseManager`, typed query classes | rules: `.agents/rules/database_*.md` |
+| 2 Core loop + event bus | `GameManager`, calendar, the async bus (the only Life↔Baseball channel) | — |
+| 3 Macro-sim (M1) | `LeagueSimulator`, `AtBatResolver`, calibrated to MLB norms | [baseball_pa_outcome_model.md](reference/baseball_pa_outcome_model.md) |
+| 4 Micro-sim (M2) | 25-state Markov at-bat sim, input blending, PED hooks (no trigger yet) | [baseball_markov_micro_sim.md](reference/baseball_markov_micro_sim.md), [at_bat_read_input_model.md](reference/at_bat_read_input_model.md) |
+| 5 Life sim (M3) | Needs engine, utility AI, stress overlay | [life_sim_needs_decay.md](reference/life_sim_needs_decay.md) |
+| 6 Relationships + legacy | Affinity graph, rivalries, heir genetics, succession | [heir_mechanics.md](reference/heir_mechanics.md) |
+| 7 Gritty events | Dispatcher, conditions, JSON events, flag cascades, marriage + conception | [gritty_event_framework.md](reference/gritty_event_framework.md), [marriage_and_conception.md](reference/marriage_and_conception.md) |
+| 8–9 Economy, hustles, career ladder (M4/M5) | Survival economy, Narcotics, Fencing, Hold'em, equipment, the availability triad, development curves, and the **6-tier league** (superseded by Phase 13) | [hustles_narcotics_fencing.md](reference/hustles_narcotics_fencing.md), [hustles_texas_holdem.md](reference/hustles_texas_holdem.md), [equipment_quality.md](reference/equipment_quality.md), [roster_availability_triad.md](reference/roster_availability_triad.md), [development_decline_curves.md](reference/development_decline_curves.md) |
+| 10 Presentation (M6) | Two-world shell, phone messages, scouting, bank, portraits (visuals superseded by Phase 15) | [presentation_layer_narrative.md](reference/presentation_layer_narrative.md) |
+| 11 Steam (M7) | Facepunch.Steamworks, achievements, cloud saves, presence, exports | [steam_publishing_ship_it.md](reference/steam_publishing_ship_it.md) |
+| 12 "Saleable" | Render integrity, surface-the-sim cards, at-bat presentation | [surface_the_sim.md](reference/surface_the_sim.md), [at_bat_presentation.md](reference/at_bat_presentation.md) |
+| Post-12 arcs | HS person layer HS-0…HS-6 (schema v11→v13), onboarding + tutorial overlay, UI slices A/B/D-1/G, event-choice prominence, the DIRT-1…4 criminal arc, the hustle depth pass (incl. robbery), the household board | [high_school_person_layer.md](reference/high_school_person_layer.md), [hs_onboarding_events.md](reference/hs_onboarding_events.md), [onboarding_tutorial_overlay.md](reference/onboarding_tutorial_overlay.md), [real_time_clock_slice_g.md](reference/real_time_clock_slice_g.md), [criminal_underworld_content_arc.md](reference/criminal_underworld_content_arc.md), [hustle_minigames_depth_pass.md](reference/hustle_minigames_depth_pass.md), [household_board.md](reference/household_board.md) |
+
+## Phase 13 — League Restructure → Milestone M8 "The Pipeline" (ACTIVE: design complete; 13-0 review open, build next)
 
 **Spec:** [design/league_restructure.md](design/league_restructure.md), which resolves the user's source spec (bottom of this file). It replaces the Phase 9 league model (6 tiers including Single-A, Double-A and Triple-A; 8 teams per tier; fixed 9+5+3 rosters; tier-ladder promotion).
 
@@ -197,7 +41,53 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 
 **Slices:** 13-0 prerequisites (sqlite MCP, MC flake) → 13-1 schema + world-gen → 13-2 roster capacities + innings + starter selection → 13-3 schedules + calendars + re-band → 13-4 playoffs + ranking → 13-5 roster lock + forfeits → 13-6 pipeline + draft → 13-7 ripple (achievements, presence, docs, cards). Owners and gates are in spec §15.
 
+- **Lineage hooks (Phase L depends on these):** `PipelineManager` publishes `ProContractSignedEvent` on **every** first Pro contract (drafted *or* signed from free agency); the playoffs publish `ChampionshipWonEvent` (also used by Phase 16b). See [design/temptation_and_lineage.md](design/temptation_and_lineage.md) §4.2/§4.4.
+
 **Exit criteria:** a generated player goes HS → College → drafted → Pro across simulated seasons; all three leagues schedule, play and crown champions; per-tier bands green; the new Pro guard recorded; PipelineHarness population conservation within ±5% over 20 seasons.
+
+## Phase G — Gameplay Core → Milestone MG "Play Ball" (HIGH PRIORITY, owner directive 2026-10-10)
+
+**Spec:** [design/gameplay_core.md](design/gameplay_core.md).
+
+- **Attributes defined:** what every rating, person stat and need affects, by how much (computed from the shipped resolver), and how it combines with player skill. **Ratings set the floor and ceiling; skill moves you within it.**
+- **Pitching mode (new):** pitch, target and intent per pitch. Control sets scatter, stuff sets whiff and weak contact, stamina sets how long both hold, and the batter AI reads your tendencies. The human branch only, so `NeutralPitcherPolicy` stays byte-identical.
+- **Batting interface upgrade:** a broadcast-style view with the pitch path, the zone overlay, feedback that teaches, and scouting tendencies.
+- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots (field, clubhouse, office, training room, stands, lot) and their own art. The at-bat shows the home park. Park factors are optional (off at launch unless approved).
+- **Handoff protocol:** every task names its recommended model. Every model stops when its task is done and tells the human which model is suggested next (spec §5, [TEAM.md](TEAM.md) §3).
+
+**Slices:** **G-1** attribute audit (Fable 5.1 in R-1 → Math) · **G-2** pitching mode design + engine (Opus + Math) · **G-3** at-bat view rebuild (Sonnet) · **G-4** venue catalog + screens (Sonnet + Flash) · **G-5** venue art (owner + AI art, Flash integration; inside 15d) · **G-6** stadium mapping + optional park factors · **G-7** fielding moments (if approved).
+
+**Exit criteria:**
+
+- A pitcher player pitches every attended game through the new interface.
+- Skill-bot harness spreads land in Math's approved band.
+- Every team resolves a venue with its own art.
+- MC neutral branches are bit-identical.
+
+## Phase L — Lineage, Temptation & Vice → Milestone ML "Blood"
+
+**Specs:** [design/temptation_and_lineage.md](design/temptation_and_lineage.md) (decisions D1–D21) and [design/substances_and_addiction.md](design/substances_and_addiction.md). Opening slice brief: [tasks/16-1_opening_sequence_brief.md](tasks/16-1_opening_sequence_brief.md).
+
+- **Identity + the secret:** `Player_Identity` (gender, ethnicity, listed position; never read by the sim); the legends roster with per-career position assignment; `Biological_Parentage` (one table for every secret); a guaranteed poverty start.
+- **The father's arc:** the `unknown_fan` thread, `NarrativeTokenResolver`, the first text on `ProContractSignedEvent`, the record-chase ladder, and the reveal on `ChampionshipWonEvent` or career end (before succession).
+- **Family:** either-gender civilian partners with a silent kin guard; planned and unplanned pregnancy (never abortion); placement for adoption and adopting in; maternity absence; the missing-piece freeze; hidden children entering the league at HS intake; opponent and teammate reveals; the paid search; reclaiming.
+- **Temptation:** affairs (confidence override, clutch, nudges) with escalating random risk, on the shared `Active_Effects` layer.
+- **Substances:** five substances on one addiction engine. The `ped_active` writer finally brings the shipped steroid multiplier to life. Fatal overdose and `AvatarDied`.
+- **The Trailblazer:** a once-per-save route for the first woman to play pro, plus press clippings (a new shared feature).
+
+**Slices:**
+
+- **Lineage, temptation and family:** **L-0** docs + no-abortion fix (**DONE 2026-10-10**) → **L-1** schema v15 + identity + legends + poverty → **L-2** legends content → **L-3** tokens + father arc → **L-4** pregnancy, placement, adoption, missing piece → **L-5** temptation + `Active_Effects` + clutch → **L-6** hidden children + reveals + search → **L-7** press clippings → **L-8** Trailblazer content.
+- **Substances:** **S-1** substance engine → **S-2** magnitudes → **S-3** content → **S-4** the asterisk.
+- **Where to find details:** owners and dependencies are in temptation §14 and substances §8; roles are in [TEAM.md](TEAM.md).
+- **Calibration:** every Phase L slice that touches `Assets/Simulation/` keeps "no rows or flags ⇒ bit-identical" and runs `run_monte_carlo_batch`.
+
+**Exit criteria:**
+
+- A full family story plays end to end in a scripted harness career: the father's first text and reveal; an affair with discovery; a placed child who later crosses paths with the heir; a search and a reclaim; an addiction with rehab; succession to an adopted or reclaimed heir.
+- The Trailblazer reaches "the first."
+- No Monte Carlo band moves with every new system idle.
+- `check_event_graph_integrity` passes, including #9 (no voice notes), #11 (never abortion) and #12 (tokens).
 
 ## Phase 14 — Voice & Broadcast Audio → Milestone M9 "The Call"
 
@@ -205,8 +95,8 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 
 - **ElevenLabs, offline only:** `Tools/VoiceGen` renders script sheets into mastered Ogg clips plus a manifest; the API key comes from the environment and never enters the repo or a build; a licensing log records every run; a human listens to every clip.
 - **Play-by-play announcers:** 56 unique booths (24 College + 32 Pro), each with a fictional persona, archetype and **signature taglines** (home run, win, strikeout, grand slam, walk-off); ~120 clips per Pro booth, ~62 per College booth; **3 shared HS local-radio voices** with school-name stingers. Your team's booth calls your games as radio homers; other booths appear in Around the League highlights and on Draft Night. Sound bites only, and no spoken player names.
-- ~~Phone voice notes~~ **cut 2026-10-10:** voice is broadcasters only. Phone messages and cutscene dialogue stay text.
-- **Runtime:** Voice / Announcer / Music / Ambience buses with sidechain ducking; a `VoiceDirector` autoload (presentation RNG only, so it's calibration-inert); a `BroadcastBooth` on the at-bat beat sequencer; a subtitle strip; volume sliders and toggles.
+- **Broadcasters only (owner, 2026-10-10):** no phone voice notes, no cutscene voice-over, no character dialogue; those are text. Avatar-facing calls use roles, never names or pronouns (the avatar can be male or female). The Trailblazer route adds a small gated set of its own calls.
+- **Runtime:** Announcer / Music / Ambience buses with sidechain ducking (no Voice bus: voice is broadcasters only); a `VoiceDirector` autoload (presentation RNG only, so it's calibration-inert); a `BroadcastBooth` on the at-bat beat sequencer; a subtitle strip; volume sliders and toggles.
 
 **Slices:** 14a buses + VoiceDirector → 14b VoiceGen + manifest + AudioManifestHarness → 14c personas + scripts → 14d BroadcastBooth + highlights → ~~14e voice notes~~ (cut) → 14f full generation + listening QA.
 
@@ -218,8 +108,8 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 
 - **Recommended direction, "Two Worlds, One Life":** the DIAMOND side looks like a prime-time sports broadcast package; the DIRT side looks like night streets and the burner phone. The phone is the portal between them, team colors tint the UI systemically, and production value climbs with the tier. The user picks the final direction at the 15a gate.
 - **Design system:** one Theme family, tokens and components; commercially licensed fonts; accessibility built in (colorblind-safe palette, text size, reduce motion, subtitles).
-- **Every screen rebuilt**, including the **new front end** a Steam product needs (title screen, New Career, loading, pause, credits) and the Phase 13 league screens (bracket, draft board, recruiting, roster status).
-- **Art:** 68 team logos, park kits, scenes, portraits and icons. AI-assisted art is pre-generated, curated and disclosed. This phase **absorbs** the deprioritized Slice E (phone tiers) and Slice F (motion).
+- **Every screen rebuilt**, including the **new front end** a Steam product needs (title screen; New Career with gender, ethnicity, the 10 positions and dating preference; loading, pause, credits), the Phase 13 league screens (bracket, draft board, recruiting, roster status), and the Phase L surfaces (the phone's **News** tab, the record book with asterisks, the Player screen's "missing piece" mark).
+- **Art:** 68 team logos, park kits, scenes, portraits (women and every ethnicity in the identity catalog, the legends, the father), and icons. AI-assisted art is pre-generated, curated and disclosed. This phase **absorbs** the deprioritized Slice E (phone tiers) and Slice F (motion).
 - 1080p reference, 16:10-safe, focus navigation everywhere (keeps Steam Deck and controller support reachable).
 
 **Slices:** 15a art direction (user picks) → 15b design system → 15c screen rebuilds → 15d art production → 15e motion → 15f phone tiers. 15a–15b can run alongside Phase 13.
@@ -230,8 +120,8 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 
 **Spec:** [design/cutscenes_motion_comic.md](design/cutscenes_motion_comic.md). User decision: in-engine motion comic, not video.
 
-- A `CutscenePlayer` overlay plus JSON definitions (layered art, camera moves, captions, voice, SFX, music) with **live slots** (your portrait, name, team, stat line).
-- **Four kinds:** story (~20), milestone (~10: Signing Day, Draft Night, first Pro game, championships…), **achievement** cards (one per achievement), and **big plays** (8 kits × 3 tier styles; the announcer's call is the audio bed).
+- A `CutscenePlayer` overlay plus JSON definitions (layered art, camera moves, captions, SFX, music, and broadcaster calls as audio beds; no character voice-over) with **live slots** (your portrait, name, team, stat line).
+- **Four kinds:** story (~20, including the poverty prologue, the lineage reveal, the hidden-child reveals, the reclaim, overdose and death, and the Trailblazer's three acts), milestone (~10: Signing Day, Draft Night, first Pro game, championships…), **achievement** cards (one per achievement), and **big plays** (8 kits × 3 tier styles; the announcer's call is the audio bed).
 - `CutsceneDirector` triggers come from the bus (new additive events `AchievementUnlocked`, `DraftCompleted`, `RecruitingCommitted`, `ChampionshipWon`) and from `BroadcastBooth.BigPlay`. Queue and rate limits; the game clock soft-pauses; everything is skippable; reduce-motion supported.
 
 **Slices:** 16a player → 16b director + events → 16c big plays → 16d achievement cards → 16e story/milestone content. Depends on 14a/14b (booth calls as audio beds) and 15a/15b (art direction).
@@ -243,7 +133,7 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 **Spec:** [design/steam_commercial_release.md](design/steam_commercial_release.md). It builds on the Phase 11 technical integration.
 
 - **Achievements and rich presence** refreshed for the new league (Signed, Draft Day, First-Rounder, The Show, State/National Champs, Ring Bearer, Walk-Off, Grand Slam, Benched, Short-Handed, Going Straight, Banned for Life, plus the shipped set; "Went Pro" retired).
-- **Legal and disclosure package:** the Steam AI-content survey (pre-generated art and ElevenLabs voices; no live generation), the mature-content survey (drugs, simulated gambling, crime, alcohol, mature relationships, language), the ElevenLabs and art licensing logs, `THIRD_PARTY_NOTICES.txt`, and a **trademark screen** of the title, league and team names.
+- **Legal and disclosure package:** the Steam AI-content survey (pre-generated art and ElevenLabs voices; no live generation), the mature-content survey (drugs and dealing, PEDs and substance abuse, simulated gambling, crime and violence, alcohol, implied sexual themes, adultery and pregnancy, overdose death, language), the ElevenLabs and art licensing logs, `THIRD_PARTY_NOTICES.txt`, and a **trademark screen** of the title, league and team names.
 - **Store page:** capsules, screenshots, trailer, copy, system requirements.
 - **Release-candidate QA:** the full gate suite, a full-career playthrough, Windows + Linux + Deck smoke tests, a cloud-save round-trip, install < 2 GB, a 10-season soak.
 - **Save policy:** from 1.0, every schema change ships a migration and a frozen-save harness check.
@@ -256,24 +146,25 @@ Not separately phased here — tracked slice-by-slice in `docs/progress.md`: the
 ## Phase Dependency Map
 
 ```text
-13 League ──────────────┬──────────────► 17 Steam Release
-14 Voice ── 14a/14b ──┐ │                     ▲
-15 Visual ─ 15a/15b ──┼─┴─► 16 Cutscenes ─────┘
-                      └──────────────────────► (14c–14f, 15c–15f run in parallel)
+13 League ─┬─ 13-1 ──► L-1 ──► L-2
+           │           └──► L-4 ──► L-5 ──► S-1 ──► S-2 / S-3 ──┐
+           └─ 13-6 ──► L-3 ──► L-6          L-7 ──► L-8, S-4 ───┼──► 17 Steam Release
+14 Voice ── 14a/14b ──┐                                         │
+15 Visual ─ 15a/15b ──┼──► 16 Cutscenes (16a/16b needed for L-3's reveal cutscene) ─┘
+                      └──► (14c–14f, 15c–15f run in parallel)
 ```
 
-Phase 13 is the critical path (engine + calibration). Phases 14 and 15 are presentation-only and can start their early slices alongside it. Phase 16 needs both the voice pipeline and the approved art direction. Phase 17 needs everything.
+Phase 13 is the critical path (engine + calibration). **Phase G runs alongside it as a high priority:** G-1 and the G-2 design start now; G-3 and G-4 follow the 15a/15b direction; G-5 is inside 15d. Phase L builds on 13-1 (schema v14) and 13-6 (the pipeline events). Phases 14 and 15 are presentation-only and start alongside 13. Phase 16 needs the voice pipeline and the approved art direction. Phase 17 needs everything.
 
 ## Cross-Cutting Discipline (every session)
 
-- Append completed work + next steps to `docs/progress.md` before ending a session.
-- Commit per completed sub-task; phases merge only with exit criteria green.
-- UI is built as thin vertical slices inside each phase, not as a big-bang Phase — every milestone stays demoable.
-- Schema changes go through the SQLite validation path first (No Blind Queries rule).
-- Voice/audio assets go through `validate_audio_manifest`; cutscene definitions through `CutsceneHarness`; event content referencing either through `check_event_graph_integrity`.
-- Presentation (announcers, voice, cutscenes, the visual redesign) never writes sim state; any slice touching `Assets/Simulation/` still triggers `run_monte_carlo_batch`.
-- No secrets in the repo: ElevenLabs and other API keys live only in environment variables.
-- External submissions, payments and legal sign-offs (Steamworks, trademark, pricing) are the user's actions.
+- Follow [TEAM.md](TEAM.md) §3: brief → your own branch and worktree → gates → independent review → merge → a compact `progress.md` entry.
+- Any `Assets/Simulation/` change runs `run_monte_carlo_batch`. The resolver guard stays byte-exact, and re-baselining a season guard needs explicit sanction.
+- Gates: event content → `check_event_graph_integrity`; schema → `validate_sqlite_schema`; voice → `validate_audio_manifest`; cutscenes → `CutsceneHarness`; exports → `validate_steamworks_native`.
+- Presentation (announcers, cutscenes, the phone, press, the redesign) never writes sim state.
+- **One home per decision:** direction changes go into GAME_VISION first, then the active spec, never as a header note on an old doc ([README.md](README.md)).
+- No secrets in any tracked file. The repo is private, but its history was public until 2026-10-10. Keys live in env vars or the git-ignored `.env`.
+- External submissions, payments and legal sign-offs are the owner's actions.
 
 ## Phase 13 Source Spec — Multi-Tiered League Specifications (user-authored, 2026-10-09)
 

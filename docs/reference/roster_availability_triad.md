@@ -1,6 +1,8 @@
 # Design — Roster Availability & the Arrest / Injury / Suspension Triad (Phase 8c)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **Phase 13 change** ([league_restructure.md](../design/league_restructure.md) §7): the nameless replacement-level call-up is **retired**, so an absence now leaves a hole. Pro's Sunday lock forbids inactive replacements, and any team that can't field 9 position players plus a pitcher forfeits. The content contract (§2) is unchanged.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** `AbsenceReason` gains `Maternity = 4` and `Rehab = 5` ([temptation](../design/temptation_and_lineage.md) §5.2; [substances](../design/substances_and_addiction.md) §3); the replacement call-up retires in Phase 13 (13-5).
+
+> **Planned changes (2026-10-09):** **Phase 13 change** ([league_restructure.md](../design/league_restructure.md) §7): the nameless replacement-level call-up is **retired**, so an absence now leaves a hole. Pro's Sunday lock forbids inactive replacements, and any team that can't field 9 position players plus a pitcher forfeits. The content contract (§2) is unchanged.
 
 **Author:** Claude Fable 5 (engine surface, shipped 2026-07-05) · **Phase:** 8c per `docs/archive/phase_8_9_interleave_plan.md` · **Status:** engine COMPLETE and harness-proven; this doc is the contract for **Sonnet 5's content half** (the event JSON that actually fires arrests, injuries and suspensions). Companion to `gritty_event_framework.md` (whose §4 deferral note reserved exactly this consequence type) and `hustles_narcotics_fencing.md` §8/§12 (the risk stats 8b writes, and the tail-pricing frame).
 

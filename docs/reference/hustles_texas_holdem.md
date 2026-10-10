@@ -1,6 +1,8 @@
 # Design — Hustle: Texas Hold'em (pot-odds / bluffing math + card simulation)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none.
+
+> **Planned changes (2026-10-09):** Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
 
 **Author:** Claude Opus 4.8 (pot-odds/bluffing math + hand-evaluation + betting state machine) · **Phase:** 8d (per `docs/archive/phase_8_9_interleave_plan.md`) · **Status:** design only — no C# in this pass; **sim/math core only, the `.tscn`/UI is a deferred follow-on slice** (this session's confirmed scope). Sonnet 5 implements against this contract; Fable 5 reviews. Companion to `hustles_narcotics_fencing.md` (shares its three-layer architecture, its `HustleContext`→`HustleResolution` seam, its consequence-writer vocabulary, and the same rules doc, `.claude/rules/gritty_events.md`).
 

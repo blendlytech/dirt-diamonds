@@ -1,6 +1,8 @@
 # High School Onboarding Events — Design Contract
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. The `rookie_season` batch's `tier >= 2` floor now means a **Pro rookie season**; review copy that describes minor-league life. HS games are now Fridays, 10 per season plus playoffs ([league_restructure.md](../design/league_restructure.md) §3).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** a Trailblazer variant of the `hs_tryouts` chain ([temptation](../design/temptation_and_lineage.md) §8.2).
+
+> **Planned changes (2026-10-09):** Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. The `rookie_season` batch's `tier >= 2` floor now means a **Pro rookie season**; review copy that describes minor-league life. HS games are now Fridays, 10 per season plus playoffs ([league_restructure.md](../design/league_restructure.md) §3).
 
 **Author:** Opus 4.8 (architecture) · **Date:** 2026-07-10 · **Arc:** Act 1 fix (HS onboarding + rookie-batch tier gate)
 **Status:** DESIGN COMPLETE — this is the authoring contract Sonnet 5 builds Stage 2 against. No code here.

@@ -1,12 +1,14 @@
-# Antigravity / Gemini Directives for "Dirt & Diamonds"
+# Project Directives for "Dirt & Diamonds" (binding for every model)
+
+*Gemini reads this file directly; Claude Code reads it through `CLAUDE.md`, GPT agents through `AGENTS.md`.*
 
 ## Mission Statement
 
-You are a member of the "Dirt & Diamonds" model team. **Roles, slice ownership, review pairs and the work flow are defined in [docs/TEAM.md](docs/TEAM.md) (owner-confirmed 2026-10-10) — read it before starting any slice.** In short: Claude Opus 5.5 is integration lead and chief architect (Phase 13 critical path, task briefs, final merge gate); Gemini 3.1 Pro is senior engineer for the presentation runtime (Phases 14/16, slices 13-4/13-5, 17a) and the independent reviewer of Claude Opus's sim diffs; Gemini 3.1 Pro Math owns calibration; Gemini 3.8 Flash owns content at volume. **Only start a slice that TEAM.md §2 assigns to you, from a task brief in `docs/tasks/`, in your own git worktree** (TEAM.md §3).
+You are a member of the "Dirt & Diamonds" model team. **Roles, slice ownership, review pairs and the work flow are defined in [docs/TEAM.md](docs/TEAM.md) (owner-confirmed 2026-10-10) — read it before starting any slice.** In short: Claude Opus 5.5 is integration lead and chief architect (Phase 13 critical path, task briefs, final merge gate); Gemini 3.1 Pro is senior engineer for the presentation runtime (Phases 14/16, slices 13-4/13-5, 17a) and the independent reviewer of Claude Opus's sim diffs; Gemini 3.1 Pro Math owns calibration; Gemini 3.8 Flash owns content at volume. **Only start a slice that TEAM.md §2 assigns to you, from a task brief in `docs/tasks/`, in your own git worktree** (TEAM.md §3). **Stop when your task is done.** End with a handoff note to the human: what was done, the commit, the gates and their results, what's open, and "Recommended next: `<slice>` by `<model>`" from TEAM.md §2. Never start the next slice yourself.
 
-**The game** (canonical: [docs/GAME_VISION.md](docs/GAME_VISION.md)) is a **commercial Steam release**: a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov chain) built in Godot 4 + C#. The player raises a ballplayer from **High School → College → the Draft → Pro** in a fictional league, survives a gritty off-field life (hustles, crime, family, heirs), hears every game called by **their team's own ElevenLabs-voiced announcer**, gets story through **phone texts**, and sees story moments, achievements and big plays as **in-engine motion-comic cutscenes**. The visual identity is being **completely redesigned** (Phase 15).
+**The game** (canonical: [docs/GAME_VISION.md](docs/GAME_VISION.md)) is a **commercial Steam release**: a hybrid life simulation (Utility AI) and deep baseball simulation (Monte Carlo / Markov chain) built in Godot 4 + C#. The player raises a ballplayer from **High School → College → the Draft → Pro** in a fictional league, survives a gritty off-field life (hustles, crime, family, heirs), hears every game called by **their team's own ElevenLabs-voiced announcer** (voice is broadcasters only), gets story through **phone texts** (including an unknown number that turns out to be the GOAT father who gave them up), lives with temptation and vice that really help and really cost, and sees story moments, achievements and big plays as **in-engine motion-comic cutscenes**. The visual identity is being **completely redesigned** (Phase 15).
 
-**Where we are:** Phases 0–12 are complete. The road to launch is Phases 13–17 in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). Docs are organized by authority in [docs/README.md](docs/README.md) (active specs in `docs/design/`, shipped-system specs in `docs/reference/`, superseded docs in `docs/archive/`). Every session starts by reading [docs/progress.md](docs/progress.md) and running `git status` + `git log` (an auto-committer and parallel sessions are active).
+**Where we are:** Phases 0–12 are complete. The road to launch is Phases 13–17 plus **Phase L** (lineage, temptation and vice) in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). The game, start to finish, is [docs/GAME_VISION.md](docs/GAME_VISION.md) **v2**. Claude Fable 5.1 is running an independent full-project review ([docs/tasks/fable_5_1_full_review_brief.md](docs/tasks/fable_5_1_full_review_brief.md)). Docs are organized by authority in [docs/README.md](docs/README.md) (active specs in `docs/design/`, shipped-system specs in `docs/reference/`, superseded docs in `docs/archive/`). Every session starts by reading [docs/progress.md](docs/progress.md) and running `git status` + `git log` (an auto-committer and parallel sessions are active).
 
 Primary objective: highly optimized, performant code with strict separation between the deterministic sports systems, the stochastic narrative systems, and the presentation layer.
 
@@ -41,10 +43,11 @@ Primary objective: highly optimized, performant code with strict separation betw
 ## 5. Audio & Voice (Phase 14, spec: [docs/design/voice_and_broadcast_audio.md](docs/design/voice_and_broadcast_audio.md))
 
 - **ElevenLabs is offline-only.** Clips are generated with `Tools/VoiceGen` and shipped as Ogg files with `Assets/Audio/Voice/voice_manifest.json`. The shipped game never calls an AI service.
-- **API keys live only in environment variables or the repo-root `.env`** (`ELEVENLABS_API_KEY`). `.env` is git-ignored and must never be tracked or staged; the repo is **public** and an auto-committer pushes. Never write a key to the repo, logs, manifests or builds.
-- **No real people:** no voice cloned from or imitating a real person or broadcaster. No spoken player names; names appear in subtitles only.
+- **API keys live only in environment variables or the repo-root `.env`** (`ELEVENLABS_API_KEY`, `ANTHROPIC_API_KEY`). `.env` is git-ignored and must never be tracked or staged. The repo is **private** (since 2026-10-10; its earlier history was public), and an auto-committer pushes. Never write a key to the repo, logs, manifests or builds, and never print `.env` values.
+- **Broadcasters only (owner, 2026-10-10):** voice is for `BroadcastBooth` and the announcers. No phone voice notes, no cutscene voice-over, no character dialogue.
+- **No real people:** no voice cloned from or imitating a real person or broadcaster. No spoken player names, and no avatar pronouns (the avatar can be male or female); names appear in subtitles only.
 - Every generation run is logged in `docs/legal/elevenlabs_generation_log.md`. Every clip gets a human listening pass.
-- Buses: Master → SFX / Voice / Announcer / Music / Ambience. Every spoken line has a strings-table subtitle.
+- Buses: Master → SFX / Announcer / Music / Ambience (no Voice bus). Every announcer line has a strings-table subtitle.
 
 ## 6. Cutscenes (Phase 16, spec: [docs/design/cutscenes_motion_comic.md](docs/design/cutscenes_motion_comic.md))
 
@@ -65,9 +68,23 @@ Primary objective: highly optimized, performant code with strict separation betw
 ## 9. Required Workflow Procedures
 
 - **Verify UI nodes:** before writing C# for any scene (hustle mini-games, the at-bat view, the phone, cutscene chrome), run `godot_scene_mapper` or the Godot MCP to verify node paths in the `.tscn`.
-- **Validate event integrity:** after any gritty-event content change, run `check_event_graph_integrity` (flags, dead ends, `contact` and `cutscene` references; any `voice_note` fails, since voice is broadcasters only).
+- **Validate event integrity:** after any gritty-event content change, run `check_event_graph_integrity` (flags, dead ends, `contact` and `cutscene` references; any `voice_note` fails, since voice is broadcasters only; planned checks #11 never-abortion and #12 tokens land with Phase L).
 - **Test stat matrices:** any change under `Assets/Simulation/` (the resolver, PED/tier weights, rosters, schedules, innings) must be followed by `run_monte_carlo_batch`. The resolver guard must stay byte-exact; re-baselining a season guard needs explicit sanction in a design doc.
 - **Validate audio:** after any voice/audio asset or manifest change, run `validate_audio_manifest`.
 - **Validate cutscenes:** after any cutscene definition change, run `Tools/CutsceneHarness`.
 - **Validate Steam natives:** after export or `.csproj` changes, run `validate_steamworks_native`.
 - **Log the session:** append a compact entry to `docs/progress.md` before ending.
+
+## 10. Lineage, Temptation & Vice (Phase L, specs: [docs/design/temptation_and_lineage.md](docs/design/temptation_and_lineage.md), [docs/design/substances_and_addiction.md](docs/design/substances_and_addiction.md))
+
+- **Identity never touches the sim.** Gender, ethnicity and listed position (`Player_Identity`) are story-only. No rating, cap or resolver path may read them.
+- **Secrecy invariant.** Only `LineageQueries` reads `Biological_Parentage`. No UI, article, event or `RelationshipGraph` hydration may hint at the father or a hidden child before its reveal. Every dating, fling, affair and adoption pool goes through `LineageQueries.IsKin` and silently excludes blood relatives.
+- **Content lines.** Temptation and substance **boosts are adults-only**: 18+ and tier ≥ College, enforced by a loader guard. Nothing sexual is explicit at any age. **Never abortion:** every pregnancy reaches a birth (kept or placed), and check #11 enforces it.
+- **Calibration discipline.** Every new effect (`Active_Effects`, clutch, missing-piece freezes, affair nudges, substance edges) must be bit-identical when no rows or flags exist, and every magnitude is a Pro Math data value gated by `run_monte_carlo_batch`. `ped_active` is engine-written by the substance engine only.
+- **Text.** Phone and press text resolve `{tokens}` at write time through `NarrativeTokenResolver`. Unknown tokens fail at load.
+
+## 11. Gameplay Core (Phase G, high priority, spec: [docs/design/gameplay_core.md](docs/design/gameplay_core.md))
+
+- **Ratings set the floor and ceiling; player skill moves you within it.** Every player-skill mechanic (batting reads, the new pitching mode, fielding moments) lives on a **human branch only**. Neutral policies (`NeutralBatterPolicy`, `NeutralPitcherPolicy`) stay byte-identical, so calibration can't move.
+- Attribute effects and sizes are defined in the spec §1. Any change to a resolver weight, a cap or a skill-band value is a Pro Math call gated by `run_monte_carlo_batch`.
+- Every team (all 68) gets its own venue (`Assets/Data/Venues/venues.json`), interactive venue screen and art. No screen may hard-code a team or a park.

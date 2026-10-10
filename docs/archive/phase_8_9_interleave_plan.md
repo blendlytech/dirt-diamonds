@@ -1,5 +1,7 @@
 # Continuing Dirt & Diamonds: Phase 8/9 Interleave Plan
 
+> **ARCHIVED: superseded by BUILD_PLAN Phases 13–17 and L ([link](../BUILD_PLAN.md)). History only; never build from this.**
+
 > **HISTORICAL** (executed 2026-07-04…06; every step shipped). **2026-10-09 vision update:** the league model this plan built (6 tiers including minor leagues, 8 teams per tier, uniform 9+5+3 rosters, tier-ladder promotion) is **superseded** by Phase 13 ([design/league_restructure.md](../design/league_restructure.md)). Kept as a record of how the daily clock and hustles were sequenced.
 
 ## Context

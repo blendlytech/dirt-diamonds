@@ -1,6 +1,8 @@
 # At-Bat "Read the Pitch" Input Model
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Mechanics unchanged. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none beyond Phase 13 calibration.
+
+> **Planned changes (2026-10-09):** Mechanics unchanged. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
 
 **Status:** DESIGN (Opus 4.8, 2026-07-07). No code. Supersedes the v4 Swing/Take
 batter input inside `PitchChain.SimulatePa` for the *human* path only.

@@ -1,6 +1,8 @@
 # Design — Criminal Underworld Content Arc: `DIRT-2` "The Fix"
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. The fix cascade now plays out in the Pro league; key beats gain story cutscenes (voice notes were cut on 2026-10-10).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none beyond Phase 13 tier numbering.
+
+> **Planned changes (2026-10-09):** Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. The fix cascade now plays out in the Pro league; key beats gain story cutscenes (voice notes were cut on 2026-10-10).
 
 **Author:** Claude Opus 4.8 (narrative architecture) · **Slice:** Content arc, batch 2 of the criminal spine · **Status:** spec written for Sonnet 5 to author `DIRT-2` against; Fable 5 reviews + gates. Companion to `docs/reference/criminal_underworld_content_arc.md` (the arc contract + `DIRT-1`, which this obeys and extends — read that first) and `docs/reference/gritty_event_framework.md` (the closed content vocabulary).
 

@@ -1,6 +1,8 @@
 # Design — Heir Mechanics: Genetic Blending, Hidden Interest, Succession & Lineage Failure
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): An heir enters the pipeline at HS like any new career ([league_restructure.md](../design/league_restructure.md) §9). Succession and lineage-over are launch story cutscenes ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §6).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** succession covers any willing child of any gender aged 19+, including adopted-in and reclaimed children; `AvatarDied` forces succession; `Succeed()` must handle an heir who is already rostered ([temptation](../design/temptation_and_lineage.md) §5.5, §7.6; [substances](../design/substances_and_addiction.md) §2.6).
+
+> **Planned changes (2026-10-09):** An heir enters the pipeline at HS like any new career ([league_restructure.md](../design/league_restructure.md) §9). Succession and lineage-over are launch story cutscenes ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §6).
 
 **Author:** Claude Opus 4.8 (architecture / mathematical design) · **Phase:** 6 (Legacy & Lineage — second bullet; exit criteria = a simulated 3-generation run with succession handoffs) · **Status:** design only — **no code written this pass.** This document is the spec Claude Sonnet 5 implements the blending math / heir generation / queries / harness checks against, and Claude Fable 5 implements the succession handoff + 3-generation harness suite against (model split in §9.4).
 

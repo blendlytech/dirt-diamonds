@@ -1,6 +1,8 @@
 # Design — Robbery Hustle: One New High-Stakes Target ("The Jewelry Exchange")
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none.
+
+> **Planned changes (2026-10-09):** Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
 
 **Author:** Claude Opus 4.8 (mechanical/calibration architecture) · **Slice:** Hustle depth, one target added to one hustle · **Status:** spec written for Sonnet 5 **or** Fable 5 to build against; Fable 5 reviews + gates. Companion to `docs/reference/hustle_minigames_depth_pass.md` §5 (the Robbery contract this extends) and `docs/reference/hustles_narcotics_fencing.md` (the shared resolver shape). Mirrors the section rigor of `docs/reference/criminal_underworld_dirt3_product_and_turf.md`, adapted for a calibration spec.
 

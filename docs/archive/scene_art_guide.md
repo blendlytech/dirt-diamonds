@@ -1,5 +1,7 @@
 # Scene Art Guide — what to draw and where to put it
 
+> **ARCHIVED: superseded by the Phase 15 visual redesign ([link](../design/visual_redesign.md)). History only; never build from this.**
+
 > **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The house style is **superseded** by [visual_redesign.md](../design/visual_redesign.md). The scene-resolution logic and file locations stay until slice 15d replaces the art. Four new HS schools need art ([league_restructure.md](../design/league_restructure.md) Appendix A).
 
 The dashboard's center card now **always** shows a scene: where the player is right now, or what's demanding their attention. Every scene renders its authored PNG if the file exists; otherwise it shows a school-color text placeholder. **Drop a file at the exact path below and the scene starts using it on the next boot — no code changes ever.**

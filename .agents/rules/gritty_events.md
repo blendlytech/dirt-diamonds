@@ -15,6 +15,15 @@ Event JSON structure:
 
 Choices must write immediate consequences (e.g. deduct funds) AND write hidden flags to Entity_Flags to trigger cascading events years later.
 
+## Content lines (owner directives 2026-10-10)
+
+- **Never abortion.** Every pregnancy reaches a birth: kept, or placed for adoption (planned check #11).
+- **Adults only for rewards.** Temptation and substance **boosts** need age ≥ 18 **and** tier ≥ College. HS romance stays off-screen and is never rewarded.
+- **Nothing sexual is explicit** at any age.
+- **Secrecy.** No event text may hint at the father or a hidden child before its reveal.
+- **Tokens.** Message text may use `{tokens}` from the `NarrativeTokenResolver` vocabulary; unknown tokens fail at load (planned check #12).
+- Specs: `docs/design/temptation_and_lineage.md`, `docs/design/substances_and_addiction.md`.
+
 ## Hustle State Machines
 
 Hustles operate as isolated interactive nodes:

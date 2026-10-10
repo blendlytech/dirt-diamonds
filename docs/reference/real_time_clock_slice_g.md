@@ -1,6 +1,8 @@
 # Real-Time Clock & Time Controls — Slice G
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Cutscenes soft-pause the clock exactly like hustle sessions ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §3). Weekly game days follow the new tier calendars ([league_restructure.md](../design/league_restructure.md) §3).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** cutscenes soft-pause the clock (Phase 16).
+
+> **Planned changes (2026-10-09):** Cutscenes soft-pause the clock exactly like hustle sessions ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §3). Weekly game days follow the new tier calendars ([league_restructure.md](../design/league_restructure.md) §3).
 
 **Owner of this doc:** Opus 4.8 (architecture/design only — NO code). Per the standing roadmap
 split, Opus owes this design *before* any build. Slice G is flagged in

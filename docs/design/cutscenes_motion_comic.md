@@ -121,7 +121,7 @@ New bus events are **additive, primitives-only Core events** (the house rule). P
 
 ## 6. Launch content list
 
-**Story (~20):** opening (new career), first day of high school, the household, first hustle, the gambling debt (DIRT-1), the syndicate's ask (DIRT-2), the shaved runs, the league investigation, product and turf (DIRT-3), the indictment, going straight (DIRT-4), arrest/booking, a PED scandal breaks, proposal/wedding, a child's birth, a career-ending injury, retirement, succession (the heir picks up the bat), lineage over (game over).
+**Story (~25):** the opening **poverty prologue** (captions only, [16-1 brief](../tasks/16-1_opening_sequence_brief.md)), first day of high school, the Trailblazer's **tryout**, **"Could she be the first?"** and **the first** ([temptation_and_lineage.md](temptation_and_lineage.md) §8.2), the household, first hustle, the gambling debt (DIRT-1), the syndicate's ask (DIRT-2), the shaved runs, the league investigation, product and turf (DIRT-3), the indictment, going straight (DIRT-4), arrest/booking, a PED scandal breaks, proposal/wedding, a child's birth, **placing a child for adoption**, a hidden child revealed **across the diamond** and **in the clubhouse**, **the reclaim**, **the lineage reveal** (the father; uses `father_portrait`/`father_name`), rehab, an **overdose / death**, a career-ending injury, retirement, succession (the heir picks up the bat), lineage over (game over).
 
 **Milestone (~10):** Signing Day, first college game, National Championship, declare for the draft, Draft Night, first Pro game, first Pro home run, playoff clinch, Pro Championship, Hall-of-legacy career retrospective.
 

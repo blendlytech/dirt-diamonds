@@ -47,6 +47,7 @@ Phase 11's discipline holds: **every achievement traces to a bus event or persis
 | **Banned for Life** | `GrittyEventResolvedEvent` (`dirt_permanent_ban`) | new |
 | **Next of Kin**, **Dynasty**, **End of the Line**, **Rap Sheet**, **Moonlighting**, **Juiced**, **Journeyman** | As shipped in Phase 11 | kept |
 | ~~Went Pro~~ (first minor-league tier) | — | **removed** (no minors) |
+| *Proposed (Phase L, owner to approve):* **Blood Will Tell** (the lineage reveal), **The First** (Trailblazer signs pro), **Something's Missing** (place a child), **Home Again** (reclaim a child), **Clean** (a year clean after rehab), **Asterisk** (break the father's record) | Phase L bus events / flags ([temptation_and_lineage.md](temptation_and_lineage.md)) | proposed |
 
 `AchievementManager` publishes **`AchievementUnlockedEvent`** after a successful set (or locally when Steam is unavailable) for the cutscene director. Achievement definitions and icons live on the Steamworks partner site 👤. Icons come from the Phase 15 icon family.
 
@@ -62,7 +63,7 @@ Phase 11's discipline holds: **every achievement traces to a bus event or persis
 - **Art:** any AI-assisted art (portraits, scene and cutscene art) is generated during development and curated and edited by humans.
 - **Guardrails to state:** no runtime generation; no voices or likenesses of real people; every line and image is human-reviewed before release.
 
-**Mature content survey.** Answer it truthfully for: **drug use and dealing** (the Narcotics hustle, PEDs), **simulated gambling** (Texas Hold'em, sports betting/debt; no real money), **crime and violence** (robbery, arrest, syndicate), **alcohol**, **mature relationship themes** (dating, pregnancy; non-explicit), and **strong language** (street contacts; announcers are clean).
+**Mature content survey.** Answer it truthfully for: **drug use and dealing** (the Narcotics hustle; using steroids, amphetamines, cocaine and painkillers, with addiction, rehab and **fatal overdose**), **alcohol** (including DUI), **simulated gambling** (Texas Hold'em, sports betting/debt; no real money), **crime and violence** (robbery, arrest, syndicate), **sexual themes, implied and never explicit** (dating, flings, **adultery**, pregnancy; adults only for any rewarded behavior), and **strong language** (street contacts; announcers are clean). Steam prohibits sexual content involving minors: the HS arc keeps romance off-screen and never rewards it ([temptation_and_lineage.md](temptation_and_lineage.md) §6.5).
 
 **Licensing records** (`docs/legal/`):
 

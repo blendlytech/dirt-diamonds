@@ -1,6 +1,8 @@
 # Onboarding Tutorial Overlay (Day 1) + Self-Explaining Needs UI
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. The tutorial must also cover weekly game days, roster status, recruiting and the Draft ([league_restructure.md](../design/league_restructure.md)).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** the tutorial must also cover the Phase 13 calendar, roster status, recruiting and the Draft.
+
+> **Planned changes (2026-10-09):** Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. The tutorial must also cover weekly game days, roster status, recruiting and the Draft ([league_restructure.md](../design/league_restructure.md)).
 
 **Status:** Design (Opus 4.8) — supersedes the delivery mechanism of `day1_phone_tutorial.md`, not its intent.
 **Date:** 2026-07-11

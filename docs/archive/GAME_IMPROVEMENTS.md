@@ -1,5 +1,7 @@
 # Game Improvements - Dirt & Diamonds
 
+> **ARCHIVED: superseded by GAME_VISION v2 and BUILD_PLAN ([link](../GAME_VISION.md)). History only; never build from this.**
+
 ## Overview
 
 This document contains the game improvement ideas for the game Dirt & Diamonds.

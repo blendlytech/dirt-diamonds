@@ -1,6 +1,8 @@
 # High School Person Layer (HS-0 design)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The HS season becomes 10 Friday games plus a playoff bracket ([league_restructure.md](../design/league_restructure.md) §3, §8.1), and HS graduation feeds college recruiting (§9.1). The person layer itself is unchanged.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** new careers map the wealth roll onto tiers 0–1 (the poverty prologue); `Player_Identity` adds gender, ethnicity and listed position; partners become either-gender civilians ([temptation](../design/temptation_and_lineage.md) §3.1, §4.1, §6.3).
+
+> **Planned changes (2026-10-09):** The HS season becomes 10 Friday games plus a playoff bracket ([league_restructure.md](../design/league_restructure.md) §3, §8.1), and HS graduation feeds college recruiting (§9.1). The person layer itself is unchanged.
 
 **Owner: Opus 4.8 (design). Implemented by HS-1…HS-6** per the approved plan
 (`review-docs-game-idas-high-school-md-and-sequential-pillow.md`). This is the

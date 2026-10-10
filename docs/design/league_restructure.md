@@ -182,7 +182,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 ## 9. The pipeline — graduation, recruiting, the Draft
 
 ```text
- HS (4 grades, ages ~15–18)
+ HS (4 grades; the avatar starts as a freshman at 16, generated intake is 15–16)
    │ senior fall: recruiting offers → Signing Day (avatar chooses)
    ▼
  College (class years 1–4)
@@ -222,6 +222,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 - After the draft and before the next season, any team over its 24-player org cap **releases** its lowest-value players to free agency.
 - **Free agency** is open only at the Sunday lock (the lock is the only roster-change moment) and only below the org cap. Unsigned free agents retire at season rollover if age ≥ 30 or after 2 unsigned seasons.
 - **Retirement** works as shipped (age, health floor, decline), and so does succession for the avatar.
+- **First Pro contract (Phase L hook).** `PipelineManager` publishes the additive Core event `ProContractSignedEvent(playerId, teamId, day, wasDrafted)` for **every** first Pro contract: the drafted signing (§9.3) **and** a free-agent signing of an undrafted player (§9.2/§9.4). The father's first text keys on it ([temptation_and_lineage.md](temptation_and_lineage.md) §4.2), and so does the Trailblazer's "first" (§8.1 there). The playoffs' `ChampionshipWonEvent` (also Phase 16b) drives the lineage reveal (§4.4 there).
 
 ### 9.5 What replaces `PromotionManager`
 

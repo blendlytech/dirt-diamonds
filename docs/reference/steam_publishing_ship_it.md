@@ -1,6 +1,8 @@
 # Steam & Publishing — Design (Phase 11, "Ship It")
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Still the **technical reference** (Facepunch, natives, cloud saves, degradation). The commercial launch, achievement refresh ("The Show" redefined as the first Pro game, "Went Pro" removed, new league achievements), new rich-presence tokens and the expanded AI disclosure (ElevenLabs voices) are in [steam_commercial_release.md](../design/steam_commercial_release.md) (Phase 17).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** still the technical reference; the commercial launch and achievement refresh are in `design/steam_commercial_release.md`.
+
+> **Planned changes (2026-10-09):** Still the **technical reference** (Facepunch, natives, cloud saves, degradation). The commercial launch, achievement refresh ("The Show" redefined as the first Pro game, "Went Pro" removed, new league achievements), new rich-presence tokens and the expanded AI disclosure (ElevenLabs voices) are in [steam_commercial_release.md](../design/steam_commercial_release.md) (Phase 17).
 
 **Owner of this doc:** Opus 4.8 (design only — NO code). Per the standing split and
 `CLAUDE.md`'s Steamworks directive, **Fable 5 owns the implementation volume** (Facepunch.Steamworks

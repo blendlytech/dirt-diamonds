@@ -98,6 +98,8 @@ English set — wording is 11e's to polish, the token ids are the contract:
 - `#Status_BetweenCareers` — `Between careers`
 - `#Tier_HS` — `High School`
 - `#Tier_College` — `College`
+> **Shipped tokens (v13 build).** Phase 13 removes the minor-league tiers, and slice 17a retires these tokens for `#Tier_HS` / `#Tier_College` / `#Tier_Pro` ([steam_commercial_release.md](../../../docs/design/steam_commercial_release.md) §3).
+
 - `#Tier_MinorA` — `Class A`
 - `#Tier_MinorAA` — `Double-A`
 - `#Tier_MinorAAA` — `Triple-A`

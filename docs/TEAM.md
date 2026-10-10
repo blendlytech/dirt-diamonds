@@ -1,8 +1,8 @@
 # Dirt & Diamonds — Team Roster & Operating Model
 
-**Status:** **confirmed by the owner 2026-10-10** (proposed the same day by Claude Opus 5.5 at the owner's request). It replaces the single-lead model in BUILD_PLAN's Model Delegation Doctrine. The owner can reassign any role. Roles are assigned by **kind of work**, not by brand. If a model turns out stronger or weaker at something, move the work and update this file.
+**Status:** **confirmed by the owner 2026-10-10** (proposed the same day by Claude Opus 5.5 at the owner's request). It replaced the single-lead "Model Delegation Doctrine" that used to sit in BUILD_PLAN (removed 2026-10-10). The owner can reassign any role. Roles are assigned by **kind of work**, not by brand. If a model turns out stronger or weaker at something, move the work and update this file.
 
-**Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17), [progress.md](progress.md) (where we are).
+**Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building, v2), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17 and Phase L), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Older docs name past authors ("Fable 5", "Opus 4.8", "Sonnet 5"); those are not roles. **This file is the only source of current roles.**
 
 ---
 
@@ -16,6 +16,7 @@
 | **Gemini 3.1 Pro Math** | **Calibration and math owner** | Every "is the number right" question: per-tier bands and the new Pro guard, College ranking weights, short-rest/overuse risk, draft-pool conservation, announcer call-density weights | Shipping code without the harness proving its math |
 | **Gemini 3.8 Flash** | **Content at volume** | Announcer personas and ~5,600 script lines (14c); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
 | **Claude Sonnet 5.5** | **UI and feature engineer** | Phase 15 design system and screen rebuilds (15b, 15c, 15e); the Phase 13 league UI (bracket, draft board, recruiting, roster status, standings); 13-7 ripple fixes; the Around the League card | Calibrated-core changes |
+| **Claude Fable 5.1** | **Independent full-project reviewer** (joined 2026-10) | A complete read of the vision, docs and code; findings, proposals, add-ons and disagreements per [tasks/fable_5_1_full_review_brief.md](tasks/fable_5_1_full_review_brief.md). Its output feeds the owner and the integration lead; accepted proposals become slices through the normal flow | Merging its own changes; changing GAME_VISION without the owner's yes; touching `Assets/Simulation/` outside a briefed slice |
 | **GPT 6 Astra Pro** | **Standalone tools and release paperwork** | Self-contained tools with their own test suites: `Tools/VoiceGen` (brief ready), `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`; the third-party notices generator; drafts of the Phase 17b legal/disclosure package | Game code under `Assets/`; real API runs; anything involving the live key |
 
 ---
@@ -46,6 +47,27 @@
 | **16a/16b** CutscenePlayer + Director + events | Gemini Pro | Claude Opus | — |
 | **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
 | **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Gemini Pro (wiring) | **Story sign-off** |
+| **G-1** attribute audit (verify gameplay_core §1, settle weights) | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **How much skill is worth** |
+| **G-2** pitching mode design + engine | Claude Opus + Math | Gemini Pro | Playtest |
+| **G-3** at-bat view rebuild (batting + pitching UI) | Claude Sonnet | Gemini Pro | Screenshot review; playtest |
+| **G-4** venue catalog (68) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
+| **G-5** venue art | Owner + AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste** |
+| **G-6** stadium mapping + optional park factors | Claude Sonnet / Math (factors) | Claude Opus | **Park factors yes/no** |
+| **G-7** fielding moments (if approved) | Claude Opus + Claude Sonnet | Gemini Pro | **Approve the feature** |
+| **L-0** docs + no-abortion content fix | Claude Opus | Gemini Pro | **DONE 2026-10-10** |
+| **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus (+ Sonnet: New Career UI) | Gemini Pro | — |
+| **L-2** legends roster, identity catalog, record map | Flash | Claude Opus | **Ethnicity list, legend backstories** |
+| **L-3** tokens, `unknown_fan`, father arc, `ProContractSignedEvent`, reveal ordering | Claude Opus (scripts) + Gemini Pro (event) | each other | **Father's lines** |
+| **L-4** pregnancy, placement, `AdoptChild`, maternity, missing piece | Claude Opus (+ Flash: agency events) | Gemini Pro | — |
+| **L-5** temptation, `Indiscretions`, `TemptationMath`, `Active_Effects`, clutch, partner pool + kin guard | Claude Opus + Math (+ **owner: `DiscoveryChance`**) | Gemini Pro | Tone of the lure |
+| **L-6** hidden children: intake, both reveals, PI search, reclaim, `Succeed` rostered heir | Claude Opus | Gemini Pro + Math | — |
+| **L-7** press clippings + News tab | Gemini Pro (runtime) + Sonnet (tab) + Flash (articles) | Claude Opus | — |
+| **L-8** Trailblazer route content + calls | Claude Opus (story) → Flash | Gemini Pro (wiring) | **Story sign-off** |
+| **S-1** substance engine, `ped_active` writer, Rehab absence, `AvatarDied` | Claude Opus | Gemini Pro | — |
+| **S-2** substance magnitudes | Math | Claude Opus | — |
+| **S-3** substance content + PED re-gate | Claude Opus (scripts) → Flash | Gemini Pro | — |
+| **S-4** the asterisk (press + record book) | Gemini Pro + Flash | Claude Opus | — |
+| **R-1** full-project review | Claude Fable 5.1 | Claude Opus (triage) | **Accept / reject proposals** |
 | **17a** achievements + presence | Gemini Pro | Claude Opus | — |
 | **17b** legal + notices drafts | GPT Astra Pro | Claude Opus | **Legal sign-off, trademark** |
 | **17c** store copy + trailer script | Claude Opus | — | **Approve** |
@@ -58,12 +80,13 @@
 
 ## 3. How work flows
 
-1. **Brief.** Claude Opus writes a task brief in `docs/tasks/` before any delegated slice starts, using [voicegen_task_brief.md](tasks/voicegen_task_brief.md) as the template: context, hard constraints (allowed paths), inputs, outputs, tests, definition of done, out of scope.
+1. **Brief.** Claude Opus writes a task brief in `docs/tasks/` before any delegated slice starts, from [TASK_BRIEF_TEMPLATE.md](tasks/TASK_BRIEF_TEMPLATE.md) ([voicegen_task_brief.md](tasks/voicegen_task_brief.md) is a worked example). It must name the **recommended model** and the **handoff**: context, hard constraints (allowed paths), inputs, outputs, tests, definition of done, out of scope.
 2. **Branch + worktree.** Each task runs on its own branch named `p<phase>/<slice>-<model>` (e.g. `p14/14b-gpt`), **checked out in that model's own git worktree** (`git worktree add ..\dnd-<model> -b <branch> origin/main`). A branch alone is not isolation: two models in the same checkout share one working tree and one `bin/` folder (2026-10-10: two sessions edited `CareerManager.cs` and rebuilt the MC harness under each other). **Nobody builds on `main` directly, and nobody builds in another model's worktree.**
 3. **Build and self-check.** The author runs the gates named in the brief and hands back a diff plus the gate output.
 4. **Review.** **The author never reviews their own work.** The reviewer from §2 checks the diff against the brief and the design doc, and reruns the gates.
 5. **Merge.** Claude Opus merges once the review passes and the gates are green, then logs a compact entry in `progress.md`.
 6. **Owner gates.** Where §2 names an owner gate, nothing merges until the owner says yes.
+7. **Stop and hand off.** The **Author** column in §2 is each slice's **recommended model**. A model works only its own slice and **stops when the definition of done is met**. It never drifts into the next slice. It ends with a handoff note to the human: what was done, the commit, the gates and their results, what's open, and **"Recommended next: `<slice>` by `<model>`"** (plus the reviewer). The human starts the next model.
 
 ### Gates (from GEMINI.md §9)
 - Anything under `Assets/Simulation/` → `run_monte_carlo_batch`. The resolver guard stays byte-exact; re-baselining a season guard needs explicit sanction.
@@ -74,13 +97,13 @@
 
 ## 4. Ground rules for every model
 
-- **The repo is public, and an auto-committer pushes.** Never write a secret into any file. The ElevenLabs key lives only in the untracked `.env` or an environment variable. `git ls-files .env` must print nothing.
+- **The repo is private** (since 2026-10-10; it was public before, so treat its history as published). An auto-committer pushes. Never write a secret into any tracked file: keys (`ELEVENLABS_API_KEY`, `ANTHROPIC_API_KEY`) live only in the git-ignored `.env` or environment variables, and `git ls-files .env` must print nothing.
 - **Owner-only actions:** ElevenLabs generation runs with the real key, Steamworks, trademark filings, pricing, store submission, force-pushes and history rewrites.
 - **One source of truth per question:** the vision (GAME_VISION), the plan (BUILD_PLAN), state (progress.md), specs (`docs/design/`), roles (this file).
-- **Instruction files:** Gemini reads `GEMINI.md`; Claude Code reads `CLAUDE.md`; GPT-based agents typically read `AGENTS.md`. Until they're unified (recommended: one canonical `AGENTS.md` with `CLAUDE.md` and `GEMINI.md` pointing to it), every model's task brief links GEMINI.md §1–§9 as binding.
+- **Instruction files:** `GEMINI.md` holds the binding project directives. `CLAUDE.md` (for Claude Code) imports it. GPT-based agents read `AGENTS.md`, which points to it too. Every task brief links GEMINI.md §1–§10 as binding.
 
 ## 5. Open decisions for the owner
 
 1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed this roster; Claude Opus 5.5 is integration lead. GEMINI.md and league_restructure.md now point here.
 2. **The auto-committer.** Six models working in parallel plus an auto-committer pushing to `main` will collide. Recommended: turn it off, or limit it to a personal scratch branch, and merge only through review (§3).
-3. **Repo visibility.** Recommended: make `blendlytech/dirt-diamonds` private until launch.
+3. ~~**Repo visibility.**~~ **Resolved 2026-10-10:** the repo is private.

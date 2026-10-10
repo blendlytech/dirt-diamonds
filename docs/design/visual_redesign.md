@@ -65,11 +65,12 @@ One **Godot `Theme` resource family** under `Assets/UI/Theme/` is the single ret
 
 | Group | Screens |
 | :-- | :-- |
-| **Front end (new, needed for Steam)** | Title screen / main menu (Continue, New Career, Settings, Credits, Quit), New Career (avatar creation: name, position, look, starting school), loading screens (tips + art), pause menu, credits |
+| **Front end (new, needed for Steam)** | Title screen / main menu (Continue, New Career, Settings, Credits, Quit), New Career (avatar creation: name, **gender**, **ethnicity**, **listed position** (SP, RP, C, 1B, 2B, 3B, SS, LF, CF, RF), **dating preference**, look, ratings budget, starting school; [temptation_and_lineage.md](temptation_and_lineage.md) §3.1), loading screens (tips + art), pause menu, credits |
 | **Shell** | Home layout (DIAMOND dashboard + phone), top bar (date, clock, funds), time controls |
+| **Venues (new, high priority)** | One **interactive venue screen per team (68)**: an HS school screen or a College/Pro stadium screen, with hotspots (field, clubhouse/locker, office, training room, stands, lot) and the team's own art; the opponent's venue for away games ([gameplay_core.md](gameplay_core.md) §3) |
 | **Baseball** | At-bat view (broadcast scorebug, strike zone, pitch reveal, count/bases/score, subtitle strip for announcer), box score, standings (conferences/divisions), leaders, playoff bracket, National Ranking, Draft board / Draft Night, Recruiting offers, roster status (active/inactive), scouting report card, player page, team page |
 | **Life** | Schedule planner (hour blocks), calendar (weekly game days, postseason), needs panel, household board, school/GPA |
-| **Phone (DIRT portal)** | Lock screen, home, Messages (threads, bubbles, choice chips), Events/History, Contacts, Bank, Marketplace/items, Calendar, Player, League, Settings, phone-tier skins (absorbs Slice E: each phone tier is a distinct physical model) |
+| **Phone (DIRT portal)** | Lock screen, home, Messages (threads, bubbles, choice chips; the `unknown_fan` thread re-labels at the reveal), **News** (press clippings, [temptation_and_lineage.md](temptation_and_lineage.md) §9), Events/History, Contacts, Bank, Marketplace/items, Calendar, Player, League, Settings, phone-tier skins (absorbs Slice E: each phone tier is a distinct physical model) |
 | **Hustles** | Narcotics, Fencing, Robbery, Texas Hold'em, Legal Work. Each gets its own environment art and a DIRT treatment while keeping the HustleFeel reveal timing |
 | **Overlays** | Event choice prominence (badge + banner), tutorial overlay, toasts, modals, cutscene player chrome (skip, subtitles) |
 
@@ -84,7 +85,7 @@ Every screen goes through the same loop: **style frame → user approval → bui
 | Team logos + color triplets | 68 | Original marks; trademark-screened |
 | Ballparks / fields | ~10 kits | HS field kit (4 variants), college park kit (3), pro stadium kit (3), team-tinted |
 | Location scenes | existing list in [scene_art_guide.md](../archive/scene_art_guide.md) + new | Home, school, clubhouse, street corner, pawn shop, jail, hospital, etc., in the new style |
-| Contact and player portraits | about 40 authored + procedural fallback | Re-done in the new style; the existing Midjourney portraits are retired or restyled |
+| Contact and player portraits | about 40 authored + procedural fallback, covering **men and women in every identity-catalog ethnicity**, the legends roster (young and old), and heirs | Re-done in the new style; the existing Midjourney portraits are retired or restyled |
 | Icons | ~120 | One icon family covering both worlds |
 | Cutscene art kits | per [cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6 | Produced with the same direction |
 

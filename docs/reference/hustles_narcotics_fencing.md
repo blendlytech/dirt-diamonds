@@ -1,6 +1,8 @@
 # Design — Hustles: Narcotics State Machine & Fencing Negotiation
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. Voice is broadcasters only (2026-10-10), so hustle characters stay text. **2026-10-10:** the `uses_product` hook is now set by substance dependence ([substances_and_addiction.md](../design/substances_and_addiction.md) §2.3).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** `uses_product` is set by cocaine/painkiller dependence ([substances](../design/substances_and_addiction.md) §2.3).
+
+> **Planned changes (2026-10-09):** Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. Voice is broadcasters only (2026-10-10), so hustle characters stay text. **2026-10-10:** the `uses_product` hook is now set by substance dependence ([substances_and_addiction.md](../design/substances_and_addiction.md) §2.3).
 
 **Author:** Claude Opus 4.8 (risk/reward math + state machine) · **Phase:** 8b (per `docs/archive/phase_8_9_interleave_plan.md`) · **Status:** design only — no C# in this pass. Sonnet 5 implements against this contract; Fable 5 reviews (the risk stats this writes feed the PED-style modifier layer and 8c's triad). Companion to `gritty_event_framework.md` (shares its consequence vocabulary and the same rules doc, `.claude/rules/gritty_events.md`).
 

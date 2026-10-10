@@ -1,6 +1,8 @@
 # Design — Gritty Event Framework (Dispatcher, Condition Model & Content Schema)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): New delivery field: `cutscene` ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §5). (The planned `voice_note` field was cut on 2026-10-10: voice is broadcasters only.) Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** new consequence payloads (`conceive_child` `co_parent` + placement), `{token}` text resolution, an adults-only loader guard, integrity checks #11 (never abortion) and #12 (tokens) ([temptation](../design/temptation_and_lineage.md) §5, §10, §13).
+
+> **Planned changes (2026-10-09):** New delivery field: `cutscene` ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §5). (The planned `voice_note` field was cut on 2026-10-10: voice is broadcasters only.) Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro.
 
 **Author:** Claude Fable 5 (dispatcher skeleton + spec) · **Phase:** 7 (Gritty Event Framework) · **Status:** spec written alongside the implementation it describes; the seed content in `Assets/Narrative/Events/Content/core_events.json` doubles as the pipeline fixture set. Companion to the four existing design docs, same house style.
 

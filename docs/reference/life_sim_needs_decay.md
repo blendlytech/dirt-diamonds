@@ -1,6 +1,8 @@
 # Design — Non-Linear Need-Decay Curves (Life Sim / Utility AI)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. HS/College schedules have more practice days and fewer game days ([league_restructure.md](../design/league_restructure.md) §3).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** substances add need drains (amphetamines: sleep) and stress effects ([substances](../design/substances_and_addiction.md) §2).
+
+> **Planned changes (2026-10-09):** No mechanical change. HS/College schedules have more practice days and fewer game days ([league_restructure.md](../design/league_restructure.md) §3).
 
 **Author:** Claude Opus 4.8 (mathematical design) · **Phase:** 5 (Life Sim: Needs Engine & Utility AI → Milestone M3 "Life Happens") · **Status:** design formalized retroactively; first-pass curves already ship in `Assets/Simulation/Life/NeedsEngine.cs` and pass `simulate_utility_decay` 14/14. This doc is the spec that implementation was tuned against; it also closes the gaps the empirical first pass left open (§4 modifier semantics, §6 recovery, §7 Utility coupling).
 

@@ -1,10 +1,10 @@
 ---
 name: validate_sqlite_schema
-description: Ensures the massive generational SQLite database remains structurally sound as Fable 5 writes new code.
+description: Ensures the generational SQLite database remains structurally sound as new code is written.
 ---
 # validate_sqlite_schema
 
-**Purpose:** Ensures the massive generational SQLite database remains structurally sound as Fable 5 writes new code.
+**Purpose:** Ensures the generational SQLite database remains structurally sound as new code is written (by any model).
 
 **Execution:**
 

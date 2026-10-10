@@ -1,5 +1,7 @@
 # Design — Tier League Offensive Environments (6-Tier Ladder, Macro-Sim)
 
+> **ARCHIVED: superseded by the Phase 13 three-tier league ([link](../design/league_restructure.md)). History only; never build from this.**
+
 > **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): **SUPERSEDED** by [league_restructure.md](../design/league_restructure.md) §11. The 6-tier ladder becomes HS / College / Pro. The HS (−20) and College (−16) rows carry forward, MLB (0) becomes Pro, and the three minor-league rows are retired. Runs are banded per 9 innings because HS plays 7. Kept as the derivation record for the delta method.
 
 **Author:** Claude Opus 4.8 (statistical/mathematical design) · **Phase:** 9a (Tier Schema + Multi-Tier Macro-Sim) · **Status:** design complete; C# not yet written. Fable 5 implements per `docs/archive/phase_8_9_interleave_plan.md §9a`.

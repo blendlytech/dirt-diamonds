@@ -38,4 +38,8 @@ The SQLite database is the single source of truth for the entire universe. Game 
 
 ## Execution Rules
 
-Always use parameterized queries. When advancing days or weeks, wrap all stat updates in one `BEGIN TRANSACTION` block. Presentation-only data (announcer personas, cutscene definitions, voice manifests) lives in content files under `Assets/`, **not** in the database.
+Always use parameterized queries. When advancing days or weeks, wrap all stat updates in one `BEGIN TRANSACTION` block. Presentation-only data (announcer personas, cutscene definitions, voice manifests, the venue catalog, legends content, press templates) lives in content files under `Assets/`, **not** in the database.
+
+## Planned Tables (v15, Phase L, after v14; `docs/design/temptation_and_lineage.md` §3)
+
+**Player_Identity** (gender, ethnicity, listed_position; never read by the sim) · **Legend_Assignments** (legend → position, record stat/value) · **Biological_Parentage** (every lineage secret; readable only through `LineageQueries`) · **Indiscretions** (the hidden temptation risk ledger) · **Active_Effects** (temporary edges and penalties) · **Substance_Use** (dependence per substance; `docs/design/substances_and_addiction.md` §3). Shipped v13 is what the code uses today.

@@ -23,6 +23,10 @@ Active PED use applies a temporary 1.5x multiplier to power/stamina stats during
 
 Deduct from health_ceiling and increase detection_risk in the database after every game played under the influence.
 
+`ped_active` is **engine-written by the substance engine only** (Phase L, `docs/design/substances_and_addiction.md` §4). Until S-1 lands, nothing in the live game sets it.
+
+**Player skill (Phase G, `docs/design/gameplay_core.md`):** batting reads and the new pitching mode live on the human branch only. `NeutralBatterPolicy` and `NeutralPitcherPolicy` stay byte-identical. Gender, ethnicity and listed position never enter the sim.
+
 ## **3. League Structure (Phase 13 — `docs/design/league_restructure.md`)**
 
 Three tiers only: `LeagueTier` HS = 0, College = 1, Pro = 2. There are no minor leagues.

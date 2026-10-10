@@ -1,6 +1,8 @@
 # Design — Markov Micro-Simulation (Interactive At-Bat / Pitch-Level Model)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): The 25-state model is unchanged. Regulation innings become per tier (HS 7), and roster sizes become capacities ([league_restructure.md](../design/league_restructure.md) §4–§5).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** the PED stamina multiplier becomes live via the substance engine ([substances](../design/substances_and_addiction.md) §4); clutch applies in `late_tension` PAs ([temptation](../design/temptation_and_lineage.md) §6.1); regulation innings become per-tier in Phase 13.
+
+> **Planned changes (2026-10-09):** The 25-state model is unchanged. Regulation innings become per tier (HS 7), and roster sizes become capacities ([league_restructure.md](../design/league_restructure.md) §4–§5).
 
 **Author:** Claude Opus 4.8 (statistical/mathematical design) · **Phase:** 4 (Baseball Micro-Sim, "when the player's avatar is in-game") · **Status:** design complete; no C# written yet.
 

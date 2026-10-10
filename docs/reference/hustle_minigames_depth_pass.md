@@ -1,6 +1,8 @@
 # Design — Hustle Mini-Games Depth Pass (+ Robberies, net-new)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. The shipped `HustleFeel` reveal timing carries into the new motion toolkit ([visual_redesign.md](../design/visual_redesign.md) §7).
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none.
+
+> **Planned changes (2026-10-09):** Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged. The shipped `HustleFeel` reveal timing carries into the new motion toolkit ([visual_redesign.md](../design/visual_redesign.md) §7).
 
 **Author:** Claude Opus 4.8 (design) · **Status:** design only — no C# this pass; **§5.1 robbery stage list and §3.1 haggle EV-neutrality target LOCKED (Opus, on recommendations)**; **§11 open seams resolved to their recommended defaults**. Build flow per §10 (Fable 5 for any `Assets/Simulation/Hustles/` core touch + all reviews; Sonnet 5 for UI-only sub-slices). First build slice = **R-1** (robbery pure resolver + `HustleHarness` band, Fable 5). Companion to the two shipped hustle docs: `hustles_narcotics_fencing.md` (8b) and `hustles_texas_holdem.md` (8d). This doc **extends** those; it does not restate their architecture.
 

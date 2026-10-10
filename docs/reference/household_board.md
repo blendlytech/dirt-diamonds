@@ -1,6 +1,8 @@
 # Household Board — parents cover a wealth-tier share of food & living costs
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): No mechanical change. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** every new career starts in wealth tier 0–1 ([temptation](../design/temptation_and_lineage.md) §4.1), so the board covers little or nothing for most players.
+
+> **Planned changes (2026-10-09):** No mechanical change. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
 
 *Spec + build: Fable 5, 2026-07-12 (user-directed, from the A2b playtest conversation: "Eating food should be taken care of by parents if the kid isn't poor, but if poor the kid needs to find a way to eat"). Single-session slice: spec, build, and gates together.*
 

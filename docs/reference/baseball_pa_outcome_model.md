@@ -1,6 +1,8 @@
 # Design — Plate-Appearance Outcome Probability Model (Macro-Sim / Monte Carlo)
 
-> **2026-10-09 vision update** (see [GAME_VISION.md](../GAME_VISION.md)): Unchanged. This calibration **is** the Pro tier in the new league ([league_restructure.md](../design/league_restructure.md) §11). Its §8 batch remains the byte-exact resolver guard.
+> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** the `ped_active` flag finally gets a writer, the substance engine ([substances](../design/substances_and_addiction.md) §4); the new `ClutchEffects` stage and the `Active_Effects` bake sit in the resolver chain ([temptation](../design/temptation_and_lineage.md) §6.4); tier deltas and bands change in Phase 13 ([league](../design/league_restructure.md) §11).
+
+> **Planned changes (2026-10-09):** Unchanged. This calibration **is** the Pro tier in the new league ([league_restructure.md](../design/league_restructure.md) §11). Its §8 batch remains the byte-exact resolver guard.
 
 **Author:** Claude Opus 4.8 (statistical/mathematical design) · **Phase:** 3 (Baseball Macro-Sim → Milestone M1 "The League Lives") · **Status:** design complete, backing schema (v3) shipped; C# resolver/simulator not yet written.
 
