@@ -172,6 +172,7 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 | **G-5** | Venue art production | **Owner + AI art tools**, **Gemini 3.8 Flash** (integration) | Claude Opus (consistency) | **Owner taste** |
 | **G-6** | Stadium mapping in the at-bat; optional park factors | **Claude Sonnet 5.5** (visual) / **Gemini Pro Math** (factors, if approved) | Claude Opus | Inert unless factors are approved |
 | **G-7** | Fielding moments (if approved) | **Claude Opus 5.5** + **Claude Sonnet 5.5** | Gemini Pro | Human branch only |
+| **G-8** | Read v2: re-band batting to the same skill band and tilt idiom as the pitching mode ([brief](../tasks/G-8_read_v2_batting_reband_brief.md)) | **GPT 6 Astra Pro** (design → engine) | Claude Opus + Gemini Pro | Random reader ≈ ratings; perfect/fooled ≈ ±.100 OPS |
 
 **Order:** G-1 and the G-2 design start now, alongside 13-0/13-1. G-3 and G-4 follow the 15a/15b art direction and design system. G-5 runs inside 15d.
 
@@ -195,7 +196,7 @@ The human starts the next model. No model starts another model's slice.
 
 ## 6. Open owner decisions
 
-1. **How much is skill worth** against ratings (§1.4)? Recommended: about the 40-to-70 rating gap, capped.
+1. ~~**How much is skill worth** against ratings (§1.4)?~~ **Decided by the owner 2026-10-10:** about the 40-to-70 rating gap (±.100 OPS around ratings), capped, with a blind or average player at the ratings line, for **both** pitching (G-2) and batting (re-band: G-8).
 2. **Needs and stress on the field** (§1.3)? Recommended: a small, capped game-day penalty.
 3. **Person stats on the field** beyond the shipped three (§1.3)? Recommended: work_ethic → development, person discipline → read scaler.
 4. **Park factors** (§3.3)? Recommended: off at launch.
