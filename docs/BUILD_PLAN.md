@@ -166,3 +166,51 @@ Every UI shipped to date is a deliberate thin slice of plain Godot controls. GAM
 - Commit per completed sub-task; phases merge only with exit criteria green.
 - UI is built as thin vertical slices inside each phase, not as a big-bang Phase — every milestone stays demoable.
 - Schema changes go through the SQLite validation path first (No Blind Queries rule).
+
+## Multi-Tiered League Specifications (Prompt for Implementation)
+
+**System Prompt / Instructions for League Simulation Engine:**
+
+You are tasked with implementing the core architecture for a custom, multi-tiered baseball universe encompassing High School, College, and Professional play. This world operates under highly restrictive rules, condensed schedules, and a strict progression pipeline without minor leagues.
+
+Please ensure the simulation engine strictly adheres to the following constraints:
+
+### 1. The Global Pipeline & Draft
+
+* **No Minor Leagues:** Player progression is strictly linear: High School -> College -> Pro.
+- **Draft Eligibility:** College players are eligible to declare for the Professional Draft after completing their Sophomore year.
+
+### 2. High School Level (12 Teams)
+
+* **Game Length:** 7 innings.
+- **Schedule:** 1 game per week.
+- **Structure:** 2 Conferences, with 6 teams in each.
+- **Rosters:** Wide open. No strict limits on roster construction.
+- **Playoffs:** The top 3 teams from each conference advance to a single-elimination (1-game) playoff bracket. The 1st seed in each conference receives a first-round bye.
+
+### 3. College Level (24 Teams)
+
+* **Game Length:** 9 innings.
+- **Schedule:** 1 game per week.
+- **Structure:** 2 Conferences, comprising a total of 6 Divisions (4 teams per division).
+- **Rosters:** Semi-restricted. Features 2 extra open starting spots compared to the strict Professional limits.
+- **Playoffs (18-Team Tournament):**
+  - The top 17 teams make the playoffs based on an overarching National Ranking across both conferences.
+  - A single-elimination play-in game determines the 18th and final playoff spot.
+  - The playoffs consist of Conference Tournaments, culminating in a single-game National Championship between the winner of each conference.
+
+### 4. Professional Level (32 Teams)
+
+* **Game Length:** 9 innings.
+- **Schedule:** 64-game regular season. Teams average 3 games per week.
+- **Structure:** 2 Conferences, comprising a total of 8 Divisions (4 teams per division).
+- **Playoffs:** Series-based format. Early playoff rounds are Best-of-3 game series, culminating in a Best-of-5 Championship Series.
+
+### 5. Professional Roster Constraints & Mechanics (STRICT)
+
+* **Starting Pitchers:** Maximum of 4 total per organization (Up to 3 Active, 1 Inactive).
+- **Bullpen:** Maximum of 5 total per organization (3 Active, 2 Inactive).
+- **Position Players:** Exactly 12 Active (9 Starters, 3 Bench) and 3 Inactive.
+- **Pitching Philosophy:** Teams heavily rely on their aces, often employing a 2-man rotation and starting their #1 pitcher in every game possible.
+- **The Weekly "Sunday" Roster Lock:** Active and Inactive roster designations must be submitted on Sunday night and are permanently locked for the week.
+- **The Attrition & Forfeit Rule:** If a player is injured during the week, they *cannot* be replaced by an Inactive player. If injuries deplete an Active roster to the point where a team cannot field 9 defensive players and a valid pitcher, that team immediately forfeits the game.
