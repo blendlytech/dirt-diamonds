@@ -63,6 +63,7 @@ internal static class Program
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_montecarlo_{Guid.NewGuid():N}.db");
         string microScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_microsim_{Guid.NewGuid():N}.db");
         string worldV14ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_worldv14_{Guid.NewGuid():N}.db");
+        string capacityScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_capacity_{Guid.NewGuid():N}.db");
         string saveCompatScratchDir = Path.Combine(Path.GetTempPath(), $"dnd_savecompat_{Guid.NewGuid():N}");
         string careerIdsScratchPath1 = Path.Combine(Path.GetTempPath(), $"dnd_careerids1_{Guid.NewGuid():N}.db");
         string careerIdsScratchPath2 = Path.Combine(Path.GetTempPath(), $"dnd_careerids2_{Guid.NewGuid():N}.db");
@@ -99,6 +100,7 @@ internal static class Program
             RunReadModelA0Sweep();
             RunWorldGenV14Suite(schemaPath, worldV14ScratchPath);
             RunSaveCompatibilitySuite(schemaPath, saveCompatScratchDir);
+            RunRosterCapacitySuite(schemaPath, capacityScratchPath);
             RunCareerIdsSuite(schemaPath, careerIdsScratchPath1, careerIdsScratchPath2);
             RunCareerWiringSuite(schemaPath, careerScratchPath);
             RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
@@ -139,6 +141,9 @@ internal static class Program
             TryDelete(microScratchPath + "-wal");
             TryDelete(microScratchPath + "-shm");
             TryDelete(worldV14ScratchPath);
+            TryDelete(capacityScratchPath);
+            TryDelete(capacityScratchPath + "-wal");
+            TryDelete(capacityScratchPath + "-shm");
             TryDelete(worldV14ScratchPath + "-wal");
             TryDelete(worldV14ScratchPath + "-shm");
             TryDelete(careerIdsScratchPath1);
@@ -381,7 +386,7 @@ internal static class Program
         bool skippedSecond = !LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
         var rosterRows = new List<RosterPlayerRow>();
         int rosterCount = baseball.LoadRoster(rosterRows);
-        int expectedRoster = LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
+        int expectedRoster = LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize;
         Check("league generated once, idempotent on second call", generated && skippedSecond);
         Check($"roster join loads {expectedRoster} players across {LeagueSimulator.TeamCount} teams",
             rosterCount == expectedRoster && baseball.CountTeams() == LeagueSimulator.TeamCount,
@@ -1413,6 +1418,249 @@ internal static class Program
         TryDelete(path + "-shm");
     }
 
+    // ------------------------------------------------------------------
+    // Phase 13-2: roster capacities, regulation innings, "ride the ace"
+    // (league_restructure.md §4, §5.2, §6)
+    // ------------------------------------------------------------------
+
+    private static StarterCandidate Cand(int slot, int score, long last, bool available = true) =>
+        new() { Slot = slot, Score = score, LastStartDay = last, Available = available };
+
+    private static void RunRosterCapacitySuite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- 13-2 roster capacities, regulation innings, ride the ace (spec §4/§5.2/§6) ---");
+        const long Never = StarterSelection.NeverStarted;
+
+        // ---- §6 selection rule, pure fixtures ----
+        StarterCandidate[] rotation = { Cand(10, 180, Never), Cand(11, 200, Never), Cand(12, 160, Never) };
+        int pick = StarterSelection.Choose(rotation, ReadOnlySpan<StarterCandidate>.Empty, 0, 3, out StartKind kind);
+        bool rule = pick == 11 && kind == StartKind.Rested;                          // the ace (highest rating)
+        rotation[1].LastStartDay = 0;
+        pick = StarterSelection.Choose(rotation, ReadOnlySpan<StarterCandidate>.Empty, 2, 3, out kind);
+        rule &= pick == 10 && kind == StartKind.Rested;                              // ace resting → best rested
+        rotation[0].LastStartDay = 1;
+        rotation[2].LastStartDay = 0;
+        pick = StarterSelection.Choose(rotation, ReadOnlySpan<StarterCandidate>.Empty, 2, 3, out kind);
+        rule &= pick == 11 && kind == StartKind.ShortRest;                           // nobody rested → best-rested (tie → rating)
+        StarterCandidate[] allOut = { Cand(10, 200, Never, available: false) };
+        StarterCandidate[] pen = { Cand(20, 120, Never), Cand(21, 150, 5) };
+        pick = StarterSelection.Choose(allOut, pen, 6, 3, out kind);
+        rule &= pick == 21 && kind == StartKind.Opener;                              // no starter → best reliever opens
+        pick = StarterSelection.Choose(allOut, ReadOnlySpan<StarterCandidate>.Empty, 6, 3, out kind);
+        rule &= pick == -1 && kind == StartKind.None;
+        StarterCandidate[] ties = { Cand(30, 150, Never), Cand(31, 150, Never) };
+        pick = StarterSelection.Choose(ties, ReadOnlySpan<StarterCandidate>.Empty, 0, 3, out kind);
+        rule &= pick == 30;                                                          // ties → earlier slot
+        Check("§6 selection: rested ace; else best rested; else best-rested on short rest; else a reliever opens; ties to the earlier slot",
+            rule);
+
+        // ---- §6 cadence: Pro Tue/Thu/Sat (rest 3) → the ace takes 2 of 3; HS/College weekly (rest 4) → ace every game ----
+        string proPattern = RideTheAce(new long[] { 0, 2, 4, 7, 9, 11, 14, 16, 18 }, TierRules.MinRestDays(LeagueTier.Pro));
+        string weeklyPattern = RideTheAce(new long[] { 0, 7, 14, 21, 28 }, TierRules.MinRestDays(LeagueTier.HS));
+        Check("§6 cadence: Pro (Tue/Thu/Sat, rest 3) is a natural 2-man rotation — ace Tue+Sat, #2 Thursdays; HS/College weekly (rest 4) → the ace starts every game",
+            proPattern == "ABAABAABA" && weeklyPattern == "AAAAA"
+            && TierRules.MinRestDays(LeagueTier.College) == 4,
+            $"Pro {proPattern}, weekly {weeklyPattern}");
+        Check("§4 regulation innings: HS 7, College 9, Pro 9",
+            TierRules.RegulationInnings(LeagueTier.HS) == 7 && TierRules.RegulationInnings(LeagueTier.College) == 9
+            && TierRules.RegulationInnings(LeagueTier.Pro) == 9);
+
+        // ---- mixed-shape world: capacities, per-team counts, bench, bullpen games ----
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var genRng = new RngState(LeagueSeed + 1320);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
+        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRosterByTier(LeagueTier.Pro, roster);
+        List<string> RoleOf(int team, PitcherRole role) =>
+            roster.Where(r => r.TeamId == team && r.Role == role).Select(r => r.PlayerId).ToList();
+
+        var fixtureRng = new RngState(LeagueSeed + 1321);
+        db.BeginBatch();
+        // Team 1 → Pro org shape 15 / 4 / 5.
+        for (int i = 0; i < 6; i++)
+        {
+            LeagueGenerator.GeneratePlayer(players, baseball, 1, PitcherRole.None,
+                LeagueGenerator.DefaultRatingSpread, ref fixtureRng);
+        }
+        baseball.UpsertPitcherRole(RoleOf(1, PitcherRole.Starter)[4], PitcherRole.Reliever);
+        (string extraReliever, int extraStuff) = LeagueGenerator.GeneratePlayer(players, baseball, 1, PitcherRole.Reliever,
+            LeagueGenerator.DefaultRatingSpread, ref fixtureRng);
+        LeagueGenerator.GenerateArsenal(baseball, extraReliever, extraStuff, LeagueGenerator.DefaultRatingSpread, ref fixtureRng);
+        // Team 2 → HS-like 12 / 3 / 2.
+        for (int i = 0; i < 3; i++)
+        {
+            LeagueGenerator.GeneratePlayer(players, baseball, 2, PitcherRole.None,
+                LeagueGenerator.DefaultRatingSpread, ref fixtureRng);
+        }
+        players.SetTeam(RoleOf(2, PitcherRole.Starter)[3], null);
+        players.SetTeam(RoleOf(2, PitcherRole.Starter)[4], null);
+        players.SetTeam(RoleOf(2, PitcherRole.Reliever)[2], null);
+        // Team 3 → no starters at all: every game is a bullpen game.
+        foreach (string starter in RoleOf(3, PitcherRole.Starter))
+        {
+            players.SetTeam(starter, null);
+        }
+        db.CommitBatch();
+        baseball.LoadRosterByTier(LeagueTier.Pro, roster);
+
+        var rest = new PitcherRestLedger();
+        var macro = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed + 1322))
+        {
+            Rest = rest,
+        };
+        macro.Initialize();
+        var micro = new MicroGame(db, baseball) { Rest = rest };
+        micro.Initialize();
+
+        // A real clock and bus drive the season (so the macro flushes and the
+        // ledger follows the calendar). Macro day 1, then an attended (micro)
+        // game the next day between teams 4 and 5: team 4's day-1 starter must
+        // sit (rest 1 < 3) through the shared ledger.
+        var state = new GlobalState();
+        var bus = new EventBus();
+        var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+        clock.Initialize(StartYear);
+        rest.AttachTo(bus);
+        macro.AttachTo(bus);
+        clock.AdvanceDay();
+        bus.DispatchPending();
+        long day1 = rest.Today;
+        List<string> starters4 = RoleOf(4, PitcherRole.Starter);
+        string day1Starter4 = starters4.SingleOrDefault(id => rest.LastStartDay(id) == day1) ?? "";
+        rest.Today = day1 + 1;
+        var neutralPolicy = new NeutralBatterPolicy();
+        var microRng = new RngState(MicroSeed + 1323);
+        micro.PlayGame(4, 5, MicroGame.NoHuman, ref neutralPolicy, ref microRng);
+        string day2Starter4 = starters4.SingleOrDefault(id => rest.LastStartDay(id) == day1 + 1) ?? "";
+        Check("§6 shared rest ledger: an attended (micro) game respects rest earned in the macro sim — yesterday's starter sits, another rested starter goes",
+            day1Starter4.Length > 0 && day2Starter4.Length > 0 && day2Starter4 != day1Starter4,
+            $"day 1 {(day1Starter4.Length > 0 ? day1Starter4[..8] + "…" : "none")}, day 2 {(day2Starter4.Length > 0 ? day2Starter4[..8] + "…" : "none")}");
+
+        for (int i = 1; i < GlobalState.DaysPerSeason; i++)
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+        }
+
+        LeaguePitchingTotals season = baseball.LoadLeaguePitchingTotals(StartYear);
+        // Every team plays every scheduled day; one starter per team per game.
+        long teamGames = season.Gs / LeagueSimulator.TeamCount;
+        long games = season.Gs / 2;
+        int SeasonPa(string id) =>
+            baseball.TryGetBattingSeasonLine(id, StartYear, out BattingSeasonLine line) ? line.Pa : 0;
+        (int G, int Gs) SeasonPitching(string id) =>
+            baseball.TryGetPitchingSeasonLine(id, StartYear, out PitchingSeasonLine line) ? (line.G, line.Gs) : (0, 0);
+
+        (int Batted, int Idle) PositionUsage(int team)
+        {
+            List<int> pa = roster.Where(r => r.TeamId == team && r.Role == PitcherRole.None).Select(r => SeasonPa(r.PlayerId)).ToList();
+            return (pa.Count(x => x > 0), pa.Count(x => x == 0));
+        }
+        (int batted1, int idle1) = PositionUsage(1);
+        (int batted2, int idle2) = PositionUsage(2);
+        Check("§5.2 capacities: 15- and 12-man position groups bat exactly 9 and bench the rest (0 PA); the season ledger balances",
+            batted1 == 9 && idle1 == 6 && batted2 == 9 && idle2 == 3
+            && teamGames >= LeagueSimulator.RegularSeasonDays - 1 && season.Gs == teamGames * LeagueSimulator.TeamCount
+            && season.W == games && season.L == games,
+            $"team 1 {batted1}+{idle1}, team 2 {batted2}+{idle2}, {teamGames} games per team");
+
+        int[] team1Gs = roster.Where(r => r.TeamId == 1 && r.Role == PitcherRole.Starter)
+            .OrderByDescending(r => StarterSelection.ScoreOf(r.PitStuff, r.PitControl, r.PitStamina))
+            .Select(r => SeasonPitching(r.PlayerId).Gs).ToArray();
+        Check("§6 ride the ace (Pro rest 3, daily legacy schedule): a natural 3-man rotation — the top three starters split the season, the 4th never starts",
+            team1Gs.Length == 4 && team1Gs[3] == 0 && team1Gs.Take(3).All(g => g >= 50) && team1Gs.Sum() == teamGames,
+            string.Join("/", team1Gs));
+
+        int team3OpenerGs = RoleOf(3, PitcherRole.Reliever).Sum(id => SeasonPitching(id).Gs);
+        Check("§6 bullpen games: a team with no starters opens every game with its best available reliever",
+            team3OpenerGs == teamGames, $"reliever GS {team3OpenerGs}/{teamGames}");
+
+        // Allocation: the selection path stays allocation-free once warm.
+        var warm = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed + 1324));
+        warm.Initialize();
+        for (int day = 1; day <= 7; day++)
+        {
+            warm.SimulateGameDay(day, day);
+        }
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int day = 8; day <= 27; day++)
+        {
+            warm.SimulateGameDay(day, day);
+        }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Check("zero-alloc: a warm mixed-shape game day (capacities + §6 selection) allocates zero bytes", allocated == 0, $"{allocated} B");
+
+        // ---- §4 HS regulation: 7 innings in the micro-sim (extras only when tied) ----
+        int hsGames = 0;
+        int hsSeven = 0;
+        bool hsNeverShort = true;
+        for (int g = 0; g < 300; g++)
+        {
+            MicroGameResult r = micro.PlayGame(101, 102, MicroGame.NoHuman, ref neutralPolicy, ref microRng);
+            hsGames++;
+            hsSeven += r.Innings == 7 ? 1 : 0;
+            hsNeverShort &= r.Innings >= 7;
+        }
+        MicroGameResult pro = micro.PlayGame(6, 7, MicroGame.NoHuman, ref neutralPolicy, ref microRng);
+        Check("§4 micro regulation: HS games go 7 (extras only when tied, never shorter); Pro games go at least 9",
+            hsNeverShort && hsSeven >= hsGames * 8 / 10 && pro.Innings >= 9,
+            $"HS {hsSeven}/{hsGames} at 7, Pro {pro.Innings}");
+
+        // ---- capacity overflow fails loudly ----
+        bool overflowRefused = false;
+        using (var dbOver = new DatabaseManager(scratchPath + ".over"))
+        {
+            dbOver.InitializeSchema(schemaPath);
+            var playersOver = new PlayerQueries(dbOver);
+            var baseballOver = new BaseballQueries(dbOver);
+            var overRng = new RngState(LeagueSeed + 1325);
+            LeagueGenerator.GenerateIfEmpty(dbOver, playersOver, baseballOver, 0, ref overRng);
+            dbOver.BeginBatch();
+            for (int i = 0; i < 2; i++)
+            {
+                (string id, int stuff) = LeagueGenerator.GeneratePlayer(playersOver, baseballOver, 4, PitcherRole.Starter, 0, ref overRng);
+                LeagueGenerator.GenerateArsenal(baseballOver, id, stuff, 0, ref overRng);
+            }
+            dbOver.CommitBatch();
+            try
+            {
+                new LeagueSimulator(dbOver, baseballOver, new StatsNormalizer(dbOver, baseballOver), new RngState(SeasonSeed)).Initialize();
+            }
+            catch (InvalidOperationException ex)
+            {
+                overflowRefused = ex.Message.Contains("RosterCapacity", StringComparison.Ordinal);
+            }
+        }
+        TryDelete(scratchPath + ".over");
+        TryDelete(scratchPath + ".over-wal");
+        TryDelete(scratchPath + ".over-shm");
+        Check("§5.2 a team over a capacity (7 starters > MaxStarters 6) is refused loudly at Initialize", overflowRefused);
+        Check("capacity world: integrity ok, no FK violations, no open batch",
+            !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+    }
+
+    /// <summary>Plays the §6 rule over a 4-starter rotation (ratings A &gt; B &gt; C &gt; D) on the given days.</summary>
+    private static string RideTheAce(long[] gameDays, int minRest)
+    {
+        StarterCandidate[] pool =
+        {
+            Cand(0, 240, StarterSelection.NeverStarted), Cand(1, 220, StarterSelection.NeverStarted),
+            Cand(2, 200, StarterSelection.NeverStarted), Cand(3, 180, StarterSelection.NeverStarted),
+        };
+        var sb = new System.Text.StringBuilder(gameDays.Length);
+        foreach (long day in gameDays)
+        {
+            int slot = StarterSelection.Choose(pool, ReadOnlySpan<StarterCandidate>.Empty, day, minRest, out _);
+            pool[slot].LastStartDay = day;
+            sb.Append((char)('A' + slot));
+        }
+        return sb.ToString();
+    }
+
     private static void RunCareerIdsSuite(string schemaPath, string scratchPath1, string scratchPath2)
     {
         Console.WriteLine("--- Career IDs: determinism and reload uniqueness ---");
@@ -1877,12 +2125,12 @@ internal static class Program
                 default: positions[row.TeamId]++; break;
             }
         }
-        bool shape = roster.Count == LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
+        bool shape = roster.Count == LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize;
         for (int t = 1; t <= LeagueSimulator.TeamCount; t++)
         {
             shape &= positions[t] == LeagueSimulator.LineupSize
-                && starters[t] == LeagueSimulator.RotationSize
-                && relievers[t] == LeagueSimulator.BullpenSize;
+                && starters[t] == LeagueGenerator.LegacyRotation
+                && relievers[t] == LeagueGenerator.LegacyBullpen;
         }
         Check("v4 roster shape: 9 position + 5 starters + 3 relievers per team, roles ⟺ is_pitcher",
             shape && rolesConsistent, $"{roster.Count} rostered");
@@ -1914,7 +2162,7 @@ internal static class Program
         baseball.LoadRoster(roster);
         int refilled = roster.Count(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever);
         Check("EnsureV4 tops a short bullpen back up and is then a no-op",
-            toppedUp && secondIsNoOp && refilled == LeagueSimulator.BullpenSize, $"team 5 relievers {refilled}");
+            toppedUp && secondIsNoOp && refilled == LeagueGenerator.LegacyBullpen, $"team 5 relievers {refilled}");
 
         // ---- bullpen substitution over flushed games ----
         var micro = new MicroGame(db, baseball) { LoggingEnabled = false };
@@ -2954,8 +3202,8 @@ internal static class Program
         for (int teamId = 1; teamId <= LeagueSimulator.TeamCount; teamId++)
         {
             if (counts[teamId, (int)PitcherRole.None] != LeagueSimulator.LineupSize
-                || counts[teamId, (int)PitcherRole.Starter] != LeagueSimulator.RotationSize
-                || counts[teamId, (int)PitcherRole.Reliever] != LeagueSimulator.BullpenSize)
+                || counts[teamId, (int)PitcherRole.Starter] != LeagueGenerator.LegacyRotation
+                || counts[teamId, (int)PitcherRole.Reliever] != LeagueGenerator.LegacyBullpen)
             {
                 detail = $"team {teamId}: {counts[teamId, 0]}/{counts[teamId, 1]}/{counts[teamId, 2]} (want 9/5/3)";
                 return false;
@@ -4159,7 +4407,8 @@ internal static class Program
     // §4 table verbatim, three rows since schema v14 (league_restructure.md
     // §11.2: HS, College and Pro reuse the shipped HS, College and MLB rows).
     // The Pro row is the shipped Phase 3 §8 band and doubles as the 9a
-    // regression guard on the calibrated core. Slice 13-3 moves HS to R/9.
+    // regression guard on the calibrated core. The run band (RgLo/RgHi) is
+    // read as R/9 since 13-2 (§11.2: HS R/9 6.4–8.0), because HS plays 7.
     private static readonly TierBand[] TierBands =
     {
         new(.296, .316, .379, .399, .493, .523, .177, .207, .109, .129, .034, .042, 6.4, 8.0), // HS
@@ -4224,12 +4473,12 @@ internal static class Program
         {
             tierCountsOk &= baseball.CountTeamsInTier((LeagueTier)t) == LeagueSimulator.TeamCount;
             tierCountsOk &= baseball.LoadRosterByTier((LeagueTier)t, tierRoster)
-                == LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
+                == LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize;
         }
         var globalRoster = new List<RosterPlayerRow>();
         Check("EnsureTierLeagues seeds the 2 missing tiers once (idempotent): 24 teams, 8 + full 9+5+3 per tier",
             tiersSeeded && secondSkipped && tierCountsOk
-            && baseball.LoadRoster(globalRoster) == LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam,
+            && baseball.LoadRoster(globalRoster) == LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize,
             $"teams={baseball.CountTeams()} roster={globalRoster.Count}");
 
         // One season, all three sims on the same bus/clock. The Pro sim's seed is
@@ -4258,6 +4507,7 @@ internal static class Program
         // ---- §4 per-tier bands + strictly monotone ladder ----
         Span<double> avgByTier = stackalloc double[LeagueDirectory.TierCount];
         Span<double> rgByTier = stackalloc double[LeagueDirectory.TierCount];
+        Span<double> outsPerTeamGame = stackalloc double[LeagueDirectory.TierCount];
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
             var tier = (LeagueTier)t;
@@ -4272,32 +4522,44 @@ internal static class Program
             double kRate = (double)bat.So / bat.Pa;
             double bbRate = (double)bat.Bb / bat.Pa;
             double hrRate = (double)bat.Hr / bat.Pa;
-            double runsPerTeamGame = (double)pit.Er / pit.Gs;
+            // §11.2: runs per 9 innings (27 outs), so 7-inning HS games
+            // (13-2, §4) compare with 9-inning College/Pro ones. Every run in
+            // the macro sim is earned, so ER is total runs.
+            double runsPerNine = 27.0 * pit.Er / pit.OutsRecorded;
             avgByTier[t] = avg;
-            rgByTier[t] = runsPerTeamGame;
+            rgByTier[t] = runsPerNine;
+            outsPerTeamGame[t] = (double)pit.OutsRecorded / pit.Gs;
 
             Console.WriteLine($"  {tier,-8} {avg:.000}/{obp:.000}/{slg:.000}  K% {kRate:P1}  BB% {bbRate:P1}  " +
-                $"HR/PA {hrRate:P1}  R/G {runsPerTeamGame:F2}  ({bat.Pa:N0} PA)");
+                $"HR/PA {hrRate:P1}  R/9 {runsPerNine:F2}  ({bat.Pa:N0} PA)");
 
             TierBand band = TierBands[t];
             Check($"§4 [{tier}] slash line inside the tier band",
                 avg >= band.AvgLo && avg <= band.AvgHi && obp >= band.ObpLo && obp <= band.ObpHi
                 && slg >= band.SlgLo && slg <= band.SlgHi,
                 $"{avg:.000}/{obp:.000}/{slg:.000}");
-            Check($"§4 [{tier}] K/BB/HR rates and R/G inside the tier band",
+            Check($"§4 [{tier}] K/BB/HR rates and R/9 inside the tier band",
                 kRate >= band.KLo && kRate <= band.KHi && bbRate >= band.BbLo && bbRate <= band.BbHi
                 && hrRate >= band.HrLo && hrRate <= band.HrHi
-                && runsPerTeamGame >= band.RgLo && runsPerTeamGame <= band.RgHi,
-                $"K {kRate:P1} BB {bbRate:P1} HR {hrRate:P1} R/G {runsPerTeamGame:F2}");
+                && runsPerNine >= band.RgLo && runsPerNine <= band.RgHi,
+                $"K {kRate:P1} BB {bbRate:P1} HR {hrRate:P1} R/9 {runsPerNine:F2}");
         }
         bool monotone = true;
         for (int t = 1; t < LeagueDirectory.TierCount; t++)
         {
             monotone &= avgByTier[t] < avgByTier[t - 1] && rgByTier[t] < rgByTier[t - 1];
         }
+        // §4 (13-2): the macro sim plays each tier's regulation length. Outs
+        // per team-game sit just under 3 × innings (the home team skips the
+        // final bottom half when ahead) plus a little for extras.
+        Check("§4 macro regulation: HS team-games average ~7 innings of outs, College and Pro ~9",
+            outsPerTeamGame[(int)LeagueTier.HS] is >= 19.5 and <= 21.5
+            && outsPerTeamGame[(int)LeagueTier.College] is >= 25.5 and <= 27.5
+            && outsPerTeamGame[(int)LeagueTier.Pro] is >= 25.5 and <= 27.5,
+            $"HS {outsPerTeamGame[0]:F2}, College {outsPerTeamGame[1]:F2}, Pro {outsPerTeamGame[2]:F2} outs");
         int top = LeagueDirectory.TierCount - 1;
-        Check("tier ladder is strictly monotone HS→Pro on AVG and R/G (legibility contract)", monotone,
-            $"AVG {avgByTier[0]:.000}→{avgByTier[top]:.000}  R/G {rgByTier[0]:F2}→{rgByTier[top]:F2}");
+        Check("tier ladder is strictly monotone HS→Pro on AVG and R/9 (legibility contract)", monotone,
+            $"AVG {avgByTier[0]:.000}→{avgByTier[top]:.000}  R/9 {rgByTier[0]:F2}→{rgByTier[top]:F2}");
 
         // ---- Pro bit-identity: the same seed in a Pro-only world ----
         using var refDb = new DatabaseManager(referencePath);
@@ -5385,11 +5647,19 @@ internal static class Program
         // at the end of this suite. ----
         players.SetAge(avatarId, SchoolGrades.SeniorAge);
         avatarEvents = 0;
-        for (int i = 0; i < GlobalState.DaysPerSeason; i++)
+        for (int i = 0; i < GlobalState.DaysPerSeason - 1; i++)
         {
             clock.AdvanceDay();
             bus.DispatchPending();
         }
+        // The senior season's HS aggregate, read on its last day: the
+        // tier-joined total follows each player's CURRENT team, so after the
+        // rollover's promotion pass it would also count relegated College
+        // starters' College starts (13-2's ride-the-ace concentrates starts on
+        // aces, which makes that leak large).
+        LeaguePitchingTotals hsSenior = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
+        clock.AdvanceDay();
+        bus.DispatchPending();
 
         PromotionSummary run1 = promo.LastRun;
         bool inCollege = baseball.TryGetTeamTier(career.AvatarTeamId, out LeagueTier newTier)
@@ -5464,22 +5734,24 @@ internal static class Program
         // Origin release, asserted BEFORE the next rollover (its age-out
         // removals would drop players out of the tier-joined aggregate). While
         // the avatar was a senior IN high school, the macro sim skipped its
-        // team's pairing every day (those games ran in the micro-sim and never
-        // reach the macro GS aggregate), so that season's HS GS runs well under
-        // full. After graduation the HS macro reclaims the team and the season
-        // recovers to (near-)full — a stale attended-team claim would instead
-        // keep it stuck at the senior-season shortfall. The residual gap is the
-        // single graduation-boundary day: TimeManager fires DayAdvanced(day 1)
-        // before SeasonRolledOver, so the avatar is still HS on that one day and
-        // that lone game is micro-played — which is exactly why we test
-        // RECOVERY, not an exact count.
-        LeaguePitchingTotals hsSenior = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
+        // team's pairing every day and the micro-sim played those games on
+        // autopilot, flushing them into the same Pitching_Stats aggregate, so
+        // the senior season is exactly full. After graduation the HS macro must
+        // reclaim the team: a stale attended-team claim would leave that
+        // team's pairings unplayed by anyone, and the season would run short.
+        // The residual tolerance is the single graduation-boundary day:
+        // TimeManager fires DayAdvanced(day 1) before SeasonRolledOver, so the
+        // avatar is still HS on that one day and that lone game is
+        // micro-played. (13-2 correction: the old form asserted the senior
+        // season ran SHORT; that was an artifact of reading it after the
+        // promotion pass, which moves starters, and their starts, across
+        // tiers. Read on its last day it is full; `hsSenior` above.)
         LeaguePitchingTotals hsSeason2 = baseball.LoadLeaguePitchingTotals(StartYear + 2, LeagueTier.HS);
         // HS plays HsSeasonCalendar's sparse spring schedule: GamesPerSeason
         // game days × TeamCount starts (2 starters × TeamCount/2 pairings).
         int fullHsGs = HsSeasonCalendar.GamesPerSeason * LeagueSimulator.TeamCount;
-        Check("origin sim released: after the avatar graduates, the HS macro reclaims its old team — the post-graduation season recovers to near-full GS, versus the attended senior season that ran short (no stale attended-team claim)",
-            hsSenior.Gs < fullHsGs && hsSeason2.Gs > hsSenior.Gs
+        Check("origin sim released: the attended senior season is complete (micro-played games flush into it), and after graduation the HS macro reclaims the old team so the next season is (near-)full GS (no stale attended-team claim)",
+            hsSenior.Gs == fullHsGs
             && hsSeason2.Gs >= fullHsGs - LeagueSimulator.TeamCount,
             $"senior {hsSenior.Gs}, post-grad {hsSeason2.Gs}/{fullHsGs}");
 
@@ -6941,13 +7213,13 @@ internal static class Program
         }
         foreach (KeyValuePair<int, (int Batters, int Starters, int Relievers)> entry in counts)
         {
-            if (entry.Value != (LeagueSimulator.LineupSize, LeagueSimulator.RotationSize, LeagueSimulator.BullpenSize))
+            if (entry.Value != (LeagueSimulator.LineupSize, LeagueGenerator.LegacyRotation, LeagueGenerator.LegacyBullpen))
             {
                 detail = $"team {entry.Key} = {entry.Value.Batters}/{entry.Value.Starters}/{entry.Value.Relievers}";
                 return false;
             }
         }
-        if (roster.Count != LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam)
+        if (roster.Count != LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize)
         {
             detail = $"{roster.Count} rostered";
             return false;

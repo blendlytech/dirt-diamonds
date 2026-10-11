@@ -468,7 +468,7 @@ public sealed class PromotionManager
         }
 
         var roster = new List<RosterPlayerRow>(
-            LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+            LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize);
         _baseball.LoadRoster(roster);
 
         // 9d-2 (development doc §6): the sweep's scouting projects real

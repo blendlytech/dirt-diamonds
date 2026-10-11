@@ -797,7 +797,7 @@ public sealed class CareerManager
     /// </summary>
     private string FindDisplacedPlayer(int teamId, PitcherRole role)
     {
-        var roster = new List<RosterPlayerRow>(LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+        var roster = new List<RosterPlayerRow>(LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize);
         _baseball.LoadRoster(roster);
 
         bool isPitcher = role != PitcherRole.None;

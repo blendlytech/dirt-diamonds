@@ -351,7 +351,7 @@ public sealed class DevelopmentManager
     public void RunDevelopment(int completedSeasonYear)
     {
         var roster = new List<RosterPlayerRow>(
-            LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+            LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueGenerator.LegacyRosterSize);
         _baseball.LoadRoster(roster);
         if (roster.Count == 0)
         {

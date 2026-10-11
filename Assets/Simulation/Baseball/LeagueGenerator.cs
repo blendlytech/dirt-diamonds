@@ -29,6 +29,18 @@ public static class LeagueGenerator
 
     // ---- legacy fixture ladder (frozen; retired with the season guard in 13-3) ----
 
+    /// <summary>
+    /// The legacy fixture ladder's fixed roster shape: 9 position players, 5
+    /// starters, 3 relievers per team. A generation shape for the calibration
+    /// world only. The sims size and loop by <see cref="RosterCapacity"/> and
+    /// per-team counts (league_restructure §5.2), never by these.
+    /// </summary>
+    public const int LegacyLineup = RosterCapacity.Lineup;
+    public const int LegacyRotation = 5;
+    public const int LegacyBullpen = 3;
+    public const int LegacyRosterSize = LegacyLineup + LegacyRotation + LegacyBullpen;
+
+
     // The frozen M1 Pro league: generation order and ids 1–8 are the season-
     // pipeline guard's prefix. Names, conference and division come from the
     // Appendix A seed with the same abbreviation (LeagueStructure).
@@ -132,7 +144,7 @@ public static class LeagueGenerator
 
         // (id, stuff) of every pitcher in generation order, for the arsenal pass.
         var pitchers = new List<(string Id, int Stuff)>(
-            LegacyProAbbreviations.Length * (LeagueSimulator.RotationSize + LeagueSimulator.BullpenSize));
+            LegacyProAbbreviations.Length * (LegacyRotation + LegacyBullpen));
 
         db.BeginBatch();
         try
@@ -149,9 +161,9 @@ public static class LeagueGenerator
                 baseball.UpsertTeamTier(teamId, LeagueTier.Pro);
 
                 // Frozen v3 prefix: 9 + 5 per team, main-stream draws only.
-                for (int slot = 0; slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize; slot++)
+                for (int slot = 0; slot < LegacyLineup + LegacyRotation; slot++)
                 {
-                    bool isPitcher = slot >= LeagueSimulator.LineupSize;
+                    bool isPitcher = slot >= LegacyLineup;
                     (string id, int stuff) = GeneratePlayer(
                         players, baseball, teamId, isPitcher ? PitcherRole.Starter : PitcherRole.None,
                         ratingSpread, ref rng, persons: persons);
@@ -166,7 +178,7 @@ public static class LeagueGenerator
             RngState v4Rng = rng.Split();
             for (int t = 0; t < LegacyProAbbreviations.Length; t++)
             {
-                for (int slot = 0; slot < LeagueSimulator.BullpenSize; slot++)
+                for (int slot = 0; slot < LegacyBullpen; slot++)
                 {
                     (string id, int stuff) = GeneratePlayer(
                         players, baseball, t + 1, PitcherRole.Reliever, ratingSpread, ref v4Rng, persons: persons);
@@ -189,7 +201,7 @@ public static class LeagueGenerator
     }
 
     /// <summary>
-    /// v3→v4 save top-up: fills any team's bullpen to <see cref="LeagueSimulator.BullpenSize"/>
+    /// v3→v4 save top-up: fills any team's bullpen to <see cref="LegacyBullpen"/>
     /// relievers (Players + ratings + role + arsenal) in one batch. Migrated
     /// pitchers' role/arsenal rows come from the idempotent DDL backfill; only
     /// people have to be invented here. No-op (and no rng draws) on a
@@ -205,7 +217,7 @@ public static class LeagueGenerator
         }
 
         var roster = new List<RosterPlayerRow>(
-            LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+            LeagueSimulator.TeamCount * LegacyRosterSize);
         baseball.LoadRoster(roster);
 
         Span<int> relievers = stackalloc int[LeagueSimulator.TeamCount + 1];
@@ -220,7 +232,7 @@ public static class LeagueGenerator
         bool topUpNeeded = false;
         for (int teamId = 1; teamId <= LeagueSimulator.TeamCount; teamId++)
         {
-            if (relievers[teamId] < LeagueSimulator.BullpenSize)
+            if (relievers[teamId] < LegacyBullpen)
             {
                 topUpNeeded = true;
             }
@@ -235,7 +247,7 @@ public static class LeagueGenerator
         {
             for (int teamId = 1; teamId <= LeagueSimulator.TeamCount; teamId++)
             {
-                for (int i = relievers[teamId]; i < LeagueSimulator.BullpenSize; i++)
+                for (int i = relievers[teamId]; i < LegacyBullpen; i++)
                 {
                     (string id, int stuff) = GeneratePlayer(
                         players, baseball, teamId, PitcherRole.Reliever, ratingSpread, ref rng, persons: persons);
@@ -310,7 +322,7 @@ public static class LeagueGenerator
                 (int minAge, int ageSpan) = LegacyAgeRolls[t];
                 string[] abbreviations = LegacyTierAbbreviations[t];
                 var pitchers = new List<(string Id, int Stuff)>(
-                    abbreviations.Length * (LeagueSimulator.RotationSize + LeagueSimulator.BullpenSize));
+                    abbreviations.Length * (LegacyRotation + LegacyBullpen));
 
                 for (int s = 0; s < abbreviations.Length; s++)
                 {
@@ -318,11 +330,11 @@ public static class LeagueGenerator
                     baseball.InsertTeam(LegacyTeamRow(abbreviations[s], teamId));
                     baseball.UpsertTeamTier(teamId, tier);
 
-                    for (int slot = 0; slot < LeagueSimulator.RosterSizePerTeam; slot++)
+                    for (int slot = 0; slot < LegacyRosterSize; slot++)
                     {
                         PitcherRole role =
-                            slot < LeagueSimulator.LineupSize ? PitcherRole.None
-                            : slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize ? PitcherRole.Starter
+                            slot < LegacyLineup ? PitcherRole.None
+                            : slot < LegacyLineup + LegacyRotation ? PitcherRole.Starter
                             : PitcherRole.Reliever;
                         (string id, int stuff) = GeneratePlayer(
                             players, baseball, teamId, role, ratingSpread, ref rng, minAge, ageSpan, persons);
