@@ -1,0 +1,46 @@
+# R-1 conflict register
+
+Baseline `2dec343`. Items marked **fixed on branch** are plain factual/editorial corrections under the brief exception. All other rows are **needs decision**; their recommended design changes are not applied. Source line numbers refer to the baseline. Historical authors are not treated as current owners. Planned-vs-shipped differences alone are not contradictions.
+
+| ID | Conflicting sources / contract | Recommended resolution |
+| --- | --- | --- |
+| D01 — **fixed on branch** | `docs/design/gameplay_core.md:80` says owner to confirm skill band; `docs/progress.md:26` records O1 decided, but `:48` still lists five open decisions including O1 | Mark O1 settled, four remaining gameplay choices; keep ±.100 as the actual target. |
+| D02 | `docs/design/pitching_mode.md:268-269` centers aZ, but `:122-128` applies aZ times the in-zone indicator | Math must center applied conditional terms; G01 supplies the counterexample. Block implementation acceptance until proved. |
+| D03 | `Assets/Simulation/Baseball/PitcherFatigue.cs:98-100` and `docs/design/pitching_mode.md:524` retain regression toward 50; pitching `:87,381,449` promises fatigue degradation of an all-50 pitcher | Accept a separately calibrated fatigue contract or change the promise/gate. Existing formula improves weak pitchers. |
+| D04 | Pitching `:56,337` produces waste index 17; `:215,232` defines 17-bin array and direct observation indexing | Explicit waste bin/mapping and fixtures, never silently classify waste as hittable. |
+| D05 — **fixed on branch** | Pitching `:420,534` says HS batting discipline is lowered; `Assets/Simulation/Baseball/TierEffects.cs:52` does not lower batter ratings | Correct future tuning assumptions; do not change tier code to fit mistaken prose. |
+| D06 — **fixed on branch** | Pitching `:445` calls PA/H/ER totals a resolver invariant; `.agents/skills/run_monte_carlo_batch/SKILL.md:12-13` permits the season guard's sanctioned 13-3 replacement | Name resolver and topology-dependent season guards separately. |
+| D07 | `docs/design/temptation_and_lineage.md:240-242` unlocks at official reclaim (18); `:357-358` unlocks immediately on telling, before official status | Recommend reclaim/official-day unlock, matching D16. Test chance discovery below 18 separately from paid search at 19+. |
+| D08 | Lineage `:24,391` makes the Trailblazer turn in senior year; `docs/design/league_restructure.md:208` allows sophomore draft declaration | Trigger the turn before the first eligible declaration, with a senior fallback; avoid forcing a different career timetable. |
+| D09 | Lineage `:380` lets a later female heir inherit the dream; `:381` always calls her the GOAT's daughter | Carry genealogy-aware identity/copy; later generations are descendants, not necessarily daughters. |
+| D10 | `docs/design/league_restructure.md:214` places July draft before the Pro stretch run; `:215` orders by playoff elimination/champion | Explicitly use previous completed Pro season, with a seeded inaugural order. Current-season playoffs cannot supply July order. |
+| D11 | `docs/design/substances_and_addiction.md:134-136` re-gates all shipped PED events on avatar-written ped_active; `:154` preserves NPC PED arcs with avatar-only substances | Separate avatar active-effect gates from the existing NPC arc; test both populations. |
+| D12 — **fixed on branch** | Substances `:69` leaves fatal overdose for owner; `:86` decides it can be fatal (also progress `:34`) | Remove stale pending wording; Math still supplies probability, not permission for fatality. |
+| D13 — **fixed on branch** | `docs/design/voice_and_broadcast_audio.md:47` allows environment only; `docs/tasks/voicegen_task_brief.md:27` explicitly adds root .env fallback | Accept the more specific brief as pipeline input contract; align active spec, preserve redaction/no build secrets. |
+| D14 — **fixed on branch** | Voice `:45` says take participates in hash; `:48` omits it from the listed hash inputs; VoiceGen brief `:118` specifies versioned full hash | One authoritative complete hash contract including take and pipeline version; test changes independently. |
+| D15 — **fixed on branch** | Voice `:22` bans generic avatar pronouns; VoiceGen pilot lines `:203-213` contain he/he'll/he's | Rewrite generic samples before generation; keep only explicitly gated Trailblazer exceptions. |
+| D16 | VoiceGen `:131` allows manifest checkpoint every 25 clips after file placement; `:180` expects completed work to survive crashes precisely | Commit each successful clip's recoverable record or reconcile durable orphan files; distinguish atomic rename from cross-file durability. |
+| D17 | `docs/tasks/voicegen_task_brief.md:5` names an older reviewer and says do not commit; `docs/TEAM.md:37,91` current ownership/workflow supersedes old assignments | Owner/Opus should publish one scoped handoff/commit rule for 14b. Do not infer R-1 permission to modify the active voice worktree. |
+| D18 | Lineage `:182` gates succession on reveal/cutscene; `docs/design/cutscenes_motion_comic.md:56` drops queued presentations above depth three; `docs/GAME_VISION.md:165` forbids presentation driving state | Core persists reveal/ack state; skipped/dropped/reloaded playback cannot lose revelation or deadlock succession. |
+| D19 | `GEMINI.md:15` / `.agents/rules/ui_conventions.md:17` require intents/DTOs; `Assets/UI/TimeControlBar.cs:176-184,312-322` drives time and `Assets/UI/TutorialOverlay.cs:299` writes state | Clarify sanctioned command API and move clock/save ownership to Core during scoped UI work (02 C02). |
+| D20 | `.agents/rules/database_rules.md:7` centralizes SQL in DatabaseManager; `Assets/Data/Database/BaseballQueries.cs:110,125` implements SQL in typed query classes | State that Data owns SQL and DatabaseManager owns connection/transaction lifetime; match intended shipped architecture. |
+| D21 — **fixed on branch** | `docs/reference/heir_mechanics.md:207` sets Spread=12; `:213` fixture F3 needs a +19 lottery from its bounded draw | Replace impossible fixture with an attainable result, or explicitly authorize a new distribution. No silent genetics retune. |
+| D22 — **fixed on branch** | `docs/tasks/R-1_full_review_brief.md:90` expects 345 MC checks; reviewed harness actually runs 352 (02 verification) | Update gate count on integration; use actual assertions/results rather than copied counts. |
+| D23 | `docs/design/gameplay_core.md:160` asks 68 venues with 5–7 layered scenes; `docs/design/visual_redesign.md:86` budgets about 10 park kits | Clarify shared kits with unique dressing versus hundreds of bespoke scenes; recommend reuse, retain team identity. |
+| D24 | Lineage `:488` L-4 adds opposite-sex conception after identity seeds the league male; `:489` defers civilian partners to L-5 | Pull minimal eligible civilian partner pool/kin guard ahead of conception, or explicitly test a supported L-4 source of partners. |
+| D25 | `docs/GAME_VISION.md:164` prohibits all prerecorded avatar pronouns; `docs/design/voice_and_broadcast_audio.md:22` permits gated Trailblazer gendered calls | Owner should ratify the specific Trailblazer exception or remove it; ordinary calls remain neutral. |
+
+Additional precision obligations, not yet demonstrated contradictions: pitching's count-conditioned CreditRef/ExecCenter, HBP centering and hidden-information Perfect bot (03 G04); death/ban/reveal ordering. Resolve these explicitly in implementation briefs.
+
+Factual edits on this branch: D01 settled O1 wording; D05 tier descriptions; D06 season-guard name; D12 fatality wording; D13 API-key source aligned with GEMINI.md:46 and the specific brief; D14 full hash inputs; D15 generic pilot copy; D21 attainable genetics fixture; D22 actual MC count. No runtime behavior, tuning constant, role assignment or vision decision changed. The zero-conflict goal remains an integration gate after decisions, not a claim about this branch. Every accepted resolution should update all affected active contracts in one doc-only integration slice; use this register as its checklist.
+
+## Owner acceptance follow-up (2026-10-10)
+
+All recommendations were accepted explicitly. The table above remains the baseline evidence record, not a live list of unasked owner votes. Disposition:
+
+- D01/D05/D06/D12–D15/D21/D22: factual fixes already committed in R-1.
+- D07–D11/D16/D17/D23/D25: accepted contracts now reconciled in lineage, league, substance, voice, visual, vision and workflow docs.
+- D18/D19/D20/D24: approved ownership/dependency resolution; Core owns revelation/clock commands, Data query classes own SQL, and R1-FAMILY provides civilian/kin eligibility before L-4. Runtime correction is pending the linked briefs, not complete.
+- D02/D03/D04 and G04 precision obligations: owner authorizes correction; R1-MATH still owes the actual proof/formulas/waste representation and explicit fatigue guard decision. They remain technical gates, not owner-choice blockers.
+
+Concrete art/name/legend selections, owner-function intent, account prerequisites and operational auto-committer configuration are still inputs/work to supply; accepting a process does not invent its artifacts. See [accepted questions](06_owner_questions.md) and [BUILD_PLAN](../../BUILD_PLAN.md) for the executable follow-up.

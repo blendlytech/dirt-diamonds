@@ -491,3 +491,7 @@ shippable.
   phase files).
 - `Assets/Platform/Steam/{SteamIntegration,AchievementManager}.cs` (the reserved stubs this phase
   fills).
+
+## R-1 superseding release requirement (implementation pending)
+
+Owner accepted unavailable-Steam credit in R-1 Q14. [R1-STEAM](../tasks/R1-STEAM_offline_eligibility.md) supersedes the historical no-local-tracking/server-only-counter limitation in this reference. Prefer durable gameplay facts; persist minimal eligibility/outbox/totals where necessary, then reconcile idempotently. The current implementation has not gained this behavior merely because the contract changed.

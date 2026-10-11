@@ -1,5 +1,7 @@
 # Pitching Mode: "Work the Book"
 
+> **R-1 owner acceptance (2026-10-10):** approved direction is recorded in [accepted decisions](../review/r1/06_owner_questions.md). [R1-MATH](../tasks/R1-MATH_gameplay_contracts.md) must resolve conditional centering, waste observations, count/HBP effects and fatigue before G-2/G-8 engine acceptance. The rev 2 formulas/estimates below remain review inputs where flagged; owner approval is not mathematical validation.
+
 **Status:** DESIGN **rev 2** (G-2). Feasibility review done ([G-2_pitching_mode_review.md](../review/G-2_pitching_mode_review.md)); its blockers B1–B3 and corrections C1–C4 are applied here. Next: Gemini 3.1 Pro Math curve review, then owner acceptance.
 **Author:** Claude Fable 5.1, 2026-10-10 (rev 1, `6ba9055`), from [G-2_pitching_context_pack.md](../tasks/G-2_pitching_context_pack.md) (code facts as of `f983692`). **Rev 2:** Claude Opus 5.5, 2026-10-10. Fable's API credit ran out before its revision pass, so the integration lead applied the review in place (§3.5 is new; §3.3, §4.4, §4.6, §5, §7.2, §8, §9.1, §9.3, §10 and §12 are edited). The design and its decisions are Fable's.
 **Scope:** the player-facing pitching mode for attended games when the avatar pitches. Self-contained: an engineer can implement from this file and Pro Math can tune from the constants table (§8) and the harness (§7).
@@ -417,7 +419,7 @@ All bots implement `IPitcherPolicy` as structs and run 20,000 PAs against `BookB
 
 Perfect is a hand-built heuristic ceiling (book-aware, well-located, sequenced, effort-managed). A true per-pitch optimizer would score a little lower still; the clamps bound it.
 
-Additional runs: every bot at pitcher **30/30** and **85/85** (stuff/control) for the cap gates; Perfect and PredictableHeart over **full 110-pitch outings** (fatigue curve) reporting opp OPS by 20-pitch window; Reference at **HS tier** effective ratings (stuff/control −20, batters' discipline −20) to record the tier line.
+Additional runs: every bot at pitcher **30/30** and **85/85** (stuff/control) for the cap gates; Perfect and PredictableHeart over **full 110-pitch outings** (fatigue curve) reporting opp OPS by 20-pitch window; Reference at **HS tier** effective ratings (stuff/control −20; batter ratings unchanged by TierEffects) to record the tier line.
 
 Metrics per bot: opp AVG/OBP/SLG/OPS, K%, BB%, HR%, P/PA, executed in-zone %, waste %, chase % (out-of-zone strikes / out-of-zone pitches), whiff flavor %, mean `aT`/`aZ`/`aC`, mean `|lean|`, HBP %.
 
@@ -443,7 +445,7 @@ CoinFlip: 8/17 ring targets → executed in-zone ≈ 43%, waste ≈ 8% (walks �
 | **G2 ordering** | opp OPS: Perfect < Contrarian ≤ Reference ≤ CoinFlip < Challenge < PredictableCorner < PredictableHeart; every `<` is a gap ≥ .010, every `≤` allows a tie within noise |
 | **G3 band** | Reference − Perfect ∈ [.080, .130]; PredictableHeart − Reference ∈ [.100, .160]; PredictableCorner − Reference ∈ [.050, .120] |
 | **G4 not dominant** | Challenge ≥ Reference + .010 and Challenge ≥ Perfect + .080; Paint ≥ Reference + .030 |
-| **G5 invariants** | suites 5/6/7 green; A0 sweep lines byte-identical; resolver guard PA 48384 / H 10969 / ER 5237 |
+| **G5 invariants** | suites 5/6/7 green; A0 sweep lines byte-identical; season-pipeline guard PA 48384 / H 10969 / ER 5237 (subject to the sanctioned 13-3 topology rebaseline; neutral resolver guards remain separate) |
 | **G6 zero-alloc** | `GC.GetAllocatedBytesForCurrentThread()` delta = 0 across a 20k-PA Perfect run after one warm-up PA |
 | **G7 determinism** | two runs, same seed: identical per-pitch logs (cell, class, flavor, q) |
 | **G8 caps** | at 85/85: PredictableHeart − Neutral(85/85) ≤ .160; at 30/30: Neutral(30/30) − Perfect ≤ .130 |
@@ -521,7 +523,7 @@ Unchanged: `FoulShareOfStrikes = 0.68` self-loops on the strike class. The tilts
 
 ### 9.3 Fatigue within an outing
 
-`PitcherFatigue` semantics are unchanged: effective ratings snapshot at PA start. Its counter `_pitchesThrown` is already a `double` (`AddPitch` adds 1.0, `AddNpcPa` adds 3.9), so rev 2 adds **`AddPitches(double n)`** and the pitching path calls `AddPitches(1 + EffortFatigueGain·effort)` per pitch: 1.4 at max effort, 0.6 at finesse. Rev 1's effort-debt accumulator is dropped (Q2, verified). The neutral and legacy paths keep calling `AddPitch()`. The reveal shows tank remaining as a percentage of capacity (presentation reads it from the snapshot; it never writes).
+**R-1 supersedes the retained fatigue formula:** Math must approve the separate monotone-fatigue contract before implementation; tired weak pitchers cannot improve. Until that contract is signed, this paragraph describes only the existing snapshot/counter seam, not accepted fatigue magnitudes: effective ratings snapshot at PA start. Its counter `_pitchesThrown` is already a `double` (`AddPitch` adds 1.0, `AddNpcPa` adds 3.9), so rev 2 adds **`AddPitches(double n)`** and the pitching path calls `AddPitches(1 + EffortFatigueGain·effort)` per pitch: 1.4 at max effort, 0.6 at finesse. Rev 1's effort-debt accumulator is dropped (Q2, verified). The neutral and legacy paths keep calling `AddPitch()`. The reveal shows tank remaining as a percentage of capacity (presentation reads it from the snapshot; it never writes).
 
 ### 9.4 Shadowed, pulled, absent
 
@@ -531,7 +533,7 @@ Unchanged: `FoulShareOfStrikes = 0.68` self-loops on the strike class. The tilts
 
 ### 9.5 Tiers
 
-HS and College apply the tier environment before the PA (stuff/control −20 / −16), so a HS avatar scatters wider (`M ≈ 1.32` at a rated 50) and faces batters whose discipline is also lower, so the book learns slower (`disc` up to 1.5× prior). Predictability is punished less in HS and more in Pro: a built-in difficulty ramp with no extra knob. HS innings (7) only change capacity use, not the model.
+HS and College apply the tier environment before the PA (stuff/control −20 / −16), so a HS avatar scatters wider (`M ≈ 1.32` at a rated 50) but TierEffects leaves batter discipline unchanged. Slower book learning cannot be inferred from the tier modifier; measure the tier result with the actual batter ratings. HS innings (7) only change capacity use, not the model.
 
 ### 9.6 PED
 

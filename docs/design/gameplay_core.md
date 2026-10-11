@@ -57,9 +57,9 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
 | Attribute | What it affects today | Gameplay gap / proposal |
 | :-- | :-- | :-- |
 | **confidence, happiness, teamwork** | The only person stats that reach the field (±2 points each, §1.2); also events | — |
-| **intelligence, maturity, charisma, reputation, social_status, attractiveness, morality, discipline (person), work_ethic** | Event prerequisites and outcomes, dating and NPC autonomy, person drift, item rewards (`PersonDrift`, `EventConsequenceApplier`, `NpcAutonomyService`, `ItemService`) | **None reach the field.** *Proposal:* work_ethic scales practice → development; discipline (person) feeds plate discipline's read scaler; maturity shrinks slump and stress effects. Owner/Math call. |
+| **intelligence, maturity, charisma, reputation, social_status, attractiveness, morality, discipline (person), work_ethic** | Event prerequisites and outcomes, dating and NPC autonomy, person drift, item rewards (`PersonDrift`, `EventConsequenceApplier`, `NpcAutonomyService`, `ItemService`) | **None reach the field.** **Accepted R-1:** work_ethic scales actual practice development with a bounded Math-calibrated modifier. Additional person discipline/composure field scalers are deferred until existing effects are legible. |
 | **gpa** | HS eligibility, school events, recruiting context | — |
-| **Needs** (hunger, sleep, hygiene, social, fitness) and **stress** | Life sim only: utility AI, forced actions, events | **They never touch the field.** A starving, sleepless player bats like a rested one. *Proposal:* a small, capped game-day penalty from low sleep/fitness and high stress (an `Active_Effects` row baked at game start, bit-identical when needs are healthy). Owner/Math call. |
+| **Needs** (hunger, sleep, hygiene, social, fitness) and **stress** | Life sim only: utility AI, forced actions, events | **They never touch the field.** A starving, sleepless player bats like a rested one. **Accepted R-1:** one small capped game-start projection from needs/stress, visible to the player and consistent across attended/background avatar games. Healthy/no-effects is exact identity; Math owns constants and prevents double counting. |
 | **health_ceiling** | Injury rust, decline speed, forced retirement below the floor | — |
 | **recklessness** | Event and hustle prerequisites; risk rolls | — |
 | **baseball_interest** | Heirs only: will this child play? | — |
@@ -77,7 +77,7 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
   - **Reads are decisive.** A perfect read with high contact gives peak damage; a fooled swing gives weak contact or a whiff.
 - **Pitching:** no player-facing mode yet. The career path passes `NeutralPitcherPolicy`, so a pitcher player only watches. An engine seam does exist: `PitchCall` (type + in/out-of-zone target, control-driven execution) and `InteractivePitcherPolicy`, but it is unused and NPC batters stay neutral against it. See [G-2 context pack](../tasks/G-2_pitching_context_pack.md) §6. §2.2 designs the mode.
 - **Background games** use ratings only (no skill), so the league stays calibrated.
-- **How much should skill be worth?** *Proposal (owner to confirm):* for an average-rated avatar, the gap between a poor and an excellent player-skill game should be about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS). It's capped so skill can't make a 30-rated player elite, or ruin an 85.
+- **How much should skill be worth?** *Owner decided 2026-10-10 (§6, O1):* for an average-rated avatar, the gap between a poor and an excellent player-skill game should be about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS). It's capped so skill can't make a 30-rated player elite, or ruin an 85.
   - This is the human branch only. The neutral, calibrated branch never changes (Invariant N in the read-input spec).
   - **Math owns the tuning**, through a scripted-skill harness: a perfect bot, a coin-flip bot and a contrarian bot.
 
@@ -115,13 +115,13 @@ No sim change, so this is calibration-inert.
 - **Outcome:** the same swing-gated class draw and `DrawBallInPlay` as the batting model. A wild miss into the heart of the zone is punished; painting the edge after setting it up is rewarded.
 - **Calibration contract:** a new human branch only (`IPitcherPolicy` already exists as the seam). `NeutralPitcherPolicy` stays byte-identical, so every band and guard is untouched by construction. Harness coverage: self-consistency, plus the skill-bot spread from §1.4.
 
-### 2.3 Fielding moments (*proposal*)
+### 2.3 Fielding moments (deferred beyond 1.0 by owner, R-1)
 
 The avatar's `fielding` rating only feeds the team average today, and listed positions are story-only.
 
-*Proposal:* occasional **defensive moments** for the avatar's listed position: a quick read-and-react prompt on a ball hit to them, graded against fielding.
+**Post-1.0 idea only:** occasional **defensive moments** for the avatar's listed position: a quick read-and-react prompt on a ball hit to them, graded against fielding.
 - It's opt-in in Settings, attended games only, on the human branch only.
-- This would make listed position mean something on the field. It's an owner call and an R-1 review item, because positions are currently story-only by design (temptation §3.1).
+- This would make listed position mean something on the field. The owner deferred this from 1.0; listed positions remain story-only by design (temptation §3.1).
 
 ---
 
@@ -153,11 +153,11 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 ### 3.3 Stadium mapping in the at-bat
 
 - The at-bat view uses the **home park's** field art and dimensions overlay, so every park looks like itself.
-- **Park factors:** *proposal: off at launch* (neutral, calibration-inert). If the owner wants parks to *play* differently, it becomes a separate Math slice with per-park HR/2B/3B factors, re-banded through `run_monte_carlo_batch`, with league-wide factors averaging 1.0. **Owner decision.**
+- **Park factors:** off for 1.0 (owner accepted R-1 Q06). Venue identity is presentation-only. Any future factors require a separate approved Math slice and matchup/PA-weighted calibration, not merely factors averaging 1.0.
 
 ### 3.4 Art scope
 
-68 venues × about 5–7 layered scenes, plus day/night variants for the field, in the approved Phase 15 direction. Pre-generated, curated and disclosed (the AI-art rule). This feeds slice 15d. The two shipped HS field images (CRW, LKS) are the seed.
+68 distinct venue identities built from reusable park kits with team-specific dressing, hotspots and day/night variants, in the approved Phase 15 direction. This is not a requirement for 68 × 5–7 bespoke scene sets. Approve representative HS/College/Pro examples before volume production (owner accepted R-1 Q13). Pre-generated, curated and disclosed; feeds 15d.
 
 ---
 
@@ -165,13 +165,13 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 
 | Slice | Content | Recommended model | Reviewer | Gate |
 | :-- | :-- | :-- | :-- | :-- |
-| **G-1** | Attribute audit: verify §1 against code, settle the macro weights of discipline and control, decide the needs/stress and person-stat proposals | **GPT 6 Astra Pro** (in review R-1; reassigned from Claude Fable 5.1, 2026-10-10) → **Gemini Pro Math** (numbers) | Claude Opus | Owner: "how much skill is worth" |
+| **G-1** | Attribute audit: verify §1 against code, settle the macro weights of discipline and control, decide the needs/stress and person-stat proposals | **GPT 6 Astra Pro** (in review R-1; reassigned from Claude Fable 5.1, 2026-10-10) → **Gemini Pro Math** (numbers) | Claude Opus | Owner decisions settled; R1-MATH owns accepted modifier constants |
 | **G-2** | Pitching mode design → engine (`IPitcherPolicy` human branch, scatter model, batter tendency read) | **Claude Fable 5.1** (design, owner 2026-10-10: [brief](../tasks/G-2_pitching_design_fable_brief.md)) → **GPT 6 Astra Pro** (engine; owner reassignment 2026-10-10) + **Gemini Pro Math** (scatter/whiff curves); UI: **Claude Sonnet 5.5** | Gemini Pro (sim diff) + Claude Opus (merge gate) | MC bit-identical on the neutral branch; skill-bot spread |
 | **G-3** | At-bat view rebuild for batting + pitching (§2.1, §2.2 UI) | **Claude Sonnet 5.5** | Gemini Pro | Screenshot review; playtest |
 | **G-4** | Venue catalog (68 entries) + venue screen runtime + hotspots | **Claude Sonnet 5.5** (screen) + **Gemini 3.8 Flash** (catalog data) | Claude Opus | Every team resolves a venue; no missing-art fallbacks |
 | **G-5** | Venue art production | **Owner + AI art tools**, **Gemini 3.8 Flash** (integration) | Claude Opus (consistency) | **Owner taste** |
-| **G-6** | Stadium mapping in the at-bat; optional park factors | **Claude Sonnet 5.5** (visual) / **Gemini Pro Math** (factors, if approved) | Claude Opus | Inert unless factors are approved |
-| **G-7** | Fielding moments (if approved) | **Claude Opus 5.5** + **Claude Sonnet 5.5** | Gemini Pro | Human branch only |
+| **G-6** | Stadium mapping in the at-bat (presentation only) | **Claude Sonnet 5.5** | Claude Opus | Park factors deferred beyond 1.0 |
+| **G-7** | Fielding moments (deferred beyond 1.0) | **Claude Opus 5.5** + **Claude Sonnet 5.5** | Gemini Pro | Outside launch scope |
 | **G-8** | Read v2: re-band batting to the same skill band and tilt idiom as the pitching mode ([brief](../tasks/G-8_read_v2_batting_reband_brief.md)) | **GPT 6 Astra Pro** (design → engine) | Claude Opus + Gemini Pro | Random reader ≈ ratings; perfect/fooled ≈ ±.100 OPS |
 
 **Order:** G-1 and the G-2 design start now, alongside 13-0/13-1. G-3 and G-4 follow the 15a/15b art direction and design system. G-5 runs inside 15d.
@@ -194,10 +194,16 @@ The human starts the next model. No model starts another model's slice.
 
 ---
 
-## 6. Open owner decisions
+## 6. Owner decisions (all five settled; R-1 recommendations accepted)
 
 1. ~~**How much is skill worth** against ratings (§1.4)?~~ **Decided by the owner 2026-10-10:** about the 40-to-70 rating gap (±.100 OPS around ratings), capped, with a blind or average player at the ratings line, for **both** pitching (G-2) and batting (re-band: G-8).
-2. **Needs and stress on the field** (§1.3)? Recommended: a small, capped game-day penalty.
-3. **Person stats on the field** beyond the shipped three (§1.3)? Recommended: work_ethic → development, person discipline → read scaler.
-4. **Park factors** (§3.3)? Recommended: off at launch.
-5. **Fielding moments** (§2.3)? Recommended: yes, opt-in.
+2. **Needs/stress: accepted.** Small capped visible game-start projection, same attended/background avatar effect, healthy identity exact; Math calibrates.
+3. **Person stats: work_ethic to actual practice development first.** Additional discipline/composure field scalers deferred.
+4. **Park factors: off for 1.0.** Distinct venue presentation remains in scope.
+5. **Fielding moments: deferred beyond 1.0.** Position-specific presentation, rating-driven outcomes.
+
+## Accepted R-1 additions (implementation pending)
+
+[Practice and modifier explanations](../tasks/R1-LEARN_practice_and_modifiers.md) reuse real pitching/batting inputs and policies in an isolated session with no career writes or RNG changes. Reveal chosen/executed/read/result after the pitch. A read-only game-start DTO exposes the actual modifier order, clamps and effective ratings; UI does not calculate them.
+
+[R1-EFFECTS](../tasks/R1-EFFECTS_life_projections.md) implements the accepted life projections only after [R1-MATH](../tasks/R1-MATH_gameplay_contracts.md) signs constants. Correcting fatigue is separately authorized; neutral/human guard changes must be explicit and reviewed, never an incidental consequence of the UI or batting reband.

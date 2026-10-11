@@ -1,5 +1,7 @@
 # G-2 Context Pack: Pitching Mode
 
+> **R-1 follow-up:** owner accepted the review recommendations. [R1-MATH](R1-MATH_gameplay_contracts.md) is the technical acceptance gate for shared centering, waste and fatigue contracts; [accepted decisions](../review/r1/06_owner_questions.md) settle product scope. Do not copy the flagged rev 2 equations without that review.
+
 **For:** Claude Fable 5.1 (G-2 pitching-mode design). **Prepared by:** Claude Opus 5.5, 2026-10-10, from `origin/main @ f983692`.
 **Purpose:** everything the design needs, in one file. **Do not explore the repo.** Every code fact below was checked against the source. If you need something that isn't here, write it into the spec's "Open questions for Opus" section instead of searching.
 

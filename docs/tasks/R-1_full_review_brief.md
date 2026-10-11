@@ -87,7 +87,7 @@ Each has been reported by the integration lead. Confirm or refute it against the
 | :-- | :-- |
 | `dotnet build DirtAndDiamonds.sln -c Debug` | 0 warnings, 0 errors |
 | `dotnet run --project Tools/GrittyEventsHarness -c Release` | 363/363 |
-| `dotnet run --project Tools/MonteCarloHarness -c Release` | 345/345 (rare flake: see 13-0) |
+| `dotnet run --project Tools/MonteCarloHarness -c Release` | 352/352 (reviewed baseline 2dec343; rare flake: see 13-0) |
 | `dotnet run --project Tools/CoreLoopHarness -c Release`, `NeedsDecayHarness`, `HustleHarness`, `HoldemHarness`, `SchemaValidator` | all green |
 
 If a gate fails on a clean `origin/main`, that's a finding. Report it; don't fix it.

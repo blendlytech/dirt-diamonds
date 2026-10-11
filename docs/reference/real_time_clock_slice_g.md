@@ -367,3 +367,7 @@ time-of-day).
 *Related: [surface_the_sim.md] (the dashboard placement precedent this reuses), `ui_conventions.md`,
 `database_rules.md`, `docs/archive/GAME_IMPROVEMENTS.md` §Game UI. Roadmap slot: Slice G in
 `docs/progress.md`.*
+
+## Accepted R-1 persistence contract (planned replacement, not yet shipped)
+
+[R1-SAVE-1](../tasks/R1-SAVE-1_save_boundary.md) and [R1-SAVE-2](../tasks/R1-SAVE-2_recovery_and_rng.md) supersede the earlier driver/replay limitations for 1.0. Core owns clock/day/save commands; UI submits intents. A successful save includes completed background games, retryable graph changes, pending choices, durable work identities and consistent independent RNG state. Recovery preserves separate subsystem transactions with idempotent completion. Cold reload continues the same future random sequence. This section is the accepted target; the shipped behavior above remains historical until those slices land.
