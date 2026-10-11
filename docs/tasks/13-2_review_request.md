@@ -56,3 +56,57 @@ See the 13-2 entry in [progress.md](../progress.md). The bar: build 0 warnings /
 2. **(Math)** Is reading §11.2's College/Pro bands as R/9 (rather than R/G) right? The values are nearly identical at 9 innings (Pro 4.28 either way).
 3. **(Pro)** Is the selection score (raw stuff + control + stamina) acceptable, or should it use the tier/person-baked ratings? Raw keeps the macro and micro agreeing by construction.
 4. **(Pro)** Is the corrected origin-release check right?
+
+---
+
+## Reviewer Verdict: APPROVE (Gemini 3.1 Pro)
+
+**Date:** 2026-10-11  
+**Reviewer:** Gemini 3.1 Pro (independent reviewer of Opus's sim diffs, TEAM.md §2)  
+**Branch under review:** `p13/13-2-opus` (`50301f3` / `61139a3`) stacked on `p13/13-1-review-gemini`  
+**Verdict:** **APPROVE**. All spec constraints (§4, §5.2, §6, §11.2), zero-allocation contracts, shared rest mechanics, and regression guards verified with zero regressions.
+
+### Answers to Questions 3 & 4 (Pro Reviewer)
+
+3. **Selection score (raw stuff + control + stamina):** **Acceptable and endorsed.**  
+   - Rotation hierarchy reflects underlying arm talent rather than transient in-season mood swings (confidence/happiness).  
+   - Within any team, all pitchers share the identical tier delta vector (e.g. HS −20); applying tier deltas adds a uniform constant that preserves the exact same ranking.  
+   - `MicroGame` dynamically refreshes person levers between games (`RefreshPersonCache`) when `PersonLevers` are attached, whereas `LeagueSimulator` is season-baked. Using raw score (`StarterSelection.ScoreOf`) guarantees byte-identical evaluation between macro and micro sims by construction, completely immune to attachment state differences.
+4. **Corrected origin-release check:** **Yes, mathematically correct and strictly tighter.**  
+   - In the attended senior season, all games run through the micro-sim on autopilot and flush into the shared `Pitching_Stats` aggregate; asserting `hsSenior.Gs == fullHsGs` (208/208) on the final day of the season verifies that no attended games were dropped.  
+   - The prior shortfall was an artifact of sampling after the promotion pass at rollover, which moves graduated pitchers across tiers (attributing their starts to their new tier).  
+   - Asserting `hsSeason2.Gs >= fullHsGs - LeagueSimulator.TeamCount` rigorously verifies that the HS macro sim reclaimed the team upon the avatar's graduation rather than leaving it suppressed by a stale attended-team claim.
+
+### Detailed Verification Findings
+
+- **(a) Sizing by Capacity, Loops by Per-Team Counts (GEMINI §2 & spec §5.2):**  
+  `RosterCapacity` defines static buffer bounds (`Lineup 9`, `MaxBench 8`, `MaxStarters 6`, `MaxRelievers 6`). Both `LeagueSimulator` and `MicroGame` size arrays to capacity once at `Initialize` and loop strictly to per-team counts (`_starterCount[team]`, `_relieverCount[team]`, `lineupCount[team]`). `Candidate` pools use stack-allocated spans (`starterPool[..starters]`, `relieverPool[..relievers]`). Rosters violating capacities throw loud `InvalidOperationException` at `Initialize`.
+- **(b) Shared PitcherRestLedger & Ride-the-Ace (§6):**  
+  Both sims invoke the pure static method `StarterSelection.Choose`. `GameManager` wires one shared `PitcherRestLedger` to all tier sims and `MicroGame`. Calendar days advance via `DayAdvancedEvent`, ensuring rest days accrued in macro games dictate availability in attended micro games and vice versa. Cadences verified: Pro Tue/Thu/Sat produces `ABAABAABA` (natural 2-man rotation); HS/College weekly produces `AAAAA`.
+- **(c) Season-Pipeline Regression Guard:**  
+  The bit-identity guard on the flat-league Pro season remains exact: **PA 48384 / H 10969 / ER 5237**.
+- **(d) Origin Sim Released Check:**  
+  Verified: `senior 208, post-grad 208/208`.
+- **(e) Zero-Allocation Contract:**  
+  Verified: `[PASS] zero-alloc: a warm mixed-shape game day (capacities + §6 selection) allocates zero bytes - 0 B`.
+- **(f) Regulation Innings & R/9 Bands (§4 & §11.2):**  
+  HS micro games play 7 regulation innings (88% end at 7; extras only when tied; never shorter). Pro micro games go ≥ 9. Macro games record outs per team-game matching regulation: HS 21.29 (~7 innings), College 26.97, Pro 26.97. 9a runs metrics correctly evaluate R/9 (HS 6.94, College 6.38, Pro 4.28), strictly monotone and within all acceptance bands.
+
+### Gate Re-Run Results (Independent Review in worktree `dnd-gemini-132`)
+
+| Gate | Result | Notes |
+| :--- | :--- | :--- |
+| `dotnet build DirtAndDiamonds.sln -c Debug` | **PASS** | 0 warnings, 0 errors across all 8 projects |
+| `MonteCarloHarness` (20 consecutive runs, Release) | **PASS** | **20/20 runs passed (373/373 checks each)**; all logs diffed against run 01 and confirmed **byte-identical apart from `<n> ms`** (Normalized SHA256: `EC75EFAA22C684DFA704550861280E88A329A39CFBD54BBE38334AC9AFF29630`); Season-pipeline guard: **PA 48384 / H 10969 / ER 5237 (exact)** |
+| `SchemaValidator` | **PASS** | 131/131 checks passed |
+| `GrittyEventsHarness` | **PASS** | 363/363 checks passed |
+| `CoreLoopHarness` | **PASS** | 22/22 checks passed |
+| `NeedsDecayHarness` | **PASS** | 117/117 checks passed |
+| `HustleHarness` | **PASS** | 95/95 checks passed |
+| `HoldemHarness` | **PASS** | 63/63 checks passed |
+
+### Recommendation for Merge
+Slice 13-2 is fully validated and approved. Ready to merge into `p13/integration` by Claude Opus 5.5 alongside 13-1 once the owner clears the 13-1 gates.
+
+**Recommended next:** 13-1 + 13-2 merge into `p13/integration` by Claude Opus (after the owner's 13-1 gates), then 13-3 by Claude Opus + Gemini Pro Math.
+
