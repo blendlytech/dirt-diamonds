@@ -43,3 +43,52 @@ See the 13-1 entry in [progress.md](../progress.md) for the final numbers. The b
 1. Is keeping the legacy 8-team ladder as the calibration fixture until 13-3 the right seam, or should 13-2 move the calibration world to Pro-shaped rosters first?
 2. FKs from the new tables to `Teams` are stricter than §12's sketch. Any objection?
 3. `LeagueStructure` lives in the Data layer, so harnesses that only compile `Assets/Data/Database` can build valid teams. Acceptable?
+
+---
+
+## Reviewer Verdict: APPROVE (Gemini 3.1 Pro)
+
+**Date:** 2026-10-11  
+**Reviewer:** Gemini 3.1 Pro (independent reviewer of Opus's sim diffs, TEAM.md §2)  
+**Branch under review:** `p13/13-1-opus` (`d0c0777`) rebased on `beb1843`  
+**Verdict:** **APPROVE**. All spec constraints, DDL invariants, data contracts, and harness expectations verified with zero regressions.
+
+### Answers to Author's Questions
+
+1. **Legacy 8-team ladder seam:** **Keeping the legacy 8-team ladder until 13-3 is the exact right seam.** The season-pipeline guard (`PA 48384 / H 10969 / ER 5237`) is strictly tied to the 8-team 154-game schedule. Slice 13-2 refactors roster capacities, regulation innings, and starter selection without introducing the new schedule, while slice 13-3 introduces `SeasonScheduler` (64-game schedule) and is explicitly sanctioned by spec §11.3 & §15 to retire the old guard and record the new Pro guard. Preserving the legacy ladder as the fixture through 13-2 ensures the calibrated core remains continuous and proven at every step.
+2. **Stricter Foreign Keys on `Teams`:** **No objection; strongly endorsed.** In SQLite (`foreign_keys=ON`), `Teams` rows are static universe fixtures generated at world-gen and never deleted. Explicit FKs guarantee relational integrity across `Schedule_Games`, `Playoff_Series`, `Team_Seasons`, `Roster_Designations`, `College_Enrollment`, `Recruiting_Offers`, and `Draft_Picks`. `PRAGMA foreign_key_check` passes completely clean (0 errors) with no runtime penalty.
+3. **`LeagueStructure` in Data Layer:** **Acceptable and architecturally clean.** `LeagueStructure` provides pure data definitions (`ConferenceDef`, `DivisionDef`, `TeamSeed`) and helper mappers. Placing it in `Assets/Data/Database` adheres to dependency inversion: harnesses compiling only `Assets/Data` can construct valid, schema-compliant team rows without creating forbidden upward dependencies on `Assets/Simulation/`.
+
+### Detailed Verification Findings
+
+- **(a) DDL Validity, Idempotence & STRICT:** Validated against `league_restructure.md` §12. All 9 new tables (`Conferences`, `Divisions`, `Schedule_Games`, `Playoff_Series`, `Team_Seasons`, `Roster_Designations`, `College_Enrollment`, `Recruiting_Offers`, `Draft_Picks`) are `STRICT`. `Teams` enforces `conference_id NOT NULL` and `home_park NOT NULL`. `Team_Tiers.tier` CHECK enforces `0..2`. The historical v6→v7 tier-5 backfill was cleanly excised. `PRAGMA user_version = 14` applies idempotently under transaction wrapping.
+- **(b) Appendix A World-Gen Placement:** Verified team-by-team against Appendix A (68 teams total). HS (101–112: 2 conferences × 6, no divisions), College (201–224: 2 conferences × 3 divisions × 4), Pro (301–332: 2 conferences × 4 divisions × 4). All abbreviations, city names, team names, division IDs, conference IDs, and `IsPlaceholder` flags match Appendix A exactly.
+- **(c) TierSeedOffset Plumbing:** Verified in `MonteCarloHarness.cs` line 4176. `TierSeedOffset(LeagueTier.Pro)` maps to `5UL` (the retired MLB ordinal), preserving the exact RNG stream for the legacy 8-team calibration season. The season-pipeline guard remains byte-exact: `PA 48384 / H 10969 / ER 5237`. This is purely seed-stream plumbing across the enum collapse, not a re-baseline.
+- **(d) Changed Harness Expectations:** Every expectation delta is strictly justified by the spec:
+  - 9a tier ladder: `TierBands` pruned to 3 rows (HS, College, Pro=MLB) per §11.2;
+  - 9c/9d: promotion/relegation bounds generalized from 6 tiers to 3 tiers (`TierCount = 3`, 24 teams / 408 rostered);
+  - GrittyEvents: `tierPollJoin` updated to expect `tier == 2` for Pro (was 5) and `COALESCE(tt.tier, 2)`;
+  - Total checks moved from 354 to 361 (+13 new world-gen/save-compat checks, −6 retired minor tier bands). Zero tolerances loosened.
+- **(e) SaveCompatibility Invariants:** In `SaveCompatibility.cs` + `DatabaseManager.PeekSchemaVersion`:
+  - `PeekSchemaVersion` opens an unpooled, read-only connection without schema side-effects;
+  - Saves with `user_version < 14` are renamed to `.vN.bak` (incrementing `.vN.n.bak` collision avoidance) along with any existing `-wal` and `-shm` sidecars;
+  - If sidecar movement fails, it throws before a new database is opened, guaranteeing no stale WAL reaches a new save;
+  - Future saves (`user_version > 14`) are rejected and left untouched.
+
+### Gate Re-Run Results (Independent Review Run in `dnd-gemini-131`)
+
+| Gate | Result | Notes |
+| :--- | :--- | :--- |
+| `dotnet build DirtAndDiamonds.sln -c Debug` | **PASS** | 0 warnings, 0 errors across all 8 projects |
+| `SchemaValidator` | **PASS** | 131/131 checks passed |
+| `MonteCarloHarness` (20 consecutive runs) | **PASS** | **20/20 runs passed (361/361 checks each)**; logs diffed against run 01 and confirmed **byte-identical apart from `<n> ms`** (Normalized SHA256: `16AB47BDEA1FD4B1ABB661D57FE4F48FE66926810033B7632705B29B2B2D8DA7`); Season-pipeline guard: **PA 48384 / H 10969 / ER 5237 (exact)** |
+| `GrittyEventsHarness` | **PASS** | 363/363 checks passed |
+| `CoreLoopHarness` | **PASS** | 22/22 checks passed |
+| `NeedsDecayHarness` | **PASS** | 117/117 checks passed |
+| `HustleHarness` | **PASS** | 95/95 checks passed |
+| `HoldemHarness` | **PASS** | 63/63 checks passed |
+
+### Recommendation for Merge
+Slice 13-1 is fully validated and ready to merge into `p13/integration` by Claude Opus 5.5 pending owner gate sign-off on Appendix A placeholder names and interpretation I6.
+
+**Recommended next:** 13-1 merge by Claude Opus → R1-SAVE-1 by Claude Opus.
