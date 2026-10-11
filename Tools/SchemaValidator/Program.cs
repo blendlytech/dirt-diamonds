@@ -33,6 +33,9 @@ internal static class Program
         "Player_Absences", "Player_Equipment", "Player_Potential",
         "Player_Person", "Family_Background", "Phone_State", "Player_Items", "Child_Development",
         "Child_Rearing_Commitment", "Relationship_History",
+        // Schema v14 (Phase 13, league_restructure.md §12).
+        "Conferences", "Divisions", "Schedule_Games", "Playoff_Series", "Team_Seasons", "Roster_Designations",
+        "College_Enrollment", "Recruiting_Offers", "Draft_Picks",
     };
 
     private static int Main(string[] args)
@@ -138,7 +141,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 13", db.GetSchemaVersion() == 13, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 14", db.GetSchemaVersion() == 14, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);
@@ -626,6 +629,15 @@ internal static class Program
         // Schema v11: person-layer probes + the player-scoped item load ride the PKs.
         Check("index: Player_Person(player_id)", HasIndexPrefix(db, "Player_Person", "player_id"));
         Check("index: Player_Items(player_id, item_id)", HasIndexPrefix(db, "Player_Items", "player_id", "item_id"));
+        // Schema v14: the sims read one tier's games for one day (spec §12 ix_sched_day).
+        Check("index: Schedule_Games(season_year, tier, day_of_season)",
+            HasIndexPrefix(db, "Schedule_Games", "season_year", "tier", "day_of_season"));
+        Check("Teams v14 column types", VerifyColumnTypes(db, "Teams", new Dictionary<string, string>
+        {
+            ["conference_id"] = "INTEGER",
+            ["division_id"] = "INTEGER",
+            ["home_park"] = "TEXT",
+        }));
 
         // Data-type consistency spot check on the hottest table.
         Check("Players column types", VerifyColumnTypes(db, "Players", new Dictionary<string, string>

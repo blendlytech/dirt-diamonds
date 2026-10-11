@@ -42,10 +42,7 @@ public sealed class RichPresenceWriter
     // must never silently change the wire token.
     private const string TierTokenHS = "#Tier_HS";
     private const string TierTokenCollege = "#Tier_College";
-    private const string TierTokenMinorA = "#Tier_MinorA";
-    private const string TierTokenMinorAA = "#Tier_MinorAA";
-    private const string TierTokenMinorAAA = "#Tier_MinorAAA";
-    private const string TierTokenMLB = "#Tier_MLB";
+    private const string TierTokenPro = "#Tier_Pro"; // schema v14: no minor leagues (league_restructure §2.1)
 
     private readonly SteamIntegration _steam;
     private readonly BaseballQueries _baseball;
@@ -171,9 +168,6 @@ public sealed class RichPresenceWriter
     {
         LeagueTier.HS => TierTokenHS,
         LeagueTier.College => TierTokenCollege,
-        LeagueTier.MinorA => TierTokenMinorA,
-        LeagueTier.MinorAA => TierTokenMinorAA,
-        LeagueTier.MinorAAA => TierTokenMinorAAA,
-        _ => TierTokenMLB,
+        _ => TierTokenPro,
     };
 }

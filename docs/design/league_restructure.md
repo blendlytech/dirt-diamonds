@@ -388,6 +388,7 @@ Owner accepted R-1 Q09: I1–I5 below are adopted defaults, including prior-comp
 - **I3. Pro playoff field.** The spec gives formats (Bo3 early, Bo5 final) but not field size. Chosen: 12 teams (division winners + 2 wild cards per conference, top 2 seeds bye).
 - **I4. Draft timing and reporting.** Draft in July; picks report the following spring. No mid-season call-ups, because there are no minors and the Sunday lock is the only roster-change moment.
 - **I5. Lock scope.** The Sunday lock and forfeit-without-replacement are Pro rules (spec §5). College and HS have no lock, but the "can't field 9" forfeit applies everywhere, because no call-ups exist.
+- **I6. College generation shape** (13-1). §5.1 gives College limits (≤ 4 SP, ≤ 5 RP, ≤ 17 position players, org cap 26) but no generation target. Chosen: **4 SP, 5 RP, 15 position players** (24, Pro's org shape), leaving 2 org spots under the cap for recruits and walk-ons. Math may retune it in 13-6 (population conservation).
 - **Open: league and brand names.** The Pro league's name, conference names and the College league name all need a trademark screen before ship.
 - **Open: HS mercy rule** (10-run rule after 5 innings). Off by default.
 - **Open: college academic eligibility** (GPA floor to play). Not in v1; the GPA system already exists if wanted.

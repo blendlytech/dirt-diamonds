@@ -4,6 +4,12 @@
 -- Schema evolution is keyed on PRAGMA user_version (see end of file);
 -- never rename/drop a column saved games reference without a migration step.
 --
+-- Schema v14 (Phase 13, league_restructure.md §12/§14) is a pre-1.0 CLEAN
+-- BREAK: boot refuses any save with 0 < user_version < 14 (SaveCompatibility
+-- renames it to *.v13.bak and a new world is generated), so this script only
+-- ever runs on an empty file or a v14 save. From 1.0 on, every schema change
+-- ships a migration (GEMINI.md §4).
+--
 -- Connection-level pragmas (journal_mode=WAL, foreign_keys=ON, synchronous)
 -- are set by DatabaseManager on every connection open, NOT in this script,
 -- because foreign_keys is per-connection and cannot be persisted here.
@@ -177,19 +183,43 @@ CREATE TABLE IF NOT EXISTS Game_State (
 ) STRICT;
 
 -- ----------------------------------------------------------------------------
--- Teams — league structure (Phase 3 / schema v3). team_id is the value the
--- previously unconstrained Players.team_id points at; rosters and schedules
--- group by it. A real FK on Players.team_id needs a Players table rebuild and
--- is deferred — the relationship is enforced at the query layer for now, with
--- the mandated hot-path index (idx_players_team) added below.
+-- Conferences / Divisions — schema v14 (league_restructure.md §2.3). Static
+-- league structure written once at world-gen (LeagueStructure, no rng). HS has
+-- two 6-team conferences and no divisions; College is 2 × 3 divisions of 4;
+-- Pro is 2 × 4 divisions of 4. tier mirrors the C# LeagueTier enum (0..2).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Conferences (
+    conference_id INTEGER PRIMARY KEY,
+    tier          INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2),
+    name          TEXT    NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS Divisions (
+    division_id   INTEGER PRIMARY KEY,
+    conference_id INTEGER NOT NULL REFERENCES Conferences(conference_id),
+    name          TEXT    NOT NULL
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Teams — league structure (Phase 3 / schema v3; v14 adds the conference,
+-- division and home park). team_id is the value the unconstrained
+-- Players.team_id points at; rosters and schedules group by it. A real FK on
+-- Players.team_id needs a Players table rebuild and is deferred — the
+-- relationship is enforced at the query layer, with the mandated hot-path
+-- index (idx_players_team) added below. league/division stay as display text
+-- (the UI's labels); conference_id/division_id are the structure. division_id
+-- is NULL for HS (no divisions). home_park feeds announcer intros and the UI.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS Teams (
-    team_id      INTEGER PRIMARY KEY,
-    city         TEXT    NOT NULL,
-    name         TEXT    NOT NULL,
-    abbreviation TEXT    NOT NULL,
-    league       TEXT,
-    division     TEXT
+    team_id       INTEGER PRIMARY KEY,
+    city          TEXT    NOT NULL,
+    name          TEXT    NOT NULL,
+    abbreviation  TEXT    NOT NULL,
+    league        TEXT,
+    division      TEXT,
+    conference_id INTEGER NOT NULL REFERENCES Conferences(conference_id),
+    division_id   INTEGER REFERENCES Divisions(division_id),
+    home_park     TEXT    NOT NULL
 ) STRICT;
 
 -- Mandated hot-path index: the macro-sim bulk-loads rosters grouped by team_id.
@@ -309,26 +339,20 @@ CREATE TABLE IF NOT EXISTS Life_Stress (
 -- ----------------------------------------------------------------------------
 -- Team_Tiers — schema v7. The career-ladder dimension (Phase 9a): one row per
 -- team naming which league tier it plays in. tier mirrors the C# LeagueTier
--- enum: 0 = HS, 1 = College, 2 = MinorA, 3 = MinorAA, 4 = MinorAAA, 5 = MLB.
+-- enum: 0 = HS, 1 = College, 2 = Pro (schema v14 collapsed the six-rung ladder;
+-- Pro keeps the old MinorA ordinal, so content gates written `tier >= 2` hold).
 -- A separate table rather than an ALTER on Teams so the v6→v7 migration stays
 -- purely additive and this script remains the whole migration — ALTER TABLE
 -- ADD COLUMN is not idempotent, the same reasoning as Pitcher_Roles/Life_Stress.
 -- The PK doubles as the hot-path index for the tier-scoped roster join
 -- (Players.team_id → Team_Tiers.team_id probe); the tier filter itself scans
--- at most 48 rows and needs no index of its own.
+-- at most 68 rows and needs no index of its own. (The v6→v7 tier-5 backfill
+-- went with the v14 clean break: world-gen writes every tier row.)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS Team_Tiers (
     team_id INTEGER PRIMARY KEY REFERENCES Teams(team_id) ON DELETE CASCADE,
-    tier    INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 5)
+    tier    INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2)
 ) STRICT;
-
--- v6→v7 backfill: every pre-v7 team was the one MLB-calibrated league, so
--- existing teams migrate as tier 5 (MLB). INSERT OR IGNORE keeps this
--- idempotent on every boot; post-v7 code (LeagueGenerator/EnsureTierLeagues)
--- writes tier rows explicitly at team creation, so this only ever touches
--- migrated saves — a fresh world's Teams table is empty when this runs.
-INSERT OR IGNORE INTO Team_Tiers (team_id, tier)
-    SELECT team_id, 5 FROM Teams;
 
 -- ----------------------------------------------------------------------------
 -- Player_Absences — schema v8. The roster-availability store (Phase 8c): one
@@ -536,8 +560,97 @@ CREATE TABLE IF NOT EXISTS Child_Rearing_Commitment (
     weekly_funding INTEGER NOT NULL DEFAULT 0 CHECK (weekly_funding BETWEEN 0 AND 300)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Phase 13 league tables — schema v14 (league_restructure.md §12). Created
+-- empty here; their writers land in later slices: Schedule_Games (13-3
+-- SeasonScheduler), Playoff_Series + Team_Seasons (13-4), Roster_Designations
+-- (13-5 Sunday lock), College_Enrollment + Recruiting_Offers + Draft_Picks
+-- (13-6 PipelineManager). Team and player columns carry real FKs (Teams rows
+-- are never deleted; player rows follow the ON DELETE CASCADE convention).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Playoff_Series (
+    series_id         INTEGER PRIMARY KEY,
+    season_year       INTEGER NOT NULL,
+    tier              INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2),
+    round             INTEGER NOT NULL CHECK (round >= 1),
+    best_of           INTEGER NOT NULL CHECK (best_of IN (1, 3, 5, 7)),
+    high_seed_team_id INTEGER NOT NULL REFERENCES Teams(team_id),
+    low_seed_team_id  INTEGER NOT NULL REFERENCES Teams(team_id),
+    high_wins         INTEGER NOT NULL DEFAULT 0 CHECK (high_wins >= 0),
+    low_wins          INTEGER NOT NULL DEFAULT 0 CHECK (low_wins >= 0),
+    winner_team_id    INTEGER REFERENCES Teams(team_id)
+) STRICT;
+
+-- phase: 0 regular, 1 play-in, 2 playoff. status: 0 scheduled, 1 final, 2 forfeit.
+CREATE TABLE IF NOT EXISTS Schedule_Games (
+    game_id        INTEGER PRIMARY KEY,
+    season_year    INTEGER NOT NULL,
+    tier           INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2),
+    day_of_season  INTEGER NOT NULL CHECK (day_of_season >= 1),
+    home_team_id   INTEGER NOT NULL REFERENCES Teams(team_id),
+    away_team_id   INTEGER NOT NULL REFERENCES Teams(team_id),
+    phase          INTEGER NOT NULL CHECK (phase IN (0, 1, 2)),
+    series_id      INTEGER REFERENCES Playoff_Series(series_id),
+    game_in_series INTEGER CHECK (game_in_series >= 1),
+    status         INTEGER NOT NULL DEFAULT 0 CHECK (status IN (0, 1, 2)),
+    home_score     INTEGER CHECK (home_score >= 0),
+    away_score     INTEGER CHECK (away_score >= 0),
+    CHECK (home_team_id <> away_team_id)
+) STRICT;
+
+-- Mandated hot-path index: the sims read one tier's games for one day.
+CREATE INDEX IF NOT EXISTS ix_sched_day ON Schedule_Games(season_year, tier, day_of_season);
+
+-- Materialized standings + College national ranking, one row per team-season.
+CREATE TABLE IF NOT EXISTS Team_Seasons (
+    team_id       INTEGER NOT NULL REFERENCES Teams(team_id),
+    season_year   INTEGER NOT NULL,
+    wins          INTEGER NOT NULL DEFAULT 0 CHECK (wins >= 0),
+    losses        INTEGER NOT NULL DEFAULT 0 CHECK (losses >= 0),
+    runs_scored   INTEGER NOT NULL DEFAULT 0 CHECK (runs_scored >= 0),
+    runs_allowed  INTEGER NOT NULL DEFAULT 0 CHECK (runs_allowed >= 0),
+    national_rank INTEGER CHECK (national_rank >= 1),
+    seed          INTEGER CHECK (seed >= 1),
+    PRIMARY KEY (team_id, season_year)
+) STRICT;
+
+-- Pro weekly Sunday lock (College/HS: unused, §16-I5).
+CREATE TABLE IF NOT EXISTS Roster_Designations (
+    player_id          TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    team_id            INTEGER NOT NULL REFERENCES Teams(team_id),
+    is_active          INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+    locked_through_day INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS College_Enrollment (
+    player_id       TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    team_id         INTEGER NOT NULL REFERENCES Teams(team_id),
+    entry_season    INTEGER NOT NULL,
+    class_year      INTEGER NOT NULL CHECK (class_year BETWEEN 1 AND 4),
+    declared_season INTEGER
+) STRICT;
+
+-- status: 0 open, 1 accepted, 2 declined, 3 expired.
+CREATE TABLE IF NOT EXISTS Recruiting_Offers (
+    player_id   TEXT    NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    team_id     INTEGER NOT NULL REFERENCES Teams(team_id),
+    season_year INTEGER NOT NULL,
+    status      INTEGER NOT NULL DEFAULT 0 CHECK (status BETWEEN 0 AND 3),
+    PRIMARY KEY (player_id, team_id, season_year)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS Draft_Picks (
+    season_year  INTEGER NOT NULL,
+    overall_pick INTEGER NOT NULL CHECK (overall_pick >= 1),
+    round        INTEGER NOT NULL CHECK (round >= 1),
+    team_id      INTEGER NOT NULL REFERENCES Teams(team_id),
+    player_id    TEXT    NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    PRIMARY KEY (season_year, overall_pick)
+) STRICT;
+
 COMMIT;
 
--- Schema version 13 — adds Relationship_History (purely additive; see its
--- own comment above). Bump with every migration.
-PRAGMA user_version = 13;
+-- Schema version 14 — the Phase 13 clean break (see the header): three tiers,
+-- Conferences/Divisions, the Teams v14 columns and the league tables above.
+-- Bump with every migration.
+PRAGMA user_version = 14;

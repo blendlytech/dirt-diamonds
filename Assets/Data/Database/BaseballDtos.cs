@@ -23,18 +23,17 @@ public enum PitchType : byte
 }
 
 /// <summary>
-/// Team_Tiers.tier values (schema v7) — the career-ladder dimension. The
-/// numeric order IS the ladder order (Phase 9c's promotion gates climb it),
-/// and arrays index by (int)tier, so the order is load-bearing.
+/// Team_Tiers.tier values — the career-ladder dimension. Schema v14 collapses
+/// the ladder to three tiers (league_restructure.md §2.1): no minor leagues.
+/// Pro stays 2, so every shipped content gate written as `tier >= 2` ("pro
+/// ball") keeps its meaning. The numeric order IS the ladder order and arrays
+/// index by (int)tier, so the order is load-bearing.
 /// </summary>
 public enum LeagueTier : byte
 {
     HS = 0,
     College = 1,
-    MinorA = 2,
-    MinorAA = 3,
-    MinorAAA = 4,
-    MLB = 5,
+    Pro = 2,
 }
 
 /// <summary>
@@ -50,6 +49,12 @@ public struct TeamRow
     public string Abbreviation;
     public string? League;
     public string? Division;
+    /// <summary>Schema v14: the team's conference (NOT NULL; see <see cref="LeagueStructure"/>).</summary>
+    public int ConferenceId;
+    /// <summary>Schema v14: the team's division, null for HS (no divisions).</summary>
+    public int? DivisionId;
+    /// <summary>Schema v14: the home park name (announcer intros, UI).</summary>
+    public string HomePark;
     public LeagueTier Tier;
 }
 

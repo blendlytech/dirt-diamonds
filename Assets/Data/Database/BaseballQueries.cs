@@ -16,22 +16,32 @@ namespace DirtAndDiamonds.Data;
 public sealed class BaseballQueries
 {
     private const string SqlInsertTeam =
-        "INSERT INTO Teams (team_id, city, name, abbreviation, league, division) VALUES " +
-        "(@teamId, @city, @name, @abbreviation, @league, @division);";
+        "INSERT INTO Teams (team_id, city, name, abbreviation, league, division, conference_id, division_id, home_park) VALUES " +
+        "(@teamId, @city, @name, @abbreviation, @league, @division, @conferenceId, @divisionId, @homePark);";
 
-    // Tier rides a LEFT JOIN + COALESCE(…, 5) so a Teams row missing its
-    // Team_Tiers row degrades to MLB (the v6→v7 backfill value) instead of
+    // Schema v14 static structure (LeagueStructure). INSERT OR IGNORE: written
+    // once at world-gen, idempotent if a fixture calls it again.
+    private const string SqlInsertConference =
+        "INSERT OR IGNORE INTO Conferences (conference_id, tier, name) VALUES (@conferenceId, @tier, @name);";
+
+    private const string SqlInsertDivision =
+        "INSERT OR IGNORE INTO Divisions (division_id, conference_id, name) VALUES (@divisionId, @conferenceId, @name);";
+
+    // Tier rides a LEFT JOIN + COALESCE(…, 2) so a Teams row missing its
+    // Team_Tiers row degrades to Pro (schema v14; formerly the v6→v7 MLB backfill) instead of
     // silently vanishing from the load. Plan validated on a v7 scratch db:
     // Teams scan + Team_Tiers PK probe (No Blind Queries).
     private const string SqlSelectAllTeams =
-        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, COALESCE(tt.tier, 5) " +
+        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, COALESCE(tt.tier, 2), " +
+        "t.conference_id, t.division_id, t.home_park " +
         "FROM Teams AS t LEFT JOIN Team_Tiers AS tt ON tt.team_id = t.team_id ORDER BY t.team_id;";
 
     // Tier-scoped teams load (schema v7): one ladder tier's league, ordered by
     // team_id so team indexes stay deterministic within the tier. INNER JOIN —
     // a tier-scoped caller by definition wants only tiered teams.
     private const string SqlSelectTeamsByTier =
-        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, tt.tier " +
+        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, tt.tier, " +
+        "t.conference_id, t.division_id, t.home_park " +
         "FROM Teams AS t JOIN Team_Tiers AS tt ON tt.team_id = t.team_id " +
         "WHERE tt.tier = @tier ORDER BY t.team_id;";
 
@@ -46,9 +56,9 @@ public sealed class BaseballQueries
         "ON CONFLICT (team_id) DO UPDATE SET tier = excluded.tier;";
 
     // One team's ladder tier; the COALESCE-through-Teams shape distinguishes a
-    // missing team (no row → null scalar) from a merely untiered one (→ MLB).
+    // missing team (no row → null scalar) from a merely untiered one (→ Pro).
     private const string SqlSelectTeamTier =
-        "SELECT COALESCE(tt.tier, 5) FROM Teams AS t " +
+        "SELECT COALESCE(tt.tier, 2) FROM Teams AS t " +
         "LEFT JOIN Team_Tiers AS tt ON tt.team_id = t.team_id WHERE t.team_id = @teamId;";
 
     private const string SqlUpsertRatings =
@@ -379,6 +389,8 @@ public sealed class BaseballQueries
 
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertTeam;
+    private readonly SqliteCommand _insertConference;
+    private readonly SqliteCommand _insertDivision;
     private readonly SqliteCommand _selectAllTeams;
     private readonly SqliteCommand _selectTeamsByTier;
     private readonly SqliteCommand _countTeams;
@@ -428,7 +440,12 @@ public sealed class BaseballQueries
 
         _insertTeam = Acquire(SqlInsertTeam,
             ("@teamId", SqliteType.Integer), ("@city", SqliteType.Text), ("@name", SqliteType.Text),
-            ("@abbreviation", SqliteType.Text), ("@league", SqliteType.Text), ("@division", SqliteType.Text));
+            ("@abbreviation", SqliteType.Text), ("@league", SqliteType.Text), ("@division", SqliteType.Text),
+            ("@conferenceId", SqliteType.Integer), ("@divisionId", SqliteType.Integer), ("@homePark", SqliteType.Text));
+        _insertConference = Acquire(SqlInsertConference,
+            ("@conferenceId", SqliteType.Integer), ("@tier", SqliteType.Integer), ("@name", SqliteType.Text));
+        _insertDivision = Acquire(SqlInsertDivision,
+            ("@divisionId", SqliteType.Integer), ("@conferenceId", SqliteType.Integer), ("@name", SqliteType.Text));
 
         _selectAllTeams = Acquire(SqlSelectAllTeams);
         _selectTeamsByTier = Acquire(SqlSelectTeamsByTier, ("@tier", SqliteType.Integer));
@@ -564,7 +581,34 @@ public sealed class BaseballQueries
         p["@abbreviation"].Value = team.Abbreviation;
         p["@league"].Value = team.League is null ? DBNull.Value : team.League;
         p["@division"].Value = team.Division is null ? DBNull.Value : team.Division;
+        p["@conferenceId"].Value = team.ConferenceId;
+        p["@divisionId"].Value = team.DivisionId.HasValue ? team.DivisionId.Value : DBNull.Value;
+        p["@homePark"].Value = team.HomePark;
         _db.ExecuteNonQuery(_insertTeam);
+    }
+
+    /// <summary>
+    /// Writes the static v14 conference and division rows (<see cref="LeagueStructure"/>)
+    /// that every Teams row references. Idempotent; joins the caller's open batch.
+    /// </summary>
+    public void EnsureLeagueStructure()
+    {
+        foreach (ConferenceDef c in LeagueStructure.Conferences)
+        {
+            SqliteParameterCollection p = _insertConference.Parameters;
+            p["@conferenceId"].Value = c.ConferenceId;
+            p["@tier"].Value = (int)c.Tier;
+            p["@name"].Value = c.Name;
+            _db.ExecuteNonQuery(_insertConference);
+        }
+        foreach (DivisionDef d in LeagueStructure.Divisions)
+        {
+            SqliteParameterCollection p = _insertDivision.Parameters;
+            p["@divisionId"].Value = d.DivisionId;
+            p["@conferenceId"].Value = d.ConferenceId;
+            p["@name"].Value = d.Name;
+            _db.ExecuteNonQuery(_insertDivision);
+        }
     }
 
     public int LoadAllTeams(List<TeamRow> destination)
@@ -601,6 +645,9 @@ public sealed class BaseballQueries
                 League = reader.IsDBNull(4) ? null : reader.GetString(4),
                 Division = reader.IsDBNull(5) ? null : reader.GetString(5),
                 Tier = (LeagueTier)reader.GetInt32(6),
+                ConferenceId = reader.GetInt32(7),
+                DivisionId = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                HomePark = reader.GetString(9),
             });
         }
     }
@@ -624,7 +671,7 @@ public sealed class BaseballQueries
 
     /// <summary>
     /// One team's ladder tier — false when the team itself does not exist. A
-    /// team missing only its Team_Tiers row reads as MLB, matching the v6→v7
+    /// team missing only its Team_Tiers row reads as Pro, matching the former v6→v7
     /// backfill (and <see cref="LoadAllTeams"/>'s COALESCE).
     /// </summary>
     public bool TryGetTeamTier(int teamId, out LeagueTier tier)

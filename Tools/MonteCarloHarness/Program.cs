@@ -5,6 +5,7 @@ using DirtAndDiamonds.Data;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.UI.Portraits;
 using DirtAndDiamonds.UI.Scouting;
+using Microsoft.Data.Sqlite;
 
 namespace DirtAndDiamonds.Tools.MonteCarloHarness;
 
@@ -61,6 +62,8 @@ internal static class Program
         string schemaPath = Path.Combine(repoRoot, "Assets", "Data", "Database", "SchemaDefinitions.sql");
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_montecarlo_{Guid.NewGuid():N}.db");
         string microScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_microsim_{Guid.NewGuid():N}.db");
+        string worldV14ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_worldv14_{Guid.NewGuid():N}.db");
+        string saveCompatScratchDir = Path.Combine(Path.GetTempPath(), $"dnd_savecompat_{Guid.NewGuid():N}");
         string careerIdsScratchPath1 = Path.Combine(Path.GetTempPath(), $"dnd_careerids1_{Guid.NewGuid():N}.db");
         string careerIdsScratchPath2 = Path.Combine(Path.GetTempPath(), $"dnd_careerids2_{Guid.NewGuid():N}.db");
         string careerScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_career_{Guid.NewGuid():N}.db");
@@ -94,6 +97,8 @@ internal static class Program
             RunMicroAnalyticSuite();
             RunMicroGameSuite(schemaPath, microScratchPath);
             RunReadModelA0Sweep();
+            RunWorldGenV14Suite(schemaPath, worldV14ScratchPath);
+            RunSaveCompatibilitySuite(schemaPath, saveCompatScratchDir);
             RunCareerIdsSuite(schemaPath, careerIdsScratchPath1, careerIdsScratchPath2);
             RunCareerWiringSuite(schemaPath, careerScratchPath);
             RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
@@ -123,7 +128,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Check($"unhandled {ex.GetType().Name}", false, ex.Message);
+            Check($"unhandled {ex.GetType().Name}", false, $"{ex.Message} | {ex.StackTrace}");
         }
         finally
         {
@@ -133,6 +138,9 @@ internal static class Program
             TryDelete(microScratchPath);
             TryDelete(microScratchPath + "-wal");
             TryDelete(microScratchPath + "-shm");
+            TryDelete(worldV14ScratchPath);
+            TryDelete(worldV14ScratchPath + "-wal");
+            TryDelete(worldV14ScratchPath + "-shm");
             TryDelete(careerIdsScratchPath1);
             TryDelete(careerIdsScratchPath1 + "-wal");
             TryDelete(careerIdsScratchPath1 + "-shm");
@@ -361,7 +369,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v13", db.GetSchemaVersion() == 13, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v14", db.GetSchemaVersion() == 14, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -1121,6 +1129,289 @@ internal static class Program
     // 6. Phase 5 career wiring: avatar, macro suppression, stat composition,
     //    interactive bridge — a whole season through the real event loop
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // Phase 13-1: schema v14 world-gen (league_restructure.md §2, §5.3,
+    // §12, §14, Appendix A) — the slice's gate: world-gen round-trip, FK
+    // integrity, and the clean-break save check.
+    // ------------------------------------------------------------------
+
+    private static void RunWorldGenV14Suite(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- 13-1 world-gen v14: 68 teams, conferences/divisions, per-tier rosters (spec §2/§5.3/App. A) ---");
+
+        using var db = new DatabaseManager(scratchPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var rng = new RngState(LeagueSeed + 1300);
+        bool generated = LeagueGenerator.GenerateWorld(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        bool secondSkipped = !LeagueGenerator.GenerateWorld(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
+        Check("GenerateWorld seeds an empty save once and is a no-op on an existing league",
+            generated && secondSkipped && db.GetSchemaVersion() == SaveCompatibility.CurrentSchemaVersion,
+            $"user_version={db.GetSchemaVersion()}");
+
+        // ---- structure: tiers, conferences, divisions (§2.2/§2.3) ----
+        var teams = new List<TeamRow>();
+        baseball.LoadAllTeams(teams);
+        bool countsOk = teams.Count == 68
+            && baseball.CountTeamsInTier(LeagueTier.HS) == 12
+            && baseball.CountTeamsInTier(LeagueTier.College) == 24
+            && baseball.CountTeamsInTier(LeagueTier.Pro) == 32;
+        bool idsOk = teams.All(t => t.TeamId > LeagueStructure.TeamIdBase(t.Tier)
+            && t.TeamId <= LeagueStructure.TeamIdBase(t.Tier) + LeagueStructure.TeamCount(t.Tier));
+        Check("§2 68 teams: HS 12 (101–112), College 24 (201–224), Pro 32 (301–332)",
+            countsOk && idsOk, $"teams={teams.Count}");
+
+        var conferenceTier = LeagueStructure.Conferences.ToDictionary(c => c.ConferenceId, c => c.Tier);
+        var divisionConference = LeagueStructure.Divisions.ToDictionary(d => d.DivisionId, d => d.ConferenceId);
+        bool shapeOk = true;
+        string shapeDetail = "";
+        foreach (ConferenceDef conference in LeagueStructure.Conferences)
+        {
+            List<TeamRow> members = teams.Where(t => t.ConferenceId == conference.ConferenceId).ToList();
+            int expected = LeagueStructure.TeamCount(conference.Tier) / 2;
+            bool ok = members.Count == expected && members.All(t => t.Tier == conference.Tier);
+            if (conference.Tier == LeagueTier.HS)
+            {
+                ok &= members.All(t => t.DivisionId is null);
+            }
+            else
+            {
+                int divisions = conference.Tier == LeagueTier.College ? 3 : 4;
+                var byDivision = members.GroupBy(t => t.DivisionId).ToList();
+                ok &= byDivision.Count == divisions
+                    && byDivision.All(g => g.Key is int d && divisionConference[d] == conference.ConferenceId && g.Count() == 4);
+            }
+            if (!ok && shapeDetail.Length == 0)
+            {
+                shapeDetail = $"conference {conference.ConferenceId} ({conference.Tier} {conference.Name}): {members.Count} teams";
+            }
+            shapeOk &= ok;
+        }
+        Check("§2.3 shape: HS 2×6 no divisions; College 2×3×4; Pro 2×4×4; every division inside its own conference",
+            shapeOk && LeagueStructure.Conferences.Length == 6 && LeagueStructure.Divisions.Length == 14,
+            shapeDetail.Length > 0 ? shapeDetail : "6 conferences, 14 divisions");
+
+        // ---- round-trip: the saved rows are exactly the Appendix A seeds ----
+        bool roundTrip = teams.Count == LeagueStructure.Teams.Length;
+        string roundTripDetail = "";
+        for (int i = 0; roundTrip && i < teams.Count; i++)
+        {
+            TeamRow expected = LeagueStructure.ToTeamRow(LeagueStructure.Teams[i]);
+            TeamRow actual = teams[i];
+            roundTrip = actual.TeamId == expected.TeamId && actual.City == expected.City && actual.Name == expected.Name
+                && actual.Abbreviation == expected.Abbreviation && actual.League == expected.League
+                && actual.Division == expected.Division && actual.ConferenceId == expected.ConferenceId
+                && actual.DivisionId == expected.DivisionId && actual.HomePark == expected.HomePark
+                && actual.Tier == expected.Tier && conferenceTier[actual.ConferenceId] == actual.Tier;
+            if (!roundTrip)
+            {
+                roundTripDetail = $"team {actual.TeamId} ({actual.Abbreviation}) differs from its seed";
+            }
+        }
+        Check("world-gen round-trip: every saved Teams row (incl. conference, division, home park, tier) equals its Appendix A seed",
+            roundTrip, roundTripDetail.Length > 0 ? roundTripDetail : "68/68 rows");
+
+        // ---- rosters (§5.1/§5.3) ----
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        var potential = new Dictionary<string, PlayerPotentialRow>();
+        baseball.LoadAllPotential(potential);
+        var arsenals = new List<PitchArsenalRow>();
+        baseball.LoadAllArsenals(arsenals);
+        var pitchesPerPitcher = arsenals.GroupBy(a => a.PlayerId).ToDictionary(g => g.Key, g => g.Count());
+        bool rosterOk = true;
+        string rosterDetail = "";
+        foreach (TeamRow team in teams)
+        {
+            List<RosterPlayerRow> members = roster.Where(r => r.TeamId == team.TeamId).ToList();
+            int position = members.Count(r => r.Role == PitcherRole.None);
+            int starters = members.Count(r => r.Role == PitcherRole.Starter);
+            int relievers = members.Count(r => r.Role == PitcherRole.Reliever);
+            bool ok = team.Tier == LeagueTier.HS
+                ? starters is >= 3 and <= 4 && relievers is >= 2 and <= 4 && position is >= 11 and <= 14
+                : starters == 4 && relievers == 5 && position == 15;
+            (int minAge, int maxAge) = team.Tier switch
+            {
+                LeagueTier.HS => (15, 18),
+                LeagueTier.College => (18, 22),
+                _ => (21, 36),
+            };
+            foreach (RosterPlayerRow member in members)
+            {
+                ok &= players.TryGetById(member.PlayerId, out PlayerRow person)
+                    && person.Age >= minAge && person.Age <= maxAge
+                    && potential.ContainsKey(member.PlayerId)
+                    && member.IsPitcher == (member.Role != PitcherRole.None)
+                    && (member.Role == PitcherRole.None || pitchesPerPitcher.GetValueOrDefault(member.PlayerId) == 3);
+            }
+            if (!ok && rosterDetail.Length == 0)
+            {
+                rosterDetail = $"team {team.TeamId} ({team.Tier}): {position} pos / {starters} SP / {relievers} RP";
+            }
+            rosterOk &= ok;
+        }
+        int proOrg = roster.Count(r => r.TeamId > 300);
+        int collegeOrg = roster.Count(r => r.TeamId is > 200 and < 300);
+        int hsOrg = roster.Count(r => r.TeamId < 200);
+        Check("§5.3 rosters: HS 3–4 SP / 2–4 RP / 11–14 pos; College and Pro 4 SP / 5 RP / 15 pos; tier ages; ratings, ceilings, roles and 3-pitch arsenals",
+            rosterOk && proOrg == 32 * 24 && collegeOrg == 24 * 24,
+            rosterDetail.Length > 0 ? rosterDetail : $"HS {hsOrg}, College {collegeOrg}, Pro {proOrg} rostered");
+        Check("world-gen v14: integrity ok, no FK violations, no open batch",
+            !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+
+        // ---- determinism: same seed → byte-identical world ----
+        string fingerprintA = WorldFingerprint(baseball, roster);
+        using (var dbB = new DatabaseManager(scratchPath + ".b"))
+        {
+            dbB.InitializeSchema(schemaPath);
+            var baseballB = new BaseballQueries(dbB);
+            var rngB = new RngState(LeagueSeed + 1300);
+            LeagueGenerator.GenerateWorld(dbB, new PlayerQueries(dbB), baseballB, LeagueGenerator.DefaultRatingSpread, ref rngB);
+            var rosterB = new List<RosterPlayerRow>();
+            baseballB.LoadRoster(rosterB);
+            string fingerprintB = WorldFingerprint(baseballB, rosterB);
+            Check("world-gen determinism: two same-seed v14 worlds are byte-identical (ids, rosters, ratings)",
+                fingerprintA == fingerprintB, $"fingerprint {fingerprintA.Length} chars");
+        }
+        TryDelete(scratchPath + ".b");
+        TryDelete(scratchPath + ".b-wal");
+        TryDelete(scratchPath + ".b-shm");
+
+        // ---- integration state (§15): the shipped sims still refuse it ----
+        bool refusedLoudly = false;
+        try
+        {
+            new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed), LeagueTier.HS)
+                .Initialize();
+        }
+        catch (InvalidOperationException ex)
+        {
+            refusedLoudly = ex.Message.Contains("requires exactly", StringComparison.Ordinal);
+        }
+        Check("integration state: the 8-team sims refuse the 68-team world at Initialize, loudly, until 13-2/13-3",
+            refusedLoudly);
+    }
+
+    private static string WorldFingerprint(BaseballQueries baseball, List<RosterPlayerRow> roster)
+    {
+        var sb = new System.Text.StringBuilder(roster.Count * 48);
+        foreach (RosterPlayerRow r in roster)
+        {
+            sb.Append(r.TeamId).Append(':').Append(r.PlayerId).Append(':').Append((int)r.Role).Append(':')
+                .Append(r.BatPower).Append(',').Append(r.BatContact).Append(',').Append(r.BatDiscipline).Append(',')
+                .Append(r.PitStuff).Append(',').Append(r.PitControl).Append(',').Append(r.PitStamina).Append(',')
+                .Append(r.Fielding).Append(';');
+        }
+        return sb.ToString();
+    }
+
+    private static void RunSaveCompatibilitySuite(string schemaPath, string scratchDir)
+    {
+        Console.WriteLine("--- 13-1 clean-break save check (spec §14): legacy saves moved aside, never deleted ---");
+
+        Directory.CreateDirectory(scratchDir);
+        string savePath = Path.Combine(scratchDir, "dirt_and_diamonds.db");
+
+        Check("no save file → NewSave",
+            SaveCompatibility.Prepare(savePath, out _) == SaveCheckOutcome.NewSave && !File.Exists(savePath));
+        File.WriteAllBytes(savePath, Array.Empty<byte>());
+        Check("a 0-byte save (the live file found 2026-10-09) → NewSave, left in place",
+            SaveCompatibility.Prepare(savePath, out _) == SaveCheckOutcome.NewSave && File.Exists(savePath));
+        File.Delete(savePath);
+
+        // A current save is loaded as-is.
+        using (var current = new DatabaseManager(savePath))
+        {
+            current.InitializeSchema(schemaPath);
+        }
+        SqliteConnection.ClearAllPools();
+        Check("a v14 save → Current, untouched",
+            SaveCompatibility.Prepare(savePath, out string? noBackup) == SaveCheckOutcome.Current
+            && noBackup is null && File.Exists(savePath));
+        DeleteSaveFiles(savePath);
+
+        // Two legacy saves in a row: each is moved aside, and the first
+        // backup is never overwritten by the second.
+        const string backupCheck =
+            "a v13 save is moved aside (never deleted), the save path freed; a second legacy save never overwrites the first backup";
+        try
+        {
+            WriteLegacySave(savePath, version: 13, marker: "first");
+            SaveCheckOutcome first = SaveCompatibility.Prepare(savePath, out string? firstBackup);
+            WriteLegacySave(savePath, version: 13, marker: "second");
+            SaveCheckOutcome second = SaveCompatibility.Prepare(savePath, out string? secondBackup);
+            bool backupsOk = first == SaveCheckOutcome.LegacyBackedUp && second == SaveCheckOutcome.LegacyBackedUp
+                && firstBackup is not null && secondBackup is not null && firstBackup != secondBackup
+                && !File.Exists(savePath)
+                && ReadLegacyMarker(firstBackup) == "first" && ReadLegacyMarker(secondBackup) == "second";
+            Check(backupCheck, backupsOk, $"{Path.GetFileName(firstBackup)} / {Path.GetFileName(secondBackup)}");
+        }
+        catch (Exception ex)
+        {
+            Check(backupCheck, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        DeleteSaveFiles(savePath);
+
+        // A save from a newer build is refused and left exactly where it is.
+        WriteLegacySave(savePath, version: 15, marker: "future");
+        bool refused = false;
+        try
+        {
+            SaveCompatibility.Prepare(savePath, out _);
+        }
+        catch (InvalidOperationException)
+        {
+            refused = true;
+        }
+        Check("a save from a newer build (v15) is refused and left untouched", refused && ReadLegacyMarker(savePath) == "future");
+
+        SqliteConnection.ClearAllPools();
+        try
+        {
+            Directory.Delete(scratchDir, recursive: true);
+        }
+        catch (IOException)
+        {
+            // best effort, like TryDelete
+        }
+    }
+
+    private static void WriteLegacySave(string path, int version, string marker)
+    {
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText =
+                "CREATE TABLE Legacy (marker TEXT NOT NULL); " +
+                $"INSERT INTO Legacy (marker) VALUES ('{marker}'); PRAGMA user_version = {version};";
+            command.ExecuteNonQuery();
+        }
+    }
+
+    private static string? ReadLegacyMarker(string? path)
+    {
+        if (path is null || !File.Exists(path))
+        {
+            return null;
+        }
+        using var connection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        connection.Open();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT marker FROM Legacy;";
+        return command.ExecuteScalar() as string;
+    }
+
+    private static void DeleteSaveFiles(string path)
+    {
+        SqliteConnection.ClearAllPools();
+        TryDelete(path);
+        TryDelete(path + "-wal");
+        TryDelete(path + "-shm");
+    }
 
     private static void RunCareerIdsSuite(string schemaPath, string scratchPath1, string scratchPath2)
     {
@@ -3421,7 +3712,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // 13. Phase 9a tier ladder: 6-tier world-gen, per-tier environments
+    // 13. Phase 9a tier ladder: 3-tier legacy world-gen, per-tier environments
     //     (docs/archive/tier_league_environments.md §2/§4/§5)
     // ------------------------------------------------------------------
 
@@ -3865,21 +4156,28 @@ internal static class Program
         double KLo, double KHi, double BbLo, double BbHi, double HrLo, double HrHi,
         double RgLo, double RgHi);
 
-    // §4 table verbatim; the MLB row is the shipped Phase 3 §8 band and
-    // doubles as the 9a regression guard on the calibrated core.
+    // §4 table verbatim, three rows since schema v14 (league_restructure.md
+    // §11.2: HS, College and Pro reuse the shipped HS, College and MLB rows).
+    // The Pro row is the shipped Phase 3 §8 band and doubles as the 9a
+    // regression guard on the calibrated core. Slice 13-3 moves HS to R/9.
     private static readonly TierBand[] TierBands =
     {
         new(.296, .316, .379, .399, .493, .523, .177, .207, .109, .129, .034, .042, 6.4, 8.0), // HS
         new(.284, .304, .364, .384, .473, .503, .184, .214, .103, .123, .033, .041, 5.8, 7.1), // College
-        new(.272, .292, .348, .368, .453, .483, .190, .220, .097, .117, .032, .040, 5.3, 6.5), // MinorA
-        new(.260, .280, .334, .354, .434, .464, .197, .227, .091, .111, .030, .039, 4.9, 5.9), // MinorAA
-        new(.248, .268, .319, .339, .415, .445, .203, .233, .085, .105, .029, .037, 4.5, 5.4), // MinorAAA
-        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.2, 4.8), // MLB (§8)
+        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.2, 4.8), // Pro (the MLB §8 row)
     };
+
+    /// <summary>
+    /// Per-tier season-seed offset for the 9a ladder worlds. Pro keeps the
+    /// retired MLB ordinal (5), so the guard season below runs on the exact
+    /// seed it always has (PA 48384 / H 10969 / ER 5237) after the v14 enum
+    /// collapse renumbered the top tier to 2. HS and College are unchanged.
+    /// </summary>
+    private static ulong TierSeedOffset(LeagueTier tier) => tier == LeagueTier.Pro ? 5UL : (ulong)tier;
 
     private static void RunTierLadderSuite(string schemaPath, string scratchPath)
     {
-        Console.WriteLine("--- Phase 9a tier ladder: 6-tier world, per-tier environments (design doc §2/§4/§5) ---");
+        Console.WriteLine("--- Phase 9a tier ladder: 3-tier legacy world, per-tier environments (design doc §2/§4/§5) ---");
 
         // ---- §5 HS resolver fixture: all-50 roster after the HS shift ----
         TierRatingDeltas hs = TierEffects.For(LeagueTier.HS);
@@ -3901,13 +4199,13 @@ internal static class Program
             $"p=[{hsProbs[0]:F5} {hsProbs[1]:F5} {hsProbs[2]:F5} {hsProbs[3]:F5} {hsProbs[4]:F5} {hsProbs[5]:F5} {hsProbs[6]:F5}]");
 
         // ---- §2 MLB contract: the MLB delta vector is exactly zero ----
-        TierRatingDeltas mlb = TierEffects.For(LeagueTier.MLB);
+        TierRatingDeltas mlb = TierEffects.For(LeagueTier.Pro);
         Check("§2 MLB contract: delta vector all-zero, Shift(r, 0) is the identity over 0–100",
             mlb.BatPower == 0 && mlb.BatContact == 0 && mlb.BatDiscipline == 0
             && mlb.PitStuff == 0 && mlb.PitControl == 0 && mlb.Defense == 0
             && Enumerable.Range(0, 101).All(r => TierEffects.Shift(r, 0) == r));
 
-        // ---- 6-tier flat world + a same-seed MLB-only reference world ----
+        // ---- 3-tier legacy fixture world + a same-seed Pro-only reference world ----
         string referencePath = scratchPath + ".ref";
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
@@ -3920,7 +4218,7 @@ internal static class Program
         bool tiersSeeded = LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref tierGenRng);
         bool secondSkipped = !LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref tierGenRng);
 
-        bool tierCountsOk = baseball.CountTeams() == 6 * LeagueSimulator.TeamCount;
+        bool tierCountsOk = baseball.CountTeams() == LeagueDirectory.TierCount * LeagueSimulator.TeamCount;
         var tierRoster = new List<RosterPlayerRow>();
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
@@ -3929,12 +4227,12 @@ internal static class Program
                 == LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
         }
         var globalRoster = new List<RosterPlayerRow>();
-        Check("EnsureTierLeagues seeds 5 missing tiers once (idempotent): 48 teams, 8 + full 9+5+3 per tier",
+        Check("EnsureTierLeagues seeds the 2 missing tiers once (idempotent): 24 teams, 8 + full 9+5+3 per tier",
             tiersSeeded && secondSkipped && tierCountsOk
-            && baseball.LoadRoster(globalRoster) == 6 * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam,
+            && baseball.LoadRoster(globalRoster) == LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam,
             $"teams={baseball.CountTeams()} roster={globalRoster.Count}");
 
-        // One season, all six sims on the same bus/clock. The MLB sim's seed is
+        // One season, all three sims on the same bus/clock. The Pro sim's seed is
         // shared with the reference world below, so its season must come out
         // bit-identical — the "9a moved nothing in the calibrated core" guard.
         var state = new GlobalState();
@@ -3945,7 +4243,7 @@ internal static class Program
         var normalizer = new StatsNormalizer(db, baseball);
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
-            var tierSim = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed + (ulong)t), (LeagueTier)t);
+            var tierSim = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed + TierSeedOffset((LeagueTier)t)), (LeagueTier)t);
             tierSim.Initialize();
             tierSim.AttachTo(bus);
         }
@@ -3954,7 +4252,7 @@ internal static class Program
             clock.AdvanceDay();
             bus.DispatchPending();
         }
-        Check("6-tier season: integrity ok, no FK violations, no open batch",
+        Check("3-tier season: integrity ok, no FK violations, no open batch",
             !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
 
         // ---- §4 per-tier bands + strictly monotone ladder ----
@@ -3997,10 +4295,11 @@ internal static class Program
         {
             monotone &= avgByTier[t] < avgByTier[t - 1] && rgByTier[t] < rgByTier[t - 1];
         }
-        Check("tier ladder is strictly monotone HS→MLB on AVG and R/G (legibility contract)", monotone,
-            $"AVG {avgByTier[0]:.000}→{avgByTier[5]:.000}  R/G {rgByTier[0]:F2}→{rgByTier[5]:F2}");
+        int top = LeagueDirectory.TierCount - 1;
+        Check("tier ladder is strictly monotone HS→Pro on AVG and R/G (legibility contract)", monotone,
+            $"AVG {avgByTier[0]:.000}→{avgByTier[top]:.000}  R/G {rgByTier[0]:F2}→{rgByTier[top]:F2}");
 
-        // ---- MLB bit-identity: the same seed in an MLB-only world ----
+        // ---- Pro bit-identity: the same seed in a Pro-only world ----
         using var refDb = new DatabaseManager(referencePath);
         refDb.InitializeSchema(schemaPath);
         var refPlayers = new PlayerQueries(refDb);
@@ -4013,7 +4312,7 @@ internal static class Program
         refClock.Initialize(StartYear);
         var refLeague = new LeagueSimulator(
             refDb, refBaseball, new StatsNormalizer(refDb, refBaseball),
-            new RngState(SeasonSeed + (ulong)LeagueTier.MLB));
+            new RngState(SeasonSeed + TierSeedOffset(LeagueTier.Pro)));
         refLeague.Initialize();
         refLeague.AttachTo(refBus);
         for (int i = 0; i < GlobalState.DaysPerSeason; i++)
@@ -4021,11 +4320,11 @@ internal static class Program
             refClock.AdvanceDay();
             refBus.DispatchPending();
         }
-        LeagueBattingTotals mlbBat = baseball.LoadLeagueBattingTotals(StartYear, LeagueTier.MLB);
-        LeaguePitchingTotals mlbPit = baseball.LoadLeaguePitchingTotals(StartYear, LeagueTier.MLB);
+        LeagueBattingTotals mlbBat = baseball.LoadLeagueBattingTotals(StartYear, LeagueTier.Pro);
+        LeaguePitchingTotals mlbPit = baseball.LoadLeaguePitchingTotals(StartYear, LeagueTier.Pro);
         LeagueBattingTotals refBat = refBaseball.LoadLeagueBattingTotals(StartYear);
         LeaguePitchingTotals refPit = refBaseball.LoadLeaguePitchingTotals(StartYear);
-        Check("MLB regression guard: the 6-tier world's MLB season is BIT-IDENTICAL to a same-seed MLB-only world",
+        Check("MLB regression guard: the 3-tier world's Pro season is BIT-IDENTICAL to a same-seed Pro-only world",
             mlbBat.Pa == refBat.Pa && mlbBat.Ab == refBat.Ab && mlbBat.H == refBat.H
             && mlbBat.Doubles == refBat.Doubles && mlbBat.Triples == refBat.Triples && mlbBat.Hr == refBat.Hr
             && mlbBat.Bb == refBat.Bb && mlbBat.So == refBat.So && mlbBat.Rbi == refBat.Rbi
@@ -4676,7 +4975,7 @@ internal static class Program
         baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
         string cream = NthOfRole(tierRoster, PitcherRole.None, 0);
         string agedOut = NthOfRole(tierRoster, PitcherRole.None, 1);
-        baseball.LoadRosterByTier(LeagueTier.MLB, tierRoster);
+        baseball.LoadRosterByTier(LeagueTier.Pro, tierRoster);
         string dreg = NthOfRole(tierRoster, PitcherRole.None, 0);
         string retiree = NthOfRole(tierRoster, PitcherRole.None, 1);
         string broken = NthOfRole(tierRoster, PitcherRole.Starter, 0);
@@ -4764,7 +5063,7 @@ internal static class Program
             bus.DispatchPending();
         }
 
-        Check("§10.2 conservation law: after every offseason, 48 teams × exactly 9+5+3, 816 rostered, intake ≡ removals",
+        Check("§10.2 conservation law: after every offseason, 24 teams × exactly 9+5+3, 408 rostered, intake ≡ removals",
             conservationFailures.Count == 0 && creamPath.Count == Years,
             conservationFailures.Count > 0 ? conservationFailures[0] : $"{Years} rollovers clean");
         Check("§10.4 removal triad: retiree (42), broken (health ≤ 40) and HS age-out all land in FA, stats intact, exactly matched by HS intake",
@@ -4774,22 +5073,24 @@ internal static class Program
         bool creamOk = true;
         for (int k = 0; k < creamPath.Count; k++)
         {
-            creamOk &= creamPath[k].Rostered && (int)creamPath[k].Tier == Math.Min(k + 1, (int)LeagueTier.MLB);
+            creamOk &= creamPath[k].Rostered && (int)creamPath[k].Tier == Math.Min(k + 1, (int)LeagueTier.Pro);
         }
-        Check("§10.3 cream rises: a max-rated 15-year-old climbs exactly one rung per offseason, HS→MLB in 5, then holds",
+        Check("§10.3 cream rises: a max-rated 15-year-old climbs exactly one rung per offseason, HS→Pro in 2, then holds",
             creamOk,
             $"path {string.Join("→", creamPath.ConvertAll(p => p.Rostered ? p.Tier.ToString() : "FA"))}");
 
+        // Rungs between Pro and the College age cap (schema v14: just College).
+        int relegationRungs = (int)LeagueTier.Pro - (int)LeagueTier.College;
         bool dregOk = true;
-        for (int k = 0; k < 4; k++)
+        for (int k = 0; k < relegationRungs; k++)
         {
-            dregOk &= dregPath[k].Rostered && (int)dregPath[k].Tier == (int)LeagueTier.MLB - (k + 1);
+            dregOk &= dregPath[k].Rostered && (int)dregPath[k].Tier == (int)LeagueTier.Pro - (k + 1);
         }
-        for (int k = 4; k < dregPath.Count; k++)
+        for (int k = relegationRungs; k < dregPath.Count; k++)
         {
             dregOk &= !dregPath[k].Rostered;
         }
-        Check("§10.3 symmetric: a zero-rated MLB bat relegates one rung per offseason, then washes out at the College age cap",
+        Check("§10.3 symmetric: a zero-rated Pro bat relegates one rung per offseason, then washes out at the College age cap",
             dregOk,
             $"path {string.Join("→", dregPath.ConvertAll(p => p.Rostered ? p.Tier.ToString() : "FA"))}");
 
@@ -4823,16 +5124,17 @@ internal static class Program
         // the MLB-retirement cascade from year ~6) — full strict monotonicity
         // across the middle rungs is 9d's development-curve handoff, not a
         // static-ratings property.
+        int topTier = LeagueDirectory.TierCount - 1;
         bool hsLowest = true;
         bool mlbHighest = true;
         for (int t = 1; t < LeagueDirectory.TierCount; t++)
         {
             hsLowest &= meanTalent[t] > meanTalent[0];
-            mlbHighest &= meanTalent[5] > meanTalent[t - 1];
+            mlbHighest &= meanTalent[topTier] > meanTalent[t - 1];
         }
-        Check($"§10.9 pre-9d equilibrium: after {Years} offseasons HS is strictly the weakest tier, MLB strictly the strongest (gap ≥ 20), College out-sorts HS",
-            hsLowest && mlbHighest && meanTalent[5] - meanTalent[0] >= 20.0 && meanTalent[1] > meanTalent[0] + 5.0,
-            $"HS {meanTalent[0]:F1} → MLB {meanTalent[5]:F1} (gap {meanTalent[5] - meanTalent[0]:F1})");
+        Check($"§10.9 pre-9d equilibrium: after {Years} offseasons HS is strictly the weakest tier, Pro strictly the strongest (gap ≥ 20), College out-sorts HS",
+            hsLowest && mlbHighest && meanTalent[topTier] - meanTalent[0] >= 20.0 && meanTalent[1] > meanTalent[0] + 5.0,
+            $"HS {meanTalent[0]:F1} → Pro {meanTalent[topTier]:F1} (gap {meanTalent[topTier] - meanTalent[0]:F1})");
         Check("sweep world: integrity ok, no FK violations, no open batch",
             !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
 
@@ -4889,7 +5191,7 @@ internal static class Program
         // Two same-seed worlds — one with the promotion pass attached and
         // firing (but choosing no-op: spread-0 ratings, ages pinned to 25),
         // one without it — must produce BIT-IDENTICAL season-2 games in all
-        // six tiers. This is §10.1's "inert until movement" clause plus
+        // three tiers. This is §10.1's "inert until movement" clause plus
         // §10.8's stream isolation: attaching, evaluating and no-op'ing the
         // pass reads the database only and draws from no one's RNG stream.
         var batByTier = new LeagueBattingTotals[2][];
@@ -4986,9 +5288,9 @@ internal static class Program
         }
         Check("§10.1/§10.8: the pass fired, evaluated and chose no-op (no removals, no swaps, no intake)",
             noOpRan);
-        Check("§10.1/§10.8: season 2 is BIT-IDENTICAL across all six tiers with the no-op pass attached vs absent",
+        Check("§10.1/§10.8: season 2 is BIT-IDENTICAL across all three tiers with the no-op pass attached vs absent",
             identical && integrityOk,
-            $"MLB PA {batByTier[0][5].Pa}/{batByTier[1][5].Pa} H {batByTier[0][5].H}/{batByTier[1][5].H}");
+            $"Pro PA {batByTier[0][LeagueDirectory.TierCount - 1].Pa}/{batByTier[1][LeagueDirectory.TierCount - 1].Pa} H {batByTier[0][LeagueDirectory.TierCount - 1].H}/{batByTier[1][LeagueDirectory.TierCount - 1].H}");
     }
 
     private static void RunPromotionAvatarSuite(string schemaPath, string scratchPath)
@@ -5623,7 +5925,7 @@ internal static class Program
         // health-worn MLB veteran (§10.4), in one 24-offseason world ----
         string prospect = NthOfRole(hsRoster, PitcherRole.None, 0);
         var mlbRoster = new List<RosterPlayerRow>();
-        baseball.LoadRosterByTier(LeagueTier.MLB, mlbRoster);
+        baseball.LoadRosterByTier(LeagueTier.Pro, mlbRoster);
         string veteran = NthOfRole(mlbRoster, PitcherRole.None, 0);
 
         players.SetAge(prospect, 15);
@@ -5722,7 +6024,7 @@ internal static class Program
         Check("§5 the pass ran on every rollover; the first offseason moved ratings BOTH ways (growth and decline)",
             devRanEveryYear && firstRun.PlayersChanged > 0 && firstRun.PointsUp > 0 && firstRun.PointsDown > 0,
             $"year-1 changed {firstRun.PlayersChanged} (+{firstRun.PointsUp}/−{firstRun.PointsDown})");
-        Check("§10.8 conservation still holds through 24 developed offseasons: 48 × 9+5+3, 816 rostered, intake ≡ removals",
+        Check("§10.8 conservation still holds through 24 developed offseasons: 24 × 9+5+3, 408 rostered, intake ≡ removals",
             conservationFailures.Count == 0,
             conservationFailures.Count > 0 ? conservationFailures[0] : "24 rollovers clean");
 
@@ -5753,7 +6055,7 @@ internal static class Program
         bool reachedMlb = false;
         foreach ((bool rostered, LeagueTier tier, _) in prospectPath)
         {
-            reachedMlb |= rostered && tier == LeagueTier.MLB;
+            reachedMlb |= rostered && tier == LeagueTier.Pro;
         }
         int finalSum = prospectPath[Years - 1].BatSum; // age 39
         // The raw seed provably can never clear a boundary himself: even
@@ -5785,7 +6087,7 @@ internal static class Program
         }
         foreach ((bool rostered, LeagueTier tier, _) in veteranPath)
         {
-            relegatedBeforeOut |= rostered && tier < LeagueTier.MLB;
+            relegatedBeforeOut |= rostered && tier < LeagueTier.Pro;
         }
         Check("§10.4 decline arc: the health-worn veteran's ratings fall EVERY season he remains rostered, and 9c's EXISTING merit swaps relegate him below MLB",
             declinedWhileRostered && relegatedBeforeOut,
@@ -5879,7 +6181,7 @@ internal static class Program
         // firing (but provably choosing no-op: every rostered age pinned to
         // the peak, where BOTH phase weights and the jitter scale are zero by
         // construction), one without it — must produce BIT-IDENTICAL season-2
-        // games in all six tiers. Strictly stronger than §10.1's inert-without-
+        // games in all three tiers. Strictly stronger than §10.1's inert-without-
         // rollover clause (structural: the only subscription is the rollover),
         // this also proves §10.7's stream isolation: the pass fired, bulk-read
         // the world and drew its jitter bells from the dedicated fork without
@@ -5972,9 +6274,9 @@ internal static class Program
         }
         Check("§10.1/§10.7: the pass fired at the peak-pinned rollover and provably changed nothing",
             noOpRan);
-        Check("§10.1/§10.7: season 2 is BIT-IDENTICAL across all six tiers with the no-op pass attached vs absent",
+        Check("§10.1/§10.7: season 2 is BIT-IDENTICAL across all three tiers with the no-op pass attached vs absent",
             identical && integrityOk,
-            $"MLB PA {batByTier[0][5].Pa}/{batByTier[1][5].Pa} H {batByTier[0][5].H}/{batByTier[1][5].H}");
+            $"Pro PA {batByTier[0][LeagueDirectory.TierCount - 1].Pa}/{batByTier[1][LeagueDirectory.TierCount - 1].Pa} H {batByTier[0][LeagueDirectory.TierCount - 1].H}/{batByTier[1][LeagueDirectory.TierCount - 1].H}");
     }
 
     // ------------------------------------------------------------------
@@ -6211,7 +6513,7 @@ internal static class Program
     // deliverable (development doc §7/§10.6, acceptance check 6). Runs the
     // ladder for 80 simulated offseasons (aging → development → promotion,
     // the doc §5 order) and proves the population's talent distribution
-    // settles to a STATIONARY, MONOTONE gradient across all six tiers — the
+    // settles to a STATIONARY, MONOTONE gradient across all three tiers — the
     // 9c "middle-minors flatness" (§10.9's own disclosure: no age caps and no
     // retirements until the founding generation ages through, so the middle
     // rungs hover at the generation mean) perturbed into a real ladder by
@@ -6254,7 +6556,7 @@ internal static class Program
 
         const int Years = 80;
         const int Warmup = 30; // discard the first 30 offseasons (transient from the flat generated-world start)
-        string[] tierNames = { "HS", "College", "MinorA", "MinorAA", "MinorAAA", "MLB" };
+        string[] tierNames = { "HS", "College", "Pro" };
         var talentHistory = new List<double[]>(Years);
         var conservationFailures = new List<string>();
         var roster = new List<RosterPlayerRow>();
@@ -6294,7 +6596,7 @@ internal static class Program
             talentHistory.Add(talent);
         }
 
-        Check("§10.2 conservation holds through all 80 developed+promoted offseasons: 48 teams × exactly 9+5+3, 816 rostered",
+        Check("§10.2 conservation holds through all 80 developed+promoted offseasons: 24 teams × exactly 9+5+3, 408 rostered",
             conservationFailures.Count == 0,
             conservationFailures.Count > 0 ? conservationFailures[0] : "80 rollovers clean");
 
@@ -6315,7 +6617,7 @@ internal static class Program
         {
             monotone &= mean[t] > mean[t - 1];
         }
-        Check("§7/§10.6 the middle-minors flatness is perturbed into a real gradient: mean batter talent is strictly monotone HS→MLB across all six tiers",
+        Check("§7/§10.6 mean batter talent is strictly monotone HS→College→Pro (three tiers since schema v14)",
             monotone,
             string.Join(" < ", Enumerable.Range(0, LeagueDirectory.TierCount).Select(t => $"{tierNames[t]} {mean[t]:F1}")));
 
@@ -6604,8 +6906,8 @@ internal static class Program
     }
 
     /// <summary>
-    /// The 9c conservation law (§10.2): 48 teams, every team exactly
-    /// 9 batters + 5 starters + 3 relievers, 816 rostered in total.
+    /// The 9c conservation law (§10.2): 24 teams (3 legacy tiers × 8), every team exactly
+    /// 9 batters + 5 starters + 3 relievers, 408 rostered in total.
     /// </summary>
     private static bool TierLadderInvariantHolds(BaseballQueries baseball, out string detail)
     {

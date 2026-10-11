@@ -91,7 +91,7 @@ public enum PrerequisiteKind : byte
 ///
 /// Tier and Gpa (the HS onboarding arc, docs/reference/hs_onboarding_events.md
 /// §1) follow the exact same poll-join shape: Tier LEFT JOINs Team_Tiers
-/// (COALESCEd to MLB(5) for a rostered team missing its row, the v6→v7
+/// (COALESCEd to Pro(2) for a rostered team missing its row, the v6→v7
 /// backfill convention — but a NULL team_id reads as sentinel −1). The
 /// sentinel defeats every ">=" and "==" gate real content authors (both
 /// shipped gates — onboarding's tier==0, the rookie batch's tier>=2 — hold

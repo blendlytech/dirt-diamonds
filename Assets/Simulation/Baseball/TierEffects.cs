@@ -55,10 +55,7 @@ public static class TierEffects
         //                   bPow bCon bDis pStf pCtl dFld
         new TierRatingDeltas(0, 0, 0, -20, -20, -20), // HS
         new TierRatingDeltas(0, 0, 0, -16, -16, -16), // College
-        new TierRatingDeltas(0, 0, 0, -12, -12, -12), // MinorA
-        new TierRatingDeltas(0, 0, 0, -8, -8, -8),    // MinorAA
-        new TierRatingDeltas(0, 0, 0, -4, -4, -4),    // MinorAAA
-        new TierRatingDeltas(0, 0, 0, 0, 0, 0),       // MLB — all-zero by contract, never edit
+        new TierRatingDeltas(0, 0, 0, 0, 0, 0),       // Pro (the former MLB row) — all-zero by contract, never edit
     };
 
     /// <summary>The §2 delta vector for one tier.</summary>

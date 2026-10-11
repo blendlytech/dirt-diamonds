@@ -15,7 +15,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// </summary>
 public sealed class LeagueDirectory
 {
-    public const int TierCount = 6;
+    public const int TierCount = 3;
 
     private readonly LeagueSimulator?[] _byTier = new LeagueSimulator?[TierCount];
 

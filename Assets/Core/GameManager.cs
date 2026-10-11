@@ -203,6 +203,17 @@ public sealed partial class GameManager : Node
     /// <summary>Phase 11a: the sole Steam SDK owner — public like Career/Hustles so 11b's achievement subscriber and 11d's presence writer route through its guarded wrappers, never Steamworks directly.</summary>
     public SteamIntegration Steam { get; private set; } = null!;
 
+    /// <summary>
+    /// What boot found at the save path (schema v14 clean break,
+    /// league_restructure.md §14). <see cref="SaveCheckOutcome.LegacyBackedUp"/>
+    /// means an older save was moved to <see cref="LegacySaveBackupPath"/> and a
+    /// new world was generated; the front end tells the player (UI pending).
+    /// </summary>
+    public SaveCheckOutcome SaveCheck { get; private set; }
+
+    /// <summary>Where the legacy save went, when <see cref="SaveCheck"/> is LegacyBackedUp.</summary>
+    public string? LegacySaveBackupPath { get; private set; }
+
     // Phase 11b: the achievements bus subscriber — private like _rivalryLedger
     // (nothing reads it; it exists exactly as long as the bus does).
     private AchievementManager _achievements = null!;
@@ -228,6 +239,14 @@ public sealed partial class GameManager : Node
         Steam.Initialize();
 
         string databasePath = ProjectSettings.GlobalizePath(SaveFilePath);
+        // Schema v14 clean break: a pre-v14 save can't load, so it is moved
+        // aside (never deleted) before the schema script touches the path.
+        SaveCheck = SaveCompatibility.Prepare(databasePath, out string? legacyBackup);
+        LegacySaveBackupPath = legacyBackup;
+        if (SaveCheck == SaveCheckOutcome.LegacyBackedUp)
+        {
+            GD.Print($"[GameManager] Older save moved to '{legacyBackup}'; generating a new world.");
+        }
         _database = new DatabaseManager(databasePath);
 
         string ddl = FileAccess.GetFileAsString(SchemaResourcePath);
@@ -264,20 +283,17 @@ public sealed partial class GameManager : Node
 
         // World-gen on first boot only; an existing save keeps its league.
         // In-game runs are not required to be replay-deterministic (that is
-        // the harness's contract), so a wall-clock seed is fine here.
-        var rng = new RngState(unchecked((ulong)System.Environment.TickCount64) | 1UL);
-        // HS-2: Persons wired in so fresh worlds seed the §2.5 organic
-        // person-stat spread at generation (from the per-player fork — the
-        // rating draws are untouched); migrated saves keep their backfilled
-        // neutral rows (INSERT OR IGNORE never clobbers).
-        bool newLeague = LeagueGenerator.GenerateIfEmpty(
+        // the harness's contract). The seed mixes wall-clock time into the
+        // since-OS-start tick count, so two boots never share a career stream
+        // (CareerManager mints player ids from it; 13-0 review F3).
+        var rng = new RngState(
+            unchecked((ulong)System.DateTime.UtcNow.Ticks ^ (ulong)System.Environment.TickCount64) | 1UL);
+        // Schema v14 (league_restructure.md §5.3, Appendix A): 68 teams in 3
+        // tiers with per-tier rosters. HS-2: Persons wired in so fresh worlds
+        // seed the §2.5 organic person-stat spread at generation (from the
+        // per-player fork — the rating draws are untouched).
+        bool newLeague = LeagueGenerator.GenerateWorld(
             _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
-        // v3→v4 save top-up: invents the relievers the DDL backfill cannot
-        // (roles/arsenals for migrated pitchers come from the schema script).
-        LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
-        // v6→v7 world top-up (Phase 9a): seeds the five ladder tiers below MLB
-        // on both migrated saves and fresh worlds. No-op once they exist.
-        LeagueGenerator.EnsureTierLeagues(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
 
         // Split the wall-clock stream before the sims copy it, so no two
         // consumers ever replay each other's draws.
@@ -317,9 +333,12 @@ public sealed partial class GameManager : Node
         PersonLevers.AttachTo(Events);
 
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
-        // own 8-team league, each with its own forked rng stream. All six run
-        // the same day loop off the bus; the avatar's tier is resolved by
-        // CareerManager through the directory.
+        // own league, each with its own forked rng stream. All three run the
+        // same day loop off the bus; the avatar's tier is resolved by
+        // CareerManager through the directory. Phase 13 integration state: the
+        // sims still require 8 teams × 9+5+3 per tier and refuse the 68-team
+        // v14 world at Initialize until slices 13-2 (roster capacities) and
+        // 13-3 (schedules) land (league_restructure.md §15).
         Leagues = new LeagueDirectory();
         var normalizer = new StatsNormalizer(_database, Baseball);
         for (int t = 0; t < LeagueDirectory.TierCount; t++)

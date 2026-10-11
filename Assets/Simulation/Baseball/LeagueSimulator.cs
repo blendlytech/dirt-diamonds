@@ -168,13 +168,14 @@ public sealed class LeagueSimulator
     /// The ladder tier this instance simulates (Phase 9a). One simulator per
     /// tier; each bulk-loads only its own 8-team league and bakes its tier's
     /// <see cref="TierEffects"/> deltas into the rating arrays at Initialize.
-    /// Defaults to MLB so every pre-9a construction site (and harness fixture)
-    /// keeps its exact behavior — the MLB delta vector is all-zero by contract.
+    /// Defaults to Pro (the former MLB rung, schema v14) so every pre-9a
+    /// construction site and harness fixture keeps its exact behavior — the Pro
+    /// delta vector is all-zero by contract.
     /// </summary>
     public LeagueTier Tier { get; }
 
     public LeagueSimulator(DatabaseManager db, BaseballQueries queries, StatsNormalizer normalizer, RngState rng,
-        LeagueTier tier = LeagueTier.MLB)
+        LeagueTier tier = LeagueTier.Pro)
     {
         _db = db;
         _queries = queries;

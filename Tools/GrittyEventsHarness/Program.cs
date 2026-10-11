@@ -2152,7 +2152,8 @@ internal static class Program
         {
             using World world = World.Create("hsOnboardingChain", GrittyEventJson.Parse(new[] { onboardingJson, rookieJson }));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 101, City = "Crestwood", Name = "Cardinals", Abbreviation = "CRC", League = "HS", Division = "A" });
+            baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+            baseball.InsertTeam(new TeamRow { TeamId = 101, City = "Crestwood", Name = "Cardinals", Abbreviation = "CRC", League = "HS", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.HS), HomePark = "Test Park" });
             baseball.UpsertTeamTier(101, LeagueTier.HS);
 
             world.AddPlayer("hero", age: 16, teamId: 101);
@@ -2181,7 +2182,7 @@ internal static class Program
                 string.Join(",", world.Fired.Select(f => f.EventId).Where(id => RookieBatchEventIds.Contains(id))));
         }
 
-        // (c) positive control: a tier>=2 (MinorA, the floor) avatar still
+        // (c) positive control: a tier>=2 (Pro; the old MinorA ordinal) avatar still
         // gets the rookie batch -- the gate excludes HS/College, not
         // professional tiers. Isolated to the rookie file alone (the
         // onboarding file is irrelevant here: every one of its events
@@ -2189,8 +2190,9 @@ internal static class Program
         {
             using World world = World.Create("rookiePositiveControl", GrittyEventJson.Parse(rookieJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 201, City = "Rockford", Name = "River Cats", Abbreviation = "ROC", League = "MiLB", Division = "A" });
-            baseball.UpsertTeamTier(201, LeagueTier.MinorA);
+            baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+            baseball.InsertTeam(new TeamRow { TeamId = 201, City = "Rockford", Name = "River Cats", Abbreviation = "ROC", League = "MiLB", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.Pro), HomePark = "Test Park" });
+            baseball.UpsertTeamTier(201, LeagueTier.Pro);
 
             world.AddPlayer("proHero", age: 20, teamId: 201);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "proHero");
@@ -2204,7 +2206,7 @@ internal static class Program
                 world.Bus.DispatchPending();
             }
 
-            Check("a tier>=2 (MinorA) avatar still fires clubhouse_welcome -- the rookie batch is NOT globally blocked, only HS/College",
+            Check("a tier>=2 (Pro) avatar still fires clubhouse_welcome -- the rookie batch is NOT globally blocked, only HS/College",
                 world.Fired.Any(f => f.EventId == "clubhouse_welcome"),
                 $"{world.Fired.Count} fires");
         }
@@ -2217,7 +2219,8 @@ internal static class Program
         {
             using World world = World.Create("contaminatedSaveGuard", GrittyEventJson.Parse(new[] { onboardingJson, rookieJson }));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 102, City = "Riverton", Name = "Rams", Abbreviation = "RIV", League = "HS", Division = "A" });
+            baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+            baseball.InsertTeam(new TeamRow { TeamId = 102, City = "Riverton", Name = "Rams", Abbreviation = "RIV", League = "HS", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.HS), HomePark = "Test Park" });
             baseball.UpsertTeamTier(102, LeagueTier.HS);
 
             world.AddPlayer("contaminatedHero", age: 16, teamId: 102);
@@ -2244,18 +2247,19 @@ internal static class Program
         // sentinel through NarrativePollQueries itself, not just the
         // evaluator -- proving the CASE WHEN p.team_id IS NULL branch in the
         // actual poll SQL, alongside a rostered HS/pro pair and a rostered
-        // team with NO Team_Tiers row (the v6->v7 COALESCE-to-MLB(5)
-        // backfill convention, still honored with the new join in place).
+        // team with NO Team_Tiers row (the COALESCE-to-Pro(2) convention, formerly MLB(5);
+        // schema v14), still honored with the new join in place.
         // Also proves gpa round-trips through the same join.
         {
             using World world = World.Create("tierPollJoin", GrittyEventJson.Parse(onboardingJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 301, City = "Testville", Name = "HS Team", Abbreviation = "TVH", League = "HS", Division = "A" });
+            baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+            baseball.InsertTeam(new TeamRow { TeamId = 301, City = "Testville", Name = "HS Team", Abbreviation = "TVH", League = "HS", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.HS), HomePark = "Test Park" });
             baseball.UpsertTeamTier(301, LeagueTier.HS);
-            baseball.InsertTeam(new TeamRow { TeamId = 302, City = "Testburg", Name = "Pro Team", Abbreviation = "TVP", League = "MLB", Division = "A" });
-            baseball.UpsertTeamTier(302, LeagueTier.MLB);
-            baseball.InsertTeam(new TeamRow { TeamId = 303, City = "Orphantown", Name = "No Tier Row", Abbreviation = "ORP", League = "MLB", Division = "A" });
-            // Deliberately no UpsertTeamTier(303, ...) -- proves the missing-row COALESCE(tt.tier, 5) branch.
+            baseball.InsertTeam(new TeamRow { TeamId = 302, City = "Testburg", Name = "Pro Team", Abbreviation = "TVP", League = "MLB", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.Pro), HomePark = "Test Park" });
+            baseball.UpsertTeamTier(302, LeagueTier.Pro);
+            baseball.InsertTeam(new TeamRow { TeamId = 303, City = "Orphantown", Name = "No Tier Row", Abbreviation = "ORP", League = "MLB", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.Pro), HomePark = "Test Park" });
+            // Deliberately no UpsertTeamTier(303, ...) -- proves the missing-row COALESCE(tt.tier, 2) branch.
 
             world.AddPlayer("hsPlayer", age: 16, teamId: 301);
             world.AddPlayer("proPlayer", age: 25, teamId: 302);
@@ -2277,11 +2281,11 @@ internal static class Program
 
             Check("a rostered HS-tier subject polls tier 0 through the real Team_Tiers join",
                 hsRow.Tier == 0);
-            Check("a rostered MLB-tier subject polls tier 5",
-                proRow.Tier == 5);
-            Check("a rostered team missing its Team_Tiers row still COALESCEs to MLB(5) (the v6->v7 backfill convention, unbroken by the new join)",
-                untieredRow.Tier == 5);
-            Check("an UNROSTERED subject (NULL team_id, the seeded-parent shape) polls the -1 sentinel end to end through the real SQL, never MLB(5)",
+            Check("a rostered Pro-tier subject polls tier 2 (schema v14)",
+                proRow.Tier == 2);
+            Check("a rostered team missing its Team_Tiers row still COALESCEs to Pro(2) (the former MLB(5) convention, unbroken by the new join)",
+                untieredRow.Tier == 2);
+            Check("an UNROSTERED subject (NULL team_id, the seeded-parent shape) polls the -1 sentinel end to end through the real SQL, never Pro(2)",
                 parentRow.TeamId == null && parentRow.Tier == -1);
             Check("gpa round-trips through the real Player_Person join",
                 Math.Abs(hsRow.Gpa - 3.8) < 1e-9);
@@ -2814,8 +2818,9 @@ internal static class Program
                 """;
             using World world = World.Create("dirtFixRamps", GrittyEventJson.Parse(rampMirrorJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 601, City = "Testburg", Name = "Ramps", Abbreviation = "RMP", League = "MiLB", Division = "A" });
-            baseball.UpsertTeamTier(601, LeagueTier.MinorA);
+            baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+            baseball.InsertTeam(new TeamRow { TeamId = 601, City = "Testburg", Name = "Ramps", Abbreviation = "RMP", League = "MiLB", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.Pro), HomePark = "Test Park" });
+            baseball.UpsertTeamTier(601, LeagueTier.Pro);
 
             world.AddPlayer("useful", age: 24, teamId: 601);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "useful");
@@ -3194,8 +3199,9 @@ internal static class Program
                 """;
             using World world = World.Create("dirtProductTurfMadeUseful", GrittyEventJson.Parse(madeUsefulMirrorJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 701, City = "Testville", Name = "Hustlers", Abbreviation = "HST", League = "MiLB", Division = "A" });
-            baseball.UpsertTeamTier(701, LeagueTier.MinorA);
+            baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+            baseball.InsertTeam(new TeamRow { TeamId = 701, City = "Testville", Name = "Hustlers", Abbreviation = "HST", League = "MiLB", Division = "A", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.Pro), HomePark = "Test Park" });
+            baseball.UpsertTeamTier(701, LeagueTier.Pro);
 
             world.AddPlayer("proHustler", age: 24, teamId: 701);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "proHustler");
@@ -4557,10 +4563,11 @@ internal static class Program
 
         // Two teams pin the parental-support window: 900 = the HS window
         // open, 901 = graduated (any non-HS tier).
-        baseball.InsertTeam(new TeamRow { TeamId = 900, City = "Test", Name = "Preps", Abbreviation = "PRE" });
+        baseball.EnsureLeagueStructure(); // schema v14: Teams.conference_id is NOT NULL
+        baseball.InsertTeam(new TeamRow { TeamId = 900, City = "Test", Name = "Preps", Abbreviation = "PRE", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.HS), HomePark = "Test Park" });
         baseball.UpsertTeamTier(900, LeagueTier.HS);
-        baseball.InsertTeam(new TeamRow { TeamId = 901, City = "Test", Name = "Pros", Abbreviation = "PRO" });
-        baseball.UpsertTeamTier(901, LeagueTier.MLB);
+        baseball.InsertTeam(new TeamRow { TeamId = 901, City = "Test", Name = "Pros", Abbreviation = "PRO", ConferenceId = LeagueStructure.FirstConferenceId(LeagueTier.Pro), HomePark = "Test Park" });
+        baseball.UpsertTeamTier(901, LeagueTier.Pro);
 
         void AddPerson(string id, int? teamId, double funds)
         {
