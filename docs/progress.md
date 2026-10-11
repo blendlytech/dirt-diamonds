@@ -10,7 +10,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 | Phase | Spec | State | Very next action (owner) |
 | :-- | :-- | :-- | :-- |
-| **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | Design complete | **13-0:** the MC flake is root-caused (random `Guid.NewGuid()` ids in `CareerManager`); an in-flight counter fix needs one change before merge ([tasks/13-0_review_careermanager_ids.md](tasks/13-0_review_careermanager_ids.md)); repair the `sqlite` MCP to point at a scratch DB. Then **13-1** schema v14 + world-gen (Claude Opus). |
+| **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | **13-0 done** (merged 2026-10-10) | **13-1** schema v14 + world-gen (Claude Opus) on **`p13/integration`**. 13-1…13-3 merge there after Gemini review; `main` stays green on v13 until 13-3 records the new Pro guard (spec §15). |
 | **G Gameplay Core** (**high priority**) | [design/gameplay_core.md](design/gameplay_core.md) | Design draft; [pitching_mode.md](design/pitching_mode.md) **rev 2** (on `main`) | **G-2:** Gemini Pro Math curve review of rev 2, then owner acceptance; then the engine (GPT 6 Astra Pro, G-8a → G-2a → G-2b → G-8b). **G-8a** Read v2 design (GPT) can start now. **G-1** runs inside R-1 (GPT 6 Astra Pro). |
 | **L Lineage, Temptation & Vice** | [design/temptation_and_lineage.md](design/temptation_and_lineage.md), [design/substances_and_addiction.md](design/substances_and_addiction.md) | Design complete; **L-0 done** | **L-1** after 13-1 (schema v15 + identity + legends + poverty). |
 | **14 Voice & Broadcast Audio** | [design/voice_and_broadcast_audio.md](design/voice_and_broadcast_audio.md) | Design complete (broadcasters only) | 14a buses + `VoiceDirector` (Gemini Pro); 14b `Tools/VoiceGen` pilot (GPT Astra Pro; needs the owner's commercial ElevenLabs plan). Can run alongside 13. |
@@ -36,6 +36,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
   - Five substances, each with a distinct edge and price. Boosts are 18+. A fatal overdose is possible.
   - The father's record is juiced in 50% of careers.
   - The repo is private.
+  - Phase 13 lands 13-1…13-3 on an integration branch `p13/integration` and merges to `main` once the full MC suite is green with the new Pro guard.
 
 **Open for the owner:**
 
@@ -66,7 +67,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 1. **Gemini 3.1 Pro Math: G-2 curve review** of [pitching_mode.md](design/pitching_mode.md) rev 2 (the §8 constants, the §7.3 estimates, the §3.5 centering), then **owner acceptance** of the spec.
 2. **GPT 6 Astra Pro: G-8a** Read v2 design, per its brief (unblocked: rev 2's §3.5/§4.4 is the centering template).
-3. **Claude Opus: 13-0 → 13-1**, the critical path.
+3. **Claude Opus: 13-1** on `p13/integration`, the critical path (13-0 done).
 4. **GPT 6 Astra Pro: R-1** full-project review in its own worktree `..\dnd-gpt-review` ([brief](tasks/R-1_full_review_brief.md)), gameplay first (G-1 inside it). Runs alongside G-8a; output to `docs/review/r1/`, then owner + Opus triage.
 
 ---

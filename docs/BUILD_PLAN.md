@@ -26,7 +26,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 | 12 "Saleable" | Render integrity, surface-the-sim cards, at-bat presentation | [surface_the_sim.md](reference/surface_the_sim.md), [at_bat_presentation.md](reference/at_bat_presentation.md) |
 | Post-12 arcs | HS person layer HS-0…HS-6 (schema v11→v13), onboarding + tutorial overlay, UI slices A/B/D-1/G, event-choice prominence, the DIRT-1…4 criminal arc, the hustle depth pass (incl. robbery), the household board | [high_school_person_layer.md](reference/high_school_person_layer.md), [hs_onboarding_events.md](reference/hs_onboarding_events.md), [onboarding_tutorial_overlay.md](reference/onboarding_tutorial_overlay.md), [real_time_clock_slice_g.md](reference/real_time_clock_slice_g.md), [criminal_underworld_content_arc.md](reference/criminal_underworld_content_arc.md), [hustle_minigames_depth_pass.md](reference/hustle_minigames_depth_pass.md), [household_board.md](reference/household_board.md) |
 
-## Phase 13 — League Restructure → Milestone M8 "The Pipeline" (ACTIVE: design complete; 13-0 review open, build next)
+## Phase 13 — League Restructure → Milestone M8 "The Pipeline" (ACTIVE: 13-0 done 2026-10-10; 13-1…13-3 build on `p13/integration`, spec §15)
 
 **Spec:** [design/league_restructure.md](design/league_restructure.md), which resolves the user's source spec (bottom of this file). It replaces the Phase 9 league model (6 tiers including Single-A, Double-A and Triple-A; 8 teams per tier; fixed 9+5+3 rosters; tier-ladder promotion).
 

@@ -364,6 +364,8 @@ The game hasn't released. On boot, a save with `user_version < 14` gets a dialog
 
 ## 15. Build slices (each one gated; owners per BUILD_PLAN)
 
+**Integration branch (owner decision, 2026-10-10).** Slices 13-1, 13-2 and 13-3 change the world's shape: 68 teams, 3 tiers, per-tier rosters and schedules. The shipped sim hard-codes 8 teams × 17 players per tier until 13-2 and 13-3 land, so no one of these slices can pass the full MC gate alone. Each one is reviewed (TEAM.md §2) and merged into **`p13/integration`**, not `main`. Expected red MC checks on that branch are listed in each slice's handoff. `p13/integration` merges to `main` only when the **full MC suite is green with the new Pro guard recorded** (13-3, sanctioned in §11.3). `main` stays green on v13 until then. Claude Opus keeps the branch synced with `main` (Phase G work). **L-1 (schema v15) branches from `p13/integration`, not `main`.**
+
 | Slice | Content | Owner | Gate |
 | :-- | :-- | :-- | :-- |
 | **13-0** | Prerequisites: sqlite MCP repaired; the 344/345 MC flake identified and seeded (failed-check recap on the harness tail) | Pro | MC green 20/20 runs |
