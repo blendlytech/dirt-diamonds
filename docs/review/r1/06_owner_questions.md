@@ -1,0 +1,24 @@
+# R-1 consolidated owner questions
+
+For one owner/Opus triage session. Recommended answers below are proposals, not assumed approvals. Technical arithmetic corrections (G01/G03/G05), deterministic IDs, and confirmed persistence defects need scoped engineering briefs, not a new creative vote. O1's ±.100 band, fatal overdose permission, broadcaster-only voice, v14 clean break, adoption availability and heir eligibility at 19 are already decided.
+
+| ID | Decision | Recommended answer / consequence |
+| --- | --- | --- |
+| Q01 | Accept the priorities and additional repair briefs in 04/05? | Yes: save integrity, mathematical contracts, IDs and partner invariants before content scale. Owner/Opus disposition every proposal; defer rather than silently expand scope. |
+| Q02 | Should reloading preserve the same future random continuation, and should pending story choices survive? | Preserve pending choices and completed work unconditionally. Prefer persisted independent RNG streams for fair cold-reload continuity; if rerolls are intentionally allowed, document that separately from fixed-seed harness determinism. |
+| Q03 | Authorize a fatigue model correction beyond the currently retained regression-to-50 formula? | Yes, as a separate Math-approved contract with explicit neutral/human guards; tired weak pitchers should not improve. G-2 cannot promise all-50 degradation from today's formula. |
+| Q04 | Remaining G choice: needs/stress on the field? | Yes, one small capped and visible game-start projection, consistent across attended/background avatar games; healthy identity exact. Math supplies values. |
+| Q05 | Remaining G choice: more person stats on the field? | Work_ethic affects practice development first. Defer additional discipline/composure field scalers until existing modifiers are understandable. |
+| Q06 | Remaining G choices: park factors and fielding moments? | Defer both from 1.0; retain distinct venues and position-specific presentation. This avoids a second outcome calibration/input project. |
+| Q07 | Missing-piece unlock when telling a found child below 18, or on official reclaim? | Official reclaim at 18, matching D16/§5.6; relationship can begin earlier. Paid search is already 19+ and has no timing conflict. |
+| Q08 | Trailblazer senior-year turn versus sophomore draft eligibility; later-generation family wording? | Let the story turn before the first eligible declaration; senior fallback. Use actual ancestor relationship for later heirs, preserving once-per-save first-Pro achievement. |
+| Q09 | Which standings order the July draft? | Previous completed Pro season/playoffs; seeded deterministic inaugural order. Accept/review the other league §16 interpretations together. |
+| Q10 | Are NPC PED arcs retained while substances remain avatar-only? | Yes. Keep NPC gates separate from avatar active-effect ped_active, so shipped NPC stories remain reachable. |
+| Q11 | Can skipped or dropped revelation playback delay succession? | No. Core persists/acknowledges the revelation and offers replay; cutscene queue capacity is presentation only. Cover death and ban as well as retirement/title. |
+| Q12 | Approve practice mode and modifier breakdown? | Yes, bounded reuse of real systems with no career mutation. Prefer these learnability features over more launch simulation dimensions. |
+| Q13 | Park art: unique bespoke scenes for all 68 venues or reusable dressed kits? | Reusable kits with distinctive team dressing; approve representative examples before volume. Owner still picks 15a style, names and brands. |
+| Q14 | Should play with Steam entirely unavailable count toward later achievements? | Yes, reconcile durable eligibility and totals idempotently on later availability. Ordinary offline play must work regardless. |
+| Q15 | Voice tool's remaining contract differences: .env fallback, hash, crash durability and workflow owner? | Accept brief's guarded environment/.env input and full versioned hash; recover each completed clip; remove generic gendered pilot copy. Opus reconciles reviewer/commit instructions with TEAM before handoff. No new spend is authorized here. |
+| Q16 | Outstanding owner-authored content/functions and release choices? | Approve ethnicity/legend list and art/names before volume. Supply ChooseFatherFallback and DiscoveryChance intent for Math/Opus to formalize; keep current bounded deterministic interfaces. Resolve auto-committer policy explicitly. Complete Steam/commercial account prerequisites on the owner's schedule. |
+
+After triage, Opus records the decisions in canonical docs and updates affected briefs. This review intentionally leaves those documents unchanged; acceptance of this report alone should not be mistaken for acceptance of every proposal.
