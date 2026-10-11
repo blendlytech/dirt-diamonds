@@ -1379,8 +1379,11 @@ internal static class Program
         {
             outcomes++;
         }
-        Check("scripted UI drives a full interactive game over the bridge",
-            !career.HasPendingGame && interactive.HumanPa > 0 && snapshots >= interactive.HumanPitchesSeen
+        // Exactly one snapshot per human pitch: TryGetSnapshot consumes, and the
+        // UI reads inside the awaiting branch before submitting, so no publish is
+        // overwritten unread (13-0 review) and none is counted twice.
+        Check("scripted UI drives a full interactive game over the bridge (one snapshot per pitch)",
+            !career.HasPendingGame && interactive.HumanPa > 0 && snapshots == interactive.HumanPitchesSeen
             && outcomes == interactive.HumanPa,
             $"{interactive.HumanPa} PA, {interactive.HumanPitchesSeen} pitches, {snapshots} snapshots, {outcomes} outcomes");
         Check("attended-game NPC feed queues non-human PAs with a display name once a UI attaches FeedSink",
@@ -2845,6 +2848,11 @@ internal static class Program
                 && pit3.OutsRecorded == bat3.Pa - bat3.H - bat3.Bb);
 
             // ---- drift bound (§3/F5): the bloodline regresses toward the mean ----
+            // §3/F5 asks for regression with no upward ratchet; it sets no floor.
+            // The gen-2 floor is only a "didn't collapse" guard on the CURRENT
+            // rating (lottery on, after development and aging), not a calibration
+            // value. With deterministic CareerManager ids (13-0), gen 2 is pinned
+            // at 39, hence >= 39 rather than the earlier empirical 40.
             baseball.TryGetRatings(heir1Id, out PlayerRatingsRow heir1Final);
             baseball.TryGetRatings(heir2Id, out PlayerRatingsRow heir2Final);
             Check("drift bound: lone-parent bloodline regresses (founder 90 → gen2 in 39–73 → gen3 within ±20 of the mean), no upward ratchet",

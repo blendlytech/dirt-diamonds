@@ -20,7 +20,7 @@
       "args": [
         "-y",
         "mcp-sqlite",
-        "C:/Users/DELL/AppData/Roaming/Godot/app_userdata/Dirt & Diamonds/dirt_and_diamonds.db"
+        "C:/Users/DELL/dnd-scratch/schema_scratch.db"
       ]
     },
     "godot": {
