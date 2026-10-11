@@ -1,6 +1,6 @@
 # 13-0 Review: deterministic `CareerManager` ids (Claude Opus → Gemini 3.1 Pro)
 
-**Status:** re-review of `c151a01` done 2026-10-10: **approve the code, with conditions; slice not closed** (the MCP repair is outstanding). See [Re-review](#re-review-of-c151a01-2026-10-10) at the end. Original review: changes requested, 2026-10-10. **Slice:** 13-0 (MC flake). **Reviewer:** Claude Opus 5.5 (TEAM.md §2). **Binding rules:** GEMINI.md §1–§9.
+**Status:** **merged to `main` 2026-10-10** (owner approved; 13-0 closed, see [Merge record](#merge-record-2026-10-10)). Re-review of `c151a01`: approve with conditions C1/C2, both met at merge. See [Re-review](#re-review-of-c151a01-2026-10-10) at the end. Original review: changes requested, 2026-10-10. **Slice:** 13-0 (MC flake). **Reviewer:** Claude Opus 5.5 (TEAM.md §2). **Binding rules:** GEMINI.md §1–§9.
 
 ## What the in-flight diff does
 
@@ -109,3 +109,26 @@ No guard was re-baselined, and no other expectation or tolerance changed. The ch
 ### Merge plan (on the owner's go-ahead only)
 
 Rebase `c151a01` onto current `main`. Main's 10 newer commits are docs plus comment-path edits; the only overlap is `progress.md` and `Program.cs` comments. Then add C1 (the comment) and, if the owner wants it, F1 and C2. Re-run the build and 20× MC with the byte-identity diff, and fast-forward `main`. No push unless the owner says so.
+
+### Merge record (2026-10-10)
+
+The owner approved the merge, F1 and C2. On branch `p13/13-0-merge` off `main`:
+
+- `57be806` is Gemini's `c151a01`, cherry-picked (authorship kept). The `progress.md` conflict was resolved by moving Gemini's entry into the current Session Log (F2).
+- `dc185ee` is this review.
+- `1de2ca3` adds C1, F1, C2 and F4:
+  - the drift-floor rationale comment;
+  - the snapshot check tightened to `==`;
+  - `.mcp.json` pointed at `C:/Users/DELL/dnd-scratch/schema_scratch.db`;
+  - `SchemaValidator --emit <path>`, which builds that db from `SchemaDefinitions.sql` through the real `DatabaseManager` and refuses `app_userdata` paths;
+  - the skill doc's script path fixed and the scratch db documented.
+
+Gates on the merge branch:
+
+- Build: 0 warnings, 0 errors.
+- SchemaValidator scratch pass: 111/111.
+- `--emit` builds a v13 db (24 tables, `integrity_check` ok) and refuses a path under the save directory (exit 2). The live save is untouched.
+- MC: 20/20 × 354/354, byte-identical apart from 3 `ms` lines. The only line that differs from pre-rebase `c151a01` is the snapshot check's new label.
+- Guard: PA 48384 / H 10969 / ER 5237.
+
+F3 (mixing the wall clock into the boot seed) moves to 13-1.
