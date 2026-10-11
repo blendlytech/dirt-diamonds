@@ -1,6 +1,6 @@
 # R-1 ranked proposals
 
-For owner + Opus acceptance, not adopted scope. S = localized change/brief; M = coordinated subsystem slice; L = multi-slice work. Costs are relative engineering/content effort, not delivery promises. Findings retain IDs from 01–03.
+**Accepted by the owner on 2026-10-10 through approval of all Q01–Q17 recommendations.** All rows below are adopted direction for their stated scope; runtime implementation is pending. See BUILD_PLAN's R-1 section for briefs and owners. S = localized change/brief; M = coordinated subsystem slice; L = multi-slice work. Costs are relative engineering/content effort, not delivery promises. Findings retain IDs from 01–03.
 
 | Rank | Proposal and why | Docs / code changes | Cost | Risk / calibration | Recommended model |
 | --- | --- | --- | --- | --- | --- |

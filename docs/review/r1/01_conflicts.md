@@ -33,3 +33,14 @@ Baseline `2dec343`. Items marked **fixed on branch** are plain factual/editorial
 Additional precision obligations, not yet demonstrated contradictions: pitching's count-conditioned CreditRef/ExecCenter, HBP centering and hidden-information Perfect bot (03 G04); death/ban/reveal ordering. Resolve these explicitly in implementation briefs.
 
 Factual edits on this branch: D01 settled O1 wording; D05 tier descriptions; D06 season-guard name; D12 fatality wording; D13 API-key source aligned with GEMINI.md:46 and the specific brief; D14 full hash inputs; D15 generic pilot copy; D21 attainable genetics fixture; D22 actual MC count. No runtime behavior, tuning constant, role assignment or vision decision changed. The zero-conflict goal remains an integration gate after decisions, not a claim about this branch. Every accepted resolution should update all affected active contracts in one doc-only integration slice; use this register as its checklist.
+
+## Owner acceptance follow-up (2026-10-10)
+
+All recommendations were accepted explicitly. The table above remains the baseline evidence record, not a live list of unasked owner votes. Disposition:
+
+- D01/D05/D06/D12–D15/D21/D22: factual fixes already committed in R-1.
+- D07–D11/D16/D17/D23/D25: accepted contracts now reconciled in lineage, league, substance, voice, visual, vision and workflow docs.
+- D18/D19/D20/D24: approved ownership/dependency resolution; Core owns revelation/clock commands, Data query classes own SQL, and R1-FAMILY provides civilian/kin eligibility before L-4. Runtime correction is pending the linked briefs, not complete.
+- D02/D03/D04 and G04 precision obligations: owner authorizes correction; R1-MATH still owes the actual proof/formulas/waste representation and explicit fatigue guard decision. They remain technical gates, not owner-choice blockers.
+
+Concrete art/name/legend selections, owner-function intent, account prerequisites and operational auto-committer configuration are still inputs/work to supply; accepting a process does not invent its artifacts. See [accepted questions](06_owner_questions.md) and [BUILD_PLAN](../../BUILD_PLAN.md) for the executable follow-up.

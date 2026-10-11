@@ -133,7 +133,7 @@ The catalog (`Assets/Data/Substances/substances.json`) holds the numbers. The **
 
 1. `ped_active` becomes **engine-written**: set while the avatar has an active `steroids` effect and cleared when it expires. It's documented as an engine flag, so `check_event_graph_integrity` #2 accepts it.
 2. That revives the shipped ×1.5 multiplier and per-game costs with no change to their calibrated math.
-3. **Then** the four shipped PED events can safely re-gate on `ped_active` as well as `detection_risk`, the follow-up that DIRT-4 §2.1 deferred. Re-gating before step 1 would silently delete the steroid arc.
+3. **Then** avatar PED events may gate on active-effect `ped_active` plus detection risk. Preserve shipped NPC PED arcs with separate NPC eligibility; NPCs have no avatar substance rows in v1. Never gate every scope-any PED event on an avatar-only flag. Test clean/active avatar and NPC reachability separately (R-1 Q10).
 
 ---
 

@@ -54,8 +54,8 @@
 | **G-3** at-bat view rebuild (batting + pitching UI) | Claude Sonnet | Gemini Pro | Screenshot review; playtest |
 | **G-4** venue catalog (68) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
 | **G-5** venue art | Owner + AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste** |
-| **G-6** stadium mapping + optional park factors | Claude Sonnet / Math (factors) | Claude Opus | **Park factors yes/no** |
-| **G-7** fielding moments (if approved) | Claude Opus + Claude Sonnet | Gemini Pro | **Approve the feature** |
+| **G-6** stadium mapping, presentation only | Claude Sonnet | Claude Opus | Park factors deferred beyond 1.0 (R-1) |
+| **G-7** fielding moments, deferred beyond 1.0 | Claude Opus + Claude Sonnet | Gemini Pro | Not in launch scope (R-1) |
 | **L-0** docs + no-abortion content fix | Claude Opus | Gemini Pro | **DONE 2026-10-10** |
 | **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus (+ Sonnet: New Career UI) | Gemini Pro | — |
 | **L-2** legends roster, identity catalog, record map | Flash | Claude Opus | **Ethnicity list, legend backstories** |
@@ -107,5 +107,9 @@
 ## 5. Open decisions for the owner
 
 1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed this roster; Claude Opus 5.5 is integration lead. GEMINI.md and league_restructure.md now point here.
-2. **The auto-committer.** Six models working in parallel plus an auto-committer pushing to `main` will collide. Recommended: turn it off, or limit it to a personal scratch branch, and merge only through review (§3).
+2. **Auto-committer policy (R-1 accepted):** no automatic commits/pushes to main or shared/integration branches. Disable it for those targets; any retained automation is restricted to an explicitly chosen personal scratch branch. Reviewed human-directed integration only. This records policy, not a claim that an external service has been disabled.
 3. ~~**Repo visibility.**~~ **Resolved 2026-10-10:** the repo is private.
+
+## R-1 accepted repair assignments (2026-10-10)
+
+The owner accepted all [R-1 answers](review/r1/06_owner_questions.md). The [BUILD_PLAN execution table](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) links the eight scoped briefs. Opus owns SAVE-1/SAVE-2/FAMILY and durable REVEAL/STEAM work; Gemini Pro independently reviews and owns presentation/Steam integration. Gemini Pro Math owns R1-MATH; GPT owns accepted EFFECTS projections and LEARN engine DTO/session seams, Opus development, Sonnet LEARN UI. These assignments supplement existing slices; they do not authorize simultaneous edits to shared files. Stop and hand off per §3.

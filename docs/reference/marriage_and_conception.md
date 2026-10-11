@@ -118,3 +118,7 @@ Seam: Fable builds the two writers and the cross-boundary hop (boundary-sensitiv
 3. **Partner contributes ratings only, not needs/stress** — a `Partner` edge has no Life-sim effect yet (it is not consumed by needs or utility); it exists for the bloodline and for future life-sim coupling. Same "shipped before its live consumer" precedent as `Child` edges.
 4. **`conceive_child` is payload-free** — no twins, no birth-age control, no explicit co-parent selection from JSON. If content later needs them, they are additive fields, not a reshape.
 5. **Names are generated, not authored** — the child's first name comes from `LeagueGenerator`'s pool; surname is the bloodline's. A future naming UI at the birth event is a natural `ChildBornEvent` consumer.
+
+## R-1 superseding partner contract (implementation pending)
+
+[R1-FAMILY](../tasks/R1-FAMILY_partner_invariants.md) requires exclusivity for both partners, deliberate friend/ex/rival reclassification and married-flag/edge consistency even on failed or empty target selection. After L-1 it provides civilian/kin eligibility before L-4; L-5 extends that pool. These accepted requirements supersede the shipped first-pass restrictions above without pretending that v13 already implements them.

@@ -4,9 +4,11 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ---
 
-## Current status (2026-10-10): vision v2 locked, G-2 pitching spec at rev 2, full review (R-1) assigned to GPT 6 Astra Pro
+## Current status (2026-10-10): R-1 recommendations accepted; scoped implementation briefs ready
 
-**The game is defined** in [GAME_VISION.md](GAME_VISION.md) **v2**, which covers everything start to finish, including the lineage, temptation, vice and Trailblazer systems. **The full-project review (R-1)** is reassigned to **GPT 6 Astra Pro** (owner, 2026-10-10; [brief](tasks/R-1_full_review_brief.md)), because Claude Fable 5.1's credit ran out after the G-2 pitching design (now at rev 2, on `main`). Meanwhile Phase G (G-2 Math review, then G-8a) and Phase 13 (13-0 → 13-1) can proceed.
+**Owner follow-up:** all R-1 recommendations are accepted. Canonical specs and [BUILD_PLAN execution order](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) now include eight repair briefs. Runtime fixes are pending their assigned owners and Math gates; no new paid generation or external account action is authorized.
+
+**The game is defined** in [GAME_VISION.md](GAME_VISION.md) v2, with the owner-approved R-1 amendments. R-1 review and decision reconciliation are complete on review/r1; runtime implementation remains pending. Phase G begins with R1-MATH/G-8a acceptance, and Phase 13 with 13-0 then 13-1.
 
 | Phase | Spec | State | Very next action (owner) |
 | :-- | :-- | :-- | :-- |
@@ -41,11 +43,11 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 - the art direction (15a);
 - league, brand and team names;
-- the league_restructure §16 interpretations;
+- final league/brand naming and clearance (league §16 I1–I5 defaults are accepted);
 - the ethnicity list and legend backstories (L-2);
 - the two owner-authored functions, `ChooseFatherFallback` and `DiscoveryChance`;
-- whether to keep the auto-committer (TEAM.md §5);
-- the four remaining Phase G decisions (gameplay_core §6): needs and stress on the field, more person stats on the field, park factors, fielding moments. O1 (skill band) is decided.
+- operational verification that any auto-committer cannot target main/shared branches (policy settled, TEAM.md §5);
+- Math delivery of the accepted gameplay constants/contracts; all five Phase G owner choices are settled by O1 and R-1.
 
 **Gate baseline (2026-10-10):**
 
@@ -95,3 +97,5 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 - **2026-10-09 — Docs reconciliation (docs only, no code/sim touch):** BUILD_PLAN phase statuses corrected (8/9, 10, 11 COMPLETE; Phase 12 + post-12 arcs added), legacy→Gemini role table added, the user's league spec framed as **Phase 13 — League Restructure (PROPOSED)** with its conflicts against shipped code enumerated (tier collapse + save migration, `const` roster sizes vs `MicroGame` stackalloc, HS 1-game/week vs the 26-game calendar, `PromotionManager` → draft, MLB guard re-sanction). Gates not run (no code touched). **Next: repair `sqlite` MCP → MC flake recap/seed → Phase 13 design doc (Gemini 3.1 Pro Math).**
 
 - **2026-10-10 — R-1 review completed (GPT 6 Astra Pro, branch review/r1; baseline 2dec343):** seven reports in [review/r1/00_project_map.md](review/r1/00_project_map.md); checkpoint commits 79f94c9, 95a4d7b, 2d16a84, 16ebe68, 2a9df67. G-1 weights verified; pitching centering/fatigue/waste conflicts and save/relationship/narrative risks documented. Plain factual doc corrections are listed in 01_conflicts; no runtime code changed. Gates: Debug build 0 warnings/errors; Gritty 363/363, CoreLoop 22/22, Needs 117/117, Hustle 95/95, Holdem 63/63, Schema 111/111. MC first 351/352 (failing name not retained), diagnostic repeat 352/352; flake unresolved. No live-save or Godot/export verification. **Next: owner + Claude Opus R-1 triage (17 questions), then 13-0 by Opus with Gemini Pro review; accepted repair proposals need briefs.**
+
+- **2026-10-10 — Owner accepted all R-1 recommendations (GPT 6 Astra Pro, review/r1; docs/contracts only):** recorded Q01–Q17 approval; reconciled vision/G/lineage/draft/NPC PED/cutscene/voice/Steam contracts and workflow. Added eight scoped briefs (SAVE-1/2, FAMILY, MATH, EFFECTS, LEARN, REVEAL, STEAM) with assigned models, dependencies, allowed paths and gates; linked from BUILD_PLAN/TEAM. Park factors/manual fielding deferred beyond 1.0; practice and modifier clarity accepted. Runtime implementation, Math proofs and external auto-committer configuration remain pending. Concrete art/names/legend/function inputs and account prerequisites are still needed. Verification: documentation diff/link checks; no build rerun for documentation-only edits. **Next: 13-0 by Opus (Gemini Pro review), alongside R1-MATH by Gemini Pro Math and G-8a by GPT; SAVE-1 follows.**

@@ -2,7 +2,7 @@
 
 **For:** an outside coding model (GPT Astra 6) working in this repo with no prior context.
 **Phase / slice:** Phase 14, slice 14b ([docs/design/voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) §2, §3.3).
-**Reviewer:** Gemini 3.1 Pro (lead) and the repo owner. Hand back a diff; **do not commit**.
+**Reviewer:** Claude Opus 5.5, matching TEAM.md §2. Commit the slice on its own branch and hand off the commit; no push or merge without owner direction. No new production spend is authorized (R-1 Q15).
 
 ---
 
@@ -128,7 +128,7 @@ Exit codes: `0` success; `1` some clips failed (others succeeded and were saved)
    - Pass 2: apply `loudnorm` with the measured values, targeting **I = −18 LUFS, TP = −1 dBTP, LRA = 11**, downmix to mono, resample to 44.1 kHz, encode **Ogg Vorbis** (`libvorbis`, `-q:a 4`).
    - Measure the final file (integrated LUFS, true peak, duration in ms). If the result is off target by more than ±1 LU, retry mastering once, then mark the clip failed.
 6. **Place:** atomic rename into `<output_dir>/<clip_id>.ogg`. Don't create Godot `.import` files; the Godot editor generates those on next open, and the repo commits them.
-7. **Record:** update the manifest entry (§6). Save the manifest **at least every 25 clips and at run end**, atomically.
+7. **Recover each clip:** persist a per-clip recovery record with hash and validated artifact metadata before final placement; atomically place the file, then atomically update the manifest for that clip. On restart reconcile journal/file/manifest state; completed valid clips must not trigger another paid request. Never wait 25 clips to make progress recoverable. Test interruption at each boundary (R-1 Q15).
 
 After the run, **append** one entry to `docs/legal/elevenlabs_generation_log.md` (create it with a header if missing): UTC timestamp, `--plan-tier` value, model ids used, profile ids with their `origin`, number of clips generated, total characters sent, and the tool's `PIPELINE_VERSION`. **No key, no voice settings dump.** Dry runs and self-tests don't write the log.
 

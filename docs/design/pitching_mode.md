@@ -1,5 +1,7 @@
 # Pitching Mode: "Work the Book"
 
+> **R-1 owner acceptance (2026-10-10):** approved direction is recorded in [accepted decisions](../review/r1/06_owner_questions.md). [R1-MATH](../tasks/R1-MATH_gameplay_contracts.md) must resolve conditional centering, waste observations, count/HBP effects and fatigue before G-2/G-8 engine acceptance. The rev 2 formulas/estimates below remain review inputs where flagged; owner approval is not mathematical validation.
+
 **Status:** DESIGN **rev 2** (G-2). Feasibility review done ([G-2_pitching_mode_review.md](../review/G-2_pitching_mode_review.md)); its blockers B1–B3 and corrections C1–C4 are applied here. Next: Gemini 3.1 Pro Math curve review, then owner acceptance.
 **Author:** Claude Fable 5.1, 2026-10-10 (rev 1, `6ba9055`), from [G-2_pitching_context_pack.md](../tasks/G-2_pitching_context_pack.md) (code facts as of `f983692`). **Rev 2:** Claude Opus 5.5, 2026-10-10. Fable's API credit ran out before its revision pass, so the integration lead applied the review in place (§3.5 is new; §3.3, §4.4, §4.6, §5, §7.2, §8, §9.1, §9.3, §10 and §12 are edited). The design and its decisions are Fable's.
 **Scope:** the player-facing pitching mode for attended games when the avatar pitches. Self-contained: an engineer can implement from this file and Pro Math can tune from the constants table (§8) and the harness (§7).
@@ -521,7 +523,7 @@ Unchanged: `FoulShareOfStrikes = 0.68` self-loops on the strike class. The tilts
 
 ### 9.3 Fatigue within an outing
 
-`PitcherFatigue` semantics are unchanged: effective ratings snapshot at PA start. Its counter `_pitchesThrown` is already a `double` (`AddPitch` adds 1.0, `AddNpcPa` adds 3.9), so rev 2 adds **`AddPitches(double n)`** and the pitching path calls `AddPitches(1 + EffortFatigueGain·effort)` per pitch: 1.4 at max effort, 0.6 at finesse. Rev 1's effort-debt accumulator is dropped (Q2, verified). The neutral and legacy paths keep calling `AddPitch()`. The reveal shows tank remaining as a percentage of capacity (presentation reads it from the snapshot; it never writes).
+**R-1 supersedes the retained fatigue formula:** Math must approve the separate monotone-fatigue contract before implementation; tired weak pitchers cannot improve. Until that contract is signed, this paragraph describes only the existing snapshot/counter seam, not accepted fatigue magnitudes: effective ratings snapshot at PA start. Its counter `_pitchesThrown` is already a `double` (`AddPitch` adds 1.0, `AddNpcPa` adds 3.9), so rev 2 adds **`AddPitches(double n)`** and the pitching path calls `AddPitches(1 + EffortFatigueGain·effort)` per pitch: 1.4 at max effort, 0.6 at finesse. Rev 1's effort-debt accumulator is dropped (Q2, verified). The neutral and legacy paths keep calling `AddPitch()`. The reveal shows tank remaining as a percentage of capacity (presentation reads it from the snapshot; it never writes).
 
 ### 9.4 Shadowed, pulled, absent
 

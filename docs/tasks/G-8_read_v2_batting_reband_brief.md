@@ -1,5 +1,7 @@
 # Task Brief: G-8 "Read v2": Re-band the Batting Model
 
+> **R-1 follow-up:** owner accepted the review recommendations. [R1-MATH](R1-MATH_gameplay_contracts.md) is the technical acceptance gate for shared centering, waste and fatigue contracts; [accepted decisions](../review/r1/06_owner_questions.md) settle product scope. Do not copy the flagged rev 2 equations without that review.
+
 **Model:** GPT 6 Astra Pro (owner assignment, 2026-10-10) · **Reviewers:** Claude Opus 5.5 (design + merge gate), Gemini 3.1 Pro (independent sim-diff review, GEMINI.md), Gemini 3.1 Pro Math (constants) · **Owner gate:** the owner accepts the design; playtest after G-8b.
 **Worktree / branch:** `git worktree add ..\dnd-gpt -b g8/read-v2 g8/read-v2-brief` (TEAM.md §3). Never commit to `main`; never push unless the owner says so.
 

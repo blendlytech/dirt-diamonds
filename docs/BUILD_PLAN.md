@@ -52,10 +52,10 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 - **Attributes defined:** what every rating, person stat and need affects, by how much (computed from the shipped resolver), and how it combines with player skill. **Ratings set the floor and ceiling; skill moves you within it.**
 - **Pitching mode (new):** pitch, target and intent per pitch. Control sets scatter, stuff sets whiff and weak contact, stamina sets how long both hold, and the batter AI reads your tendencies. The human branch only, so `NeutralPitcherPolicy` stays byte-identical.
 - **Batting interface upgrade:** a broadcast-style view with the pitch path, the zone overlay, feedback that teaches, and scouting tendencies.
-- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots (field, clubhouse, office, training room, stands, lot) and their own art. The at-bat shows the home park. Park factors are optional (off at launch unless approved).
+- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots (field, clubhouse, office, training room, stands, lot) and their own art. The at-bat shows the home park. Park factors and manual fielding are deferred beyond 1.0; park art uses reusable kits with distinctive team dressing (R-1 accepted).
 - **Handoff protocol:** every task names its recommended model. Every model stops when its task is done and tells the human which model is suggested next (spec §5, [TEAM.md](TEAM.md) §3).
 
-**Slices:** **G-1** attribute audit (GPT 6 Astra Pro in R-1 → Math) · **G-2** pitching mode design (Fable 5.1; rev 2 applied by Opus) + engine (GPT 6 Astra Pro + Math; TEAM.md §2) · **G-3** at-bat view rebuild (Sonnet) · **G-4** venue catalog + screens (Sonnet + Flash) · **G-5** venue art (owner + AI art, Flash integration; inside 15d) · **G-6** stadium mapping + optional park factors · **G-7** fielding moments (if approved).
+**Slices:** **G-1** attribute audit (GPT 6 Astra Pro in R-1 → Math) · **G-2** pitching mode design (Fable 5.1; rev 2 applied by Opus) + engine (GPT 6 Astra Pro + Math; TEAM.md §2) · **G-3** at-bat view rebuild (Sonnet) · **G-4** venue catalog + screens (Sonnet + Flash) · **G-5** venue art (owner + AI art, Flash integration; inside 15d) · **G-6** stadium mapping (presentation only) · **G-7** fielding moments (deferred beyond 1.0).
 
 **Exit criteria:**
 
@@ -215,3 +215,24 @@ Please ensure the simulation engine strictly adheres to the following constraint
 - **Pitching Philosophy:** Teams heavily rely on their aces, often employing a 2-man rotation and starting their #1 pitcher in every game possible.
 - **The Weekly "Sunday" Roster Lock:** Active and Inactive roster designations must be submitted on Sunday night and are permanently locked for the week.
 - **The Attrition & Forfeit Rule:** If a player is injured during the week, they *cannot* be replaced by an Inactive player. If injuries deplete an Active roster to the point where a team cannot field 9 defensive players and a valid pitcher, that team immediately forfeits the game.
+
+## R-1 accepted execution order (2026-10-10)
+
+The owner accepted every recommendation in [Q01–Q17](review/r1/06_owner_questions.md). Approval settles scope and priorities; it does not certify formulas or mark runtime work done. R-1 contract reconciliation is complete on review/r1; integration remains reviewed, never automatic.
+
+Next: **13-0 (Opus, Gemini Pro review)** and **R1-MATH + G-8a (Math/GPT)** may progress independently; then **R1-SAVE-1 (Opus)** and **13-1 (Opus)** with shared-file coordination. Save recovery is a release gate, not optional polish. Keep one end-to-end saved career ahead of content volume.
+
+| Brief | Owner | Exit/dependency |
+| --- | --- | --- |
+| [R1-SAVE-1](tasks/R1-SAVE-1_save_boundary.md) | Opus; Gemini Pro review | Quiescent saves, all-league flush, dirty retry and database ownership |
+| [R1-SAVE-2](tasks/R1-SAVE-2_recovery_and_rng.md) | Opus; Gemini Pro review | After SAVE-1: durable day/choice/resolution recovery and independent RNG continuation |
+| [R1-FAMILY](tasks/R1-FAMILY_partner_invariants.md) | Opus; Gemini Pro review | Partner invariant repair; after L-1, civilian/kin eligibility must precede L-4 |
+| [R1-MATH](tasks/R1-MATH_gameplay_contracts.md) | Gemini Pro Math; Opus/GPT review | Before G engine: conditional centers, waste, fatigue, O1 and life modifier contracts |
+| [R1-EFFECTS](tasks/R1-EFFECTS_life_projections.md) | GPT projection; Opus development | After Math: capped needs/stress, actual-practice work_ethic |
+| [R1-LEARN](tasks/R1-LEARN_practice_and_modifiers.md) | GPT seam; Sonnet UI | Stable G DTOs: isolated practice, pitch explanation, effective-rating breakdown |
+| [R1-REVEAL](tasks/R1-REVEAL_durable_story_handoff.md) | Opus Core; Gemini Pro presentation | L-3/16b + SAVE-2: durable revelation before succession, playback never gates it |
+| [R1-STEAM](tasks/R1-STEAM_offline_eligibility.md) | Opus durability; Gemini Pro 17a | SAVE-2: unavailable-Steam eligibility and idempotent reconciliation |
+
+14b follows its updated brief (Opus review, per-clip crash recovery); no new generation spend. 15 uses reusable team-dressed kits; approve representative art before volume. G-7/manual fielding and park factors are outside 1.0. Full 13/L/G career, interrupted-save parity, Godot input/UX and exported Windows/Linux checks precede release.
+
+Still required as concrete inputs: owner art/identity/legend/name selections; ChooseFatherFallback and DiscoveryChance intent; commercial/Steam prerequisites. Auto-committer policy prohibits main/shared targets; actual external configuration must be verified separately. These are not reopened yes/no votes on accepted R-1 scope.

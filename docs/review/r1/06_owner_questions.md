@@ -1,8 +1,8 @@
-# R-1 consolidated owner questions
+# R-1 accepted owner decisions
 
-For one owner/Opus triage session. Recommended answers below are proposals, not assumed approvals. Technical arithmetic corrections (G01/G03/G05), deterministic IDs, and confirmed persistence defects need scoped engineering briefs, not a new creative vote. O1's ±.100 band, fatal overdose permission, broadcaster-only voice, v14 clean break, adoption availability and heir eligibility at 19 are already decided.
+**Owner accepted all recommended answers on 2026-10-10: ‘Follow all recommendations in the owner questions document.’** The answers below are now the approved direction, not open votes. This authorizes the repair priorities and scoped implementation briefs, not a claim that runtime changes are already shipped. Technical arithmetic corrections (G01/G03/G05), deterministic IDs, and confirmed persistence defects need scoped engineering briefs, not a new creative vote. O1's ±.100 band, fatal overdose permission, broadcaster-only voice, v14 clean break, adoption availability and heir eligibility at 19 are already decided.
 
-| ID | Decision | Recommended answer / consequence |
+| ID | Decision | Accepted answer / consequence |
 | --- | --- | --- |
 | Q01 | Accept the priorities and additional repair briefs in 04/05? | Yes: save integrity, mathematical contracts, IDs and partner invariants before content scale. Owner/Opus disposition every proposal; defer rather than silently expand scope. |
 | Q02 | Should reloading preserve the same future random continuation, and should pending story choices survive? | Preserve pending choices and completed work unconditionally. Prefer persisted independent RNG streams for fair cold-reload continuity; if rerolls are intentionally allowed, document that separately from fixed-seed harness determinism. |
@@ -22,4 +22,4 @@ For one owner/Opus triage session. Recommended answers below are proposals, not 
 | Q16 | Permit gated Trailblazer pronouns despite the blanket ban in the vision? | Yes, only in route-specific calls. Record the exception in the vision after owner acceptance; generic lines stay neutral. |
 | Q17 | Outstanding owner-authored content/functions and release choices? | Approve ethnicity/legend list and art/names before volume. Supply ChooseFatherFallback and DiscoveryChance intent for Math/Opus to formalize; keep current bounded deterministic interfaces. Resolve auto-committer policy explicitly. Complete Steam/commercial account prerequisites on the owner's schedule. |
 
-After triage, Opus records the decisions in canonical docs and updates affected briefs. This review changes only the listed plain factual errors in active docs; acceptance of this report alone should not be mistaken for acceptance of every proposal.
+The follow-up records these decisions in canonical specs, BUILD_PLAN and TEAM and creates scoped repair briefs. All 14 ranked proposals are accepted for their stated scope, including deferrals. Implementation remains pending its assigned model and technical gates. Q17 approves the selection process, not an unspecified art image, legend list, function formula or account action: those concrete inputs remain outstanding. Auto-committer policy is no main/shared-branch automation; external configuration has not been changed.

@@ -1,6 +1,6 @@
 # R-1 recommended path to 1.0
 
-Keep BUILD_PLAN's major dependency order: 13 establishes the world, L depends on that world, G establishes the attended-game skill loop, 14/15 supply presentation, 16 consumes stable events/assets, 17 proves the release. Change the gates and interleaving: settle mathematical contracts early, make completed play durable, then demonstrate one complete career path before scaling content. Owner/Opus must accept R-1 first; this is a recommendation, not a reassignment.
+Keep BUILD_PLAN's major dependency order: 13 establishes the world, L depends on that world, G establishes the attended-game skill loop, 14/15 supply presentation, 16 consumes stable events/assets, 17 proves the release. Change the gates and interleaving: settle mathematical contracts early, make completed play durable, then demonstrate one complete career path before scaling content. Owner accepted R-1 on 2026-10-10. Contract reconciliation is recorded in the follow-up; implementation/review ownership remains as assigned below and in TEAM. Technical Math acceptance still precedes engine work.
 
 ## Next five slices
 
