@@ -1,6 +1,6 @@
 # R-1 project map
 
-Reviewed baseline: `2dec343`, 2026-10-10. Worktree `C:\Users\DELL\dnd-gpt-review`, branch `review/r1`, created from local main as explicitly requested. All findings refer to that baseline. This branch changes review documents and the progress log only; proposals are not accepted design and no runtime code is changed.
+Reviewed baseline: `2dec343`, 2026-10-10. Worktree `C:\Users\DELL\dnd-gpt-review`, branch `review/r1`, created from local main as explicitly requested. All findings refer to that baseline. This branch adds review documents, updates the progress log and makes the factual documentation corrections listed in 01; proposals are not accepted design and no runtime code is changed.
 
 ## Product and durable flow
 

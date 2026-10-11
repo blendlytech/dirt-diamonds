@@ -77,7 +77,7 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
   - **Reads are decisive.** A perfect read with high contact gives peak damage; a fooled swing gives weak contact or a whiff.
 - **Pitching:** no player-facing mode yet. The career path passes `NeutralPitcherPolicy`, so a pitcher player only watches. An engine seam does exist: `PitchCall` (type + in/out-of-zone target, control-driven execution) and `InteractivePitcherPolicy`, but it is unused and NPC batters stay neutral against it. See [G-2 context pack](../tasks/G-2_pitching_context_pack.md) §6. §2.2 designs the mode.
 - **Background games** use ratings only (no skill), so the league stays calibrated.
-- **How much should skill be worth?** *Proposal (owner to confirm):* for an average-rated avatar, the gap between a poor and an excellent player-skill game should be about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS). It's capped so skill can't make a 30-rated player elite, or ruin an 85.
+- **How much should skill be worth?** *Owner decided 2026-10-10 (§6, O1):* for an average-rated avatar, the gap between a poor and an excellent player-skill game should be about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS). It's capped so skill can't make a 30-rated player elite, or ruin an 85.
   - This is the human branch only. The neutral, calibrated branch never changes (Invariant N in the read-input spec).
   - **Math owns the tuning**, through a scripted-skill harness: a perfect bot, a coin-flip bot and a contrarian bot.
 

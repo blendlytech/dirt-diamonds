@@ -1,6 +1,6 @@
 # R-1 gameplay review / G-1 attribute audit
 
-Baseline: `2dec343`, branch `review/r1`, 2026-10-10. Review and proposals only. G-2/G-8 overlap is explicitly identified below; this report does not redesign either slice. Gameplay checkpoint; verification results are consolidated in `02_code_review.md`.
+Baseline: `2dec343`, branch `review/r1`, 2026-10-10. Review and proposals only. G-2/G-8 overlap is explicitly identified below; this report does not redesign either slice. Completed gameplay audit; verification results are consolidated in `02_code_review.md`.
 
 ## G-1: recomputed rating effects
 
@@ -60,7 +60,7 @@ Baseline: AVG .247253, OBP .315000, SLG .412088, OPS .727088. K .225, BB .090, H
 2. **Needs/stress:** accept a small, capped game-start effect, applied consistently to attended and background avatar games. Preview the cause and magnitude. Healthy/no-effects must be exactly identity. Math chooses constants; avoid adding several overlapping penalties for the same sleepless night.
 3. **Other person stats:** first add work_ethic to development as a bounded modifier of actual practice. Defer person discipline/composure as extra on-field levers until the existing three and needs are legible. Do not add a thirteenth stat merely to name a pressure hook.
 4. **Park factors:** off at launch. Distinct venue art and shared functional screens satisfy the approved identity without another calibration dimension. Arithmetic-mean-one factors alone would not guarantee league-rate neutrality after matchup/PA weighting.
-5. **Fielding moments:** defer from 1.0. They require a new outcome/runner interaction and an explicit exception to listed-position-is-story-only (`GAME_VISION.md:164`), not just another UI prompt. Keep position-specific presentation while leaving fielding outcomes rating-driven.
+5. **Fielding moments:** defer from 1.0. They require a new outcome/runner interaction and an explicit exception to listed-position-is-story-only (`GAME_VISION.md:166`), not just another UI prompt. Keep position-specific presentation while leaving fielding outcomes rating-driven.
 
 ## Gameplay additions proposed for owner/Opus triage
 

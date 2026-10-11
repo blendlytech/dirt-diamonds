@@ -200,16 +200,16 @@ All self-test file output goes to a temp directory, never into `Assets/`.
    | game_open_away | We're on the road tonight, friends, but the Barons brought the bay with them. |
    | late_tension | Two on, two out, late in this one. You can hear the whole park holding its breath. |
    | single | Lined into center — a base hit for the Barons. |
-   | extra_base | Into the gap, and he's digging for two! |
+   | extra_base | Into the gap — a race for second! |
    | home_run | Tell the gulls to duck — that ball is GONE! |
-   | home_run | High, deep, and over the wall. The Bay boys strike! |
+   | home_run | High, deep, and over the wall. The Barons strike! |
    | home_run | Oh, that one's still climbing. Goodbye, baseball! |
-   | grand_slam | Four men home, and the whole bay's on its feet! |
+   | grand_slam | Four runs home, and the whole bay's on its feet! |
    | walk_off | Goodnight, Bayport — the Barons walk it off! |
    | strikeout_ours | Sit down, friend. Sit right down. |
-   | strikeout_theirs | Caught looking. He'll want that one back. |
+   | strikeout_theirs | Caught looking. That one will sting. |
    | routine_out | Bounced to short, and that'll do it. |
-   | run_scores | He's coming around — and the Barons push one across! |
+   | run_scores | Here comes the runner — and the Barons push one across! |
    | lead_change | And just like that, the Barons are back in front! |
    | opponent_big_hit | Well. That one hurt. That one hurt quite a bit. |
    | final_win | Barons win! Ring the harbor bell! |

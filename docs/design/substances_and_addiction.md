@@ -66,7 +66,7 @@ Every on-field number below is a **Pro Math data value** (first-pass magnitudes 
 - **The price (distinct: hidden damage and the hardest addiction):**
   - **The fastest dependence** in the catalog.
   - **Masked injuries compound:** each injury played through adds hidden damage, and when it surfaces it's a **severe** injury with a large `health_ceiling` loss.
-  - **Overdose:** the highest risk, multiplied by alcohol; the result is hospitalization and a long absence. Whether it can be fatal is an owner decision (§9).
+  - **Overdose:** the highest risk, multiplied by alcohol; the result is hospitalization and a long absence. It can be fatal, as already decided in §2.6; Math calibrates the fatal share.
   - **Brutal withdrawal:** sleep, stress and happiness crash for weeks.
   - Without a prescription, possession arrests apply, as with cocaine.
 

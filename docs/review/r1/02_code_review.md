@@ -67,7 +67,7 @@ Needs/utility math has explicit bounds and dedicated neglect/game-duration gates
 
 ### N01 — medium: reload discards pending choices and cooldown history
 
-`Assets/Narrative/Events/EventDispatcher.cs:56-60,131-152,200-223` keeps cooldowns in memory and initializes its first poll without replaying the current day. `EventConsequenceApplier.cs:111-112,146-160` keeps the pending choice in memory and clears it before ApplyChoice succeeds. Save/reopen can erase a presented choice; failed apply also loses the pending handle. Cooldown reset is explicitly disclosed by `docs/reference/marriage_and_conception.md:76`, so it is a shipped limitation, not a newly broken persistence promise. Before 1.0 persist the choice/cooldown state, acknowledge after commit, and test reopen while a choice is visible. Do not assume flags protect every cooldown-only event.
+`Assets/Narrative/Events/EventDispatcher.cs:56-60,131-152,200-223` keeps cooldowns in memory and initializes its first poll without replaying the current day. `EventConsequenceApplier.cs:111-112,146-160` keeps the pending choice in memory and clears it before ApplyChoice succeeds. Save/reopen can erase a presented choice; failed apply also loses the pending handle. Cooldown reset is explicitly disclosed by `docs/reference/marriage_and_conception.md:84`, so it is a shipped limitation, not a newly broken persistence promise. Before 1.0 persist the choice/cooldown state, acknowledge after commit, and test reopen while a choice is visible. Do not assume flags protect every cooldown-only event.
 
 ### N02 — high: a marriage can leave a friend/rival edge and a married flag
 
@@ -79,7 +79,7 @@ The 363 content checks pass; that does not prove every stateful arc across saves
 
 ### E01 — medium: one resolution crosses a durable boundary without a recovery record
 
-`Assets/Economy/HustleService.cs:188-211,230-299` commits the core money/risk result and subsequently applies faction relationship/trust/turf effects. Interruption or a later write failure can preserve money while losing the rest. The session-level single-net-resolution promise in `docs/reference/hustle_minigames_depth_pass.md:31-33` is not an atomic guarantee for all its effects. Add a durable resolution ID and completion/retry semantics; preserve the rule against sharing Life/Baseball transactions. Test interruption between core commit and faction effects. Pure resolver tests (Hustle 95/95, Holdem 63/63) do not cover this service/persistence boundary.
+`Assets/Economy/Hustles/HustleService.cs:188-211,230-299` commits the core money/risk result and subsequently applies faction relationship/trust/turf effects. Interruption or a later write failure can preserve money while losing the rest. The session-level single-net-resolution promise in `docs/reference/hustle_minigames_depth_pass.md:31-33` is not an atomic guarantee for all its effects. Add a durable resolution ID and completion/retry semantics; preserve the rule against sharing Life/Baseball transactions. Test interruption between core commit and faction effects. Pure resolver tests (Hustle 95/95, Holdem 63/63) do not cover this service/persistence boundary.
 
 Pure mini-games are appropriately isolated from UI and SQLite. Existing mean/tail-risk checks should remain separate: an acceptable average can hide an excessive money-printing strategy or a catastrophic tail. Recheck economy progression after the new season lengths change the number of earning days; do not transplant old per-season balances unchanged.
 
