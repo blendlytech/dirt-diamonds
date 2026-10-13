@@ -47,13 +47,16 @@
 | **16a/16b** CutscenePlayer + Director + events | Gemini Pro | Claude Opus | — |
 | **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
 | **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Gemini Pro (wiring) | **Story sign-off** |
-| **G-1** attribute audit (verify gameplay_core §1, settle weights) | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **How much skill is worth** |
-| **G-2** pitching mode design + engine | Claude Opus + Math | Gemini Pro | Playtest |
-| **G-3** at-bat view rebuild (batting + pitching UI) | Claude Sonnet | Gemini Pro | Screenshot review; playtest |
-| **G-4** venue catalog (68) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
-| **G-5** venue art | Owner + AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste** |
-| **G-6** stadium mapping + optional park factors | Claude Sonnet / Math (factors) | Claude Opus | **Park factors yes/no** |
-| **G-7** fielding moments (if approved) | Claude Opus + Claude Sonnet | Gemini Pro | **Approve the feature** |
+| **G-0** arcade feel prototype (batter vs pitcher, placeholder art) | Claude Opus (physics) + Claude Sonnet (scene) | Gemini Pro | **"Hitting is fun"** |
+| **G-1** attribute audit → ratings-to-physics mapping (gameplay_core §1, arcade §4) | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **Default difficulty target** |
+| **G-2** arcade physics core + rules engine + `ArcadeHarness` | Claude Opus | Gemini Pro | — |
+| **G-3** arcade AI + calibration to Phase 13 bands | Claude Opus + Math | Gemini Pro | — |
+| **G-4** integration (`EffectiveRatings`, `Player_Fielding`, flush, autopilot, booth beats) | Claude Opus | Gemini Pro | — |
+| **G-5** arcade presentation + controls + watch & skip | Claude Sonnet | Gemini Pro | Playtest |
+| **G-6** take over the team + baserunning | Claude Sonnet + Claude Opus | Gemini Pro | Playtest |
+| **G-7** venue catalog (68, incl. dimensions) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
+| **G-8** art: 16-bit sprites, field tilesets, venue art | Owner + artist/AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste; art source** |
+| **G-9** tuning + difficulty presets | Gemini Pro Math + Claude Sonnet (data) | Claude Opus | **Sign-off; Classic's fate** |
 | **L-0** docs + no-abortion content fix | Claude Opus | Gemini Pro | **DONE 2026-10-10** |
 | **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus (+ Sonnet: New Career UI) | Gemini Pro | — |
 | **L-2** legends roster, identity catalog, record map | Flash | Claude Opus | **Ethnicity list, legend backstories** |

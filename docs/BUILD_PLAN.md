@@ -45,24 +45,30 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 
 **Exit criteria:** a generated player goes HS → College → drafted → Pro across simulated seasons; all three leagues schedule, play and crown champions; per-tier bands green; the new Pro guard recorded; PipelineHarness population conservation within ±5% over 20 seasons.
 
-## Phase G — Gameplay Core → Milestone MG "Play Ball" (HIGH PRIORITY, owner directive 2026-10-10)
+## Phase G — Gameplay Core → Milestone MG "Play Ball" (HIGH PRIORITY, owner directives 2026-10-10 and 2026-10-13)
 
-**Spec:** [design/gameplay_core.md](design/gameplay_core.md).
+**Specs:** [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) (the attended game) and [design/gameplay_core.md](design/gameplay_core.md) (attributes, venues, handoff protocol).
 
-- **Attributes defined:** what every rating, person stat and need affects, by how much (computed from the shipped resolver), and how it combines with player skill. **Ratings set the floor and ceiling; skill moves you within it.**
-- **Pitching mode (new):** pitch, target and intent per pitch. Control sets scatter, stuff sets whiff and weak contact, stamina sets how long both hold, and the batter AI reads your tendencies. The human branch only, so `NeutralPitcherPolicy` stays byte-identical.
-- **Batting interface upgrade:** a broadcast-style view with the pitch path, the zone overlay, feedback that teaches, and scouting tendencies.
-- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots (field, clubhouse, office, training room, stands, lot) and their own art. The at-bat shows the home park. Park factors are optional (off at launch unless approved).
-- **Handoff protocol:** every task names its recommended model. Every model stops when its task is done and tells the human which model is suggested next (spec §5, [TEAM.md](TEAM.md) §3).
+- **True arcade physics (2026-10-13):** every game your team plays is a real-time, 16-bit arcade ballgame. Bat contact, pitch and ball flight, fielding and baserunning are decided by physics and your input. **Ratings shape the physics:** bat speed, sweet-spot size, pitch speed and break, reach, arm and foot speed.
+- **Control and viewing:** you control your own player, or take over the whole team. Fielding is assisted. Watch the entire game and skip by pitch, at-bat, half-inning, inning, "my next moment" or to the final.
+- **Calibration:** background games stay on the macro sim. AI-vs-AI arcade games must hit the same Phase 13 per-tier bands (`Tools/ArcadeHarness`).
+- **Data:** `Player_Fielding` (defensive position, speed, arm) folds into schema v14.
+- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots, and their own **16-bit field** built from real dimensions. Parks play differently by geometry (owner decision pending).
+- **Handoff protocol:** every task names its recommended model. Every model stops when its task is done and tells the human which model is suggested next (gameplay_core §5, [TEAM.md](TEAM.md) §3).
 
-**Slices:** **G-1** attribute audit (Fable 5.1 in R-1 → Math) · **G-2** pitching mode design + engine (Opus + Math) · **G-3** at-bat view rebuild (Sonnet) · **G-4** venue catalog + screens (Sonnet + Flash) · **G-5** venue art (owner + AI art, Flash integration; inside 15d) · **G-6** stadium mapping + optional park factors · **G-7** fielding moments (if approved).
+**Slices** (full table: arcade §12):
+
+- **G-0** feel prototype (**starts now**, no dependencies) · **G-1** attribute audit → ratings-to-physics mapping (Fable 5.1 in R-1 → Math) · **G-2** physics core + rules (Opus) · **G-3** AI + calibration (Opus + Math; needs 13-3)
+- **G-4** integration, incl. `EffectiveRatings` and `Player_Fielding` (Opus; needs 13-2) · **G-5** arcade presentation + watch & skip (Sonnet) · **G-6** team takeover (Sonnet + Opus)
+- **G-7** venue catalog + screens (Sonnet + Flash) · **G-8** art (owner + artist/AI; inside 15d) · **G-9** tuning + difficulty (Math + Sonnet)
 
 **Exit criteria:**
 
-- A pitcher player pitches every attended game through the new interface.
-- Skill-bot harness spreads land in Math's approved band.
-- Every team resolves a venue with its own art.
-- MC neutral branches are bit-identical.
+- Every attended game plays on the arcade engine. You can bat, pitch, field and run, take over the team, and watch or skip any part.
+- `ArcadeHarness`: per-tier bands green, monotonicity green, and watched = skipped.
+- MC full suite green, with the resolver guard byte-exact.
+- Difficulty presets land in Math's approved spread.
+- Every team resolves a venue and a field with its own art.
 
 ## Phase L — Lineage, Temptation & Vice → Milestone ML "Blood"
 
@@ -154,7 +160,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
                       └──► (14c–14f, 15c–15f run in parallel)
 ```
 
-Phase 13 is the critical path (engine + calibration). **Phase G runs alongside it as a high priority:** G-1 and the G-2 design start now; G-3 and G-4 follow the 15a/15b direction; G-5 is inside 15d. Phase L builds on 13-1 (schema v14) and 13-6 (the pipeline events). Phases 14 and 15 are presentation-only and start alongside 13. Phase 16 needs the voice pipeline and the approved art direction. Phase 17 needs everything.
+Phase 13 is the critical path (engine + calibration). **Phase G runs alongside it as a high priority:** G-0 (the arcade feel prototype) starts now with no dependencies; G-1 and G-2 run alongside 13-0/13-1; G-3 needs 13-3's bands and G-4 needs 13-2; G-5 takes its chrome from 15b; G-7 and G-8 follow 15a/15b, with G-8 inside 15d. Phase L builds on 13-1 (schema v14) and 13-6 (the pipeline events). Phases 14 and 15 are presentation-only and start alongside 13. Phase 16 needs the voice pipeline and the approved art direction. Phase 17 needs everything.
 
 ## Cross-Cutting Discipline (every session)
 

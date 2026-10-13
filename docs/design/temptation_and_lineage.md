@@ -74,6 +74,7 @@ INSERT OR IGNORE INTO Player_Identity (player_id) SELECT player_id FROM Players;
 ```
 
 - The **sim never reads this table.** `listed_position` is a story label (the father's record, articles, announcer roles), not a defensive position. Calibration stays inert.
+- **The on-field position is separate (arcade decision, 2026-10-13).** The arcade engine needs a real defensive position. It lives in the baseball table `Player_Fielding` ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §8.1), which `CreateAvatar` seeds from the New Career pick in the same step as this row. SP and RP map to `P` plus `Pitcher_Roles`. The sim reads only `Player_Fielding`, so this table stays story-only.
 - The backfill gives every existing row `gender = 0`: the shipped league is all-male, and so are all generated players (D10's premise).
 - Children get a seeded gender roll at `ConceiveChild` from a `Split()` of `CareerManager._rng`, so no existing draw moves.
 

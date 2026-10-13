@@ -1,6 +1,6 @@
 # Dirt & Diamonds — Game Vision (v2)
 
-**Status:** canonical. **v2, 2026-10-10**, owner-directed; it replaces v1 (2026-10-09). This is the single source of truth for *what the game is*. If any other doc disagrees with it, this one wins, and the other doc is wrong and gets fixed. A change of direction is made **here first**, then flows to the specs.
+**Status:** canonical. **v2.1, 2026-10-13**, owner-directed. v2.1 changes one thing, recorded in §3 and §5: **attended games are true arcade physics** (owner, 2026-10-13). Otherwise it's v2 (2026-10-10), which replaced v1 (2026-10-09). This is the single source of truth for *what the game is*. If any other doc disagrees with it, this one wins, and the other doc is wrong and gets fixed. A change of direction is made **here first**, then flows to the specs.
 
 **Read next:** [BUILD_PLAN.md](BUILD_PLAN.md) (how we get there), [TEAM.md](TEAM.md) (who does what), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Detailed specs are linked from each section.
 
@@ -35,14 +35,14 @@ When your career ends, a willing child can pick up the bat, and the family carri
 ## 3. Design pillars
 
 1. **The Pipeline.** Progression is strictly High School → College → the Draft → Pro. No minor leagues. Every rung is a real league with real rules, standings and playoffs.
-2. **Play, don't watch.** The at-bat is the heart of the game. **Batting and pitching are both skill-based**: ratings set the floor and the ceiling, and your reads, pitch choices and locations decide where you land. Every team has its own ballpark or campus you can walk around ([design/gameplay_core.md](design/gameplay_core.md)). This is a **high priority**.
+2. **Play it for real.** Your team's games are a **real-time arcade ballgame with true physics**, in a 16-bit style (owner, 2026-10-13). Bat contact, pitch and ball flight, fielding and baserunning are decided by physics and your hands, not by dice tables. **Ratings shape the physics:** they set what your player *can* do (bat speed, pitch speed and break, reach, arm, foot speed), and your timing and aim decide what *does* happen. You control your own player, or flip a toggle to take over the whole team. You can watch the entire game and skip ahead by pitch, at-bat, half-inning, inning, "my next moment" or to the final. Every team has its own ballpark or campus, and its real dimensions shape how it plays. Spec: [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md), under the Phase G umbrella [design/gameplay_core.md](design/gameplay_core.md). This is a **high priority**.
 3. **The Dirt.** Life pushes back. Needs decay, rent comes due, and the easy money is illegal. Crime and vice are real systems with real teeth: arrest, injury, suspension, permanent bans, death.
 4. **Every edge has a price.** Affairs, steroids and painkillers really do make you better, dramatically and immediately. Every one of them also has a cost that's real, that escalates, and that's different for each vice.
 5. **The Secret.** Lineage is a mystery you live inside: your hidden father, and the hidden children you may leave behind. The truth surfaces through play, not menus.
 6. **The Broadcast.** Baseball should *sound* like baseball. Every College and Pro team has a signature announcer with taglines; HS games get local-radio voices.
 7. **The Phone.** Story arrives the way it does in real life: threaded texts from coaches, partners, family, an unknown number and shady contacts. Your choices are replies. The press reaches you there too.
 8. **The Legacy.** Genetics, upbringing and baseball interest pass to heirs. The dynasty is the long game.
-9. **Simulation honesty.** Behind the presentation the numbers are calibrated: Pro ball plays to real MLB norms, and every system is proven by headless test harnesses.
+9. **Simulation honesty.** Behind the presentation the numbers are calibrated: Pro ball plays to real MLB norms, and every system is proven by headless test harnesses. That includes the arcade engine: AI-vs-AI physics games must land in the same per-tier bands as the background sim, so your team's numbers compare fairly with the league's.
 
 ## 4. The league universe
 
@@ -64,11 +64,13 @@ Pro-only rules: the **Sunday roster lock** (designations fixed for the week) and
 
 - **Daily:** split 24 hours across Sleep / School / Practice / Game / Work / Free, then watch the real-time clock run. Pause, slow it down or speed it up any time.
 - **Weekly:** HS and College play one game a week, and the week builds toward it. Pro plays about three a week and sets rosters on Sunday night.
-- **Game day:** you arrive at **your team's own venue** (an interactive stadium or school screen with its own art: field, clubhouse, coach's office, training room, stands). Attended games run through the interactive at-bat view, called live by your announcer:
-  - **Batting:** read the pitch type and location, and set your approach.
-  - **Pitching:** choose the pitch, the target and the intent.
-  - Every other game simulates in the background from ratings alone.
-- **Attributes:** every rating, person stat and need has a defined effect and size, and a defined way it combines with your skill. Ratings set the floor and ceiling; skill moves you within it ([design/gameplay_core.md](design/gameplay_core.md) §1).
+- **Game day:** you arrive at **your team's own venue** (an interactive stadium or school screen with its own art: field, clubhouse, coach's office, training room, stands). Then you **play the game** on the 16-bit arcade field, called live by your announcer:
+  - **Batting:** time the swing and place the contact cursor. Contact sets the cursor's size, power sets the bat speed, and discipline sets how early you read the pitch.
+  - **Pitching:** pick the pitch, aim it, hit the release meter, and steer the break. Control sets the meter and scatter, stuff and the arsenal set speed and movement, and stamina sets how long it all holds.
+  - **Fielding and running (assisted):** your fielder breaks on the ball; you steer, dive, catch and choose the throw.
+  - **Take over the team** at any time, or **watch and skip** the parts you don't play.
+  - Every other game in the league simulates in the background from ratings alone.
+- **Attributes:** every rating, person stat and need has a defined effect and size. On the arcade field, ratings become physical capabilities, and skill decides the result ([design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) §4). In background games they drive the calibrated macro sim ([design/gameplay_core.md](design/gameplay_core.md) §1). Difficulty presets tune only the human's assists.
 - **Off the field:** hustles (Legal Work, Narcotics, Fencing, Robbery, Texas Hold'em), the household, school, dating, marriage, children, temptation, substances. All of it feeds needs, money, stress, person stats and narrative flags.
 - **The phone:** threads from every person in your life, the Events feed, the bank, the marketplace, the calendar, and a **News** tab of press clippings.
 - **Seasonal:** playoffs, then recruiting (HS seniors) or the Draft (College), then development and aging, then the next season.
@@ -162,8 +164,8 @@ Full design: [design/temptation_and_lineage.md](design/temptation_and_lineage.md
 - **No runtime AI generation.** Voice and art are generated during development, human-reviewed, and shipped as files. Keys never enter the repo or the build.
 - **No real people, teams or broadcasters.** Everything is fictional. No voice clones or imitations.
 - **No spoken player names, and no avatar pronouns in pre-recorded calls.**
-- **Presentation never drives simulation.** Announcers, cutscenes, the phone and press consume events and never write state. The baseball sim stays deterministic and calibrated.
-- **Gender, ethnicity and listed position never touch the sim.**
+- **Presentation never drives simulation.** Announcers, cutscenes, the phone and press consume events and never write state. The baseball sim stays deterministic and calibrated: the arcade engine is seeded and deterministic too, so a game you skip through is exactly the game you would have watched.
+- **Gender, ethnicity and listed position never touch the sim.** Your on-field position is a separate baseball record (`Player_Fielding`), seeded from your New Career pick. The sim reads only that.
 - **Adults-only rewards.** Temptation and substance boosts require 18+ and College or above.
 - **Nothing sexual is explicit at any age.** It's always off-screen and implied.
 - **Never abortion.** Every pregnancy ends in a birth, and adoption is always offered.
@@ -183,7 +185,7 @@ Full design: [design/temptation_and_lineage.md](design/temptation_and_lineage.md
   - The **6-tier league** is rebuilt in Phase 13.
   - The **steroid multiplier** exists but has no trigger.
   - Avatar creation has **no gender, ethnicity or position**, and partners come from the league pool.
-  - **A pitcher player can't pitch yet:** the attended game auto-pitches, and there's no interface.
+  - **Attended games still run on the dice-table micro sim** with the "Read the Pitch" batting view. A pitcher player can't pitch yet, and nobody fields. The arcade engine replaces all of that in Phase G.
   - **Needs and stress never touch the field**, and only 3 of the 12 person stats do.
   - There are no venue screens. Only 2 HS fields have art.
   - The "place for adoption" choice doesn't create a child yet.

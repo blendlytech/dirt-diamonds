@@ -1,13 +1,10 @@
 # Arcade Baseball Overhaul — real-time physics, 16-bit presentation, watch & skip
 
-**Status:** ⚠ **PROPOSAL — NOT ADOPTED. Do not build from this doc until the owner decides.** Author: Claude Opus 5.5 (2026-10-09), spec only, no code. It was written *before* GAME_VISION v2 and the Oct-10 docs reorganization, and it **conflicts** with the current authority:
-- [gameplay_core.md](gameplay_core.md) §2 and GEMINI.md §11 keep the outcome-table sim and put player skill on a human branch only. This doc instead replaces attended games with real-time physics.
-- It was written against the old 6-tier league (MLB, minors). Phase 13 ([league_restructure.md](league_restructure.md)) is now 3 tiers (HS/College/Pro), with 7-inning HS games, which answers §13 Q1.
-- Its "schema v14 `Player_Fielding`" collides with v14 (Phase 13) and v15 (Phase L). It would be a later version folded into those plans.
+**Status:** **ADOPTED by the owner 2026-10-13.** Active engine spec for **Phase G**. Design only, no code yet. Author: Claude Opus 5.5 (first draft 2026-10-09; reconciled 2026-10-13 with GAME_VISION v2.1, the 3-tier league and the v14/v15 schema plan).
+**Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 pillar 2 and §5. [gameplay_core.md](gameplay_core.md) remains the Phase G umbrella (attributes, venues, handoff protocol). **This doc owns the attended game:** physics, controls, AI, watch/skip, the arcade calibration contract and the ballgame's look.
+**Supersedes, once G-4 ships:** the attended-game input and presentation path, i.e. "Read the Pitch" ([at_bat_read_input_model.md](../reference/at_bat_read_input_model.md)), [at_bat_presentation.md](../reference/at_bat_presentation.md) and `AtBatView`. It also replaces gameplay_core's former §2.2 pitching mode and §2.3 fielding moments. Those reference docs move to `archive/` when G-4 lands.
 
-**Owner decision needed:** adopt the arcade direction (record it in GAME_VISION, then reconcile gameplay_core.md and this doc), or archive this doc. Until then, **gameplay_core.md is authoritative.** If adopted, it supersedes the attended-game *presentation and input* path (`AtBatView`, "Read the Pitch"); the macro league sim is untouched.
-
-**Locked by the user (2026-10-09):**
+**Locked by the owner (2026-10-09, confirmed 2026-10-13):**
 
 | Decision | Choice |
 | --- | --- |
@@ -22,15 +19,15 @@
 
 ## 1. Scope boundary — what changes and what doesn't
 
-**Changes:** every *attended* game (the one game per day the avatar's team plays — `CareerManager.PlayPendingGame`) is played by a new real-time arcade engine instead of `MicroGame.PlayGame`. That engine produces the box score.
+**Changes:** every *attended* game is played by a new real-time arcade engine instead of `MicroGame.PlayGame`, and that engine produces the box score. An attended game is any game the avatar's team plays: `CareerManager.PlayPendingGame`, one a week in HS and College, about three a week across the 64-game Pro season.
 
 **Does not change:**
 
-- **Every other league game** stays on the macro Monte Carlo (`LeagueSimulator`). A season is thousands of games; they can't be physically simulated, and nobody watches them. The MLB bit-identity guard and all macro bands stay exactly as they are.
-- `MicroGame` is **kept**, not deleted: it remains the harness subject (MC suites 5–7 stay green and meaningful) and becomes the **"Classic sim" fallback** behind a setting until the arcade engine is proven (§11).
-- Life sim, narrative, hustles, economy, Steam — untouched except where they read game results, which arrive through the same flush they do today.
+- **Every other league game** stays on the macro Monte Carlo (`LeagueSimulator`). That covers 68 teams across three tiers. Those games can't be physically simulated at that volume, and nobody watches them. The resolver guard and all macro bands stay exactly as Phase 13 sets them.
+- `MicroGame` is **kept**, not deleted. It remains the harness subject, so the MC suites stay green and meaningful. It also becomes the **"Classic sim" fallback** behind a setting until the arcade engine is proven (§11).
+- Life sim, narrative, hustles, economy, Steam, broadcast and cutscenes stay untouched, except where they read game results or at-bat beats. Results arrive through the same flush they do today. Beats arrive through the same vocabulary the booth already consumes (§7.6).
 
-**The one hard consequence to accept:** the avatar's team's games now come from a *different stat-generating process* than the rest of the league. Promotion scores are **league-relative** (`PromotionScore.BatterPerformance` divides by league OPS, `PitcherPerformance` by league ERA), so AI-vs-AI physics games must land in the same per-tier bands as the macro sim or every teammate's numbers — and the league tables — drift. §9 is the contract that prevents that, and it is the single biggest risk in this overhaul.
+**The one hard consequence to accept:** the avatar's team's games now come from a *different stat-generating process* than the rest of the league. Everything that judges a player is **league-relative**: recruiting interest, the College National Ranking, draft stock, leaders, awards, and the record chase against the father's mark. So AI-vs-AI physics games must land in the same per-tier bands as the macro sim, or every teammate's numbers drift, and so do the league tables. §9 is the contract that prevents that, and it is the single biggest risk in this overhaul.
 
 ---
 
@@ -95,7 +92,7 @@ This is what makes it *arcade physics* rather than a dice roll in costume: a bal
 
 ### 3.3 Batted-ball flight and ground play
 
-Same drag + Magnus integrator as the pitch. Ground contact: coefficient of restitution + rolling friction, both **per surface** (grass, dirt infield, warning track, turf at higher tiers). Fences have height and distance per park (§10.4). Foul lines decide fair/foul at the first bounce or the bag; foul poles decide home runs.
+Same drag + Magnus integrator as the pitch. Ground contact: coefficient of restitution + rolling friction, both **per surface** (grass, dirt infield, warning track, turf at some parks). Fences have height and distance per park, read from that team's entry in `Assets/Data/Venues/venues.json` (gameplay_core §3.1, which already carries LF/LCF/CF/RCF/RF distances and wall heights). Foul lines decide fair/foul at the first bounce or the bag; foul poles decide home runs.
 
 ### 3.4 Fielders
 
@@ -110,7 +107,7 @@ Running speed from **Speed**; turns cost time at each base; slides at the bag. R
 
 ### 3.6 Rules engine
 
-Counts, outs, innings and the game end mirror `MicroGame`'s rules exactly (9 innings, home half skipped when leading after 8½, extras while tied) so box scores are comparable. On top of that, physics produces things the outcome tables folded away: force and tag outs, double plays, sacrifice flies, errors, reaching on error, foul outs, ground-rule doubles, hit-by-pitch. §8.3 says how they map into the existing stat columns.
+Counts, outs, innings and the game end mirror the macro sim's rules exactly, so box scores are comparable: regulation innings from `TierRules.RegulationInnings(tier)` (**HS 7, College and Pro 9**, Phase 13), the home half skipped when leading after the top of the last regulation inning, extras while tied, and the HS mercy rule if the owner turns it on (league_restructure open item). On top of that, physics produces things the outcome tables folded away: force and tag outs, double plays, sacrifice flies, errors, reaching on error, foul outs, ground-rule doubles, hit-by-pitch. §8.3 says how they map into the existing stat columns.
 
 **Out of scope for v1** (see §13): stolen bases and pickoffs, bunts, the infield-fly rule, balks, interference, ejections.
 
@@ -134,11 +131,11 @@ Counts, outs, innings and the game end mirror `MicroGame`'s rules exactly (9 inn
 | **`arm`** | **NEW** | Throw velocity (fielders, catcher pop time) |
 | **`primary_position`** | **NEW** | Where the player stands; which fielding role the AI plays |
 
-Every tier keeps its own feel through **per-tier physics ranges** (e.g. HS fastball 70–85 mph, MLB 88–101 mph), driven by the tier rating deltas already applied at roster load (`TierRatingDeltas`), plus the park (§10.4).
+Every tier keeps its own feel through **per-tier physics ranges** (e.g. HS fastball 70–85 mph, College 80–94, Pro 88–101), driven by the tier rating deltas already applied at roster load (`TierRatingDeltas`, values set in Phase 13), plus the park's real dimensions (§10.4). The mph ranges are first-pass *proposals* for Gemini Pro Math.
 
 ### 4.2 One modifier stack for both engines
 
-`MicroGame` currently builds effective ratings in two places: tier deltas (`TierEffects`) and person levers (`PersonEffects`) are baked at roster load in `Initialize`; then per PA it applies the equipment boost (`EquipmentEffects`) → rust dock (`ApplyRust`) → rivalry boost, live pitcher fatigue (`PitcherFatigue.EffectiveRatings`), and replacement call-ups for absent players (`IsShadowed`). The PED ×1.5 power multiplier is applied inside `AtBatResolver` off the `PedActive` flag. **Extract all of that into `EffectiveRatings`** (exposing the PED flag so the arcade applies the same ×1.5 to bat speed) and call it from both engines. It's a pure refactor of `MicroGame` — the MC bit-identity guard proves it changed nothing — and afterwards gear, rivalries, rust, absences, PEDs and fatigue all affect arcade games for free and can never drift between engines.
+`MicroGame` currently builds effective ratings in two places: tier deltas (`TierEffects`) and person levers (`PersonEffects`) are baked at roster load in `Initialize`; then per PA it applies the equipment boost (`EquipmentEffects`) → rust dock (`ApplyRust`) → rivalry boost, live pitcher fatigue (`PitcherFatigue.EffectiveRatings`), and replacement call-ups for absent players (`IsShadowed`). Phase 13 removes call-ups (absent players are never replaced; a short team forfeits), so `EffectiveRatings` drops that step. The PED ×1.5 power multiplier is applied inside `AtBatResolver` off the `PedActive` flag. **Extract all of that into `EffectiveRatings`**, together with Phase L's `Active_Effects` and clutch stages. Expose the PED flag so the arcade applies the same ×1.5 to bat speed. Call it from all three engines (macro, `MicroGame`, arcade). It's a pure refactor, and the MC resolver guard proves it changed nothing. Afterwards gear, rivalries, rust, person stats, vices, PEDs and fatigue all affect arcade games for free and can never drift between engines.
 
 ---
 
@@ -220,130 +217,205 @@ Skipping runs the **same simulation** headless at maximum rate — no shortcut r
 
 A running play-by-play log, a retro line score (inning-by-inning runs, R/H/E), and a full box score panel. During a skip, the log fills in as the innings pass so you can see what you skipped.
 
+
 ### 7.5 Interaction with the game clock
 
-The attended game runs inside the schedule's Game block. The real-time clock (Slice G) **soft-pauses for the whole game** (the hustle-session precedent), and the block's in-game hours are consumed in full when the game ends — however long you spent watching.
+The attended game runs inside the schedule's Game block. The real-time clock **soft-pauses for the whole game**, following the hustle-session precedent. The block's in-game hours are consumed in full when the game ends, however long you spent watching.
+
+### 7.6 Broadcast and cutscenes (Phases 14 and 16)
+
+The booth keeps its contract ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §8): it consumes beats and a game-context DTO, never the sim directly. `ArcadeGame` emits the same beat vocabulary the shipped sequencer does:
+
+- `PitchReveal`, per pitch;
+- `PaReveal`, per PA, carrying the folded `PaOutcome`;
+- game start, half-inning change and game end;
+- the context DTO: score, inning, outs, runners, and which side is "ours".
+
+Physics also produces **real signals the tables never had**, so the voice spec's "real signal only" rule allows new call categories: exit velocity and distance on a home run, a diving catch, a double play, an outfield assist at the plate, a walk-off. These ride on `PaReveal` as an additive `PlayDetail` field. Phase 14 consumers that ignore it are unaffected.
+
+- **★ big plays** still raise `BigPlay(kind, contextDto, callClipId)` to the `CutsceneDirector`. `ArcadeGame` supplies richer `kind` values. The motion-comic cutscene stays the default for ★ plays. The in-engine **instant replay** (§10.5) is a separate button, offered on any play.
+- **During a skip** the booth is silent and no cutscenes fire. When play resumes, the booth may play one "here's where we stand" call (its existing inning-change category).
+- **RNG boundary:** the arcade sim draws only from its own `RngState` stream. The booth and replay camera use presentation RNG, so watching, skipping and booth variety can never change a result.
 
 ---
 
 ## 8. Data
 
-### 8.1 Schema v14 (additive)
+### 8.1 Schema: fold into v14
 
-New table **`Player_Fielding`** (`player_id` PK/FK, `primary_position` C/1B/2B/3B/SS/LF/CF/RF/DH/P, `speed` 0–100, `arm` 0–100), the additive one-table-per-version pattern of `Pitcher_Roles` / `Pitch_Arsenals`. Migration backfill: assign positions per team from current lineup order (8 fielders + DH — lineups are already 9 position players with pitchers separate), and derive `speed` / `arm` from existing ratings with seeded variation so migrated saves get plausible, non-uniform players. `user_version` 13 → 14; validated through `validate_sqlite_schema` before any C# touches it.
+Phase 13's v14 is a pre-1.0 clean break that hasn't been built yet (13-1). **Fold one table into it**, so there's no backfill and no extra version:
+
+**`Player_Fielding`**, with these columns:
+
+- `player_id`: PK/FK.
+- `defensive_position`: one of `P, C, 1B, 2B, 3B, SS, LF, CF, RF`.
+- `secondary_position`: nullable.
+- `speed`: 0–100.
+- `arm`: 0–100.
+
+Every player gets a row, pitchers included (`P`). Pitchers field comebackers and throw to bases. Appendix A world-gen generates the rows. If 13-1 has already merged when G-4 starts, the table ships as the next free version after v15 instead, since pre-1.0 saves are disposable either way. Validate through `validate_sqlite_schema` before any C# touches it.
+
+**The identity invariant holds** (GAME_VISION §12, temptation_and_lineage §3.1). `Player_Identity.listed_position` (v15, Phase L) stays story-only, and the sim never reads it. At New Career, L-1's `CreateAvatar` writes the chosen position **twice**, once into each table:
+
+- the story label into `Player_Identity`;
+- the matching defensive assignment into `Player_Fielding`. SP and RP map to `P` plus the existing `Pitcher_Roles` row.
+
+After that the two are independent. The sim reads only `Player_Fielding`. Mid-career position changes are out of scope for v1.
+
+**Lineups** stay 9 position players with the pitcher not batting. That's a universal DH, matching the shipped sim and Phase 13's 9-starter active roster. Lineup construction (13-2/13-5) must now field a **legal defense**: one player at each of the 8 field positions plus a catcher. A player out of position plays with reduced reach and reaction (§3.4). The macro sim's team-defense byte is unchanged.
 
 ### 8.2 Ripples of the new ratings
 
-`LeagueGenerator` (generate them), `HeirGenetics` (inherit them), `DevelopmentManager` / decline curves (speed peaks early and declines first; arm holds longer), `BackstoryGenerator`, the new-game screen (**pick a position**, not just hitter/pitcher), the scouting card (show them). Each is its own small slice in §12.
+| System | Change | Slice |
+| --- | --- | --- |
+| World-gen (league_restructure Appendix A) | Positions across each roster (≥ 1 per position, 2 catchers on Pro rosters, utility players), plus speed and arm | 13-1 / G-4 |
+| `HeirGenetics` | Inherit speed and arm | G-4 |
+| `DevelopmentManager` / decline curves | Speed peaks early and declines first; arm holds longer (Math values) | G-4 |
+| New Career | The position pick (already in L-1) also seeds `Player_Fielding` | L-1 |
+| Scouting card | Show position, speed and arm | G-5 |
 
 ### 8.3 Stats
 
-`ArcadeGame` accumulates into the **same** `BattingLine` / `PitchingLine` shapes and flushes through the shared path — additive season upserts, `Game_Logs` play-by-play, PED post-game costs — in its own batch, so the normalizer, promotion, development, achievements and the dashboard keep working untouched. Richer events fold into existing columns the way `PaOutcome` already folds them: reached-on-error and sacrifices → Out, HBP → Walk. Fielding, error and stolen-base columns are a later optional schema slice.
+`ArcadeGame` accumulates into the **same** `BattingLine` / `PitchingLine` shapes. It flushes through the shared path in its own batch: additive season upserts, `Game_Logs` play-by-play, and PED post-game costs. So everything downstream keeps working untouched: the normalizer, recruiting, the National Ranking, the draft, development, achievements, the record chase and the dashboard.
+
+Richer events fold into existing columns the way `PaOutcome` already folds them: reached-on-error and sacrifices → Out, HBP → Walk. Fielding, error and stolen-base columns are a later, optional schema slice.
 
 ---
 
 ## 9. Calibration contract — the critical gate
 
-**Why it's mandatory:** promotion and the league tables compare your team's numbers to everyone else's (§1). If AI-vs-AI physics produced, say, a .290 league average while the macro sim produces .247, every hitter on your team would look like a prospect.
+**Why it's mandatory:** recruiting, the ranking, the draft and the league tables all compare your team's numbers to everyone else's (§1). Suppose AI-vs-AI physics produced a .290 league average while the macro sim produced .247. Every hitter on your team would then look like a top prospect.
 
-**`ArcadeHarness`** (headless, plain .NET, the `MonteCarloHarness` pattern) plays thousands of AI-vs-AI arcade games and asserts:
+**`Tools/ArcadeHarness`** is headless, plain .NET, and follows the `MonteCarloHarness` pattern. It plays thousands of AI-vs-AI arcade games and asserts:
 
-1. At all-50 ratings, the league line matches the macro baselines in `AtBatResolver` (.247/.315/.412; K%, BB% and HR rates from the same tables) within the MC harness's tolerances.
-2. Per-tier bands match the macro per-tier bands (`tier_league_environments.md`).
-3. **Rating monotonicity:** more Power → more HR; more Contact → fewer K; more Control → fewer BB; more Fielding/Speed → lower BABIP against.
-4. Batted-ball sanity: ground-ball / fly-ball / line-drive mix, BABIP, and the EV–launch-angle distribution against MLB shapes.
-5. Rules integrity: no impossible base-out states, runs = runners crossing home, three outs per half, determinism (same seed + inputs → byte-identical box score).
+1. **Pro at all-50 ratings** matches the macro baselines in `AtBatResolver` (.247/.315/.412, with K%, BB% and HR/PA from the same tables) within the MC harness's tolerances.
+2. **Per-tier bands** match the Phase 13 bands for HS, College and Pro ([league_restructure.md](league_restructure.md) §11), with runs measured per 9 innings so 7-inning HS games compare cleanly.
+3. **Rating monotonicity:** more Power → more HR; more Contact → fewer K; more Control → fewer BB; more Fielding or Speed → lower BABIP against.
+4. **Batted-ball sanity:** the ground-ball / fly-ball / line-drive mix, BABIP, and the exit-velocity × launch-angle distribution against MLB shapes.
+5. **Rules integrity:** no impossible base-out states, runs = runners crossing home, three outs per half, regulation innings per tier.
+6. **Determinism:** the same seed + inputs → a byte-identical box score, and a watched game = the same game skipped.
 
-Tuning happens **only** through the AI noise tables and physics constants (§6), as data edits. Re-run after any arcade-sim touch — the same mandate `run_monte_carlo_batch` carries for `Assets/Simulation/`.
+**Ownership:** Gemini 3.1 Pro Math owns the noise tables and physics constants (TEAM.md). Tuning happens **only** through them, as data edits. The harness re-runs after any change under `Assets/Simulation/Arcade/`, the same mandate `run_monte_carlo_batch` carries for the rest of `Assets/Simulation/`. If a change touches the shared `EffectiveRatings` stack, both harnesses run.
 
-**The human is deliberately uncalibrated.** A skilled player can beat their ratings — that's the point of the choice. Difficulty presets (§5.6) and higher-tier pitching (faster, nastier) keep it a challenge, and promotion still requires sustained league-relative performance.
+**The human is deliberately not calibrated to the league.** A skilled player can beat their ratings; that's the point of the choice. What *is* tuned is **difficulty** (§5.6). The scripted-skill bot harness from gameplay_core §1.4 carries over with three bots: perfect, average and poor. At the default difficulty, Math sets the targets: the average bot ≈ the ratings-only line, and the perfect and poor bots ≈ ±30 rating points. That's gameplay_core's "about a 40-to-70 gap" proposal, now owned by the difficulty presets. Higher tiers keep it a challenge, because pitches are faster and nastier.
 
 ---
 
 ## 10. Presentation — 16-bit
 
+### 10.0 How it fits Phase 15
+
+The **field itself** is the one pixel-art surface in the game. Everything around it follows the Phase 15 direction the owner picks at 15a, built from the 15b design system: the scorebug, lower-thirds, subtitle strip and box score. Under the recommended "Two Worlds" direction ([visual_redesign.md](visual_redesign.md) §2), the 16-bit ballgame sits inside the DIAMOND broadcast package. Tier progression lines up on both sides of the frame: the HS local stream with a weathered pixel field, a regional College broadcast, then the Pro prime-time package with a full stadium.
+
 ### 10.1 Resolution and scaling
 
-The ballgame renders in a **320×180 SubViewport** with nearest-neighbor filtering, integer-scaled to the window: ×4 = 1280×720 (Steam Deck width), ×6 = 1080p, ×8 = 1440p, ×12 = 4K. The rest of the game (phone, dashboard) stays at native resolution — only the diamond is pixel art.
+The ballgame renders in a **320×180 SubViewport** with nearest-neighbor filtering, integer-scaled to the window: ×4 = 1280×720 (Steam Deck width), ×6 = 1080p, ×8 = 1440p, ×12 = 4K. The surrounding UI stays at native resolution.
 
 ### 10.2 Views
 
-- **Pitch view:** behind home plate looking out, pitcher at the top and batter at the bottom (the RBI framing), with depth conveyed by sprite scaling and a ball **shadow**.
-- **Field view:** on contact, a smooth pan to an elevated angle that follows the ball. Ball height reads from shadow separation. Fielders run in eight directions. A small radar inset shows all runners.
-- **Scoreboard strip:** count, outs, bases diamond, inning, line score — styled like a stadium board.
+- **Pitch view:** from behind home plate looking out, with the pitcher at the top and the batter at the bottom (the RBI framing). Depth comes from sprite scaling and a ball **shadow**.
+- **Field view:** on contact, the camera pans smoothly to an elevated angle that follows the ball. Ball height reads from the shadow's separation. Fielders run in eight directions. A small radar inset shows all the runners.
+- **Scoreboard:** count, outs, bases diamond, inning and line score, in the 15b scorebug component.
 
 ### 10.3 Team colors for free
 
-One sprite set, **palette-swapped by shader** per team (jersey, cap, trim) plus per-player skin tones. High-school teams already carry primary/secondary/accent colors in `schools.json`; the `Teams` table has no color columns, so college/minor/MLB teams need colors added — generated by `LeagueGenerator` into a small team-colors table or a data file alongside `schools.json` (folded into slice A3). Every team in every tier then gets its own look without drawing it.
+There's one sprite set, **palette-swapped by shader** per team (jersey, cap, trim), plus per-player skin tones. Team primary/secondary/accent colors come from the venue catalog and team seed data (gameplay_core §3.1; Flash owns team seed data). All 68 teams get their own look without anyone drawing it.
 
-### 10.4 Parks that grow with your career
+### 10.4 Every park is its own field
 
-Field tilesets per tier: a weathered high-school field (chain-link, bleachers, odd dimensions) → college → minor-league parks → MLB stadiums with full crowds. Fence distance/height and surface per park feed the physics (§3.3). Night games under lights. Crowd density scales with tier and the game's stakes.
+Each of the 68 venues gets a field tileset built from its catalog entry: dimensions, wall heights, surface, and one or two signature features such as a short porch, an ivy wall or a harbor beyond right. Tier sets the base kit:
+
+- **HS:** chain-link, bleachers, odd dimensions.
+- **College:** a real ballpark with a modest crowd.
+- **Pro:** a full stadium, with night games under lights.
+
+Crowd density scales with tier and the game's stakes. Dimensions feed the physics directly, so parks *play* differently by geometry (§13 Q5).
 
 ### 10.5 Game feel ("better than RBI")
 
-- Hit-stop (a few frames' freeze) on solid contact; a small screen shake on a home run.
-- Dust puffs on slides and dives; chalk spray on balls down the line.
-- Ball trail on hard-hit balls; a crack-of-the-bat pitch that varies with exit velocity.
-- **Instant replay** of big plays (free from determinism §2: re-run the recorded inputs).
-- Optional CRT/scanline filter in settings.
+- Hit-stop (a few frames' freeze) on solid contact, and a small screen shake on a home run.
+- Dust puffs on slides and dives, and chalk spray on balls down the line.
+- A ball trail on hard-hit balls, and a crack-of-the-bat pitch that varies with exit velocity.
+- **Instant replay** of any play, free from determinism: re-run the recorded inputs.
+- An optional CRT/scanline filter in settings. Every effect respects reduce-motion.
 
 ### 10.6 Art pipeline and budget
 
-**Art is the dominant external cost of this overhaul, not code.** Production animated sprites should come from a pixel artist (or a licensed sprite pack) in Aseprite. To keep the build unblocked:
+**Art is the dominant external cost of this overhaul, not code.** Production sprites come from a pixel artist, a licensed sprite pack, or curated AI-assisted pixel art. Anything AI-made is disclosed under the Phase 17 AI-content rule. To keep the build unblocked:
 
-- Phases A0–A7 run on **programmatic placeholder sprites** (simple colored figures drawn in code), so every system is built and tuned before art is commissioned.
-- Sprite sheets plug in by a fixed **animation contract**: named animations, frame counts, pivot points, 8-direction runs.
+- G-0 through G-6 run on **programmatic placeholder sprites** (simple colored figures drawn in code), so every system is built and tuned before art arrives.
+- Sprite sheets plug in through a fixed **animation contract**: named animations, frame counts, pivot points, 8-direction runs.
 
-Minimum animation list: batter (stance, load, swing, check swing, run); pitcher (set, windup, release, follow-through, field); catcher (crouch, frame, throw); fielders (ready, run ×8 directions, dive, catch high/low, throw); runner (run, slide, tag); umpire (calls); plus crowd tiles, park tilesets per tier, ball + shadow, dust/chalk effects.
+**Minimum animation list:**
 
-All art is original: the RBI Baseball reference is for *style*, never for its assets.
+- batter: stance, load, swing, check swing, run;
+- pitcher: set, windup, release, follow-through, field;
+- catcher: crouch, frame, throw;
+- fielders: ready, run ×8 directions, dive, catch high/low, throw;
+- runner: run, slide, tag;
+- umpire: calls;
+- plus crowd tiles, park tilesets per tier, ball + shadow, and dust/chalk effects.
+
+All art is original. The RBI Baseball reference is for *style*, never its assets, and no real team, park or player likeness is used (GAME_VISION §12).
 
 ---
 
 ## 11. What this retires or supersedes
 
-- `AtBatView` and the "Read the Pitch" human path in `InteractiveBatterPolicy` / `PitchChain` — superseded for attended games. The sim code stays (it is `MicroGame`'s, and the harness covers it).
-- **Open follow-ups this makes moot:** the At-Bat Read-Input §7.4 playtest and its re-band; checklist items about the at-bat view.
-- `BaseballDashboard`'s attended-game play flow is rewired to launch the arcade scene instead.
-- **"Classic sim" setting:** keep `MicroGame` selectable for attended games until the arcade engine has passed §9 and a full-season playtest; then decide whether to keep it as a "quick sim" option or retire it.
+- **For attended games:** `AtBatView` and the "Read the Pitch" human path in `InteractiveBatterPolicy` / `PitchChain`. The sim code stays: it is `MicroGame`'s, and the harness covers it.
+- **Planned work that is no longer built:**
+  - gameplay_core's former §2.1 at-bat view upgrade, §2.2 pitching mode (the `IPitcherPolicy` human branch) and §2.3 fielding moments;
+  - the At-Bat Read-Input §7.4 playtest and its re-band;
+  - checklist items about the old at-bat view.
+- `BaseballDashboard`'s attended-game play flow is rewired to launch the arcade scene.
+- **"Classic sim" setting:** keep `MicroGame` selectable for attended games until the arcade engine has passed §9 and a full-season playtest. Then the owner decides whether to keep it as a "quick sim" option or retire it.
 
 ---
 
-## 12. Phased build plan (model-tagged, one gate per phase)
+## 12. Phase G slices (model-tagged, one gate each)
 
-| # | Slice | Owner | Gate |
-| --- | --- | --- | --- |
-| **A0** | **Feel prototype:** standalone scene, one batter vs one pitcher, pitch flight + contact + batted-ball flight + landing readout; placeholder sprites; no fielding, no DB | Fable | **User verdict: hitting is fun.** If not, iterate here before anything else is built. |
-| A1 | Physics core + rules engine (§3), engine-independent, with rules/determinism unit checks | Fable | `ArcadeHarness` rules + determinism suites green |
-| A2 | AI for every role (§6); AI-vs-AI full games headless | Opus (noise model) → Fable | **§9 calibration bands green, all tiers** |
-| A3 | Schema v14 + generator/heirs/development/backstory/new-game ripples (§8) | Fable schema → Sonnet ripples | `validate_sqlite_schema`; MC bit-identity unchanged |
-| A4 | `EffectiveRatings` extraction (§4.2) | Fable | **MC 100% green, MLB bit-identity byte-exact** (pure refactor) |
-| A5 | Integration: `ArcadeGame` box score + shared flush, `PlayPendingArcadeGame`, autopilot routing, Classic setting | Fable | CoreLoop + new season-long harness: an arcade-attended season flushes valid stats, promotion runs |
-| A6 | Presentation: SubViewport, pitch view, field view, scoreboard, controls + remapping | Sonnet build → Fable review | Clean boot; playable game end to end with placeholders |
-| A7 | Watch & skip (§7) + play-by-play + box score panel | Sonnet → Fable review | Determinism check: watched vs skipped seed → identical box score |
-| A8 | Take-over-the-team toggle + full baserunning control | Sonnet → Fable review | User playtest |
-| A9 | Art swap-in, palette-swap shader, parks per tier, audio, replay, juice (§10) | Sonnet + commissioned art → Fable review | User eye-gate |
-| A10 | Playtest + tuning pass, difficulty presets | Sonnet data edits → harness re-runs | User sign-off; decide Classic's fate (§11) |
+These replace gameplay_core's former §4 table. The roles come from [TEAM.md](../TEAM.md) §1. Every task follows the handoff protocol (gameplay_core §5).
 
-**A0 first, always.** It's a few days of work, and it answers the only question no spec can: does it feel good to hit? Everything after it is engineering.
+| Slice | Content | Recommended model | Reviewer | Gate |
+| :-- | :-- | :-- | :-- | :-- |
+| **G-0** | **Feel prototype:** standalone scene, one batter vs one pitcher, pitch flight + contact + batted-ball flight + landing readout. Placeholder sprites; no fielding, no DB. | Claude Opus 5.5 (physics) + Claude Sonnet 5.5 (scene) | Gemini Pro | **Owner verdict: "hitting is fun."** Iterate here until it is. |
+| **G-1** | Attribute audit → the ratings-to-physics mapping (§4.1): mph ranges, bat speed, reach, arm and speed curves | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **Owner: default difficulty target** |
+| **G-2** | Physics core + rules engine (§3), engine-independent; `ArcadeHarness` rules + determinism suites | Claude Opus 5.5 | Gemini Pro | Harness rules + determinism green |
+| **G-3** | AI for every role (§6); AI-vs-AI games calibrated to the Phase 13 bands | Claude Opus 5.5 + Gemini Pro Math | Gemini Pro | **§9 bands green, all three tiers** |
+| **G-4** | Integration: `EffectiveRatings` extraction; `Player_Fielding` + ripples (§8); `ArcadeGame` flush; `PlayPendingArcadeGame`; autopilot routing; Classic setting; booth beats (§7.6) | Claude Opus 5.5 | Gemini Pro | MC full suite (resolver guard byte-exact); season-long arcade harness |
+| **G-5** | Arcade presentation: SubViewport, pitch/field views, 15b scorebug, controls + remapping, watch & skip, play-by-play, box score | Claude Sonnet 5.5 | Gemini Pro | Clean boot; playable end to end; watched = skipped |
+| **G-6** | Take-over-the-team toggle + full baserunning control | Claude Sonnet 5.5 + Claude Opus 5.5 | Gemini Pro | Owner playtest |
+| **G-7** | Venue catalog (68 entries, incl. the dimensions physics reads) + venue screens + hotspots (gameplay_core §3) | Claude Sonnet 5.5 (+ Gemini Flash: catalog data) | Claude Opus | Every team resolves a venue |
+| **G-8** | Art: 16-bit sprite set, palette-swap shader, per-venue field tilesets, venue screen art | Owner + artist/AI art tools (Flash: integration); inside 15d | Claude Opus (consistency) | **Owner taste** |
+| **G-9** | Tuning + difficulty presets (§5.6, §9) | Gemini Pro Math + Claude Sonnet 5.5 (data) | Claude Opus | **Owner sign-off; Classic's fate (§11)** |
+
+**Dependencies:**
+
+- **G-0** has none: it's standalone, with no DB or league. **It starts now.** It's a few days of work, and it answers the only question no spec can: does it feel good to hit?
+- **G-1** and **G-2** run alongside 13-0/13-1.
+- **G-3** needs 13-3's per-tier bands.
+- **G-4** needs 13-2 (roster capacities, regulation innings) and folds `Player_Fielding` into 13-1 if that hasn't merged.
+- **G-5** can start on placeholders, but takes its chrome from 15b.
+- **G-7** and **G-8** follow 15a/15b.
 
 ---
 
-## 13. Open questions for the user
+## 13. Open questions for the owner
 
-1. **High-school game length.** Real HS games are 7 innings; the sim plays 9 at every tier. Switch HS to 7? (It also shortens HS games you watch.)
-2. **v1 extras:** stolen bases, pickoffs and bunts — in v1, or a follow-up slice?
-3. **Takeover stats:** should games played in takeover mode count normally for teammates' stats and promotions, or be flagged?
+1. ~~High-school game length~~ **Settled by Phase 13:** HS plays 7 innings, College and Pro 9.
+2. **v1 extras:** stolen bases, pickoffs and bunts. In v1, or a follow-up slice? *Recommended: stolen bases in v1; pickoffs and bunts as follow-ups.*
+3. **Takeover stats:** should games played in takeover mode count normally for teammates' stats, the draft and the father-record chase, or be flagged? *Recommended: count normally, so the record chase stays simple. Takeover doesn't touch the avatar's own at-bats.*
 4. **Classic sim:** keep it permanently as a "quick sim" option, or retire it once the arcade engine is proven?
-5. **Art:** commission a pixel artist, buy a sprite pack and adapt it, or both (pack for crowds/tiles, artist for players)?
+5. **Parks play differently?** Real dimensions make some parks hitter-friendly by geometry. *Recommended: yes, with Math checking that each tier's league-wide average stays neutral.* This replaces gameplay_core's "park factors" decision.
+6. **Art source:** commission a pixel artist, license a sprite pack, curated AI-assisted pixel art, or a mix (e.g. a pack for crowds and tiles, an artist for players)?
 
 ## 14. Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| AI-vs-AI physics can't hit the macro bands | Noise tables + physics constants are data knobs; A2 gates everything downstream; Classic fallback stays available |
-| Hitting feels bad | A0 prototype gate before any integration work |
-| Skilled humans break the economy of promotion | Difficulty presets; tier-scaled pitching; promotion stays league-relative and season-long |
-| Art cost or schedule | Placeholders through A8; fixed animation contract; palette-swap cuts team art to one set |
-| Scope creep (stealing, bunts, managers, injuries on HBP…) | v1 scope fixed in §3.6; extras are follow-up slices |
+| AI-vs-AI physics can't hit the macro bands | Noise tables + physics constants are data knobs; G-3 gates everything downstream; the Classic fallback stays available |
+| Hitting feels bad | The G-0 prototype gate comes before any integration work |
+| Skilled humans break recruiting and the draft | Difficulty presets; tier-scaled pitching; every judgment stays league-relative and season-long |
+| Phase 13 lands late or changes | G-0 to G-2 don't depend on it; G-3/G-4 wait on explicit 13-x gates |
+| Art cost or schedule | Placeholders through G-6; a fixed animation contract; palette swap cuts team art to one set |
+| Scope creep (bunts, pickoffs, managers, injuries on HBP…) | v1 scope fixed in §3.6; extras are follow-up slices |

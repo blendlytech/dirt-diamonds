@@ -219,7 +219,7 @@ Categories map **only to signals the at-bat sequencer actually emits**: PA outco
 
 `Assets/UI/Broadcast/BroadcastBooth.cs` is a child of the at-bat view (presentation layer).
 
-1. **Input:** the at-bat beat sequencer's beats (`PitchReveal`, `PaReveal`, game start, half-inning change, game end) plus a game-context DTO (score, inning, outs, runners, which side is "ours"). **Never** the sim thread directly.
+1. **Input:** the at-bat beat sequencer's beats (`PitchReveal`, `PaReveal`, game start, half-inning change, game end) plus a game-context DTO (score, inning, outs, runners, which side is "ours"). **Never** the sim thread directly. *From Phase G, the arcade engine emits these same beats, plus an additive `PlayDetail` (exit velocity, distance, diving catch, double play, assist, walk-off) that new call categories may use. The booth is silent during skips ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §7.6).*
 2. **Category resolution:** the most specific category wins (`grand_slam` beats `home_run` beats `extra_base`). Context overlays (`lead_change`, `walk_off`) take priority over the base outcome when both apply.
 3. **Density:** big plays (★) always play. Routine categories play with a probability (Math-owned knobs, starting values: `routine_out` 0.25, `single` 0.7, `walk` 0.4, `color` once per 3–5 PAs when nothing else is playing). At least 1.5 s between routine calls.
 4. **Variety:** weighted pick among the category's variants, excluding the last `min(3, n−1)` played (a per-category ring buffer). The signature tagline variant gets weight 2.

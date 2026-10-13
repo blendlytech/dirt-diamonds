@@ -326,6 +326,8 @@ CREATE TABLE Draft_Picks (
 
 All existing v13 tables (Players, Player_Ratings, stats, Relationships, Entity_Flags, Player_Person, Player_Absences, Game_State, …) carry forward unchanged in shape.
 
+**Added for Phase G (owner, 2026-10-13):** `Player_Fielding` (`player_id`, `defensive_position`, `secondary_position`, `speed`, `arm`) folds into v14, so Appendix A world-gen fills it for every player. Spec: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §8.1. If 13-1 merges first, it ships in the next free version instead.
+
 ---
 
 ## 13. Engine change map

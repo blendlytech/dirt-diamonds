@@ -18,14 +18,14 @@
 - **Disagree freely.** The vision, the plan, the specs and the code are all open to challenge, including the owner's decisions, if you think the game is better another way. Make the case. The owner decides.
 - **Propose; don't impose.** Don't edit GAME_VISION, the active specs, TEAM.md or any code. Put every change in your proposals (§5).
 - **Exception: plain factual fixes.** A broken link, a wrong path, or a doc number that contradicts the code you can fix directly on your branch. List each one in `01_conflicts.md`.
-- **Gameplay comes first** (owner priority). Do [design/gameplay_core.md](../design/gameplay_core.md) before anything else, including the G-1 attribute audit.
+- **Gameplay comes first** (owner priority). Do [design/arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) and [design/gameplay_core.md](../design/gameplay_core.md) before anything else, including the G-1 attribute audit. **The owner chose true arcade physics on 2026-10-13**, so attended games become a real-time physics game. Review that design; don't re-litigate the dice-table pitching mode, which was dropped.
 
 ## 3. Read in this order
 
 1. [README.md](../README.md): which doc is authoritative (`design/` = active, `reference/` = shipped systems, `archive/` = history; skip `archive/` unless you're resolving history).
-2. [GAME_VISION.md](../GAME_VISION.md) v2 → [BUILD_PLAN.md](../BUILD_PLAN.md) → [TEAM.md](../TEAM.md) → [progress.md](../progress.md).
+2. [GAME_VISION.md](../GAME_VISION.md) v2.1 → [BUILD_PLAN.md](../BUILD_PLAN.md) → [TEAM.md](../TEAM.md) → [progress.md](../progress.md).
 3. `GEMINI.md` (the binding directives; `CLAUDE.md` imports it) and `.agents/rules/*.md`, `.agents/skills/*/SKILL.md`.
-4. Active specs: **[gameplay_core.md](../design/gameplay_core.md)**, then [league_restructure.md](../design/league_restructure.md), [temptation_and_lineage.md](../design/temptation_and_lineage.md), [substances_and_addiction.md](../design/substances_and_addiction.md), [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md), [visual_redesign.md](../design/visual_redesign.md), [cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md), [steam_commercial_release.md](../design/steam_commercial_release.md).
+4. Active specs: **[arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)** and **[gameplay_core.md](../design/gameplay_core.md)**, then [league_restructure.md](../design/league_restructure.md), [temptation_and_lineage.md](../design/temptation_and_lineage.md), [substances_and_addiction.md](../design/substances_and_addiction.md), [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md), [visual_redesign.md](../design/visual_redesign.md), [cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md), [steam_commercial_release.md](../design/steam_commercial_release.md).
 5. Briefs: [13-0_review_careermanager_ids.md](13-0_review_careermanager_ids.md), [16-1_opening_sequence_brief.md](16-1_opening_sequence_brief.md), [voicegen_task_brief.md](voicegen_task_brief.md).
 6. The code, **one subsystem at a time** (§4), each with its `reference/` spec open.
 
@@ -54,7 +54,7 @@ Write these to `docs/review/fable_5_1/`, one file each:
 | `00_project_map.md` | Your model of the whole project: systems, data flow, boundaries (Life ↔ Baseball through the bus only; presentation never writes state; the neutral/human branch split), what's built versus planned, per subsystem with paths. |
 | `01_conflicts.md` | Every remaining contradiction, **doc ↔ doc and doc ↔ code**, with `file:line` on both sides and the fix (marked *fixed on branch* or *needs decision*). The goal is **zero**. |
 | `02_code_review.md` | Per subsystem: correctness risks, determinism and calibration hazards, performance (the zero-alloc mandate), architecture and boundary violations, test gaps. Each item has a severity (blocker / high / medium / low) and evidence. |
-| `03_gameplay.md` | **First priority.** The G-1 attribute audit (verify gameplay_core §1 against the code); a critique of the pitching-mode design; your recommended skill-vs-ratings band; positions on the five Phase G decisions (gameplay_core §6). |
+| `03_gameplay.md` | **First priority.** The G-1 attribute audit: verify gameplay_core §1 against the code and propose the ratings-to-physics mapping (arcade §4.1). Also: a critique of the arcade engine design (physics model, AI, the §9 calibration contract, determinism, the `EffectiveRatings` extraction); your recommended default difficulty target; positions on the Phase G decisions (gameplay_core §6, arcade §13). |
 | `04_proposals.md` | Changes, improvements, **feature add-ons** and **disagreements**, each with: *why*, *what changes* (docs and code), *cost* (S/M/L), *risk* (including calibration), *recommended model*. Rank by value. |
 | `05_plan_to_1_0.md` | Your recommended path to launch: agree with or resequence BUILD_PLAN, and name **the next 5 slices** to run, each with its recommended model. |
 | `06_owner_questions.md` | Every question for the owner, consolidated, each with your recommended answer. |
@@ -66,7 +66,7 @@ Each has been reported by the integration lead. Confirm or refute it against the
 - **13-0:** `CareerManager` mints ids with `Guid.NewGuid()`, which causes the rare Monte Carlo flake; an in-flight fix needs one change ([13-0 brief](13-0_review_careermanager_ids.md)).
 - **`ped_active` has no gameplay writer**, so the steroid multiplier never fires live.
 - **`place_for_adoption`** (`hs_pregnancy_decision`) creates no child.
-- **There's no pitching interface:** the attended game uses `NeutralPitcherPolicy`.
+- **There's no pitching interface:** the attended game uses `NeutralPitcherPolicy`. The arcade engine replaces this, so confirm what in `MicroGame`/`CareerManager` the G-4 seam (arcade §2) must preserve.
 - **Needs and stress never touch the field**, and only confidence, happiness and teamwork do (±2).
 - **Discipline and control have small macro weights** (gameplay_core §1.1).
 - **The spouse pool is the league** (ballplayers only), there's no gender anywhere, and position is Hitter/Pitcher only.

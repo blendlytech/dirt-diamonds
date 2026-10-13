@@ -70,6 +70,7 @@ Primary objective: highly optimized, performant code with strict separation betw
 - **Verify UI nodes:** before writing C# for any scene (hustle mini-games, the at-bat view, the phone, cutscene chrome), run `godot_scene_mapper` or the Godot MCP to verify node paths in the `.tscn`.
 - **Validate event integrity:** after any gritty-event content change, run `check_event_graph_integrity` (flags, dead ends, `contact` and `cutscene` references; any `voice_note` fails, since voice is broadcasters only; planned checks #11 never-abortion and #12 tokens land with Phase L).
 - **Test stat matrices:** any change under `Assets/Simulation/` (the resolver, PED/tier weights, rosters, schedules, innings) must be followed by `run_monte_carlo_batch`. The resolver guard must stay byte-exact; re-baselining a season guard needs explicit sanction in a design doc.
+- **Test the arcade engine:** any change under `Assets/Simulation/Arcade/` (physics constants, AI noise tables, rules) must be followed by `dotnet run --project Tools/ArcadeHarness -c Release`: per-tier bands, monotonicity, rules integrity and watched-equals-skipped determinism. A change to the shared `EffectiveRatings` stack runs both harnesses.
 - **Validate audio:** after any voice/audio asset or manifest change, run `validate_audio_manifest`.
 - **Validate cutscenes:** after any cutscene definition change, run `Tools/CutsceneHarness`.
 - **Validate Steam natives:** after export or `.csproj` changes, run `validate_steamworks_native`.
@@ -83,8 +84,12 @@ Primary objective: highly optimized, performant code with strict separation betw
 - **Calibration discipline.** Every new effect (`Active_Effects`, clutch, missing-piece freezes, affair nudges, substance edges) must be bit-identical when no rows or flags exist, and every magnitude is a Pro Math data value gated by `run_monte_carlo_batch`. `ped_active` is engine-written by the substance engine only.
 - **Text.** Phone and press text resolve `{tokens}` at write time through `NarrativeTokenResolver`. Unknown tokens fail at load.
 
-## 11. Gameplay Core (Phase G, high priority, spec: [docs/design/gameplay_core.md](docs/design/gameplay_core.md))
+## 11. Gameplay Core (Phase G, high priority; specs: [docs/design/arcade_baseball_overhaul.md](docs/design/arcade_baseball_overhaul.md) for the attended game, [docs/design/gameplay_core.md](docs/design/gameplay_core.md) for attributes and venues)
 
-- **Ratings set the floor and ceiling; player skill moves you within it.** Every player-skill mechanic (batting reads, the new pitching mode, fielding moments) lives on a **human branch only**. Neutral policies (`NeutralBatterPolicy`, `NeutralPitcherPolicy`) stay byte-identical, so calibration can't move.
-- Attribute effects and sizes are defined in the spec §1. Any change to a resolver weight, a cap or a skill-band value is a Pro Math call gated by `run_monte_carlo_batch`.
-- Every team (all 68) gets its own venue (`Assets/Data/Venues/venues.json`), interactive venue screen and art. No screen may hard-code a team or a park.
+- **Attended games are true arcade physics (owner, 2026-10-13).** Bat contact, ball flight, fielding and baserunning are decided by a real-time physics engine (`Assets/Simulation/Arcade/`) and the player's input. Ratings shape the physics (arcade §4). **Every background game stays on the calibrated macro sim**, and its neutral policies and resolver guard stay byte-exact.
+- **The arcade engine is engine-independent and deterministic.** It uses pure C# with no Godot types, a fixed step, and a seeded `RngState` plus a recorded input stream. A skipped game must equal the watched game byte for byte. Godot only renders snapshots and collects input. UI and the booth never touch its RNG.
+- **Arcade calibration:** AI-vs-AI arcade games must land in the Phase 13 per-tier bands (arcade §9). Physics constants and AI noise tables are data edits owned by Pro Math. Difficulty presets change only the human's assists, never the AI or ratings.
+- **One modifier stack.** Effective ratings (tier, person, gear, rust, rivalry, `Active_Effects`, PED, fatigue) are built once in `EffectiveRatings` and shared by the macro sim, `MicroGame` and the arcade engine. Never re-derive them inside one engine.
+- **Positions:** the sim reads the defensive position only from `Player_Fielding`, never from `Player_Identity`.
+- Attribute effects and sizes are defined in gameplay_core §1 and arcade §4. Any change to a resolver weight, a cap, a physics constant or a difficulty target is a Pro Math call gated by the matching harness.
+- Every team (all 68) gets its own venue (`Assets/Data/Venues/venues.json`), interactive venue screen, 16-bit field and art. The arcade field reads park dimensions from the venue catalog. No screen may hard-code a team or a park.

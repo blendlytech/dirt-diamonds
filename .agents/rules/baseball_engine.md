@@ -25,7 +25,15 @@ Deduct from health_ceiling and increase detection_risk in the database after eve
 
 `ped_active` is **engine-written by the substance engine only** (Phase L, `docs/design/substances_and_addiction.md` §4). Until S-1 lands, nothing in the live game sets it.
 
-**Player skill (Phase G, `docs/design/gameplay_core.md`):** batting reads and the new pitching mode live on the human branch only. `NeutralBatterPolicy` and `NeutralPitcherPolicy` stay byte-identical. Gender, ethnicity and listed position never enter the sim.
+**Arcade engine (Phase G, owner 2026-10-13, `docs/design/arcade_baseball_overhaul.md`):** every game the avatar's team plays runs on a real-time physics engine in `Assets/Simulation/Arcade/`, not on `MicroGame`. Background games stay on the macro sim, and its neutral policies and resolver guard stay byte-identical.
+
+- **Engine-independent:** no Godot types inside `Assets/Simulation/Arcade/`.
+- **Deterministic:** a fixed step, contact and catches solved analytically, a seeded `RngState` plus recorded inputs. Watched = skipped.
+- **Shared ratings:** the arcade engine reads `EffectiveRatings`, the same modifier stack as the macro sim.
+- **Calibration:** AI-vs-AI games hit the Phase 13 per-tier bands, gated by `Tools/ArcadeHarness`. Physics constants and AI noise tables are Math-owned data.
+- **Isolation:** the arcade engine never references the Life sim, the same boundary as the rest of the baseball engine.
+
+Gender, ethnicity and listed position never enter the sim. The defensive position comes only from `Player_Fielding`.
 
 ## **3. League Structure (Phase 13 — `docs/design/league_restructure.md`)**
 

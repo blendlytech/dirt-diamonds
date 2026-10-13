@@ -1,6 +1,6 @@
 # Gameplay Core: Attributes, the At-Bat (Batting & Pitching), Ballparks & Venues
 
-**Author:** Claude Opus 5.5 · **Status:** design draft 2026-10-10, **HIGH PRIORITY** (owner directive). Phase G in [BUILD_PLAN.md](../BUILD_PLAN.md). Numbers in §1 are computed from the shipped code; everything marked *proposal* is a first pass for Gemini Pro Math and the Claude Fable 5.1 review to challenge.
+**Author:** Claude Opus 5.5 · **Status:** design draft 2026-10-10, **revised 2026-10-13 for the arcade decision**, **HIGH PRIORITY** (owner directive). **The attended game itself (physics, controls, AI, watch/skip, its calibration and look) is specified in [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md).** This doc keeps the Phase G umbrella: attribute definitions, venues and the handoff protocol. Phase G in [BUILD_PLAN.md](../BUILD_PLAN.md). Numbers in §1 are computed from the shipped code; everything marked *proposal* is a first pass for Gemini Pro Math and the Claude Fable 5.1 review to challenge.
 **Authority:** [GAME_VISION.md](../GAME_VISION.md) v2 §5 and §12. The shipped contracts this builds on: [baseball_pa_outcome_model.md](../reference/baseball_pa_outcome_model.md), [at_bat_read_input_model.md](../reference/at_bat_read_input_model.md), [at_bat_presentation.md](../reference/at_bat_presentation.md), [high_school_person_layer.md](../reference/high_school_person_layer.md) §6, [equipment_quality.md](../reference/equipment_quality.md), [development_decline_curves.md](../reference/development_decline_curves.md).
 
 ---
@@ -13,6 +13,7 @@
 | G2 | **Every team gets its own interactive stadium screen** (College and Pro) **or school screen** (HS), with its own art. |
 | G3 | **Every attribute is defined:** what it affects, by how much, and how it combines with the player's own gameplay skill. |
 | G4 | **Every task names its recommended model**, and every model stops when its task is done and tells the human which model is suggested for the next one (§5). |
+| G5 | **True arcade physics (2026-10-13).** Bat contact, ball trajectory and fielding are decided by real-time physics and the player's skill. Ratings shape the physics. You control your player, with a take-over-the-team toggle. Fielding is assisted. 16-bit art. Watch the entire game, with skips. Spec: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md). |
 
 ---
 
@@ -28,13 +29,13 @@ Every rating runs 0–100, with 50 as league average. The resolver turns each in
 | :-- | :-- | :-- | :-- |
 | **bat_power** (hitter) | HR and doubles up; outs down slightly | OPS **+.034** (HR 3.2% → 3.7%) | OPS **+.071** (HR → 4.2%) |
 | **bat_contact** (hitter) | Singles and doubles up; strikeouts and outs down | OPS **+.050** (AVG .247 → .269; K 22.5% → 21.2%) | OPS **+.103** (AVG → .292) |
-| **bat_discipline** (hitter) | Walks up; strikeouts down. In attended games, also how much a good read is worth (§1.4) | OPS +.011 (BB 9.0% → 10.0%) | OPS +.022 (BB → 11.1%) |
+| **bat_discipline** (hitter) | Walks up; strikeouts down. On the arcade field, also how early the pitch reads (arcade §4.1) | OPS +.011 (BB 9.0% → 10.0%) | OPS +.022 (BB → 11.1%) |
 | **pit_stuff** (pitcher) | Strikeouts up; HR, singles and doubles down | opponent OPS **−.045** (K → 24.2%) | opponent OPS **−.089** (K → 26.0%) |
-| **pit_control** (pitcher) | Walks down. In attended games, also where pitches land (§2.2) | opponent OPS −.006 (BB → 8.1%) | opponent OPS −.012 (BB → 7.4%) |
+| **pit_control** (pitcher) | Walks down. On the arcade field, also the release-meter width and scatter (arcade §4.1) | opponent OPS −.006 (BB → 8.1%) | opponent OPS −.012 (BB → 7.4%) |
 | **pit_stamina** (pitcher) | Pitch capacity before fatigue; fatigue decays effective stuff and control toward 50 (floor ×0.5) | more innings at full strength | — |
 | **fielding** (everyone) | The **team-defense** average of the lineup: outs up; singles, doubles and triples down | team OPS allowed **−.027** (one +10 *team* average) | −.052 |
 
-**Read-out:** on the shipped weights, **contact is the strongest hitting attribute**, and **stuff is the strongest pitching one**. **Discipline and control are nearly inert in background sims.** Their main value is in attended games: discipline scales the read (§1.4), and control will drive pitch location (§2.2). *Proposal for Math:* either accept that (they're "attended-game" attributes), or raise their macro weights in the Phase 13 re-band.
+**Read-out:** on the shipped weights, **contact is the strongest hitting attribute**, and **stuff is the strongest pitching one**. **Discipline and control are nearly inert in background sims.** Their main value is on the arcade field: discipline sets how early the pitch reads, and control sets the release meter and scatter (arcade §4.1). *Proposal for Math:* either accept that (they're "attended-game" attributes), or raise their macro weights in the Phase 13 re-band.
 
 ### 1.2 What stacks on a rating (shipped + planned)
 
@@ -57,7 +58,7 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
 | Attribute | What it affects today | Gameplay gap / proposal |
 | :-- | :-- | :-- |
 | **confidence, happiness, teamwork** | The only person stats that reach the field (±2 points each, §1.2); also events | — |
-| **intelligence, maturity, charisma, reputation, social_status, attractiveness, morality, discipline (person), work_ethic** | Event prerequisites and outcomes, dating and NPC autonomy, person drift, item rewards (`PersonDrift`, `EventConsequenceApplier`, `NpcAutonomyService`, `ItemService`) | **None reach the field.** *Proposal:* work_ethic scales practice → development; discipline (person) feeds plate discipline's read scaler; maturity shrinks slump and stress effects. Owner/Math call. |
+| **intelligence, maturity, charisma, reputation, social_status, attractiveness, morality, discipline (person), work_ethic** | Event prerequisites and outcomes, dating and NPC autonomy, person drift, item rewards (`PersonDrift`, `EventConsequenceApplier`, `NpcAutonomyService`, `ItemService`) | **None reach the field.** *Proposal:* work_ethic scales practice → development; discipline (person) adds to how early the pitch reads; maturity shrinks slump and stress effects. Owner/Math call. |
 | **gpa** | HS eligibility, school events, recruiting context | — |
 | **Needs** (hunger, sleep, hygiene, social, fitness) and **stress** | Life sim only: utility AI, forced actions, events | **They never touch the field.** A starving, sleepless player bats like a rested one. *Proposal:* a small, capped game-day penalty from low sleep/fitness and high stress (an `Active_Effects` row baked at game start, bit-identical when needs are healthy). Owner/Math call. |
 | **health_ceiling** | Injury rust, decline speed, forced retirement below the floor | — |
@@ -66,62 +67,31 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
 | **detection_risk** | Steroid tests, suspensions, scandal | — |
 | **funds** | Survival economy, hustles, purchases, the search (Phase L) | — |
 
-### 1.4 Ratings × player skill (the core principle)
+### 1.4 Ratings × player skill (the core principle, revised 2026-10-13)
 
-> **Ratings set the floor and the ceiling. Player skill decides where you land between them.**
+> **Ratings shape the physics. Player skill decides what happens.**
 
-- **Batting (shipped, [at_bat_read_input_model.md](../reference/at_bat_read_input_model.md)).** Each pitch, the player guesses the **type** (FB / breaking / offspeed) and the **location** (3×3 grid or "ball"), and sets an **approach** dial.
-  - The read quality `R` blends the two guesses. **Discipline** sharpens how much `R` is worth.
-  - The swing is emergent: belief versus a discipline-set threshold, plus the approach.
-  - Contact quality `q` scales with `R` and **contact**. **Power** enters through the resolver anchor.
-  - **Reads are decisive.** A perfect read with high contact gives peak damage; a fooled swing gives weak contact or a whiff.
-- **Pitching:** today there is **none**. The attended game uses `NeutralPitcherPolicy`, so a pitcher player only watches. §2.2 designs it.
-- **Background games** use ratings only (no skill), so the league stays calibrated.
-- **How much should skill be worth?** *Proposal (owner to confirm):* for an average-rated avatar, the gap between a poor and an excellent player-skill game should be about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS). It's capped so skill can't make a 30-rated player elite, or ruin an 85.
-  - This is the human branch only. The neutral, calibrated branch never changes (Invariant N in the read-input spec).
-  - **Math owns the tuning**, through a scripted-skill harness: a perfect bot, a coin-flip bot and a contrarian bot.
+- **Attended games (arcade).** Each rating becomes a physical capability: power → bat speed, contact → sweet-spot size and timing window, discipline → how early the pitch reads, stuff/arsenal → pitch speed and break, control → release-meter width and scatter, stamina → fatigue, fielding → reaction and reach, plus the new **speed** and **arm**. The player's timing and aim decide the outcome. Full mapping: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §4.
+- **Background games** use the shipped resolver from ratings only (§1.1), so the league stays calibrated. AI-vs-AI arcade games must land in the same per-tier bands (arcade §9).
+- **How much should skill be worth?** It's now a **difficulty** question: presets tune only the human's assists (timing window, cursor size, read cue, fielding assist), never the AI or the ratings. *Proposal (owner to confirm):* at the default difficulty, an average-skill player matches their ratings, and an excellent or poor one plays about ±30 rating points away. That's the same "about a 40-to-70 gap" as before, now measured by the scripted-skill bots in `ArcadeHarness`. **Math owns the tuning.**
+- The shipped "Read the Pitch" model ([at_bat_read_input_model.md](../reference/at_bat_read_input_model.md)) stays in the code as the **Classic sim** fallback until the arcade engine is proven (arcade §11).
 
 ---
 
-## 2. The at-bat interfaces (G1)
+## 2. The at-bat interfaces (G1): replaced by the arcade engine
 
-### 2.1 Batting: upgrade the shipped read model (presentation-first)
+**Superseded 2026-10-13 (owner decision G5).** The former §2.1 read-model view upgrade, §2.2 pitching mode (an `IPitcherPolicy` human branch) and §2.3 fielding moments are **not built**. Batting, pitching, fielding and baserunning are all live controls on the arcade field:
 
-The mechanics ship and work. The **interface** is thin. Upgrades, in priority order:
+| Interface | Where it's specified |
+| :-- | :-- |
+| Batting: timing, contact cursor, power swing | [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §3.2, §5.1 |
+| Pitching: pitch, aim, release meter, aftertouch | arcade §3.1, §5.2 |
+| Fielding (assisted) and throws | arcade §3.4, §5.3 |
+| Baserunning; take over the team | arcade §3.5, §5.4, §5.5 |
+| Watch and skip; play-by-play; box score | arcade §7 |
+| Broadcast beats and ★ big plays | arcade §7.6 |
 
-1. **A broadcast-style at-bat view**: catcher-eye camera, a visible pitch path (release → plate, type-tinted), the 3×3 zone overlay you aim your read into, and the count, outs, runners and score.
-2. **Feedback that teaches:**
-   - after each pitch, show where it really went against your read;
-   - keep a per-pitcher tendency card (scouting) that sharpens your next guess;
-   - show your hot/cold zones.
-3. **Pace:** the reveal waits for the broadcaster's call; fast-forward option; reduce-motion.
-4. **Accessibility:** a hold-to-confirm option, colorblind-safe zone tints, keyboard and controller.
-
-No sim change, so this is calibration-inert.
-
-### 2.2 Pitching: a new interactive mode (the biggest gameplay gap)
-
-*Proposal, mirroring the batting model so both halves feel like one game.*
-
-- **Per pitch, the player chooses:**
-  - a **pitch** from the avatar's arsenal (`Pitch_Arsenals`; shipped data);
-  - a **target** (3×3 grid plus 8 edge/chase cells);
-  - an **intent** dial (pitch to contact ↔ go for the strikeout).
-- **Where it lands:**
-  - **Control** sets how tightly the pitch hits the target: a scatter radius that shrinks with control and grows with fatigue.
-  - **Stuff** sets how hard it is to square up (whiff and weak-contact odds).
-  - **Stamina** sets how long both hold.
-- **The batter's AI read:** it uses the batter's discipline and contact, with a simple model of the batter guessing your **tendencies**. So mixing pitches and locations is the player's skill: predictable pitchers get hit.
-- **Outcome:** the same swing-gated class draw and `DrawBallInPlay` as the batting model. A wild miss into the heart of the zone is punished; painting the edge after setting it up is rewarded.
-- **Calibration contract:** a new human branch only (`IPitcherPolicy` already exists as the seam). `NeutralPitcherPolicy` stays byte-identical, so every band and guard is untouched by construction. Harness coverage: self-consistency, plus the skill-bot spread from §1.4.
-
-### 2.3 Fielding moments (*proposal*)
-
-The avatar's `fielding` rating only feeds the team average today, and listed positions are story-only.
-
-*Proposal:* occasional **defensive moments** for the avatar's listed position: a quick read-and-react prompt on a ball hit to them, graded against fielding.
-- It's opt-in in Settings, attended games only, on the human branch only.
-- This would make listed position mean something on the field. It's an owner call and a Fable 5.1 review item, because positions are currently story-only by design (temptation §3.1).
+What carried over from the old §2: the accessibility goals (keyboard and controller, remapping, colorblind-safe cues, reduce-motion) and the pacing rule that a reveal waits for the broadcaster's call. Both are in arcade §5 and §10.
 
 ---
 
@@ -152,28 +122,29 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 
 ### 3.3 Stadium mapping in the at-bat
 
-- The at-bat view uses the **home park's** field art and dimensions overlay, so every park looks like itself.
-- **Park factors:** *proposal: off at launch* (neutral, calibration-inert). If the owner wants parks to *play* differently, it becomes a separate Math slice with per-park HR/2B/3B factors, re-banded through `run_monte_carlo_batch`, with league-wide factors averaging 1.0. **Owner decision.**
+- The arcade field is built from the **home park's** catalog entry: its dimensions, walls, surface and signature features (arcade §10.4).
+- **Park factors now emerge from geometry:** a short porch really does give up more home runs. *Proposal:* keep it, with Math checking that each tier's league-wide average stays neutral (arcade §13 Q5). Background games stay park-neutral unless the owner also wants macro park factors, which would be a separate Math slice gated by `run_monte_carlo_batch`. **Owner decision.**
 
 ### 3.4 Art scope
 
-68 venues × about 5–7 layered scenes, plus day/night variants for the field, in the approved Phase 15 direction. Pre-generated, curated and disclosed (the AI-art rule). This feeds slice 15d. The two shipped HS field images (CRW, LKS) are the seed.
+68 venues × about 5–7 layered scenes, plus day/night variants for the field, in the approved Phase 15 direction. Pre-generated, curated and disclosed (the AI-art rule). This feeds slice 15d. The two shipped HS field images (CRW, LKS) are the seed. The **16-bit field tilesets** (one per venue, arcade §10.4) are a separate art set from these venue screens, produced in slice G-8.
 
 ---
 
 ## 4. Slices (Phase G: high priority, runs alongside Phase 13)
 
-| Slice | Content | Recommended model | Reviewer | Gate |
-| :-- | :-- | :-- | :-- | :-- |
-| **G-1** | Attribute audit: verify §1 against code, settle the macro weights of discipline and control, decide the needs/stress and person-stat proposals | **Claude Fable 5.1** (in review R-1) → **Gemini Pro Math** (numbers) | Claude Opus | Owner: "how much skill is worth" |
-| **G-2** | Pitching mode design → engine (`IPitcherPolicy` human branch, scatter model, batter tendency read) | **Claude Opus 5.5** (engine) + **Gemini Pro Math** (scatter/whiff curves) | Gemini Pro | MC bit-identical on the neutral branch; skill-bot spread |
-| **G-3** | At-bat view rebuild for batting + pitching (§2.1, §2.2 UI) | **Claude Sonnet 5.5** | Gemini Pro | Screenshot review; playtest |
-| **G-4** | Venue catalog (68 entries) + venue screen runtime + hotspots | **Claude Sonnet 5.5** (screen) + **Gemini 3.8 Flash** (catalog data) | Claude Opus | Every team resolves a venue; no missing-art fallbacks |
-| **G-5** | Venue art production | **Owner + AI art tools**, **Gemini 3.8 Flash** (integration) | Claude Opus (consistency) | **Owner taste** |
-| **G-6** | Stadium mapping in the at-bat; optional park factors | **Claude Sonnet 5.5** (visual) / **Gemini Pro Math** (factors, if approved) | Claude Opus | Inert unless factors are approved |
-| **G-7** | Fielding moments (if approved) | **Claude Opus 5.5** + **Claude Sonnet 5.5** | Gemini Pro | Human branch only |
+**Revised 2026-10-13.** The Phase G slice table (G-0 through G-9), with recommended models, reviewers, gates and dependencies, now lives in [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §12. In short:
 
-**Order:** G-1 and the G-2 design start now, alongside 13-0/13-1. G-3 and G-4 follow the 15a/15b art direction and design system. G-5 runs inside 15d.
+- **G-0** feel prototype (starts now);
+- **G-1** attribute audit → ratings-to-physics mapping;
+- **G-2** physics core;
+- **G-3** AI + calibration;
+- **G-4** integration;
+- **G-5** arcade presentation + watch & skip;
+- **G-6** team takeover;
+- **G-7** venue catalog + screens (§3);
+- **G-8** art;
+- **G-9** tuning + difficulty.
 
 ---
 
@@ -195,8 +166,10 @@ The human starts the next model. No model starts another model's slice.
 
 ## 6. Open owner decisions
 
-1. **How much is skill worth** against ratings (§1.4)? Recommended: about the 40-to-70 rating gap, capped.
-2. **Needs and stress on the field** (§1.3)? Recommended: a small, capped game-day penalty.
-3. **Person stats on the field** beyond the shipped three (§1.3)? Recommended: work_ethic → development, person discipline → read scaler.
-4. **Park factors** (§3.3)? Recommended: off at launch.
-5. **Fielding moments** (§2.3)? Recommended: yes, opt-in.
+1. ~~Arcade physics vs the read model~~ **Decided 2026-10-13: arcade physics** (G5).
+2. **Default difficulty target** (§1.4)? Recommended: average skill = your ratings; excellent or poor ≈ ±30 rating points.
+3. **Needs and stress on the field** (§1.3)? Recommended: a small, capped game-day penalty. On the arcade field this would land as slower reactions and a narrower timing window.
+4. **Person stats on the field** beyond the shipped three (§1.3)? Recommended: work_ethic → development, person discipline → how early the pitch reads.
+5. **Parks play differently by geometry** (§3.3)? Recommended: yes, tier-neutral on average.
+6. ~~Fielding moments~~ **Superseded:** fielding is fully playable (assisted) on the arcade field.
+7. The arcade-specific questions: steals, pickoffs and bunts in v1; takeover stats; Classic's fate; the art source ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §13).

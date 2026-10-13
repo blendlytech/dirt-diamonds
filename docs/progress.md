@@ -11,7 +11,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 | Phase | Spec | State | Very next action (owner) |
 | :-- | :-- | :-- | :-- |
 | **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | Design complete | **13-0:** the MC flake is root-caused (random `Guid.NewGuid()` ids in `CareerManager`); an in-flight counter fix needs one change before merge ([tasks/13-0_review_careermanager_ids.md](tasks/13-0_review_careermanager_ids.md)); repair the `sqlite` MCP to point at a scratch DB. Then **13-1** schema v14 + world-gen (Claude Opus). |
-| **G Gameplay Core** (**high priority**) | [design/gameplay_core.md](design/gameplay_core.md) | Design draft | **G-1** attribute audit (Fable 5.1 within R-1 → Math) and the **G-2** pitching-mode design (Claude Opus), alongside 13-0/13-1. |
+| **G Gameplay Core** (**high priority**) | [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) (attended game) + [design/gameplay_core.md](design/gameplay_core.md) (attributes, venues) | Design complete; **arcade physics adopted 2026-10-13** | **G-0** arcade feel prototype (Claude Opus + Claude Sonnet), no dependencies, so it can start now. **G-1** attribute audit → ratings-to-physics mapping (Fable 5.1 within R-1 → Math) and **G-2** physics core (Claude Opus) alongside 13-0/13-1. |
 | **L Lineage, Temptation & Vice** | [design/temptation_and_lineage.md](design/temptation_and_lineage.md), [design/substances_and_addiction.md](design/substances_and_addiction.md) | Design complete; **L-0 done** | **L-1** after 13-1 (schema v15 + identity + legends + poverty). |
 | **14 Voice & Broadcast Audio** | [design/voice_and_broadcast_audio.md](design/voice_and_broadcast_audio.md) | Design complete (broadcasters only) | 14a buses + `VoiceDirector` (Gemini Pro); 14b `Tools/VoiceGen` pilot (GPT Astra Pro; needs the owner's commercial ElevenLabs plan). Can run alongside 13. |
 | **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md) | Design complete | 15a style frames for both worlds. **The owner picks the art direction.** |
@@ -34,6 +34,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
   - Five substances, each with a distinct edge and price. Boosts are 18+. A fatal overdose is possible.
   - The father's record is juiced in 50% of careers.
   - The repo is private.
+- **2026-10-13:** attended games are **true arcade physics**: real-time bat contact, ball flight and fielding decided by physics and skill. Ratings shape the physics. You control your player, with a take-over-the-team toggle. Fielding is assisted. 16-bit art. Watch the whole game, with skips. Recorded in GAME_VISION v2.1 §3/§5. Spec: [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md).
 
 **Open for the owner:**
 
@@ -43,8 +44,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 - the ethnicity list and legend backstories (L-2);
 - the two owner-authored functions, `ChooseFatherFallback` and `DiscoveryChance`;
 - whether to keep the auto-committer (TEAM.md §5);
-- the five Phase G decisions (gameplay_core §6): how much skill is worth, needs and stress on the field, more person stats on the field, park factors, fielding moments.
-- **arcade physics vs gameplay_core:** adopt or archive the proposal [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) (2026-10-09). It replaces attended games with real-time physics (bat contact, ball flight, fielding), 16-bit art, and watch/skip. That conflicts with gameplay_core §2 and GEMINI.md §11.
+- the Phase G decisions (gameplay_core §6, arcade §13): the default difficulty target, needs and stress on the field, more person stats on the field, parks playing differently by geometry, steals/pickoffs/bunts in v1, takeover stats, Classic sim's fate, and the art source.
 
 **Gate baseline (2026-10-10):**
 
@@ -65,11 +65,14 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 1. **Claude Fable 5.1: the full-project review**, with Phase G (gameplay) as its first focus (R-1, per its brief). It writes to `docs/review/fable_5_1/`.
 2. **Owner + Claude Opus: triage** the review's proposals. Accepted ones update GAME_VISION and the specs first, then become slices.
-3. **Claude Opus: 13-0 → 13-1**, the critical path, which resumes after triage (or in parallel, if the owner prefers).
+3. **Claude Opus: 13-0 → 13-1**, the critical path, which resumes after triage (or in parallel, if the owner prefers). 13-1 now also carries `Player_Fielding` (arcade §8.1).
+4. **G-0, the arcade feel prototype** (Claude Opus 5.5 physics + Claude Sonnet 5.5 scene; reviewer Gemini Pro). It has no dependencies, so it can run alongside 1–3. **Owner gate: "hitting is fun."** It needs a task brief in `docs/tasks/` first (Claude Opus).
 
 ---
 
 ## Session Log (compact)
+
+- **2026-10-13 — Arcade physics ADOPTED; docs reconciled (Claude Opus 5.5; docs only, no code/sim touch):** owner directive. GAME_VISION → v2.1 (pillar 2, §5 game day, §12, §13); `arcade_baseball_overhaul.md` → active Phase G engine spec (3 tiers, HS 7 innings, `Player_Fielding` folded into v14, booth beats + `PlayDetail` §7.6, Phase 13 bands for calibration, G-0…G-9 slices, owner questions); gameplay_core §1.4/§2/§3.3/§4/§6 revised (pitching mode and fielding moments dropped; slices moved to arcade §12); GEMINI.md §9 (ArcadeHarness gate) + §11; BUILD_PLAN Phase G; TEAM.md G rows; one-line hooks in league_restructure §12, temptation §3.1, voice §8; Fable 5.1 review brief points at the arcade spec. Gates not run (no code touched). **Next: G-0 feel prototype by Claude Opus 5.5 (physics) + Claude Sonnet 5.5 (scene), reviewer Gemini Pro. Owner gate: "hitting is fun."**
 
 - **2026-10-13 — Arcade baseball overhaul pushed as a PROPOSAL (Claude Opus 5.5; docs only, no code/sim touch):** `docs/design/arcade_baseball_overhaul.md`, written 2026-10-09 from the owner's choices that day (true arcade physics, my player + team-takeover toggle, ratings shape physics, assisted fielding, 16-bit, full watch/skip). Rebased onto the Oct-10 reorganization and bannered **NOT ADOPTED**, because it conflicts with gameplay_core §2, GEMINI.md §11, the 3-tier league and the v14/v15 schema plan. Added to "Open for the owner". Gates not run (no code touched). **Next: owner decides adopt or archive. If adopted, Claude Opus reconciles GAME_VISION + gameplay_core first.**
 
