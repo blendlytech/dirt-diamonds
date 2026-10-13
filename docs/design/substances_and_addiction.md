@@ -66,7 +66,7 @@ Every on-field number below is a **Pro Math data value** (first-pass magnitudes 
 - **The price (distinct: hidden damage and the hardest addiction):**
   - **The fastest dependence** in the catalog.
   - **Masked injuries compound:** each injury played through adds hidden damage, and when it surfaces it's a **severe** injury with a large `health_ceiling` loss.
-  - **Overdose:** the highest risk, multiplied by alcohol; the result is hospitalization and a long absence. Whether it can be fatal is an owner decision (§9).
+  - **Overdose:** the highest risk, multiplied by alcohol; the result is hospitalization and a long absence. It can be fatal, as already decided in §2.6; Math calibrates the fatal share.
   - **Brutal withdrawal:** sleep, stress and happiness crash for weeks.
   - Without a prescription, possession arrests apply, as with cocaine.
 
@@ -133,7 +133,7 @@ The catalog (`Assets/Data/Substances/substances.json`) holds the numbers. The **
 
 1. `ped_active` becomes **engine-written**: set while the avatar has an active `steroids` effect and cleared when it expires. It's documented as an engine flag, so `check_event_graph_integrity` #2 accepts it.
 2. That revives the shipped ×1.5 multiplier and per-game costs with no change to their calibrated math.
-3. **Then** the four shipped PED events can safely re-gate on `ped_active` as well as `detection_risk`, the follow-up that DIRT-4 §2.1 deferred. Re-gating before step 1 would silently delete the steroid arc.
+3. **Then** avatar PED events may gate on active-effect `ped_active` plus detection risk. Preserve shipped NPC PED arcs with separate NPC eligibility; NPCs have no avatar substance rows in v1. Never gate every scope-any PED event on an avatar-only flag. Test clean/active avatar and NPC reachability separately (R-1 Q10).
 
 ---
 

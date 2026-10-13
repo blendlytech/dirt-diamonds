@@ -111,3 +111,5 @@ A broadcast-package motion language for DIAMOND (wipes, count-ups, scorebug tran
 | **15f** | Phone tier skins | Flash → Pro review | Each tier is visually distinct |
 
 **Dependencies:** 15a and 15b can start alongside Phase 13. Screens for new league features (bracket, draft, recruiting, roster status) are designed here directly. Their thin functional versions from Phase 13 exist only to unblock harness and playtest work.
+
+**R-1 art scope accepted:** the ~10 park kits are shared foundations with team-specific dressing and functional hotspots for 68 distinct venues. Approve representative HS/College/Pro examples before bulk generation. No requirement for hundreds of wholly bespoke scenes; owner style/name/brand selection remains a concrete input.

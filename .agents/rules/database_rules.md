@@ -4,7 +4,7 @@ These rules govern *how* code talks to the database. The table structures themse
 
 ## Access Discipline
 
-- **All access goes through `DatabaseManager.cs`.** No other class opens a connection, holds a connection string, or constructs raw SQL. Simulation systems consume typed query classes (e.g., `PlayerQueries.cs`) and DTOs only.
+- **Data owns SQL; `DatabaseManager.cs` owns connections and transaction lifetime.** Typed query classes inside the Data layer construct parameterized SQL through that owner. No simulation or UI class opens connections, holds connection strings or constructs raw SQL. Simulation systems consume typed query classes and DTOs only (R-1 D20 accepted).
 - **Parameterized queries only.** String-interpolated SQL is a review-blocking defect, even for internally generated values.
 - **No Blind Queries.** Before writing or modifying any query with a join or a new column reference, validate the live schema via the SQLite MCP server, or the `validate_sqlite_schema` skill (sqlite3 CLI) when the MCP is unavailable.
 

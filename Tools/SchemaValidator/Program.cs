@@ -17,6 +17,10 @@ namespace DirtAndDiamonds.Tools.SchemaValidator;
 /// --live &lt;path&gt; mode: read-only structural audit of an existing save
 /// (integrity_check, foreign_key_check, table/index/STRICT coverage). Never
 /// mutates rows.
+///
+/// --emit &lt;path&gt; mode: (re)builds an empty, schema-applied scratch database
+/// for the sqlite MCP (GEMINI.md §4: schema exploration targets a scratch copy,
+/// never the live save). Refuses any path under the Godot save directory.
 /// </summary>
 internal static class Program
 {
@@ -34,6 +38,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         string? livePath = null;
+        string? emitPath = null;
         string? schemaPath = null;
         int playerCount = 10_000;
 
@@ -44,6 +49,9 @@ internal static class Program
                 case "--live" when i + 1 < args.Length:
                     livePath = args[++i];
                     break;
+                case "--emit" when i + 1 < args.Length:
+                    emitPath = args[++i];
+                    break;
                 case "--schema" when i + 1 < args.Length:
                     schemaPath = args[++i];
                     break;
@@ -52,13 +60,17 @@ internal static class Program
                     break;
                 default:
                     Console.Error.WriteLine($"Unknown or incomplete argument: {args[i]}");
-                    Console.Error.WriteLine("Usage: SchemaValidator [--live <db path>] [--schema <SchemaDefinitions.sql>] [--players <n>]");
+                    Console.Error.WriteLine("Usage: SchemaValidator [--live <db path> | --emit <scratch db path>] [--schema <SchemaDefinitions.sql>] [--players <n>]");
                     return 2;
             }
         }
 
         try
         {
+            if (emitPath is not null)
+            {
+                return EmitScratchDatabase(emitPath, schemaPath ?? FindSchemaScript());
+            }
             if (livePath is not null)
             {
                 RunLiveAudit(livePath);
@@ -89,6 +101,28 @@ internal static class Program
     // ------------------------------------------------------------------
     // Modes
     // ------------------------------------------------------------------
+
+    private static int EmitScratchDatabase(string emitPath, string schemaPath)
+    {
+        string fullPath = Path.GetFullPath(emitPath);
+        if (fullPath.Contains("app_userdata", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Refusing to emit under the Godot save directory: {fullPath}");
+            return 2;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        DeleteDatabaseFiles(fullPath);
+        int version;
+        using (var db = new DatabaseManager(fullPath))
+        {
+            db.InitializeSchema(schemaPath);
+            version = db.GetSchemaVersion();
+        }
+        SqliteConnection.ClearAllPools();
+        Console.WriteLine($"Emitted scratch schema db (user_version={version}) from {schemaPath} to {fullPath}");
+        return 0;
+    }
 
     private static void RunScratchValidation(string schemaPath, int playerCount)
     {

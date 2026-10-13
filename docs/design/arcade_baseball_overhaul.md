@@ -92,7 +92,7 @@ This is what makes it *arcade physics* rather than a dice roll in costume: a bal
 
 ### 3.3 Batted-ball flight and ground play
 
-Same drag + Magnus integrator as the pitch. Ground contact: coefficient of restitution + rolling friction, both **per surface** (grass, dirt infield, warning track, turf at some parks). Fences have height and distance per park, read from that team's entry in `Assets/Data/Venues/venues.json` (gameplay_core §3.1, which already carries LF/LCF/CF/RCF/RF distances and wall heights). Foul lines decide fair/foul at the first bounce or the bag; foul poles decide home runs.
+Same drag + Magnus integrator as the pitch. Ground contact: coefficient of restitution + rolling friction, both **per surface** (grass, dirt infield, warning track, turf at some parks). Fences have height and distance per park. **At 1.0 every park uses its tier's standard dimensions** (owner accepted R-1 Q06: park factors off for 1.0), so venue identity is presentation-only. The per-team distances in `Assets/Data/Venues/venues.json` (gameplay_core §3.1) drive the art, and they'd drive the physics only through a later approved Math slice. Foul lines decide fair/foul at the first bounce or the bag; foul poles decide home runs.
 
 ### 3.4 Fielders
 
@@ -297,7 +297,7 @@ Richer events fold into existing columns the way `PaOutcome` already folds them:
 
 **Ownership:** Gemini 3.1 Pro Math owns the noise tables and physics constants (TEAM.md). Tuning happens **only** through them, as data edits. The harness re-runs after any change under `Assets/Simulation/Arcade/`, the same mandate `run_monte_carlo_batch` carries for the rest of `Assets/Simulation/`. If a change touches the shared `EffectiveRatings` stack, both harnesses run.
 
-**The human is deliberately not calibrated to the league.** A skilled player can beat their ratings; that's the point of the choice. What *is* tuned is **difficulty** (§5.6). The scripted-skill bot harness from gameplay_core §1.4 carries over with three bots: perfect, average and poor. At the default difficulty, Math sets the targets: the average bot ≈ the ratings-only line, and the perfect and poor bots ≈ ±30 rating points. That's gameplay_core's "about a 40-to-70 gap" proposal, now owned by the difficulty presets. Higher tiers keep it a challenge, because pitches are faster and nastier.
+**The human is deliberately not calibrated to the league.** A skilled player can beat their ratings; that's the point of the choice. What *is* tuned is **difficulty** (§5.6). The scripted-skill bot harness from gameplay_core §1.4 carries over with three bots: perfect, average and poor. At the default difficulty, the targets are the owner's **O1** skill band (2026-10-10): the average bot ≈ the ratings-only line, and the perfect and poor bots ≈ the 40-to-70 rating gap (±.100 OPS), capped. Math sets the constants. Higher tiers keep it a challenge, because pitches are faster and nastier.
 
 ---
 
@@ -323,13 +323,13 @@ There's one sprite set, **palette-swapped by shader** per team (jersey, cap, tri
 
 ### 10.4 Every park is its own field
 
-Each of the 68 venues gets a field tileset built from its catalog entry: dimensions, wall heights, surface, and one or two signature features such as a short porch, an ivy wall or a harbor beyond right. Tier sets the base kit:
+Each of the 68 venues gets a field built from **reusable park kits plus team dressing** (owner accepted R-1 Q13). The dressing draws on its catalog entry: dimensions, wall heights, surface, and one or two signature features such as a short porch, an ivy wall or a harbor beyond right. Tier sets the base kit:
 
 - **HS:** chain-link, bleachers, odd dimensions.
 - **College:** a real ballpark with a modest crowd.
 - **Pro:** a full stadium, with night games under lights.
 
-Crowd density scales with tier and the game's stakes. Dimensions feed the physics directly, so parks *play* differently by geometry (§13 Q5).
+Crowd density scales with tier and the game's stakes. At 1.0 the physics runs on tier-standard dimensions (R-1 Q06), so the signature features are visual. Real geometry is a post-1.0 Math option (§13 Q5).
 
 ### 10.5 Game feel ("better than RBI")
 
@@ -374,17 +374,17 @@ All art is original. The RBI Baseball reference is for *style*, never its assets
 
 ## 12. Phase G slices (model-tagged, one gate each)
 
-These replace gameplay_core's former §4 table. The roles come from [TEAM.md](../TEAM.md) §1. Every task follows the handoff protocol (gameplay_core §5).
+These replace gameplay_core's former §4 table, and they reuse the IDs G-1…G-9. The old G-2 (pitching mode) and G-8 (Read v2) are retired and archived. Engine slices go to **GPT 6 Astra Pro**, per the owner's 2026-10-10 decision that it is the senior engineer for gameplay models. G-0a was built by Claude Opus before the two histories merged. The roles come from [TEAM.md](../TEAM.md) §1. Every task follows the handoff protocol (gameplay_core §5).
 
 | Slice | Content | Recommended model | Reviewer | Gate |
 | :-- | :-- | :-- | :-- | :-- |
 | **G-0** | **Feel prototype:** standalone scene, one batter vs one pitcher, pitch flight + contact + batted-ball flight + landing readout. Placeholder sprites; no fielding, no DB. | Claude Opus 5.5 (physics) + Claude Sonnet 5.5 (scene) | Gemini Pro | **Owner verdict: "hitting is fun."** Iterate here until it is. |
-| **G-1** | Attribute audit → the ratings-to-physics mapping (§4.1): mph ranges, bat speed, reach, arm and speed curves | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **Owner: default difficulty target** |
-| **G-2** | Physics core + rules engine (§3), engine-independent; `ArcadeHarness` rules + determinism suites | Claude Opus 5.5 | Gemini Pro | Harness rules + determinism green |
-| **G-3** | AI for every role (§6); AI-vs-AI games calibrated to the Phase 13 bands | Claude Opus 5.5 + Gemini Pro Math | Gemini Pro | **§9 bands green, all three tiers** |
-| **G-4** | Integration: `EffectiveRatings` extraction; `Player_Fielding` + ripples (§8); `ArcadeGame` flush; `PlayPendingArcadeGame`; autopilot routing; Classic setting; booth beats (§7.6) | Claude Opus 5.5 | Gemini Pro | MC full suite (resolver guard byte-exact); season-long arcade harness |
+| **G-1** | Attribute audit (**done inside R-1**) → the ratings-to-physics mapping (§4.1): mph ranges, bat speed, reach, arm and speed curves | GPT 6 Astra Pro → Gemini Pro Math | Claude Opus | ~~Default difficulty target~~ decided (O1) |
+| **G-2** | Physics core + rules engine (§3), engine-independent; `ArcadeHarness` rules + determinism suites | GPT 6 Astra Pro | Gemini Pro + Claude Opus (merge gate) | Harness rules + determinism green |
+| **G-3** | AI for every role (§6); AI-vs-AI games calibrated to the Phase 13 bands | GPT 6 Astra Pro + Gemini Pro Math | Gemini Pro + Claude Opus | **§9 bands green, all three tiers** |
+| **G-4** | Integration: `EffectiveRatings` extraction (incl. R1-EFFECTS projections); `Player_Fielding` + ripples (§8); `ArcadeGame` flush; `PlayPendingArcadeGame`; autopilot routing; Classic setting; booth beats (§7.6) | GPT 6 Astra Pro | Gemini Pro + Claude Opus | MC full suite (resolver guard byte-exact); season-long arcade harness |
 | **G-5** | Arcade presentation: SubViewport, pitch/field views, 15b scorebug, controls + remapping, watch & skip, play-by-play, box score | Claude Sonnet 5.5 | Gemini Pro | Clean boot; playable end to end; watched = skipped |
-| **G-6** | Take-over-the-team toggle + full baserunning control | Claude Sonnet 5.5 + Claude Opus 5.5 | Gemini Pro | Owner playtest |
+| **G-6** | Take-over-the-team toggle + full baserunning control | Claude Sonnet 5.5 + GPT 6 Astra Pro | Gemini Pro | Owner playtest |
 | **G-7** | Venue catalog (68 entries, incl. the dimensions physics reads) + venue screens + hotspots (gameplay_core §3) | Claude Sonnet 5.5 (+ Gemini Flash: catalog data) | Claude Opus | Every team resolves a venue |
 | **G-8** | Art: 16-bit sprite set, palette-swap shader, per-venue field tilesets, venue screen art | Owner + artist/AI art tools (Flash: integration); inside 15d | Claude Opus (consistency) | **Owner taste** |
 | **G-9** | Tuning + difficulty presets (§5.6, §9) | Gemini Pro Math + Claude Sonnet 5.5 (data) | Claude Opus | **Owner sign-off; Classic's fate (§11)** |
@@ -406,7 +406,7 @@ These replace gameplay_core's former §4 table. The roles come from [TEAM.md](..
 2. **v1 extras:** stolen bases, pickoffs and bunts. In v1, or a follow-up slice? *Recommended: stolen bases in v1; pickoffs and bunts as follow-ups.*
 3. **Takeover stats:** should games played in takeover mode count normally for teammates' stats, the draft and the father-record chase, or be flagged? *Recommended: count normally, so the record chase stays simple. Takeover doesn't touch the avatar's own at-bats.*
 4. **Classic sim:** keep it permanently as a "quick sim" option, or retire it once the arcade engine is proven?
-5. **Parks play differently?** Real dimensions make some parks hitter-friendly by geometry. *Recommended: yes, with Math checking that each tier's league-wide average stays neutral.* This replaces gameplay_core's "park factors" decision.
+5. ~~Parks play differently?~~ **Settled for 1.0 by R-1 Q06: no.** The physics uses tier-standard dimensions; real geometry is a post-1.0 Math option.
 6. **Art source:** commission a pixel artist, license a sprite pack, curated AI-assisted pixel art, or a mix (e.g. a pack for crowds and tiles, an artist for players)?
 
 ## 14. Risks

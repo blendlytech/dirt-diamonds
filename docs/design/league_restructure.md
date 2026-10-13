@@ -212,7 +212,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 ### 9.3 The Draft
 
 - **When:** the second Saturday of July (after the College National Championship and before the Pro stretch run).
-- **Order:** reverse Pro regular-season standings. Non-playoff teams first; playoff teams ordered by round of elimination; the champion picks last. No lottery.
+- **Order:** previous completed Pro season standings/playoffs: non-playoff teams first by reverse standings, playoff teams by elimination round, champion last. The inaugural draft uses a seeded deterministic team order. No current-season future playoff result is consulted; no lottery (R-1 Q09).
 - **Rounds:** 4 (128 picks). That matches steady-state turnover: 768 Pro roster spots ÷ about 6-season average careers ≈ 128 a year. Math owns the conservation check: in the PipelineHarness, Pro population stays within ±5% of capacity across 20 simulated seasons.
 - **Team AI:** best available by recruit value, with a role-need tiebreak (a team short on SP takes the SP).
 - **Avatar:** **Draft Night** is a cutscene plus a phone moment. The drafting team's announcer gets a "we've drafted…" clip. The avatar signs (a signing bonus via `PlayerQueries.AdjustFunds`, a money spike that feeds the life-sim temptation loop) and **reports next spring**. Between the draft and Opening Day, the avatar lives a "signed prospect" offseason (training, money, risk).
@@ -366,6 +366,8 @@ The game hasn't released. On boot, a save with `user_version < 14` gets a dialog
 
 ## 15. Build slices (each one gated; owners per BUILD_PLAN)
 
+**Integration branch (owner decision, 2026-10-10).** Slices 13-1, 13-2 and 13-3 change the world's shape: 68 teams, 3 tiers, per-tier rosters and schedules. The shipped sim hard-codes 8 teams × 17 players per tier until 13-2 and 13-3 land, so no one of these slices can pass the full MC gate alone. Each one is reviewed (TEAM.md §2) and merged into **`p13/integration`**, not `main`. Expected red MC checks on that branch are listed in each slice's handoff. `p13/integration` merges to `main` only when the **full MC suite is green with the new Pro guard recorded** (13-3, sanctioned in §11.3). `main` stays green on v13 until then. Claude Opus keeps the branch synced with `main` (Phase G work). **L-1 (schema v15) branches from `p13/integration`, not `main`.**
+
 | Slice | Content | Owner | Gate |
 | :-- | :-- | :-- | :-- |
 | **13-0** | Prerequisites: sqlite MCP repaired; the 344/345 MC flake identified and seeded (failed-check recap on the harness tail) | Pro | MC green 20/20 runs |
@@ -381,7 +383,7 @@ The game hasn't released. On boot, a save with `user_version < 14` gets a dialog
 
 ## 16. Interpretations and open items
 
-Places where the source spec was ambiguous. Each is a recommended default that the user may overrule.
+Owner accepted R-1 Q09: I1–I5 below are adopted defaults, including prior-completed-season draft order and a seeded inaugural order. Names remain subject to owner selection and clearance.
 
 - **I1. College "2 extra open starting spots".** Read as **+2 active roster slots usable at any position** (active cap 20 vs Pro's 18). The alternative is 2 extra *lineup* spots (an 11-batter lineup), which would need resolver/lineup changes and is not recommended.
 - **I2. HS/College regular-season length.** The spec gives cadence (1/week) but not length. Chosen: HS 10 games (conference double round-robin), College 14 (division double + conference single).

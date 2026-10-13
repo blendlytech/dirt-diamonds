@@ -436,7 +436,7 @@ public sealed class CareerManager
 
         PitcherRole displacedRole = ratings.IsPitcher ? pitcherRole : PitcherRole.None;
         string displacedId = FindDisplacedPlayer(teamId, displacedRole);
-        string avatarId = Guid.NewGuid().ToString();
+        string avatarId = NextGuid();
 
         // 9a: the avatar's tier's sim is the one whose roster this mutates —
         // resolve it before the flush so nothing in flight is lost to the
@@ -532,8 +532,8 @@ public sealed class CareerManager
     {
         PersonQueries persons = Persons!;
 
-        string parent1Id = Guid.NewGuid().ToString();
-        string parent2Id = Guid.NewGuid().ToString();
+        string parent1Id = NextGuid();
+        string parent2Id = NextGuid();
         InsertHouseholdParent(parent1Id, backstory.Parent1FirstName, lastName, backstory.Parent1Age);
         InsertHouseholdParent(parent2Id, backstory.Parent2FirstName, lastName, backstory.Parent2Age);
 
@@ -665,7 +665,7 @@ public sealed class CareerManager
 
         PlayerRatingsRow heirRatings = HeirGenetics.BlendRatings(in parentA, in parentB, isPitcher, ref _rng);
         int interest = HeirGenetics.RollInterest(HeirGenetics.HeirGeneticsProfile.BirthAffinity, ref _rng);
-        string heirId = Guid.NewGuid().ToString();
+        string heirId = NextGuid();
 
         // Schema v10 (development doc §3.3): the blended vector is the heir's
         // POTENTIAL — the genetic ceiling, reached only by developing. His
@@ -1542,6 +1542,15 @@ public sealed class CareerManager
         {
             _gameInFlight = false;
         }
+    }
+
+    private string NextGuid()
+    {
+        Span<byte> bytes = stackalloc byte[16];
+        BitConverter.TryWriteBytes(bytes, _rng.NextUInt64());
+        BitConverter.TryWriteBytes(bytes.Slice(8), _rng.NextUInt64());
+        bytes[15] = 0xDD;
+        return new Guid(bytes).ToString();
     }
 
     private void ResolvePendingWithAutopilot()

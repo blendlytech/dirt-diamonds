@@ -27,7 +27,7 @@ Why this format (decided):
 | `achievement` | A Steam achievement unlocks | 3–5 s | Yes (tap) | "RAP SHEET" stamped over a mugshot |
 | `big_play` | A ★ play in the avatar's live game | 3–6 s | Yes (tap) | A home run trot over the announcer's tagline |
 
-Every cutscene can be skipped (the first view of a `story` cutscene included, after 0.5 s). Skipping jumps to the end state, so nothing is lost.
+Every cutscene can be skipped (the first view of a `story` cutscene included, after 0.5 s). Skipping ends presentation. Core has already committed durable story facts/notification state and owns acknowledgement/replay; neither skip nor playback completion writes progression state.
 
 ---
 
@@ -53,7 +53,7 @@ Every cutscene can be skipped (the first view of a `story` cutscene included, af
 
 ### 3.1 Queue and rate limits
 
-- One cutscene at a time; queue depth 3 (lowest-priority items are dropped beyond that). Priority: story > milestone > achievement > big_play.
+- One cutscene at a time; queue depth 3 (lowest-priority items are dropped beyond that). Priority: story > milestone > achievement > big_play. Dropping playback never drops its durable Core notification. Revelations remain replayable and never block succession (R-1 Q11).
 - **Big plays:** at most one per half-inning; at most 3 per game (walk-offs and championship-winning plays always play).
 - **Achievements:** they play at the next calm moment (never mid-at-bat). Several unlocking together play back-to-back as one sequence.
 - **Settings:** *Story cutscenes* On/Off (Off shows a still card with the caption text); *Big-play cutscenes* All / Key plays only / Off; *Achievement cutscenes* On/Off; *Reduce motion* (static panels, no camera moves or shake).
