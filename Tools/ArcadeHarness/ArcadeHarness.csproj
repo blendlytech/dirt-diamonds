@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>DirtAndDiamonds.Tools.ArcadeHarness</RootNamespace>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <!--
+      The arcade physics core compiled headless, exactly as it ships
+      (docs/design/arcade_baseball_overhaul.md §2): Godot-free, Data-free,
+      Life-free, referencing only RngState (the established pure-PRNG
+      exception, same as HoldemHarness). If an engine or Data type leaks into
+      Assets/Simulation/Arcade, this project stops building — that is the
+      engine-independence gate.
+    -->
+    <Compile Include="..\..\Assets\Simulation\Arcade\*.cs" Link="Arcade\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\RngState.cs" Link="Baseball\RngState.cs" />
+  </ItemGroup>
+</Project>
