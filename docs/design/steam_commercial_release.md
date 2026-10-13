@@ -30,7 +30,7 @@
 
 ## 3. Achievements and rich presence (17a)
 
-Phase 11's discipline holds: **every achievement traces to a bus event or persisted state, never a new tracking write.** Each also gets an achievement cutscene card ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6).
+Phase 11's discipline holds: **every achievement traces to durable gameplay facts or a durable eligibility/outbox record.** Owner accepted R-1 Q14: play with Steam entirely unavailable counts on later availability. Persist eligibility/totals that cannot be reconstructed; reconcile idempotently with no duplicated increments. This supersedes the old no-tracking-write rule where it loses offline credit. Each also gets an achievement cutscene card ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §6).
 
 | Achievement | Signal | Status |
 | :-- | :-- | :-- |

@@ -1,9 +1,15 @@
 # Task Brief: R-1 — Full-Project Review
 
-**Recommended model:** Claude Fable 5.1
+> **History (2026-10-10).** This brief was written for Claude Fable 5.1. Fable was pointed at the narrower G-2 pitching-mode design first, and its prepaid API credit ran out before R-1 began. The owner then **reassigned R-1 to GPT 6 Astra Pro**. Since the brief was written:
+> - The owner decided **O1** (the skill band; gameplay_core §6 item 1).
+> - G-2 has a full design, [pitching_mode.md](../archive/pitching_mode.md) **rev 2**. In `03_gameplay.md`, check rev 2 rather than designing pitching again.
+> - You also own G-8 and the G-2 engine (TEAM.md §2). R-1 is read-only on code, so it runs in its **own** worktree alongside them. Where your review touches G-2/G-8, flag it; don't redesign it.
+
+**Model:** GPT 6 Astra Pro (owner assignment, 2026-10-10)
 **Reviewer / triage:** the owner + Claude Opus 5.5 (integration lead)
 **Owner gate:** the owner accepts or rejects each proposal
-**Branch / worktree:** `review/fable-5-1` in your own worktree: `git worktree add ..\dnd-fable -b review/fable-5-1 origin/main` (TEAM.md §3)
+**Branch / worktree:** `review/r1` in its own worktree: `git worktree add ..\dnd-gpt-review -b review/r1 origin/main` (TEAM.md §3). Don't reuse `..\dnd-gpt` (G-8) or `..\dnd-gpt-voice` (14b).
+**Pacing:** usage is plentiful, but the corpus (§3: about 1.36M tokens) is bigger than one context. Go **subsystem by subsystem** (§4) and commit findings to disk after each one, so the review survives a context reset or a cut-off session.
 
 ---
 
@@ -47,7 +53,7 @@
 
 ## 5. Deliverables
 
-Write these to `docs/review/fable_5_1/`, one file each:
+Write these to `docs/review/r1/`, one file each:
 
 | File | Contents |
 | :-- | :-- |
@@ -73,7 +79,7 @@ Each has been reported by the integration lead. Confirm or refute it against the
 - **The shipped code is the 6-tier league**, while the plan is 3 tiers (Phase 13).
 - **`MaturityAge = 19`**, while a reclaimed child becomes official at 18 (intended, D15).
 - **The live save** `dirt_and_diamonds.db` was found at 0 bytes (2026-10-09).
-- **Reference docs' "Status" lines are historical**, and their "Fable 5 / Opus 4.8 / Sonnet 5" authors are past, not current roles. You are unrelated to "Fable 5".
+- **Reference docs' "Status" lines are historical**, and their "Fable 5 / Opus 4.8 / Sonnet 5" authors are past, not current roles. (Neither is Claude Fable 5.1, who held this brief first.)
 
 ## 7. Tests and gates (read-only verification is allowed)
 
@@ -81,7 +87,7 @@ Each has been reported by the integration lead. Confirm or refute it against the
 | :-- | :-- |
 | `dotnet build DirtAndDiamonds.sln -c Debug` | 0 warnings, 0 errors |
 | `dotnet run --project Tools/GrittyEventsHarness -c Release` | 363/363 |
-| `dotnet run --project Tools/MonteCarloHarness -c Release` | 345/345 (rare flake: see 13-0) |
+| `dotnet run --project Tools/MonteCarloHarness -c Release` | 352/352 (reviewed baseline 2dec343; rare flake: see 13-0) |
 | `dotnet run --project Tools/CoreLoopHarness -c Release`, `NeedsDecayHarness`, `HustleHarness`, `HoldemHarness`, `SchemaValidator` | all green |
 
 If a gate fails on a clean `origin/main`, that's a finding. Report it; don't fix it.
@@ -99,14 +105,14 @@ If a gate fails on a clean `origin/main`, that's a finding. Report it; don't fix
 - [ ] `01_conflicts.md` has no unresolved factual conflict left; every remaining item needs an owner decision.
 - [ ] Every proposal has why / what / cost / risk / model.
 - [ ] `05_plan_to_1_0.md` names the next 5 slices and their models.
-- [ ] Your branch is pushed; nothing is merged.
+- [ ] Your branch is committed (push only if the owner says so); nothing is merged.
 
 **When every box is checked, stop.**
 
 ## 10. Handoff (end your session with this, addressed to the human)
 
 ```text
-Done: R-1 full-project review → docs/review/fable_5_1/ (7 files) · Branch: review/fable-5-1 @ <sha>
+Done: R-1 full-project review → docs/review/r1/ (7 files) · Branch: review/r1 @ <sha>
 Gates: build <result> · GrittyEvents <n/n> · MonteCarlo <n/n> · others <results>
 Top 5 findings: <one line each>
 Open: <owner questions count> owner questions in 06_owner_questions.md

@@ -58,9 +58,9 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
 | Attribute | What it affects today | Gameplay gap / proposal |
 | :-- | :-- | :-- |
 | **confidence, happiness, teamwork** | The only person stats that reach the field (±2 points each, §1.2); also events | — |
-| **intelligence, maturity, charisma, reputation, social_status, attractiveness, morality, discipline (person), work_ethic** | Event prerequisites and outcomes, dating and NPC autonomy, person drift, item rewards (`PersonDrift`, `EventConsequenceApplier`, `NpcAutonomyService`, `ItemService`) | **None reach the field.** *Proposal:* work_ethic scales practice → development; discipline (person) adds to how early the pitch reads; maturity shrinks slump and stress effects. Owner/Math call. |
+| **intelligence, maturity, charisma, reputation, social_status, attractiveness, morality, discipline (person), work_ethic** | Event prerequisites and outcomes, dating and NPC autonomy, person drift, item rewards (`PersonDrift`, `EventConsequenceApplier`, `NpcAutonomyService`, `ItemService`) | **None reach the field.** **Accepted R-1:** work_ethic scales actual practice development with a bounded Math-calibrated modifier. Additional person discipline/composure field scalers are deferred until after 1.0. |
 | **gpa** | HS eligibility, school events, recruiting context | — |
-| **Needs** (hunger, sleep, hygiene, social, fitness) and **stress** | Life sim only: utility AI, forced actions, events | **They never touch the field.** A starving, sleepless player bats like a rested one. *Proposal:* a small, capped game-day penalty from low sleep/fitness and high stress (an `Active_Effects` row baked at game start, bit-identical when needs are healthy). Owner/Math call. |
+| **Needs** (hunger, sleep, hygiene, social, fitness) and **stress** | Life sim only: utility AI, forced actions, events | **They never touch the field.** A starving, sleepless player bats like a rested one. **Accepted R-1:** one small capped game-start projection from needs/stress, visible to the player and consistent across attended (arcade) and background avatar games. It enters through `EffectiveRatings` (arcade §4.2). Healthy/no-effects is exact identity; Math owns constants and prevents double counting. |
 | **health_ceiling** | Injury rust, decline speed, forced retirement below the floor | — |
 | **recklessness** | Event and hustle prerequisites; risk rolls | — |
 | **baseball_interest** | Heirs only: will this child play? | — |
@@ -73,14 +73,14 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
 
 - **Attended games (arcade).** Each rating becomes a physical capability: power → bat speed, contact → sweet-spot size and timing window, discipline → how early the pitch reads, stuff/arsenal → pitch speed and break, control → release-meter width and scatter, stamina → fatigue, fielding → reaction and reach, plus the new **speed** and **arm**. The player's timing and aim decide the outcome. Full mapping: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §4.
 - **Background games** use the shipped resolver from ratings only (§1.1), so the league stays calibrated. AI-vs-AI arcade games must land in the same per-tier bands (arcade §9).
-- **How much should skill be worth?** It's now a **difficulty** question: presets tune only the human's assists (timing window, cursor size, read cue, fielding assist), never the AI or the ratings. *Proposal (owner to confirm):* at the default difficulty, an average-skill player matches their ratings, and an excellent or poor one plays about ±30 rating points away. That's the same "about a 40-to-70 gap" as before, now measured by the scripted-skill bots in `ArcadeHarness`. **Math owns the tuning.**
+- **How much should skill be worth?** *Owner decided 2026-10-10 (O1):* about the gap between a **40- and a 70-rated** player (roughly ±.100 OPS around ratings), capped, with an average (or blind) player at the ratings line, for batting **and** pitching. Under arcade physics this is a **difficulty** target: presets tune only the human's assists (timing window, cursor size, read cue, fielding assist), never the AI or the ratings. At the default difficulty, an average-skill player matches their ratings and an excellent or poor one lands about ±30 rating points away, measured by the scripted-skill bots in `ArcadeHarness`. **Math owns the tuning.**
 - The shipped "Read the Pitch" model ([at_bat_read_input_model.md](../reference/at_bat_read_input_model.md)) stays in the code as the **Classic sim** fallback until the arcade engine is proven (arcade §11).
 
 ---
 
 ## 2. The at-bat interfaces (G1): replaced by the arcade engine
 
-**Superseded 2026-10-13 (owner decision G5).** The former §2.1 read-model view upgrade, §2.2 pitching mode (an `IPitcherPolicy` human branch) and §2.3 fielding moments are **not built**. Batting, pitching, fielding and baserunning are all live controls on the arcade field:
+**Superseded 2026-10-13 (owner decision G5).** The former §2.1 read-model view upgrade, §2.2 pitching mode (designed 2026-10-10 as [pitching_mode.md](../archive/pitching_mode.md) rev 2, "Work the Book") and its Read v2 batting re-band (old G-8) are **not built**. The R-1 deferral of manual fielding beyond 1.0 is **overridden**: fielding is assisted and playable at launch. Batting, pitching, fielding and baserunning are all live controls on the arcade field:
 
 | Interface | Where it's specified |
 | :-- | :-- |
@@ -123,11 +123,11 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 ### 3.3 Stadium mapping in the at-bat
 
 - The arcade field is built from the **home park's** catalog entry: its dimensions, walls, surface and signature features (arcade §10.4).
-- **Park factors now emerge from geometry:** a short porch really does give up more home runs. *Proposal:* keep it, with Math checking that each tier's league-wide average stays neutral (arcade §13 Q5). Background games stay park-neutral unless the owner also wants macro park factors, which would be a separate Math slice gated by `run_monte_carlo_batch`. **Owner decision.**
+- **Park factors: off for 1.0** (owner accepted R-1 Q06). Under physics, a park's real dimensions *would* change how it plays. So at launch the physics uses **tier-standard dimensions** for every park, and venue identity (art, signature features, crowd) is presentation-only. Any future geometry or factors need a separate approved Math slice with matchup/PA-weighted calibration (arcade §13 Q5).
 
 ### 3.4 Art scope
 
-68 venues × about 5–7 layered scenes, plus day/night variants for the field, in the approved Phase 15 direction. Pre-generated, curated and disclosed (the AI-art rule). This feeds slice 15d. The two shipped HS field images (CRW, LKS) are the seed. The **16-bit field tilesets** (one per venue, arcade §10.4) are a separate art set from these venue screens, produced in slice G-8.
+68 distinct venue identities built from **reusable park kits** with team-specific dressing, hotspots and day/night variants, in the approved Phase 15 direction. It is not 68 × 5–7 bespoke scene sets. Approve representative HS/College/Pro examples before volume production (owner accepted R-1 Q13). Pre-generated, curated and disclosed; feeds 15d. The **16-bit field kits** (arcade §10.4) follow the same kit-plus-dressing rule and are produced in slice G-8.
 
 ---
 
@@ -164,12 +164,17 @@ The human starts the next model. No model starts another model's slice.
 
 ---
 
-## 6. Open owner decisions
+## 6. Owner decisions
 
-1. ~~Arcade physics vs the read model~~ **Decided 2026-10-13: arcade physics** (G5).
-2. **Default difficulty target** (§1.4)? Recommended: average skill = your ratings; excellent or poor ≈ ±30 rating points.
-3. **Needs and stress on the field** (§1.3)? Recommended: a small, capped game-day penalty. On the arcade field this would land as slower reactions and a narrower timing window.
-4. **Person stats on the field** beyond the shipped three (§1.3)? Recommended: work_ethic → development, person discipline → how early the pitch reads.
-5. **Parks play differently by geometry** (§3.3)? Recommended: yes, tier-neutral on average.
-6. ~~Fielding moments~~ **Superseded:** fielding is fully playable (assisted) on the arcade field.
-7. The arcade-specific questions: steals, pickoffs and bunts in v1; takeover stats; Classic's fate; the art source ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §13).
+1. **Arcade physics** for attended games (G5, 2026-10-13).
+2. **Skill worth / default difficulty** (O1, 2026-10-10): about the 40-to-70 rating gap (±.100 OPS), capped; an average player sits at the ratings line.
+3. **Needs and stress** (R-1 accepted): a small capped visible game-start projection, the same for attended and background avatar games; healthy is exact identity; Math calibrates.
+4. **Person stats** (R-1 accepted): work_ethic → actual practice development first. Additional discipline/composure field scalers are deferred.
+5. **Park factors** (R-1 Q06): off for 1.0; tier-standard physics dimensions; distinct venue presentation stays in scope.
+6. **Fielding:** the R-1 "deferred beyond 1.0" is overridden by G5. Assisted fielding is in launch scope.
+7. **Still open** (arcade §13): stolen bases, pickoffs and bunts in v1; takeover stats; Classic's fate; the art source.
+
+## Accepted R-1 additions (implementation pending)
+
+- **[R1-LEARN](../tasks/R1-LEARN_practice_and_modifiers.md):** practice and the batting cage run the real **arcade engine** in an isolated session, with no career writes and no career-RNG draws. A read-only game-start DTO exposes the actual modifier order, clamps and effective ratings; UI never calculates them.
+- **[R1-EFFECTS](../tasks/R1-EFFECTS_life_projections.md):** the accepted life projections land in `EffectiveRatings` (arcade §4.2) only after **[R1-MATH](../tasks/R1-MATH_gameplay_contracts.md)** signs the constants. The fatigue correction stays separately authorized. Neutral/background guard changes must be explicit and reviewed.

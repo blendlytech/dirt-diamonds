@@ -24,10 +24,10 @@ When your career ends, a willing child can pick up the bat, and the family carri
 | **Prologue** | A captions-only motion comic: a childhood in poverty. No hint of the truth. | §6, §10 |
 | **High School** (Freshman → Senior, from age 16) | Tryouts, the varsity team, school and GPA, the household, a first job, a first hustle, dating. **A woman's route begins here**: she's only the 3rd girl in the nation to make an all-male team, and her pro dream is a joke to everyone else. | §4, §9 |
 | **Recruiting → Signing Day** | Offers arrive by phone; you pick a college (a walk-on offer guarantees one). | §4 |
-| **College** (class years 1–4) | Bigger stages, the National Ranking, adult temptations (18+). In the **Trailblazer's senior year**, the joke becomes a real possibility. | §4, §7, §8, §9 |
+| **College** (class years 1–4) | Bigger stages, the National Ranking, adult temptations (18+). Before the **Trailblazer's first eligible draft declaration** (senior-year fallback), the joke becomes a real possibility. | §4, §7, §8, §9 |
 | **The Draft / first Pro contract** | Drafted or signed as a free agent. **The father's first text arrives**: congratulations, a needle about his record, and "I'm pulling for you." For the Trailblazer, this is the day the first woman ever signs a pro contract. | §6, §9 |
 | **The Pro career** | 64-game seasons, the Sunday roster lock, the record chase against your father's mark, money, fame, marriage, children, affairs, substances, scandals, injuries. | §4, §7, §8 |
-| **The reveal** | Win the **Pro World Championship**, or **retire** (or die): whichever comes first, you learn the truth. | §6 |
+| **The reveal** | Win the **Pro World Championship**, or reach **career end** (retirement, permanent ban or death): whichever comes first, you learn the truth. | §6 |
 | **Career end** | Retirement, a lifetime ban, or death. | §4, §8 |
 | **Succession** | Any willing child aged 19+ (born, adopted in, or reclaimed) becomes the new player character. With no willing heir, the lineage is over and the game ends. | §7 |
 | **The next generation** | Your heir lives their own career. Secrets you left behind (a child you placed for adoption) can step into the batter's box against them. | §7 |
@@ -104,7 +104,7 @@ Full design: [design/temptation_and_lineage.md](design/temptation_and_lineage.md
 - **Hidden children live on in the world.** They grow up, and many play ball. They're revealed only:
   - by **crossing paths**: your line meets theirs as **opponents**, or as **teammates**, which has its own slow-burn reveal; or
   - by a **paid search**: it can't start until the child is 19; it costs a lot of money; it takes a random 1 week to a full season; and its stress drags your ratings down until it ends.
-- **Reclaiming a child:** once found, you choose whether to tell them. A told child becomes family (officially at 18). Reclaiming unfreezes the missing piece.
+- **Reclaiming a child:** once found, you choose whether to tell them. A told child becomes family (officially at 18). Official reclaim at age 18+ unfreezes the missing piece; telling a younger child begins the relationship but does not unlock it.
 - **Affairs:** each one gives **confidence at 100% plus a clutch boost** in high-pressure at-bats, and a small permanent ratings gain. The chance of getting **caught** and the chance of a **pregnancy** rise with **every** affair, and every roll is random. Discovery brings divorce, scandal, child support and a damaged clubhouse.
 - **The mirror.** You can become your father. The systems are built so that story can repeat.
 - **Succession:** any willing child aged 19+, of any gender (born, adopted in, or reclaimed), can take over.
@@ -133,9 +133,9 @@ Full design: [design/temptation_and_lineage.md](design/temptation_and_lineage.md
 - **Her goal is to be the first woman ever to play pro.** The route happens **once per save**, belonging to whoever gets there first. If she retires short of the Pros, a later daughter inherits the unfinished dream. Once someone has done it, later daughters play the standard route, and the press remembers who broke the barrier.
 - **Three acts:**
   1. **The joke** (HS through junior year of college): the 3rd girl in the nation to make an all-male team, and nobody takes the pro dream seriously.
-  2. **The possibility** (college senior year): scouts' notebooks come out, and the opposition gets organized.
+  2. **The possibility** (before the first eligible draft declaration; senior-year fallback): scouts' notebooks come out, and the opposition gets organized.
   3. **The first** (her first Pro contract).
-- She gets her own press articles, broadcaster calls, sponsorships and harassment. **She's the GOAT's daughter**, and he knows exactly who signed.
+- She gets her own press articles, broadcaster calls, sponsorships and harassment. **The founder is the GOAT's daughter; later heirs are the actual descendants.** Contact and press copy follow saved genealogy rather than replaying the founder's identity.
 
 ## 10. Presentation & audio
 
@@ -163,7 +163,7 @@ Full design: [design/temptation_and_lineage.md](design/temptation_and_lineage.md
 
 - **No runtime AI generation.** Voice and art are generated during development, human-reviewed, and shipped as files. Keys never enter the repo or the build.
 - **No real people, teams or broadcasters.** Everything is fictional. No voice clones or imitations.
-- **No spoken player names, and no avatar pronouns in pre-recorded calls.**
+- **No spoken player names, and no avatar pronouns in generic pre-recorded calls.** Route-specific Trailblazer calls may use gendered pronouns only when gated on that route (owner accepted R-1 Q16).
 - **Presentation never drives simulation.** Announcers, cutscenes, the phone and press consume events and never write state. The baseball sim stays deterministic and calibrated: the arcade engine is seeded and deterministic too, so a game you skip through is exactly the game you would have watched.
 - **Gender, ethnicity and listed position never touch the sim.** Your on-field position is a separate baseball record (`Player_Fielding`), seeded from your New Career pick. The sim reads only that.
 - **Adults-only rewards.** Temptation and substance boosts require 18+ and College or above.

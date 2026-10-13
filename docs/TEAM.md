@@ -16,8 +16,8 @@
 | **Gemini 3.1 Pro Math** | **Calibration and math owner** | Every "is the number right" question: per-tier bands and the new Pro guard, College ranking weights, short-rest/overuse risk, draft-pool conservation, announcer call-density weights | Shipping code without the harness proving its math |
 | **Gemini 3.8 Flash** | **Content at volume** | Announcer personas and ~5,600 script lines (14c); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
 | **Claude Sonnet 5.5** | **UI and feature engineer** | Phase 15 design system and screen rebuilds (15b, 15c, 15e); the Phase 13 league UI (bracket, draft board, recruiting, roster status, standings); 13-7 ripple fixes; the Around the League card | Calibrated-core changes |
-| **Claude Fable 5.1** | **Independent full-project reviewer** (joined 2026-10) | A complete read of the vision, docs and code; findings, proposals, add-ons and disagreements per [tasks/fable_5_1_full_review_brief.md](tasks/fable_5_1_full_review_brief.md). Its output feeds the owner and the integration lead; accepted proposals become slices through the normal flow | Merging its own changes; changing GAME_VISION without the owner's yes; touching `Assets/Simulation/` outside a briefed slice |
-| **GPT 6 Astra Pro** | **Standalone tools and release paperwork** | Self-contained tools with their own test suites: `Tools/VoiceGen` (brief ready), `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`; the third-party notices generator; drafts of the Phase 17b legal/disclosure package | Game code under `Assets/`; real API runs; anything involving the live key |
+| **Claude Fable 5.1** | **Inactive** (joined 2026-10; prepaid API credit exhausted 2026-10-10) | Authored the G-2 pitching-mode design ([pitching_mode.md](archive/pitching_mode.md) rev 1). Its R-1 review role moved to GPT 6 Astra Pro (owner, 2026-10-10). Re-engage only through a new brief with fresh credit | Merging its own changes; changing GAME_VISION without the owner's yes; touching `Assets/Simulation/` outside a briefed slice |
+| **GPT 6 Astra Pro** | **Senior engineer: gameplay models + standalone tools; full-project reviewer (R-1)** (expanded by the owner 2026-10-10: a strong model with plentiful subscription usage, so prefer it for heavy design and engineering over metered credit) | **R-1 full-project review** ([brief](tasks/R-1_full_review_brief.md); owner reassignment from Fable 5.1, 2026-10-10; read-only on code, own worktree); **G-2 pitching-mode engine** (G-2a/b/d, from the final [pitching_mode.md](archive/pitching_mode.md)); **G-8 Read v2 batting re-band** (design + engine, [brief](archive/G-8_read_v2_batting_reband_brief.md)); self-contained tools with their own test suites: `Tools/VoiceGen` (brief ready), `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`; the third-party notices generator; drafts of the Phase 17b legal/disclosure package | Merging its own sim changes without Gemini Pro's independent review and the Opus merge gate; game code under `Assets/` outside a briefed slice; real API runs; anything involving the live key |
 
 ---
 
@@ -47,16 +47,17 @@
 | **16a/16b** CutscenePlayer + Director + events | Gemini Pro | Claude Opus | — |
 | **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
 | **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Gemini Pro (wiring) | **Story sign-off** |
-| **G-0** arcade feel prototype (batter vs pitcher, placeholder art) | Claude Opus (physics) + Claude Sonnet (scene) | Gemini Pro | **"Hitting is fun"** |
-| **G-1** attribute audit → ratings-to-physics mapping (gameplay_core §1, arcade §4) | Claude Fable 5.1 (in R-1) → Gemini Pro Math | Claude Opus | **Default difficulty target** |
-| **G-2** arcade physics core + rules engine + `ArcadeHarness` | Claude Opus | Gemini Pro | — |
-| **G-3** arcade AI + calibration to Phase 13 bands | Claude Opus + Math | Gemini Pro | — |
-| **G-4** integration (`EffectiveRatings`, `Player_Fielding`, flush, autopilot, booth beats) | Claude Opus | Gemini Pro | — |
+| **G-0** arcade feel prototype (batter vs pitcher, placeholder art) | **G-0a physics: Claude Opus (built 2026-10-13, `pG/G-0a-opus`)** · G-0b scene: Claude Sonnet | Gemini Pro | **"Hitting is fun"** |
+| **G-1** attribute audit (**done inside R-1**, GPT 6 Astra Pro) → ratings-to-physics mapping (gameplay_core §1, arcade §4) | GPT 6 Astra Pro → Gemini Pro Math | Claude Opus | ~~Default difficulty target~~ (decided: O1 skill band) |
+| **G-2** arcade physics core + rules engine + `ArcadeHarness` | GPT 6 Astra Pro (owner 2026-10-10: senior engineer for gameplay models) | Gemini Pro (sim diff) + Claude Opus (merge gate) | — |
+| **G-3** arcade AI + calibration to Phase 13 bands | GPT 6 Astra Pro + Gemini Pro Math | Gemini Pro + Claude Opus | — |
+| **G-4** integration (`EffectiveRatings`, `Player_Fielding`, flush, autopilot, booth beats, R1-EFFECTS projections) | GPT 6 Astra Pro | Gemini Pro + Claude Opus | — |
 | **G-5** arcade presentation + controls + watch & skip | Claude Sonnet | Gemini Pro | Playtest |
-| **G-6** take over the team + baserunning | Claude Sonnet + Claude Opus | Gemini Pro | Playtest |
-| **G-7** venue catalog (68, incl. dimensions) + venue screens | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
-| **G-8** art: 16-bit sprites, field tilesets, venue art | Owner + artist/AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste; art source** |
-| **G-9** tuning + difficulty presets | Gemini Pro Math + Claude Sonnet (data) | Claude Opus | **Sign-off; Classic's fate** |
+| **G-6** take over the team + baserunning | Claude Sonnet + GPT 6 Astra Pro | Gemini Pro | Playtest |
+| **G-7** venue catalog (68) + venue screens (reusable kits + team dressing, R-1 Q13) | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
+| **G-8** art: 16-bit sprites, field kits, venue art | Owner + artist/AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste; art source** |
+| **G-9** tuning + difficulty presets (O1 skill band as the default target) | Gemini Pro Math + Claude Sonnet (data) | Claude Opus | **Sign-off; Classic's fate** |
+| ~~old G-2 pitching mode / old G-8 Read v2~~ | **Retired 2026-10-13** by the arcade decision; docs in `archive/` | — | — |
 | **L-0** docs + no-abortion content fix | Claude Opus | Gemini Pro | **DONE 2026-10-10** |
 | **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus (+ Sonnet: New Career UI) | Gemini Pro | — |
 | **L-2** legends roster, identity catalog, record map | Flash | Claude Opus | **Ethnicity list, legend backstories** |
@@ -70,7 +71,7 @@
 | **S-2** substance magnitudes | Math | Claude Opus | — |
 | **S-3** substance content + PED re-gate | Claude Opus (scripts) → Flash | Gemini Pro | — |
 | **S-4** the asterisk (press + record book) | Gemini Pro + Flash | Claude Opus | — |
-| **R-1** full-project review | Claude Fable 5.1 | Claude Opus (triage) | **Accept / reject proposals** |
+| **R-1** full-project review ([brief](tasks/R-1_full_review_brief.md); Fable 5.1's credit ran out before it began) | **GPT 6 Astra Pro** (owner reassignment, 2026-10-10) | Claude Opus (triage) | **Accept / reject proposals** |
 | **17a** achievements + presence | Gemini Pro | Claude Opus | — |
 | **17b** legal + notices drafts | GPT Astra Pro | Claude Opus | **Legal sign-off, trademark** |
 | **17c** store copy + trailer script | Claude Opus | — | **Approve** |
@@ -108,5 +109,9 @@
 ## 5. Open decisions for the owner
 
 1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed this roster; Claude Opus 5.5 is integration lead. GEMINI.md and league_restructure.md now point here.
-2. **The auto-committer.** Six models working in parallel plus an auto-committer pushing to `main` will collide. Recommended: turn it off, or limit it to a personal scratch branch, and merge only through review (§3).
+2. **Auto-committer policy (R-1 accepted):** no automatic commits/pushes to main or shared/integration branches. Disable it for those targets; any retained automation is restricted to an explicitly chosen personal scratch branch. Reviewed human-directed integration only. This records policy, not a claim that an external service has been disabled.
 3. ~~**Repo visibility.**~~ **Resolved 2026-10-10:** the repo is private.
+
+## R-1 accepted repair assignments (2026-10-10)
+
+The owner accepted all [R-1 answers](review/r1/06_owner_questions.md). The [BUILD_PLAN execution table](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) links the eight scoped briefs. Opus owns SAVE-1/SAVE-2/FAMILY and durable REVEAL/STEAM work; Gemini Pro independently reviews and owns presentation/Steam integration. Gemini Pro Math owns R1-MATH; GPT owns accepted EFFECTS projections and LEARN engine DTO/session seams, Opus development, Sonnet LEARN UI. These assignments supplement existing slices; they do not authorize simultaneous edits to shared files. Stop and hand off per §3.

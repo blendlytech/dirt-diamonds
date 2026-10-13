@@ -4,7 +4,7 @@
 
 No phase merges until its exit criteria pass. Slices run in parallel where the dependency map allows. **Phases 0–12 and the post-12 arcs are complete. The road to launch is Phases 13–17, plus Phase G (gameplay core, high priority) and Phase L (lineage, temptation and vice).**
 
-> **Historical author names.** Shipped specs in `reference/` and `archive/` name an earlier model roster as their authors ("Fable 5", "Opus 4.8", "Sonnet 5"). Those are past authors, not current roles, and they're unrelated to **Claude Fable 5.1**, which joins in 2026-10 as the independent full-project reviewer ([tasks/fable_5_1_full_review_brief.md](tasks/fable_5_1_full_review_brief.md)). Current roles live only in [TEAM.md](TEAM.md).
+> **Historical author names.** Shipped specs in `reference/` and `archive/` name an earlier model roster as their authors ("Fable 5", "Opus 4.8", "Sonnet 5"). Those are past authors, not current roles, and they're unrelated to **Claude Fable 5.1**, which joined in 2026-10 and authored the G-2 pitching design (the R-1 review is now GPT 6 Astra Pro's: [tasks/R-1_full_review_brief.md](tasks/R-1_full_review_brief.md)). Current roles live only in [TEAM.md](TEAM.md).
 
 ## Completed: Phases 0–12 and the post-12 arcs
 
@@ -26,7 +26,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 | 12 "Saleable" | Render integrity, surface-the-sim cards, at-bat presentation | [surface_the_sim.md](reference/surface_the_sim.md), [at_bat_presentation.md](reference/at_bat_presentation.md) |
 | Post-12 arcs | HS person layer HS-0…HS-6 (schema v11→v13), onboarding + tutorial overlay, UI slices A/B/D-1/G, event-choice prominence, the DIRT-1…4 criminal arc, the hustle depth pass (incl. robbery), the household board | [high_school_person_layer.md](reference/high_school_person_layer.md), [hs_onboarding_events.md](reference/hs_onboarding_events.md), [onboarding_tutorial_overlay.md](reference/onboarding_tutorial_overlay.md), [real_time_clock_slice_g.md](reference/real_time_clock_slice_g.md), [criminal_underworld_content_arc.md](reference/criminal_underworld_content_arc.md), [hustle_minigames_depth_pass.md](reference/hustle_minigames_depth_pass.md), [household_board.md](reference/household_board.md) |
 
-## Phase 13 — League Restructure → Milestone M8 "The Pipeline" (ACTIVE: design complete; 13-0 review open, build next)
+## Phase 13 — League Restructure → Milestone M8 "The Pipeline" (ACTIVE: 13-0 done 2026-10-10; 13-1…13-3 build on `p13/integration`, spec §15)
 
 **Spec:** [design/league_restructure.md](design/league_restructure.md), which resolves the user's source spec (bottom of this file). It replaces the Phase 9 league model (6 tiers including Single-A, Double-A and Triple-A; 8 teams per tier; fixed 9+5+3 rosters; tier-ladder promotion).
 
@@ -53,14 +53,16 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 - **Control and viewing:** you control your own player, or take over the whole team. Fielding is assisted. Watch the entire game and skip by pitch, at-bat, half-inning, inning, "my next moment" or to the final.
 - **Calibration:** background games stay on the macro sim. AI-vs-AI arcade games must hit the same Phase 13 per-tier bands (`Tools/ArcadeHarness`).
 - **Data:** `Player_Fielding` (defensive position, speed, arm) folds into schema v14.
-- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots, and their own **16-bit field** built from real dimensions. Parks play differently by geometry (owner decision pending).
+- **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots, and their own **16-bit field**, built from reusable park kits with distinctive team dressing (R-1 accepted). **Park factors stay off for 1.0** (R-1 Q06): the physics uses tier-standard dimensions at launch, so venue identity is presentation-only.
 - **Handoff protocol:** every task names its recommended model. Every model stops when its task is done and tells the human which model is suggested next (gameplay_core §5, [TEAM.md](TEAM.md) §3).
 
 **Slices** (full table: arcade §12):
 
-- **G-0** feel prototype (**starts now**, no dependencies) · **G-1** attribute audit → ratings-to-physics mapping (Fable 5.1 in R-1 → Math) · **G-2** physics core + rules (Opus) · **G-3** AI + calibration (Opus + Math; needs 13-3)
-- **G-4** integration, incl. `EffectiveRatings` and `Player_Fielding` (Opus; needs 13-2) · **G-5** arcade presentation + watch & skip (Sonnet) · **G-6** team takeover (Sonnet + Opus)
+- **G-0** feel prototype (G-0a physics **built**, Opus; G-0b scene, Sonnet) · **G-1** attribute audit (**done inside R-1**, GPT 6 Astra Pro) → ratings-to-physics mapping (GPT 6 Astra Pro → Math) · **G-2** physics core + rules (GPT 6 Astra Pro) · **G-3** AI + calibration (GPT 6 Astra Pro + Math; needs 13-3)
+- **G-4** integration, incl. `EffectiveRatings` and `Player_Fielding` (GPT 6 Astra Pro; needs 13-2) · **G-5** arcade presentation + watch & skip (Sonnet) · **G-6** team takeover (Sonnet + GPT 6 Astra Pro)
 - **G-7** venue catalog + screens (Sonnet + Flash) · **G-8** art (owner + artist/AI; inside 15d) · **G-9** tuning + difficulty (Math + Sonnet)
+
+**Retired by the arcade decision (2026-10-13):** the dice-table pitching mode (`pitching_mode.md`, old G-2 "Work the Book") and the Read v2 batting re-band (old G-8). Their docs are in `archive/`. Owner decision **O1** (the skill band) carries over as the arcade's default difficulty target. Claude Opus reviews and gates every engine slice; Gemini Pro reviews the sim diffs.
 
 **Exit criteria:**
 
@@ -221,3 +223,24 @@ Please ensure the simulation engine strictly adheres to the following constraint
 - **Pitching Philosophy:** Teams heavily rely on their aces, often employing a 2-man rotation and starting their #1 pitcher in every game possible.
 - **The Weekly "Sunday" Roster Lock:** Active and Inactive roster designations must be submitted on Sunday night and are permanently locked for the week.
 - **The Attrition & Forfeit Rule:** If a player is injured during the week, they *cannot* be replaced by an Inactive player. If injuries deplete an Active roster to the point where a team cannot field 9 defensive players and a valid pitcher, that team immediately forfeits the game.
+
+## R-1 accepted execution order (2026-10-10)
+
+The owner accepted every recommendation in [Q01–Q17](review/r1/06_owner_questions.md). Approval settles scope and priorities; it does not certify formulas or mark runtime work done. R-1 contract reconciliation is complete on review/r1; integration remains reviewed, never automatic.
+
+13-0 is done (2026-10-10). Next: **13-1 (Opus, on `p13/integration`)**, then **R1-SAVE-1 (Opus)** on `main` (the v13 game still boots there; SAVE-1 is merged forward into `p13/integration`), while **R1-MATH (Math)** progresses independently. *(2026-10-13: G-8a is retired by the arcade decision; R1-MATH keeps its fatigue and life-modifier contracts.)* SAVE-1 and 13-1 both touch `GameManager`/`LeagueSimulator`, so one model (Opus) sequences them. Save recovery is a release gate, not optional polish. Keep one end-to-end saved career ahead of content volume.
+
+| Brief | Owner | Exit/dependency |
+| --- | --- | --- |
+| [R1-SAVE-1](tasks/R1-SAVE-1_save_boundary.md) | Opus; Gemini Pro review | Quiescent saves, all-league flush, dirty retry and database ownership |
+| [R1-SAVE-2](tasks/R1-SAVE-2_recovery_and_rng.md) | Opus; Gemini Pro review | After SAVE-1: durable day/choice/resolution recovery and independent RNG continuation |
+| [R1-FAMILY](tasks/R1-FAMILY_partner_invariants.md) | Opus; Gemini Pro review | Partner invariant repair; after L-1, civilian/kin eligibility must precede L-4 |
+| [R1-MATH](tasks/R1-MATH_gameplay_contracts.md) | Gemini Pro Math; Opus/GPT review | Fatigue, O1 (now the arcade difficulty target) and life-modifier contracts. Its pitching-centering/waste part is retired (2026-10-13) |
+| [R1-EFFECTS](tasks/R1-EFFECTS_life_projections.md) | GPT projection; Opus development | After Math: capped needs/stress, actual-practice work_ethic |
+| [R1-LEARN](tasks/R1-LEARN_practice_and_modifiers.md) | GPT seam; Sonnet UI | Stable arcade DTOs: isolated practice on the arcade engine, pitch explanation, effective-rating breakdown |
+| [R1-REVEAL](tasks/R1-REVEAL_durable_story_handoff.md) | Opus Core; Gemini Pro presentation | L-3/16b + SAVE-2: durable revelation before succession, playback never gates it |
+| [R1-STEAM](tasks/R1-STEAM_offline_eligibility.md) | Opus durability; Gemini Pro 17a | SAVE-2: unavailable-Steam eligibility and idempotent reconciliation |
+
+14b follows its updated brief (Opus review, per-clip crash recovery); no new generation spend. 15 uses reusable team-dressed kits; approve representative art before volume. Park factors are outside 1.0. *(Manual fielding was too, until the 2026-10-13 arcade decision put assisted fielding in launch scope.)* Full 13/L/G career, interrupted-save parity, Godot input/UX and exported Windows/Linux checks precede release.
+
+Still required as concrete inputs: owner art/identity/legend/name selections; ChooseFatherFallback and DiscoveryChance intent; commercial/Steam prerequisites. Auto-committer policy prohibits main/shared targets; actual external configuration must be verified separately. These are not reopened yes/no votes on accepted R-1 scope.

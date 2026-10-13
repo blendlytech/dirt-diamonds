@@ -14,14 +14,14 @@
 | D2 | The career starts in the **Freshman** year (unchanged from today). |
 | D3 | Ethnicity is a creation choice; the GOAT father is picked to match it. |
 | D4 | The father's **first contact** comes at the avatar's **first Pro contract** (drafted or undrafted). He congratulates the avatar, needles them that they'll never beat his record, and says he's pulling for them. The relationship starts there. |
-| D5 | The avatar learns the truth **only** on winning the Pro World Championship or at retirement, whichever comes first. |
+| D5 | The avatar learns the truth **only** on winning the Pro World Championship or at career end (retirement, ban or death), whichever comes first. |
 | D6 | **No staple mentors.** The legends fill the record book; only the father texts. |
 | D7 | Pregnancies are planned (after marriage) or unplanned (flings, girlfriends, affairs). **Never abortion.** Any child can be kept or placed for adoption. |
 | D8 | Temptation has a real lure: a big confidence/happiness surge that lifts on-field play, against a hidden chance of getting caught or a pregnancy. |
 | D9 | A child placed for adoption **lives on in the world, hidden**. It's revealed only if the avatar's line ever **plays against** that child's line, or if the avatar **pays to search** once they can afford it. Once found, the avatar chooses whether to tell the child; a told child joins the lineage, **officially at 18**. |
 | D10 | The avatar can be **male or female**. Women can play pro. A female avatar's route is a story in itself: only the **3rd girl in the nation** to try out for and make an all-male team, with unique press articles and in-game moments, **for the first girl only**. |
 | D11 | Voice-over is **broadcasters only** (Phase 14 scope change). Everything in this doc is text: phone, press, captions. |
-| D12 | The Trailblazer route happens **once per save**. Her goal is to be the **first woman ever to play pro**. Through HS and college the dream is a joke to everyone else; in her **college senior year** it becomes real. |
+| D12 | The Trailblazer route happens **once per save**. Her goal is to be the **first woman ever to play pro**. Through HS and college the dream is a joke to everyone else; before her first eligible draft declaration it becomes real, with a college senior-year fallback. |
 | D13 | The avatar can **date either gender**, and can **adopt** children into the family. |
 | D14 | A hidden child landing on the avatar's **own team** gets its **own reveal**, separate from the opposing-roster reveal. |
 | D15 | Succession eligibility stays at **19** (`MaturityAge`). A claimed child becomes official at 18 and heir-eligible at 19. |
@@ -179,8 +179,8 @@ This lives in data (`legends.json` → `record_map`), not code. **Pro Math** set
 - **Ongoing:** a `Friend` edge (never `Child`) from the first contact. Avatar-scope events on the `unknown_fan` thread: first Pro home run, slumps, scandal (a discovered indiscretion; he's in no position to judge, and his text knows it), and a **record-chase ladder** at 50/75/90/100% of his mark, where the needling gets sharper and then turns proud.
 - **The reveal:** the first of
   - `ChampionshipWonEvent` (new in 16b) at Pro tier with the avatar on the winning roster, or
-  - retirement.
-- **Ordering hazard:** retirement triggers succession, which swaps the avatar. The reveal must fire **before** `Succeed()`. The retirement flow becomes *retire → `lineage_reveal_pending` → reveal event + story cutscene → succession UI*.
+  - career end: retirement, permanent ban or death.
+- **Ordering:** Core commits revelation facts and a durable notification/replay record before `Succeed()` on championship or career end. Skipped, dropped, unavailable or reloaded cutscenes never block succession or erase the reveal. Core owns acknowledgement/idempotency; playback completion is not a simulation gate (R-1 Q11).
 - **On reveal:** `child_knows = 1`, set `knows_true_lineage`, and the thread re-labels. A story cutscene (text captions only) plays with the `father_portrait` and `father_name` slots.
 
 ---
@@ -355,8 +355,8 @@ Two triggers, each with its own reveal (D14). Both fire at any tier and in any g
 
 Once a child is found, by either trigger, the avatar chooses:
 
-- **Tell them:** `child_knows = 1` and `told_day` are set, a child contact thread opens, and **the missing piece unlocks** (`unlocked_day`, §5.6). The relationship is real from that moment (texts, visits, events), but **not official**.
-  - At the yearly tick where the child is ≥ 18, `ClaimWatcher` writes the `Child` edge and sets `official_day`. From then on the child is the avatar's lineage, and succession can see them.
+- **Tell them:** `child_knows = 1` and `told_day` are set, a child contact thread opens, and the missing piece remains locked until official reclaim at age 18+ (`official_day` and `unlocked_day`, §5.6). The relationship is real from that moment (texts, visits, events), but **not official**.
+  - At the yearly tick where the child is ≥ 18, `ClaimWatcher` writes the `Child` edge and sets `official_day` and lifts that child's lock (`unlocked_day`). From then on the child is the avatar's lineage, and succession can see them.
 - **Keep the distance:** the record stays `found`, **the stat stays frozen**, and the avatar can reach out later. Some events can force the issue (the child finds *them*).
 
 ### 7.6 Succession
@@ -377,9 +377,9 @@ Succession stays **any willing child, any gender**: born, claimed or adopted in 
   - `Game_State['first_female_pro_id']` is empty at world creation.
   - A female avatar gets `trailblazer_route` while that key is empty.
   - When she signs her first Pro contract (`ProContractSignedEvent`), the key is set to her id.
-  - From then on, no one else can be first: a later female heir plays the standard route, and the press calls her "the daughter of the woman who broke the barrier."
+  - From then on, no one else can be first: a later female heir plays the standard route, and the press uses her actual genealogical relationship to the woman who broke the barrier.
   - If a trailblazer retires before reaching the Pros, the key stays empty, so a later female heir inherits the unfinished dream (D19).
-- **She's the GOAT's daughter.** The father's first text (§4.2) lands the day the first woman in pro baseball signs. He knows exactly who she is; the world doesn't.
+- **Genealogy-aware identity:** the founder is the GOAT's daughter; a later Trailblazer heir is the actual descendant. Resolve relationship labels and living contacts from saved genealogy. Do not replay the founder-only father's first-text scene for a descendant; preserve first-Pro and once-per-save milestones with descendant-specific copy (R-1 Q08).
 
 ### 8.2 The arc: a joke, then a possibility, then a first
 
@@ -389,7 +389,7 @@ The dream of playing pro is the spine. Everyone else's view of it moves through 
 | :-- | :-- | :-- | :-- |
 | **I. The joke** | HS, all four years | A punchline | She makes an all-male varsity through the `hs_tryouts` variant, only the **3rd girl in the nation** to do it. Coach Malone's skepticism, the locker-room logistics, the team accepting her, the first hostile crowd. She says "pro" out loud and gets laughed at: teammates, a guidance counselor, a local columnist's "cute story" piece. A good game earns "not bad, for a girl." |
 | **I. The joke, still** | College, freshman–junior | A novelty | A scholarship that the papers treat as a stunt. A rival coach who won't shake hands. Fans waving signs. Scouts who come for a teammate and don't take notes on her. The articles get longer but stay in the human-interest section. |
-| **II. The possibility** | College **senior year** | Real | The turn. A scout's notebook comes out. A national outlet runs a serious piece: "*Could {avatar_first} be the first?*" Mock drafts list her. The jokes go quiet, and the opposition gets louder and more organized (a petition, a commissioner's non-answer, threats). Draft-season stress spikes. Her performance, through `PersonEffects`, decides whether it's real. |
+| **II. The possibility** | Before the first eligible draft declaration; senior-year fallback | Real | The turn. A scout's notebook comes out. A national outlet runs a serious piece: "*Could {avatar_first} be the first?*" Mock drafts list her. The jokes go quiet, and the opposition gets louder and more organized (a petition, a commissioner's non-answer, threats). Draft-season stress spikes. Her performance, through `PersonEffects`, decides whether it's real. |
 | **III. The first** | First Pro contract | History | Draft Night (or the undrafted signing): the first woman in pro baseball. A front-page article, a story cutscene (captions only), the broadcaster's welcome call, the GOAT's first text, and her first Pro at-bat as its own beat. After that, the route carries on as the "only one" experiences (§8.3) for her whole Pro career. |
 
 The two girls who came before her in HS show up in the press only, as names in her articles. Neither went pro. They don't text her (D6).
@@ -486,8 +486,8 @@ Pre-recorded calls can't know the avatar's gender, so **avatar-facing categories
 | **L-1** | Schema v15 + `LineageQueries` + `CreateAvatar` identity/legends/poverty + New Game gender/ethnicity/position UI | Claude Opus (Sonnet: UI) | Gemini Pro | 13-1 |
 | **L-2** | `legends.json`, identity catalog, record map | Flash | Claude Opus | L-1 |
 | **L-3** | Token resolver, `unknown_fan`, father arc events, `ProContractSignedEvent`, reveal ordering | Claude Opus (scripts) + Gemini Pro (event) | Claude Opus / Gemini Pro | 13-6, 16b |
-| **L-4** | Pregnancy: `co_parent`, placement, gender roll, opposite-sex rule, Maternity absence, check #11; `AdoptChild` + agency arc; missing-piece lock + `DevelopmentManager` clamp + Player-screen mark | Claude Opus (Flash: agency events) | Gemini Pro | L-1 |
-| **L-5** | Temptation events + `Indiscretions` + `TemptationMath` (`DiscoveryChance`, `PregnancyChance`) + `Active_Effects` + `ClutchEffects` + rating nudges; civilian partner pool (either gender) + `IsKin` guard | Claude Opus (+ owner: `DiscoveryChance`) + Math | Gemini Pro | L-4 |
+| **L-4** | Requires R1-FAMILY civilian eligibility/kin pool after L-1. Pregnancy: `co_parent`, placement, gender roll, opposite-sex rule, Maternity absence, check #11; `AdoptChild` + agency arc; missing-piece lock + `DevelopmentManager` clamp + Player-screen mark | Claude Opus (Flash: agency events) | Gemini Pro | L-1 |
+| **L-5** | Temptation events + `Indiscretions` + `TemptationMath` (`DiscoveryChance`, `PregnancyChance`) + `Active_Effects` + `ClutchEffects` + rating nudges; extend the R1-FAMILY civilian partner pool/`IsKin` guard for temptation (the baseline must precede L-4) | Claude Opus (+ owner: `DiscoveryChance`) + Math | Gemini Pro | L-4 |
 | **L-6** | Hidden children: intake, `KinEncounterWatcher` (opponent + teammate), both reveal arcs, PI search, tell/claim (+ unlock), `Succeed` rostered heir | Claude Opus | Gemini Pro + Math | L-4, 13-6 |
 | **L-7** | Press clippings (runtime + News tab) + launch articles | Gemini Pro (runtime) + Sonnet (tab) + Flash (articles) | Claude Opus | L-3 |
 | **L-8** | Trailblazer route content + trailblazer broadcaster calls | Claude Opus (story) → Flash | Owner (**story sign-off**) | L-7, 14c |

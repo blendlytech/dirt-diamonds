@@ -210,7 +210,7 @@ All with defaults `Mean=50, Heritability=0.5, Spread=12, InterestBaseline=55, In
 
 **F2 — lone-parent regression.** Father `bat_power 85`, no partner (mate 50). midparent 67.5 → blended `50 + 0.5·17.5 = 58.75`. Lottery `bell=−0.42 → −5` → **`bat_power 54`**. Visible decline without a strong partner.
 
-**F3 — genetic phenom from average stock.** Both parents `55`. midparent 55 → blended `52.5`. Lucky `bell=+0.9·1.? → +19` → **`72`**. The lottery can mint an outlier — the draft-day surprise.
+**F3 — genetic phenom from average stock.** Both parents `55`. midparent 55 → blended `52.5`. Lucky `bell=+0.9`, with `Spread=12`, adds `10.8`: `round(52.5 + 10.8)` → **`63`**. The lottery can mint an outlier — the draft-day surprise.
 
 **F4 — interest reveal fails → game over.** Single heir, `BirthAffinity=30 → affinityAdjust +4.5`, unlucky `InterestSpread·bell = −0.85·30 ≈ −25.5` → `interest = 55 + 4.5 − 25.5 = 34` → **below 40**. At the founder's age-42 retirement, the only child is unwilling → `GameOver(NoWillingHeir)`.
 

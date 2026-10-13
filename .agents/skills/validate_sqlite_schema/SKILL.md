@@ -9,7 +9,7 @@ description: Ensures the generational SQLite database remains structurally sound
 **Execution:**
 
 ```powershell
-powershell -File .claude/skills/validate_sqlite_schema/run_validation.ps1
+powershell -File .agents/skills/validate_sqlite_schema/run_validation.ps1
 ```
 
 This runs two passes via `Tools/SchemaValidator` (a headless console project that compiles the game's real `DatabaseManager`/`PlayerQueries` sources):
@@ -25,5 +25,13 @@ dotnet run --project Tools/SchemaValidator -c Release -- --live dirt_and_diamond
 ```
 
 Options: `--players <n>` (scratch cohort size), `--schema <path>` (override DDL location).
+
+**The sqlite MCP's scratch db.** `.mcp.json` points the `sqlite` MCP at `C:/Users/DELL/dnd-scratch/schema_scratch.db`, outside every worktree and never the live save (GEMINI.md §4). (Re)build it from your checkout's `SchemaDefinitions.sql` before exploring the schema, and again after any DDL change, because it holds whichever schema was last emitted:
+
+```powershell
+dotnet run --project Tools/SchemaValidator -c Release -- --emit C:/Users/DELL/dnd-scratch/schema_scratch.db
+```
+
+`--emit` refuses any path under the Godot save directory (`app_userdata`). Close any MCP session holding the file before re-emitting.
 
 **When to run:** after any change to `SchemaDefinitions.sql`, `DatabaseManager.cs`, or a query class — and before writing C# that depends on a new column or join (No Blind Queries rule). If the sqlite MCP is unavailable, this skill is the schema validation path.
