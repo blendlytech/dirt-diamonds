@@ -97,16 +97,16 @@ The pitch comes in, you swing, and the ball flies. You see where it lands, how h
 
 **G-0a:**
 
-- [ ] Every file in §4 exists under `Assets/Simulation/Arcade/` with no Godot, Data or Life reference.
-- [ ] `ArcadeHarness` builds standalone and every suite passes.
-- [ ] The isolation diff is empty.
-- [ ] The branch is pushed, and the handoff names G-0b.
+- [x] Every file in §4 exists under `Assets/Simulation/Arcade/` with no Godot, Data or Life reference.
+- [x] `ArcadeHarness` builds standalone and every suite passes.
+- [x] The isolation diff is empty.
+- [x] The branch is pushed, and the handoff names G-0b.
 
 **G-0b:**
 
 - [ ] The scene runs standalone from the debug entry point.
 - [ ] Hitting, the readout, the tuning panel and the tally all work on keyboard and on a pad.
-- [ ] The isolation diff is empty, and the game build is clean.
+- [x] The isolation diff is empty, and the game build is clean.
 - [ ] The owner has played it.
 
 **When your half's boxes are all checked, stop.**
@@ -132,3 +132,36 @@ Recommended next: <slice> by <model> (reviewer: <model>)
 - **G-0b** hands off to **the owner** for the "hitting is fun" gate.
 
 Then add one compact line to [progress.md](../progress.md).
+
+## 9. Independent G-0a/G-0b review — 2026-10-14, GPT 6 Astra Pro
+
+Reviewed `c916426` (physics) and `4f731dc` (scene) on `pG/G-0-review-astra`. The owner's attached review instructions authorize this role; the later roster update `afcf751`, TEAM §1a, also assigns former Gemini independent-review duties to GPT. Neither reviewed branch contains that later roster update. **Verdict: changes requested; not approved for integration.** Fix commit: `4a24681`. No physics source, tuning magnitude, macro/life/narrative/hustle code, or tracked project configuration changed.
+
+### Findings (severity first)
+
+1. **P1 — debug prototype opens and writes the career save. Reported, not fixed.** `Assets/UI/Main.cs:60` switches scenes only after the autoload runs `Assets/Core/GameManager.cs:230` (database open) and `:239` (schema application). Direct scene launch has the same autoload. Startup loads/seeds the league and exit persists the clock, violating the no-DB/no-career boundary. Trying the prototype in the ordinary user directory therefore touches the career DB. All review runs used a disposable custom user directory; the live career save was not used. Repairing the earlier autoload requires an integration-lead bootstrap change outside the allowed UI hook.
+2. **P2 — a bounce after the contact plane vetoes valid contact. Reported, not fixed.** `Assets/Simulation/Arcade/ArcadeAtBat.cs:128` replaces successful contact-plane reachability with the plate-plane result; `:132` derives `Bounced` from that later result, and `:145` forces every swing to whiff. A deterministic probe (seed 3, average Pro fastballs aimed low) reached the contact plane at z=0.054692 m, above the 0.0366 m ground-contact radius, then bounced before the plate. An exactly centered/on-time swing still became `SwingingStrike`. Preserve contact-plane reachability separately from strike classification.
+3. **P2 — ground wins even when the plane crossing happens first inside the step. Reported, not fixed.** `Assets/Simulation/Arcade/BallPhysics.cs:133` tests ground before plane without comparing crossing fractions. Reproduction: position (0, 0.61, 0.04), velocity (0, -40, -1), zero spin/steer, plane y=0.60. The solver returns false at ground contact t=0.003334, y=0.476723, although the plane was crossed at t=0.000250 with z=0.039745, still above ground. Compare the within-step event times. This is separate from finding 2.
+4. **P2 — pad users could not activate tuning controls. Fixed in `4a24681`.** `Assets/UI/Arcade/ArcadePrototype.cs:185` now ensures pad accept/cancel/navigation bindings while preserving existing mappings. Previously `ui_accept` contained only Enter/keypad Enter/Space; simulated A could not change any of the four selectors or two toggles, or activate buttons. Keyboard and simulated pad control checks now pass; all 20 controls are reachable. Physical hardware remains untested.
+5. **P2 — canvas stretch broke integer pixel scaling. Fixed in `4a24681`.** `Assets/UI/Arcade/ArcadePrototype.cs:221` calculates integer scale in physical pixels and compensates for project canvas stretch. `Assets/UI/Arcade/ArcadePrototype.tscn:25` permits independent field positioning/scaling. Previously 1366x768 stretched the nominal 5x field through a 1600x900 canvas, yielding approximately 4.26875x/4.26667x physical scaling. The field now remains 320x180 at an integer physical scale, centered with spare space. Window-resize signals cover unchanged logical root size.
+6. **P3 — proposal labeling is incomplete. Reported, not fixed.** `Assets/Simulation/Arcade/ArcadeTuning.cs:30` distinguishes textbook/rulebook constants from proposals. In particular `:47` and `:48` do not label the selected drag/lift assumptions as proposals. Gameplay mappings are labeled, but the instruction that every tuning number is a first-pass proposal is not literally met. Clarify the distinction without changing magnitudes during this review.
+
+### Verification and limits
+
+| Gate | Result |
+| :-- | :-- |
+| ArcadeHarness Release | **51/51, exit 0**. 95 mph pitch: 0.401 s; 100 mph/28 degrees: 417 ft; 110 mph/25 degrees: 460 ft. Seeded replay passes; 500 hot-path pitches/swings/flights allocate 0 bytes. Not rerun after UI-only edits. |
+| Full solution Debug build | **0 warnings, 0 errors**, including final UI fixes, .NET SDK 8.0.422. No compile errors were present in the author's scene. |
+| Isolation command in §5 | **Empty**. No macro, Life, Narrative or Hustles changes. Arcade C# source unchanged; only generated script identifiers added there. |
+| Engine/source review | Pure C# core, only RngState dependency; fixed step 1/240; interpolated intra-step contact crossing; caller-owned buffers. The bounce findings qualify the crossing review. |
+| Scene mapper/style/RNG | All 10 cached GetNode paths match; no per-scene theme overrides; own arcade RNG and separate renderer System.Random cosmetics. HUD strings update on changes, consistent with the dirty-HUD rule. |
+| Godot boot and scripted interaction | **Godot 4.7 Mono, 59 assertions pass, exit 0, no error output.** Debug hook, viewport, physical integer scaling/fit at 1280x720, 1280x800, 1920x1080, 1920x1200 and 1366x768; keyboard/pad focus traversal; all selectors/sliders/toggles change; reseed/reset actions, panel shortcuts, keyboard swing/tally. Controller events were synthesized. |
+| Rendered layout | OpenGL compatibility on Intel UHD 605. Pitch captures at 1280x720 and 1280x800 and the 1920x1080 tuning capture were visually inspected; a 1920x1080 pitch capture was also saved. No engine errors. Expected informational Steam-unavailable diagnostic: this checkout lacks steam_api64. |
+| Session cycle probe | Seeded centered input enters Hit at 102.73 mph, with one swing/InPlay tally, then Result and a new Windup. This verifies the pure driver, not human timing/feel. |
+| Still unverified | Physical controller, owner playtest, and visually inspected complete hit-to-landing cycle. |
+
+The four G-0a §6 boxes are factual delivery checks and are checked; they do **not** override the change-request verdict. G-0b's build/isolation box is checked. Standalone stays open because successful boot still has the DB side effect; complete keyboard/pad gameplay stays open for hardware/full-loop validation; owner-played stays open.
+
+Generated identifiers for the G-0 core, scene scripts and harness are committed. Unrelated import churn was reverted. A local **untracked `override.cfg`** redirects this review checkout's `user://` to `DirtAndDiamonds-G0-review-astra`, a disposable directory. Keep it for a safe prototype playtest; it is not a shipping fix for finding 1. Test programs, logs and rendered captures are outside the repository in the chat's visualization directory.
+
+Done: independent review, two UI fixes, build/boot/input/layout checks. Commit: `4a24681` (fixes), followed by this review record. Open: findings 1-3 and 6, physical pad/full visual cycle, owner feel gate. No merge. Recommended next: **G-0 repairs by Claude Opus 5.5 (reviewer: GPT 6 Astra Pro)**, then the **owner's "hitting is fun" playtest**, with **Claude Sonnet 5.5** tuning from feedback (reviewer: GPT 6 Astra Pro; Opus merge gate). Do not start G-1/G-2.
