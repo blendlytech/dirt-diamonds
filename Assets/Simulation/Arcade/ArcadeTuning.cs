@@ -27,32 +27,49 @@ public enum PitchKind : byte
 /// Every physical constant and every ratings → physics mapping the arcade
 /// core uses, in one place (arcade_baseball_overhaul.md §4.1, §9).
 ///
-/// PHYSICS constants (air, ball, field geometry) are textbook values.
-/// Everything marked PROPOSAL is a G-0 first pass for the feel prototype:
-/// Gemini Pro Math owns the final values in G-1 (mapping) and G-3
-/// (calibration to the Phase 13 per-tier bands). Retuning is a data edit
-/// here, never a logic edit elsewhere — the AtBatResolver discipline.
+/// Three kinds of number live here:
+/// - FACTS: physical and rulebook values (gravity, ball mass and size, plate
+///   geometry, unit conversions). Not tunable.
+/// - PROPOSAL (model assumption): a choice about how to model the world —
+///   air density, the drag coefficient, the lift curve, zone heights, the
+///   fixed step. Defensible starting points, but still choices.
+/// - PROPOSAL (gameplay): every ratings → physics mapping and prototype knob.
+/// Everything marked PROPOSAL is a G-0 first pass: the calibration and math
+/// owner (GPT 6 Astra Pro, TEAM.md §1a) sets the final values in G-1
+/// (mapping) and G-3 (calibration to the Phase 13 per-tier bands). Retuning
+/// is a data edit here, never a logic edit elsewhere — the AtBatResolver
+/// discipline.
 /// </summary>
 public static class ArcadeTuning
 {
     // ------------------------------------------------------------------
-    // Physics (textbook)
+    // Physics: facts, then model assumptions (PROPOSAL)
     // ------------------------------------------------------------------
 
-    public const double Gravity = 9.80665;          // m/s²
-    public const double AirDensity = 1.20;          // kg/m³, ~sea level, 20 °C
-    public const double BallMass = 0.145;           // kg (5.125 oz)
-    public const double BallRadius = 0.0366;        // m (9.125 in circumference)
+    public const double Gravity = 9.80665;          // FACT: m/s²
+    public const double BallMass = 0.145;           // FACT: kg (5.125 oz)
+    public const double BallRadius = 0.0366;        // FACT: m (9.125 in circumference)
     public const double BallArea = Math.PI * BallRadius * BallRadius;
-    public const double DragCoefficient = 0.37;     // typical for a pitched/batted ball (Nathan ~0.35–0.40), constant first pass
-    public const double MaxLiftCoefficient = 0.40;  // clamp for the Sawicki lift curve
+
+    /// <summary>PROPOSAL (model assumption): air density, kg/m³ — sea level at 20 °C. No altitude, temperature or weather in G-0.</summary>
+    public const double AirDensity = 1.20;
+
+    /// <summary>PROPOSAL (model assumption): constant drag coefficient, inside the published 0.35–0.40 range for a pitched/batted ball. Real C_d varies with speed and seams.</summary>
+    public const double DragCoefficient = 0.37;
+
+    /// <summary>PROPOSAL (model assumption): Sawicki lift curve on the spin parameter S = rω/v — C_L = LiftLowSlope·S below LiftKneeS, else LiftHighIntercept + LiftHighSlope·S, clamped at MaxLiftCoefficient.</summary>
+    public const double LiftLowSlope = 1.5;
+    public const double LiftKneeS = 0.1;
+    public const double LiftHighIntercept = 0.09;
+    public const double LiftHighSlope = 0.6;
+    public const double MaxLiftCoefficient = 0.40;
 
     public const double MphToMps = 0.44704;
     public const double MetresToFeet = 3.280839895;
     public const double RpmToRadPerSec = 2.0 * Math.PI / 60.0;
     public const double DegToRad = Math.PI / 180.0;
 
-    /// <summary>Fixed simulation step (spec §3: 240 Hz; crossings are solved inside the step).</summary>
+    /// <summary>PROPOSAL (model assumption): fixed simulation step (spec §3: 240 Hz; crossings are solved inside the step).</summary>
     public const double FixedStep = 1.0 / 240.0;
 
     // ------------------------------------------------------------------
@@ -68,7 +85,7 @@ public static class ArcadeTuning
     /// <summary>PROPOSAL: the contact plane, slightly out in front of the plate where a well-timed swing meets the ball.</summary>
     public const double ContactPlaneY = 0.60;
 
-    /// <summary>Strike-zone bottom/top for an average batter (≈18 in / 42 in).</summary>
+    /// <summary>PROPOSAL (model assumption): strike-zone bottom/top for an average batter (≈18 in / 42 in); per-batter zones are later work.</summary>
     public const double ZoneBottom = 0.46;
     public const double ZoneTop = 1.07;
 

@@ -10,16 +10,24 @@ public readonly struct PitchFlight
     public readonly BallState AtContactPlane;
     /// <summary>The ball as it crosses the front of the plate (where the umpire judges it).</summary>
     public readonly BallState AtPlate;
-    /// <summary>True if the pitch hit the dirt before reaching the hitter: it can't be put in play.</summary>
+    /// <summary>True if the pitch hit the dirt before reaching the contact plane: it can't be put in play.</summary>
     public readonly bool Bounced;
+    /// <summary>
+    /// True if the pitch touched down before the front of the plate: never a
+    /// strike. Implied by <see cref="Bounced"/>, but a pitch can reach the
+    /// contact plane (and be hit) and still bounce before the plate (G-0
+    /// review finding 2): hittability and the umpire's call are separate.
+    /// </summary>
+    public readonly bool BouncedBeforePlate;
     public readonly bool IsStrike;
 
-    public PitchFlight(in PitchRelease release, in BallState atContactPlane, in BallState atPlate, bool bounced, bool isStrike)
+    public PitchFlight(in PitchRelease release, in BallState atContactPlane, in BallState atPlate, bool bounced, bool bouncedBeforePlate, bool isStrike)
     {
         Release = release;
         AtContactPlane = atContactPlane;
         AtPlate = atPlate;
         Bounced = bounced;
+        BouncedBeforePlate = bouncedBeforePlate;
         IsStrike = isStrike;
     }
 
@@ -120,16 +128,19 @@ public sealed class ArcadeAtBat
         double aftertouchX, double aftertouchZ)
     {
         PitchRelease release = PitchModel.Throw(ref rng, pitcher, tier, kind, target, aftertouchX, aftertouchZ);
-        bool reached = BallPhysics.FlyToPlane(release.Launch, ArcadeTuning.ContactPlaneY, release.Aftertouch, out BallState atContact);
+        bool reachedContact = BallPhysics.FlyToPlane(release.Launch, ArcadeTuning.ContactPlaneY, release.Aftertouch, out BallState atContact);
         BallState atPlate = atContact;
-        if (reached)
+        bool reachedPlate = reachedContact;
+        if (reachedContact)
         {
             Vec3 steer = atContact.Time < ArcadeTuning.AftertouchWindowSec ? release.Aftertouch : Vec3.Zero;
-            reached = BallPhysics.FlyToPlane(atContact, ArcadeTuning.PlateFrontY, steer, out atPlate);
+            reachedPlate = BallPhysics.FlyToPlane(atContact, ArcadeTuning.PlateFrontY, steer, out atPlate);
         }
-        bool strike = reached && PitchModel.IsStrike(atPlate.Position);
+        // Hittability comes from the contact plane, the call from the plate:
+        // a bounce between the two still leaves a hittable pitch (finding 2).
+        bool strike = reachedPlate && PitchModel.IsStrike(atPlate.Position);
         _pitchCount = BallPhysics.Sample(release.Launch, release.Aftertouch, ArcadeTuning.PlateFrontY - 1.0, SampleEvery, _pitchPath);
-        return new PitchFlight(release, atContact, atPlate, !reached, strike);
+        return new PitchFlight(release, atContact, atPlate, !reachedContact, !reachedPlate, strike);
     }
 
     /// <summary>Resolves the batter's response to a flown pitch and, on contact, flies the batted ball.</summary>

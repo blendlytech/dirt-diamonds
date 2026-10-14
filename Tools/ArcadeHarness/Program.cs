@@ -307,6 +307,37 @@ internal static class Program
             $"{o.Call}, {o.BattedBall.Kind}, {o.BattedBall.DistanceFt:F0} ft, path {atBat.HitPath.Length} pts");
         PitchOutcome takeO = atBat.Swing(pf, avg, SwingInput.Take, none, ParkDimensions.Default);
         Check("Driver: a take is called by the zone", takeO.Call == (pf.IsStrike ? PitchCall.CalledStrike : PitchCall.Ball), $"{takeO.Call}");
+
+        // G-0 review finding 3: plane crossing and touchdown inside one step —
+        // the earlier event wins. This ball crosses y = 0.60 a quarter-millisecond
+        // in, still 4 cm up, and only touches down ~3 ms later.
+        var lowStart = new BallState(new Vec3(0, 0.61, 0.04), new Vec3(0, -40, -1), Vec3.Zero, 0);
+        bool crossed = BallPhysics.FlyToPlane(lowStart, 0.60, Vec3.Zero, out BallState lowAt);
+        Check("Plane crossed before touchdown in the same step → reached",
+            crossed && Math.Abs(lowAt.Position.Y - 0.60) < 1e-9 && lowAt.Position.Z > ArcadeTuning.BallRadius,
+            $"{crossed}, t {lowAt.Time * 1000:F3} ms, z {lowAt.Position.Z:F4} m");
+
+        // G-0 review finding 2: a pitch that reaches the contact plane and
+        // then bounces before the plate is hittable, and taken it is a ball.
+        bool found = false;
+        PitchFlight dirt = default;
+        var dirtBat = new ArcadeAtBat();
+        for (int i = 300; i >= 0 && !found; i--) // top-down: the highest such pitch, the least marginal case
+        {
+            var dirtRng = new RngState(3);
+            dirt = dirtBat.ThrowPitch(ref dirtRng, PitcherProfile.LeagueAverage(), ArcadeTier.Pro, PitchKind.Fastball,
+                new Vec3(0, ArcadeTuning.PlateFrontY, 0.0005 * i), 0, 0);
+            found = !dirt.Bounced && dirt.BouncedBeforePlate;
+        }
+        Check("A pitch can reach the contact plane and still bounce before the plate", found,
+            found ? $"contact-plane z {dirt.AtContactPlane.Position.Z:F4} m" : "none in the sweep");
+        if (found)
+        {
+            PitchOutcome dirtSwing = dirtBat.Swing(dirt, avg, Perfect(dirt.AtContactPlane), none, ParkDimensions.Default);
+            Check("…and a perfect swing at it makes contact (no bounce veto)", dirtSwing.Contact.Kind != ContactKind.Whiff, $"{dirtSwing.Call}");
+            PitchOutcome dirtTake = dirtBat.Swing(dirt, avg, SwingInput.Take, none, ParkDimensions.Default);
+            Check("…and taken, it is a ball", !dirt.IsStrike && dirtTake.Call == PitchCall.Ball, $"{dirtTake.Call}");
+        }
     }
 
     // ------------------------------------------------------------------

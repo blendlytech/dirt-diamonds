@@ -41,12 +41,15 @@ public static class BallPhysics
     private const double LiftK = 0.5 * ArcadeTuning.AirDensity * ArcadeTuning.BallArea / ArcadeTuning.BallMass;
 
     /// <summary>
-    /// Sawicki lift curve on the spin parameter S = rω/v, clamped:
-    /// C_L = 1.5·S below S = 0.1, else 0.09 + 0.6·S.
+    /// Sawicki lift curve on the spin parameter S = rω/v, clamped
+    /// (coefficients in <see cref="ArcadeTuning"/>): C_L = 1.5·S below
+    /// S = 0.1, else 0.09 + 0.6·S, at most 0.40.
     /// </summary>
     public static double LiftCoefficient(double spinParameter)
     {
-        double cl = spinParameter < 0.1 ? 1.5 * spinParameter : 0.09 + 0.6 * spinParameter;
+        double cl = spinParameter < ArcadeTuning.LiftKneeS
+            ? ArcadeTuning.LiftLowSlope * spinParameter
+            : ArcadeTuning.LiftHighIntercept + ArcadeTuning.LiftHighSlope * spinParameter;
         return Math.Min(cl, ArcadeTuning.MaxLiftCoefficient);
     }
 
@@ -110,8 +113,9 @@ public static class BallPhysics
     /// Flies a pitch toward the plate until it crosses the plane
     /// Y = <paramref name="planeY"/> (the ball travels toward −Y), solving the
     /// crossing inside the step by interpolation. Returns false if the ball
-    /// hits the ground first (a bounced pitch); <paramref name="atPlane"/> is
-    /// then the state where it touched down.
+    /// hits the ground first (a bounced pitch), comparing the two events'
+    /// times when both fall inside the same step; <paramref name="atPlane"/>
+    /// is then the state where it touched down.
     /// </summary>
     /// <param name="aftertouch">Steer applied while the flight time is under <see cref="ArcadeTuning.AftertouchWindowSec"/>.</param>
     public static bool FlyToPlane(in BallState start, double planeY, in Vec3 aftertouch, out BallState atPlane) =>
@@ -130,25 +134,32 @@ public static class BallPhysics
         {
             Vec3 steer = s.Time < ArcadeTuning.AftertouchWindowSec ? aftertouch : Vec3.Zero;
             BallState next = Step(s, dt, steer);
-            if (groundStops && next.Position.Z <= ArcadeTuning.BallRadius)
+            bool groundHit = groundStops && next.Position.Z <= ArcadeTuning.BallRadius;
+            bool planeHit = next.Position.Y <= planeY;
+            if (groundHit || planeHit)
             {
-                double denom = s.Position.Z - next.Position.Z;
-                double t = denom > 0.0 ? (s.Position.Z - ArcadeTuning.BallRadius) / denom : 1.0;
-                atPlane = BallState.Lerp(s, next, Math.Clamp(t, 0.0, 1.0));
-                return false;
-            }
-            if (next.Position.Y <= planeY)
-            {
-                double denom = s.Position.Y - next.Position.Y;
-                double t = denom > 0.0 ? (s.Position.Y - planeY) / denom : 1.0;
-                atPlane = BallState.Lerp(s, next, Math.Clamp(t, 0.0, 1.0));
-                return true;
+                // Both events can fall inside one step: whichever happens first
+                // within the step decides (G-0 review finding 3). A tie goes to
+                // the plane: the ball reached it before touching down.
+                double tGround = groundHit
+                    ? CrossingFraction(s.Position.Z - ArcadeTuning.BallRadius, s.Position.Z - next.Position.Z)
+                    : double.PositiveInfinity;
+                double tPlane = planeHit
+                    ? CrossingFraction(s.Position.Y - planeY, s.Position.Y - next.Position.Y)
+                    : double.PositiveInfinity;
+                bool reached = tPlane <= tGround;
+                atPlane = BallState.Lerp(s, next, reached ? tPlane : tGround);
+                return reached;
             }
             s = next;
         }
         atPlane = s;
         return false;
     }
+
+    /// <summary>Where inside a step a linear crossing happens: <paramref name="before"/> is the distance still to go at the step's start, <paramref name="span"/> the distance covered in the step. Clamped to [0, 1].</summary>
+    private static double CrossingFraction(double before, double span) =>
+        span > 0.0 ? Math.Clamp(before / span, 0.0, 1.0) : 1.0;
 
     /// <summary>
     /// Samples a flight into <paramref name="buffer"/> every

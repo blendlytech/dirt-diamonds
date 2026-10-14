@@ -62,7 +62,10 @@ public struct PrototypeReadout
     public PitchKind Pitch;
     public double PitchMph;
     public bool InZone;
+    /// <summary>Hit the dirt before the contact plane: unhittable.</summary>
     public bool Bounced;
+    /// <summary>Hit the dirt before the plate (may still have been hittable).</summary>
+    public bool InDirt;
     public PitchCall Call;
     public bool Swung;
     public bool PowerSwing;
@@ -485,6 +488,7 @@ public sealed class PrototypeSession
         _readout.PitchMph = _flight.Release.SpeedMph;
         _readout.InZone = _flight.IsStrike;
         _readout.Bounced = _flight.Bounced;
+        _readout.InDirt = _flight.BouncedBeforePlate;
         _readout.Call = outcome.Call;
         _readout.Swung = swung;
         _readout.PowerSwing = _swingPower;

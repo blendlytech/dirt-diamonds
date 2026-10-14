@@ -21,10 +21,13 @@ namespace DirtAndDiamonds.UI.Arcade;
 ///   power swing  Shift / right trigger   tuning panel Tab / Y (pauses the pitch)
 ///   quit         Esc / Back (closes the panel first)
 ///
-/// Debug only: reached through the launch hook in Main.cs
-/// (`godot --path . -- --arcade-proto`, debug builds only) or by running this
-/// scene directly. Text in this scene is inline on purpose (a debug tool, not
-/// shipped UI); the production G-5 scene reads the strings table.
+/// Debug only, never in the career flow. Launch it as the run scene: press F6
+/// with this scene open in the editor, or `godot --path . res://Assets/UI/Arcade/ArcadePrototype.tscn`.
+/// GameManager recognizes that launch target and skips the career boot entirely
+/// (no save opened, no schema, no league seed, no exit flush); see
+/// <see cref="DirtAndDiamonds.Core.GameManager.IsArcadePrototypeLaunch"/>. Text in
+/// this scene is inline on purpose (a debug tool, not shipped UI); the
+/// production G-5 scene reads the strings table.
 /// </summary>
 public sealed partial class ArcadePrototype : Control
 {
@@ -67,6 +70,14 @@ public sealed partial class ArcadePrototype : Control
 
     public override void _Ready()
     {
+        // The prototype must never run beside an open career save (G-0 review
+        // finding 1). If GameManager failed to recognize this launch and booted
+        // anyway, say so loudly instead of playing on top of the save.
+        if (DirtAndDiamonds.Core.GameManager.Instance is not null)
+        {
+            GD.PushError("ArcadePrototype: the career save is open. Launch this scene as the run scene (F6, or pass its res:// path) so GameManager skips the career boot.");
+        }
+
         EnsureInputActions();
 
         _window = GetWindow();
@@ -452,7 +463,7 @@ public sealed partial class ArcadePrototype : Control
             PitchKind.Breaking => "Breaking ball",
             _ => "Offspeed",
         };
-        string zone = r.Bounced ? "in the dirt" : (r.InZone ? "in the zone" : "outside");
+        string zone = r.InDirt ? "in the dirt" : (r.InZone ? "in the zone" : "outside");
         string text = F($"{pitch}  {r.PitchMph:0} mph  ({zone})");
         if (!r.HasBatted)
         {
