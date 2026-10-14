@@ -104,7 +104,7 @@ The pitch comes in, you swing, and the ball flies. You see where it lands, how h
 
 **G-0b:**
 
-- [ ] The scene runs standalone from the debug entry point.
+- [x] The scene runs standalone from the debug entry point.
 - [ ] Hitting, the readout, the tuning panel and the tally all work on keyboard and on a pad.
 - [x] The isolation diff is empty, and the game build is clean.
 - [ ] The owner has played it.
@@ -182,3 +182,38 @@ Branch `pG/G-0-repairs-opus` (from `pG/G-0-review-astra` @ `e198328`). Addresses
 | Full solution Debug build | **Not run**: the game project needs Godot.NET.Sdk from NuGet, blocked in this workspace. Changed Godot-side files parse cleanly (tree-sitter C#). |
 | Live boot | **Not run** (no Godot here). Re-review should confirm: F6 launch prints the "career boot skipped" line, creates no `dirt_and_diamonds.db` in a fresh `user://`, and the full loop runs. |
 
+## 11. G-0 repair re-review — 2026-10-14, GPT 6 Astra Pro
+
+Reviewed `e198328..d84a928` on isolated branch `pG/G-0-rereview-astra`, as assigned by the owner's re-review instructions. **No findings. APPROVED for the owner's playtest.** No tracked runtime, physics, tuning or project configuration changes were needed. This approves the repaired prototype for playtesting, not the owner feel gate or a merge to main.
+
+### Repair verification
+
+- **F1 closed:** `Assets/Core/GameManager.cs:226` recognizes the actual Godot 4.7 editor child arguments (`--scene`, `res://Assets/UI/Arcade/ArcadePrototype.tscn`) and the direct CLI scene path. Boot returns before Instance, Steam, DB, schema, league and bus initialization; process is disabled. `_ExitTree` and `PersistTimeOfDay` are null-safe. `Assets/UI/Main.cs` is identical to `origin/main`. Direct and synthesized-F6 runs print the career-skipped message, produce no prototype PushError, and create no career DB during play or after exit. Ordinary launch still initializes the career.
+- **F2 closed:** `Assets/Simulation/Arcade/ArcadeAtBat.cs:131` keeps contact-plane reachability separate from plate reachability. A low pitch can be hit before bouncing and is a ball when taken. All constructor/consumer sites were checked: `PrototypeSession` maps `BouncedBeforePlate` to `InDirt`; the zone text uses that value while the whiff explanation uses contact-plane `Bounced`.
+- **F3 closed:** `Assets/Simulation/Arcade/BallPhysics.cs:137` compares the interpolated event fractions; plane wins a tie. With `groundStops:false`, ground is excluded and the plane calculation is unchanged. An extra scratch probe also reached a plane after passing through ground (z=0.023587774950672494).
+- **F6 closed:** `Assets/Simulation/Arcade/ArcadeTuning.cs:30` honestly separates physical/rulebook facts from model and gameplay proposals. No magnitude changed. A scratch build restoring the four literal lift coefficients produced the same local 2,000-pitch hash as the repaired source.
+
+### Gates and actual results
+
+| Gate | Result |
+| :-- | :-- |
+| ArcadeHarness Release, two requested runs | **55/55, exit 0, both runs.** Hash **`A69EBC30D0B76360`** in both, on Windows x64, SDK 8.0.422. Reference shapes unchanged: 0.401 s, 417 ft, 460 ft. Zero-allocation check passes. |
+| Requested Opus hash comparison | **Does not match `A88CC92A2AF45A6F`.** The unchanged pre-repair source likewise yields `C3215E090EF03DBA` here rather than Opus's `2603B56FB5D4B6E5`. Thus the discrepancy with the reported hashes is also present before the repairs. Local repeatability and lift-move identity are proven; the exact cross-environment cause is not established. No expected hash or tuning value was changed. |
+| Regression proof on `e198328` | **Fails, exit 1, 51/53.** F3 returns ground at 3.334 ms instead of the earlier plane; F2 cannot find a pitch satisfying the repaired flag split. The subsequent swing/take checks are conditionally skipped because that search fails. Compatibility-only computed `BouncedBeforePlate` getter added in the scratch old source (ground-height observation, no physics changes) so the new harness compiles. The original old harness separately passes 51/51. |
+| Lift identity / groundStops:false scratch check | **56/56**, hash `A69EBC30D0B76360`, after replacing only the four new constant references by their original literals and adding the groundStops:false assertion. |
+| Isolation command, brief §5 | **Empty.** Baseball, Life, Narrative and Hustles unchanged. Arcade imports are only the permitted RngState dependency; standalone harness compiles. |
+| Full solution Debug build | **0 warnings, 0 errors.** Godot ResourceUid API and null-safe Steam shutdown compile. Temporary live-probe and final clean-assembly builds also passed (0 warnings/errors); the probe is not shipped. |
+| Direct CLI prototype boot | **Pass**, Godot 4.7 Mono; clean stderr, career-skipped message, no career DB during or after exit. Fresh disposable user directory. |
+| Editor F6 boot | **Pass, synthesized F6 through Godot's input system**, with the prototype open. Editor reports playing; the actual spawned process has `--scene res://Assets/UI/Arcade/ArcadePrototype.tscn`. Its own log confirms boot skipped, full hit loop completed, no DB, and normal exit. This was not a human physical-keyboard press. |
+| Keyboard + simulated pad UI | **60 assertions pass** in the keyboard-swing run, then **60 pass** with pad A swinging and Back quitting. All 20 tuning controls reachable; selectors/sliders/toggles, reseed/reset, panel shortcuts, five window sizes/integer scaling and swing tallies pass. Both exits return 0; no career DB. |
+| Rendered full loop | **Pass**, OpenGL compatibility on Intel UHD 605; flight and landing captures visually inspected. Scripted centered aim + Space drives Windup → Flight → Hit → Result → next Windup, one swing/one in-play hit, EV/readout/tally populated; camera follows ball to landing. Esc exits without a DB. The F6 child also completes the loop under Vulkan. This demonstrates runtime behavior, not human timing or fun. |
+| Normal-game regression | **Pass**, separate disposable directory: Main.tscn, NewGameScreen, schema-v13 career DB created, normal exit clock persistence; no prototype-skipped message. Expected informational Steam-unavailable message because steam_api64 is absent. Clean stderr. |
+| Physical controller / owner playtest / exported build | **NOT RUN.** No physical pad attached; the owner feel gate remains open; no export was built. |
+
+### Architecture and limits
+
+The autoload is an acceptable minimal G-0 boot boundary: it is the earliest point that can prevent DB initialization, and the integration lead authored it. A future explicit launch-mode/bootstrap service would avoid having the career manager know a prototype scene path, but is not required for this isolated playtest. The suffix scan is not an export security boundary: any engine argument ending in that suffix can select the bypass, and the prototype is still included unless export filters exclude it. Phase 17 must exclude development tools or explicitly gate the launch mode; ordinary no-argument career launch was verified here. No exported-build claim is made. The `uid://` resolution branch compiles but was not exercised: this editor supplied `res://`.
+
+G-0b standalone is now checked. The keyboard/pad box remains unchecked because simulated controller events do not verify physical hardware. The owner-played box remains unchecked. All review-only scripts/plugins and import churn were removed. Logs, scratch regression projects and images are outside the repository in the chat's visualization directory. The sole retained local override is **untracked `override.cfg`**, redirecting this checkout's user data to `DirtAndDiamonds-G0-rereview-astra`; it contains no test autoload or editor plugin.
+
+Done: repair re-review, build, regression proof, isolation, direct/F6/normal boot and UI/full-loop checks. Commit: this review-record commit on `pG/G-0-rereview-astra`. Open: physical controller, cross-environment hash explanation, export filtering, and the owner's feel gate. No merge. **Recommended next: the owner's G-0 “hitting is fun” playtest.** Open `Assets/UI/Arcade/ArcadePrototype.tscn` in this review checkout and press **F6**; the local override also keeps user data disposable. **Claude Sonnet 5.5** then tunes the scene from the owner's feedback (**reviewer: GPT 6 Astra Pro**, Opus merge gate). Do not start G-1/G-2.
