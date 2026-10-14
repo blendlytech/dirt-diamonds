@@ -48,6 +48,7 @@ public sealed partial class ArcadePrototype : Control
     private PrototypeSettings _settings = null!;
     private PrototypeSession _session = null!;
 
+    private Window _window = null!;
     private SubViewportContainer _fieldContainer = null!;
     private ArcadeFieldView _field = null!;
     private Label _settingsLabel = null!;
@@ -68,6 +69,7 @@ public sealed partial class ArcadePrototype : Control
     {
         EnsureInputActions();
 
+        _window = GetWindow();
         _fieldContainer = GetNode<SubViewportContainer>("FieldCenter/FieldContainer");
         _field = GetNode<ArcadeFieldView>("FieldCenter/FieldContainer/FieldViewport/Field");
         _settingsLabel = GetNode<Label>("Hud/PitchPanel/PitchLabel");
@@ -86,6 +88,7 @@ public sealed partial class ArcadePrototype : Control
 
         BuildTuningRows();
         Resized += OnResized;
+        _window.SizeChanged += OnWindowResized;
         UpdateScale();
         RefreshSettingsLabel();
 
@@ -96,6 +99,7 @@ public sealed partial class ArcadePrototype : Control
     public override void _ExitTree()
     {
         Resized -= OnResized;
+        _window.SizeChanged -= OnWindowResized;
     }
 
     public override void _Process(double delta)
@@ -175,6 +179,24 @@ public sealed partial class ArcadePrototype : Control
         BindPadButton(ActTuning, JoyButton.Y);
         BindKey(ActQuit, Key.Escape);
         BindPadButton(ActQuit, JoyButton.Back);
+
+        // Godot's built-in UI actions may contain keyboard events only. The
+        // prototype also needs pad activation/cancel and focus navigation.
+        EnsureUiPadButton("ui_accept", JoyButton.A);
+        EnsureUiPadButton("ui_cancel", JoyButton.B);
+        EnsureUiPadButton("ui_left", JoyButton.DpadLeft);
+        EnsureUiPadButton("ui_right", JoyButton.DpadRight);
+        EnsureUiPadButton("ui_up", JoyButton.DpadUp);
+        EnsureUiPadButton("ui_down", JoyButton.DpadDown);
+    }
+
+    private static void EnsureUiPadButton(StringName action, JoyButton button)
+    {
+        var input = new InputEventJoypadButton { ButtonIndex = button };
+        if (!InputMap.ActionHasEvent(action, input))
+        {
+            InputMap.ActionAddEvent(action, input);
+        }
     }
 
     private static void BindKey(StringName action, Key key) =>
@@ -192,11 +214,19 @@ public sealed partial class ArcadePrototype : Control
 
     private void OnResized() => UpdateScale();
 
+    // A window resize can change canvas stretch without changing this Control's
+    // logical size. Wait until the window's new transform has been applied.
+    private void OnWindowResized() => Callable.From(UpdateScale).CallDeferred();
+
     private void UpdateScale()
     {
-        int scale = Math.Max(1, Mathf.FloorToInt(Math.Min(Size.X / ArcadeFieldView.ViewWidth, Size.Y / ArcadeFieldView.ViewHeight)));
-        _fieldContainer.StretchShrink = scale;
-        _fieldContainer.CustomMinimumSize = new Vector2(ArcadeFieldView.ViewWidth * scale, ArcadeFieldView.ViewHeight * scale);
+        Vector2 canvasScale = GetViewportTransform().Scale;
+        Vector2 pixels = Size * canvasScale;
+        int scale = Math.Max(1, Mathf.FloorToInt(Math.Min(pixels.X / ArcadeFieldView.ViewWidth, pixels.Y / ArcadeFieldView.ViewHeight)));
+        Vector2 logicalScale = new(scale / canvasScale.X, scale / canvasScale.Y);
+        Vector2 sourceSize = new(ArcadeFieldView.ViewWidth, ArcadeFieldView.ViewHeight);
+        _fieldContainer.Scale = logicalScale;
+        _fieldContainer.Position = (Size - sourceSize * logicalScale) * 0.5f;
     }
 
     // ------------------------------------------------------------------

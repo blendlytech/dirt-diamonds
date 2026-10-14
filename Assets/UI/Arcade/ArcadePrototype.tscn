@@ -22,7 +22,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.043, 0.047, 0.063, 1)
 
-[node name="FieldCenter" type="CenterContainer" parent="."]
+[node name="FieldCenter" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -33,11 +33,11 @@ mouse_filter = 2
 
 [node name="FieldContainer" type="SubViewportContainer" parent="FieldCenter"]
 texture_filter = 1
-custom_minimum_size = Vector2(1280, 720)
-layout_mode = 2
+custom_minimum_size = Vector2(320, 180)
+layout_mode = 0
+offset_right = 320.0
+offset_bottom = 180.0
 mouse_filter = 2
-stretch = true
-stretch_shrink = 4
 
 [node name="FieldViewport" type="SubViewport" parent="FieldCenter/FieldContainer"]
 handle_input_locally = false
