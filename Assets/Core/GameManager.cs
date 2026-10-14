@@ -211,8 +211,52 @@ public sealed partial class GameManager : Node
     // _achievements (nothing reads it; it lives exactly as long as the bus).
     private RichPresenceWriter _presence = null!;
 
+    // G-0 arcade feel prototype (a debug tool; tasks/G-0_arcade_feel_prototype_brief.md):
+    // the scene that, when it is the launch target, must run with no career at all.
+    private const string ArcadePrototypeSceneSuffix = "Assets/UI/Arcade/ArcadePrototype.tscn";
+
+    /// <summary>
+    /// True when this process was launched with the G-0 arcade prototype as its
+    /// run scene: F6 in the editor, or its <c>res://</c> (or <c>uid://</c>) path on the
+    /// command line. The prototype's brief forbids any DB or career touch, and an
+    /// autoload boots before any scene can object, so the check lives here and
+    /// the whole career boot is skipped (G-0 review finding 1). Main.tscn never
+    /// loads in that launch, so nothing else expects a booted GameManager.
+    /// </summary>
+    public static bool IsArcadePrototypeLaunch()
+    {
+        foreach (string arg in OS.GetCmdlineArgs())
+        {
+            string path = arg;
+            if (path.StartsWith("uid://", StringComparison.Ordinal))
+            {
+                long id = ResourceUid.TextToId(path);
+                if (!ResourceUid.HasId(id))
+                {
+                    continue;
+                }
+                path = ResourceUid.GetIdPath(id);
+            }
+            if (path.Replace('\\', '/').EndsWith(ArcadePrototypeSceneSuffix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public override void _Ready()
     {
+        if (IsArcadePrototypeLaunch())
+        {
+            // No save opened, no schema applied, no league seeded, no Steam, no
+            // bus. Instance stays null, _Process is off, and _ExitTree's flushes
+            // are all null-guarded, so quitting writes nothing either.
+            SetProcess(false);
+            GD.Print("[GameManager] Arcade prototype launch: career boot skipped, no save opened.");
+            return;
+        }
+
         Instance = this;
         // The bus must keep pumping while the SceneTree is paused (menus, at-bat
         // freeze) — pausing the sims is the sims' concern, not the dispatcher's.
