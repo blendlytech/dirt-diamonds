@@ -158,6 +158,20 @@ public static class ArcadeTuning
         return sigma / f;
     }
 
+    /// <summary>PROPOSAL: a tired pitcher loses velocity: 100% fresh, 97% at fatigue 0.5 (the multiplier's floor), clamped to [0.9, 1].</summary>
+    public static double FatigueSpeedScale(double fatigueMultiplier) => Math.Clamp(0.94 + 0.06 * fatigueMultiplier, 0.9, 1.0);
+
+    /// <summary>PROPOSAL (G-0 prototype AI only; G-3 replaces it): share of pitches aimed in the zone.</summary>
+    public const double ProtoInZoneShare = 0.5;
+
+    /// <summary>PROPOSAL (G-0 prototype AI): in-zone targets stay this far inside the zone edges (m).</summary>
+    public const double ProtoZoneMargin = 0.03;
+
+    /// <summary>PROPOSAL (G-0 prototype AI): the edge/chase target box (m): ±X half-width and Z bottom/top.</summary>
+    public const double ProtoChaseHalfWidth = 0.38;
+    public const double ProtoChaseBottom = 0.30;
+    public const double ProtoChaseTop = 1.30;
+
     /// <summary>PROPOSAL: aftertouch — a lateral/vertical steer the pitcher can apply during the first part of the flight.</summary>
     public const double AftertouchWindowSec = 0.15;
 

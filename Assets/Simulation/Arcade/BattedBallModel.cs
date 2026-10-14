@@ -99,8 +99,9 @@ public readonly struct BattedBallResult
 /// <summary>
 /// Batted-ball flight (arcade §3.3): integrates from the bat to the first
 /// landing, checking the fence on the way. Fair/foul uses the angle where
-/// the ball lands or reaches the fence (a G-0 simplification; the G-2 rules
-/// engine adds the infield "where it stops / passes the bag" rule).
+/// the ball reaches the fence (the foul-pole rule) or, short of the fence,
+/// where it first lands (a G-0 simplification; the G-2 rules engine adds the
+/// infield "where it stops / passes the bag" rule).
 /// </summary>
 public static class BattedBallModel
 {
@@ -157,8 +158,12 @@ public static class BattedBallModel
         }
 
         Vec3 land = offWall ? fencePoint : s.Position;
-        double landSpray = Math.Atan2(land.X, Math.Max(land.Y, 1e-9)) / ArcadeTuning.DegToRad;
-        bool fair = land.Y > 0.0 && Math.Abs(landSpray) <= ArcadeTuning.FoulLineDeg;
+        // A ball that reaches the fence is judged where it crosses it (the foul
+        // pole rule): a fair drive that slices past the line after clearing the
+        // wall is still a home run. Anything else is judged where it lands.
+        Vec3 judge = homeRun || offWall ? fencePoint : land;
+        double judgeSpray = Math.Atan2(judge.X, Math.Max(judge.Y, 1e-9)) / ArcadeTuning.DegToRad;
+        bool fair = judge.Y > 0.0 && Math.Abs(judgeSpray) <= ArcadeTuning.FoulLineDeg;
 
         double evMph = launch.Speed / ArcadeTuning.MphToMps;
         double la = Math.Asin(Math.Clamp(launch.Velocity.Z / Math.Max(launch.Speed, 1e-9), -1.0, 1.0)) / ArcadeTuning.DegToRad;

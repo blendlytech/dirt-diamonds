@@ -89,19 +89,20 @@ public sealed class ArcadeAtBat
         double r = rng.NextDouble() * total;
         kind = r < fb ? PitchKind.Fastball : r < fb + br ? PitchKind.Breaking : PitchKind.Offspeed;
 
-        bool inZone = rng.NextDouble() < 0.5;
+        bool inZone = rng.NextDouble() < ArcadeTuning.ProtoInZoneShare;
         double u = rng.NextDouble();
         double v = rng.NextDouble();
         double x, z;
         if (inZone)
         {
-            x = (u * 2.0 - 1.0) * (ArcadeTuning.PlateHalfWidth - 0.03);
-            z = ArcadeTuning.ZoneBottom + 0.03 + v * (ArcadeTuning.ZoneTop - ArcadeTuning.ZoneBottom - 0.06);
+            double m = ArcadeTuning.ProtoZoneMargin;
+            x = (u * 2.0 - 1.0) * (ArcadeTuning.PlateHalfWidth - m);
+            z = ArcadeTuning.ZoneBottom + m + v * (ArcadeTuning.ZoneTop - ArcadeTuning.ZoneBottom - 2.0 * m);
         }
         else
         {
-            x = (u * 2.0 - 1.0) * 0.38;
-            z = 0.30 + v * 1.00;
+            x = (u * 2.0 - 1.0) * ArcadeTuning.ProtoChaseHalfWidth;
+            z = ArcadeTuning.ProtoChaseBottom + v * (ArcadeTuning.ProtoChaseTop - ArcadeTuning.ProtoChaseBottom);
         }
         target = new Vec3(x, ArcadeTuning.PlateFrontY, z);
     }

@@ -191,6 +191,42 @@ internal static class Program
         var inDeep = BattedBallModel.Fly(down, deepPark);
         Check("The same drive down the line: HR in a short park, not in a deep one",
             inShort.Kind == BattedBallKind.HomeRun && inDeep.Kind != BattedBallKind.HomeRun, $"{inShort.Kind} vs {inDeep.Kind} ({inShort.DistanceFt:F0} ft)");
+        // Foul-pole rule (G-0a review): a drive that clears the fence fair near the pole and
+        // then slices past the line is a home run, judged at the fence, not at the landing point.
+        var pole = Hit(100, 25, 41.25);
+        Check("Foul pole: clears fair at the fence, lands past the line → still a HR",
+            pole.Kind == BattedBallKind.HomeRun && pole.IsFair && Math.Abs(Math.Atan2(pole.Landing.X, pole.Landing.Y) / ArcadeTuning.DegToRad) > ArcadeTuning.FoulLineDeg,
+            $"{pole.Kind}, lands at {Math.Atan2(pole.Landing.X, pole.Landing.Y) / ArcadeTuning.DegToRad:F1}°");
+        // Independent sweep: walk each ball's sampled path, find where it first reaches the
+        // fence radius, and judge fair/foul there by angle. The model's call must agree.
+        var path = new BallState[4096];
+        var park = ParkDimensions.Default;
+        int poleMisjudged = 0, poleCases = 0;
+        for (double sp = 38.0; sp <= 45.0; sp += 0.25)
+        {
+            for (double la = 20.0; la <= 35.0; la += 1.0)
+            {
+                BallState launch = ContactModel.LaunchState(new Vec3(0, ArcadeTuning.ContactPlaneY, 0.9), 104 * ArcadeTuning.MphToMps, la, sp);
+                var b = BattedBallModel.Fly(launch, park);
+                int n = BallPhysics.Sample(launch, Vec3.Zero, double.NegativeInfinity, 1, path);
+                for (int k = 1; k < n; k++)
+                {
+                    Vec3 q = path[k].Position;
+                    double deg = Math.Atan2(q.X, q.Y) / ArcadeTuning.DegToRad;
+                    if (q.GroundDistance >= park.FenceDistanceM(deg))
+                    {
+                        if (Math.Abs(deg) <= ArcadeTuning.FoulLineDeg && q.Z > park.WallHeightM)
+                        {
+                            poleCases++;
+                            if (b.Kind != BattedBallKind.HomeRun) poleMisjudged++;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        Check("Foul pole sweep (104 mph, spray 38–45°, LA 20–35°): every ball over the fence fair is a HR",
+            poleMisjudged == 0 && poleCases > 0, $"{poleCases} cleared fair, {poleMisjudged} misjudged");
         Check("More exit velocity → more carry at 28°", Hit(95, 28).DistanceFt < Hit(100, 28).DistanceFt && Hit(100, 28).DistanceFt < Hit(105, 28).DistanceFt, "monotonic");
     }
 
@@ -248,6 +284,7 @@ internal static class Program
         Check("LHB early → pulled to right field (spray > +10°)", lhbEarly.SprayDeg > 10, $"{lhbEarly.SprayDeg:F1}°");
 
         Check("Outside the timing window → whiff", ContactModel.Resolve(at, avg, Perfect(at, 1.05 * window), none).Kind == ContactKind.Whiff, "late");
+        Check("Too early (outside the window) → whiff", ContactModel.Resolve(at, avg, Perfect(at, -1.05 * window), none).Kind == ContactKind.Whiff, "early");
         Check("Outside the cursor → whiff", ContactModel.Resolve(at, avg, Perfect(at, 0, 1.05 * ArcadeTuning.CursorHalfWidth(50, false)), none).Kind == ContactKind.Whiff, "wide");
         Check("Cursor edge → foul tip", ContactModel.Resolve(at, avg, Perfect(at, 0, 0.96 * ArcadeTuning.CursorHalfWidth(50, false)), none).Kind == ContactKind.FoulTip, "nick");
         Check("No swing → take", ContactModel.Resolve(at, avg, SwingInput.Take, none).Kind == ContactKind.Take, "take");

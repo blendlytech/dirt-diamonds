@@ -193,7 +193,7 @@ public static class PitchModel
         ref RngState rng, in PitcherProfile pitcher, ArcadeTier tier, PitchKind kind,
         in Vec3 intendedTarget, double aftertouchX, double aftertouchZ)
     {
-        double mph = ArcadeTuning.PitchSpeedMph(tier, kind, pitcher.Velocity(kind)) * Math.Clamp(0.94 + 0.06 * pitcher.FatigueMultiplier, 0.9, 1.0);
+        double mph = ArcadeTuning.PitchSpeedMph(tier, kind, pitcher.Velocity(kind)) * ArcadeTuning.FatigueSpeedScale(pitcher.FatigueMultiplier);
         double speed = mph * ArcadeTuning.MphToMps;
         byte movement = pitcher.Movement(kind);
         Vec3 spin = SpinVector(kind, movement, pitcher.Throws);
