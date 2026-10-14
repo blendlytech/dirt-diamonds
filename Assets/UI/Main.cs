@@ -49,8 +49,20 @@ public sealed partial class Main : Node
     private BurnerPhone? _burnerPhone;
     private BaseballDashboard? _baseballDashboard;
 
+    // G-0b debug entry point: `-- --arcade-proto` on a debug build swaps to the
+    // standalone arcade feel prototype. Never reachable in a release/export build
+    // or from the career flow.
+    private const string ArcadePrototypeArg = "--arcade-proto";
+    private const string ArcadePrototypeScene = "res://Assets/UI/Arcade/ArcadePrototype.tscn";
+
     public override void _Ready()
     {
+        if (OS.IsDebugBuild() && Array.IndexOf(OS.GetCmdlineUserArgs(), ArcadePrototypeArg) >= 0)
+        {
+            GetTree().CallDeferred(SceneTree.MethodName.ChangeSceneToFile, ArcadePrototypeScene);
+            return;
+        }
+
         _screenContainer = GetNode<Node>("ScreenContainer");
         _equipmentShop = GetNode<EquipmentShopScreen>("EquipmentShopScreen");
         _tutorialOverlay = GetNode<TutorialOverlay>("TutorialOverlay");
