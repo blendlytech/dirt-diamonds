@@ -2,7 +2,7 @@
 
 **What we're building:** [GAME_VISION.md](GAME_VISION.md) (v2, canonical). **Who does what:** [TEAM.md](TEAM.md) (owner-confirmed; Claude Opus 5.5 is integration lead). **Where we are:** [progress.md](progress.md). **Docs map:** [README.md](README.md).
 
-No phase merges until its exit criteria pass. Slices run in parallel where the dependency map allows. **Phases 0–12 and the post-12 arcs are complete. The road to launch is Phases 13–17, plus Phase G (gameplay core, high priority) and Phase L (lineage, temptation and vice).**
+**Roles (2026-10-13):** Gemini 3.1 Pro and Pro Math are unavailable; wherever this plan names them, read [TEAM.md](TEAM.md) §1a. No phase merges until its exit criteria pass. Slices run in parallel where the dependency map allows. **Phases 0–12 and the post-12 arcs are complete. The road to launch is Phases 13–17, plus Phase G (gameplay core, high priority) and Phase L (lineage, temptation and vice).**
 
 > **Historical author names.** Shipped specs in `reference/` and `archive/` name an earlier model roster as their authors ("Fable 5", "Opus 4.8", "Sonnet 5"). Those are past authors, not current roles, and they're unrelated to **Claude Fable 5.1**, which joined in 2026-10 and authored the G-2 pitching design (the R-1 review is now GPT 6 Astra Pro's: [tasks/R-1_full_review_brief.md](tasks/R-1_full_review_brief.md)). Current roles live only in [TEAM.md](TEAM.md).
 
@@ -62,7 +62,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 - **G-4** integration, incl. `EffectiveRatings` and `Player_Fielding` (GPT 6 Astra Pro; needs 13-2) · **G-5** arcade presentation + watch & skip (Sonnet) · **G-6** team takeover (Sonnet + GPT 6 Astra Pro)
 - **G-7** venue catalog + screens (Sonnet + Flash) · **G-8** art (owner + artist/AI; inside 15d) · **G-9** tuning + difficulty (Math + Sonnet)
 
-**Retired by the arcade decision (2026-10-13):** the dice-table pitching mode (`pitching_mode.md`, old G-2 "Work the Book") and the Read v2 batting re-band (old G-8). Their docs are in `archive/`. Owner decision **O1** (the skill band) carries over as the arcade's default difficulty target. Claude Opus reviews and gates every engine slice; Gemini Pro reviews the sim diffs.
+**Retired by the arcade decision (2026-10-13):** the dice-table pitching mode (`pitching_mode.md`, old G-2 "Work the Book") and the Read v2 batting re-band (old G-8). Their docs are in `archive/`. Owner decision **O1** (the skill band) carries over as the arcade's default difficulty target. Claude Opus reviews and gates every GPT engine slice; GPT 6 Astra Pro reviews Claude's sim diffs (owner 2026-10-13, TEAM.md §1a).
 
 **Exit criteria:**
 
@@ -232,14 +232,14 @@ The owner accepted every recommendation in [Q01–Q17](review/r1/06_owner_questi
 
 | Brief | Owner | Exit/dependency |
 | --- | --- | --- |
-| [R1-SAVE-1](tasks/R1-SAVE-1_save_boundary.md) | Opus; Gemini Pro review | Quiescent saves, all-league flush, dirty retry and database ownership |
-| [R1-SAVE-2](tasks/R1-SAVE-2_recovery_and_rng.md) | Opus; Gemini Pro review | After SAVE-1: durable day/choice/resolution recovery and independent RNG continuation |
-| [R1-FAMILY](tasks/R1-FAMILY_partner_invariants.md) | Opus; Gemini Pro review | Partner invariant repair; after L-1, civilian/kin eligibility must precede L-4 |
-| [R1-MATH](tasks/R1-MATH_gameplay_contracts.md) | Gemini Pro Math; Opus/GPT review | Fatigue, O1 (now the arcade difficulty target) and life-modifier contracts. Its pitching-centering/waste part is retired (2026-10-13) |
+| [R1-SAVE-1](tasks/R1-SAVE-1_save_boundary.md) | Opus; GPT 6 Astra Pro review | Quiescent saves, all-league flush, dirty retry and database ownership |
+| [R1-SAVE-2](tasks/R1-SAVE-2_recovery_and_rng.md) | Opus; GPT 6 Astra Pro review | After SAVE-1: durable day/choice/resolution recovery and independent RNG continuation |
+| [R1-FAMILY](tasks/R1-FAMILY_partner_invariants.md) | Opus; GPT 6 Astra Pro review | Partner invariant repair; after L-1, civilian/kin eligibility must precede L-4 |
+| [R1-MATH](tasks/R1-MATH_gameplay_contracts.md) | GPT 6 Astra Pro (Math); Opus review | Fatigue, O1 (now the arcade difficulty target) and life-modifier contracts. Its pitching-centering/waste part is retired (2026-10-13) |
 | [R1-EFFECTS](tasks/R1-EFFECTS_life_projections.md) | GPT projection; Opus development | After Math: capped needs/stress, actual-practice work_ethic |
 | [R1-LEARN](tasks/R1-LEARN_practice_and_modifiers.md) | GPT seam; Sonnet UI | Stable arcade DTOs: isolated practice on the arcade engine, pitch explanation, effective-rating breakdown |
-| [R1-REVEAL](tasks/R1-REVEAL_durable_story_handoff.md) | Opus Core; Gemini Pro presentation | L-3/16b + SAVE-2: durable revelation before succession, playback never gates it |
-| [R1-STEAM](tasks/R1-STEAM_offline_eligibility.md) | Opus durability; Gemini Pro 17a | SAVE-2: unavailable-Steam eligibility and idempotent reconciliation |
+| [R1-REVEAL](tasks/R1-REVEAL_durable_story_handoff.md) | Opus Core; Sonnet presentation | L-3/16b + SAVE-2: durable revelation before succession, playback never gates it |
+| [R1-STEAM](tasks/R1-STEAM_offline_eligibility.md) | Opus durability; Sonnet 17a | SAVE-2: unavailable-Steam eligibility and idempotent reconciliation |
 
 14b follows its updated brief (Opus review, per-clip crash recovery); no new generation spend. 15 uses reusable team-dressed kits; approve representative art before volume. Park factors are outside 1.0. *(Manual fielding was too, until the 2026-10-13 arcade decision put assisted fielding in launch scope.)* Full 13/L/G career, interrupted-save parity, Godot input/UX and exported Windows/Linux checks precede release.
 

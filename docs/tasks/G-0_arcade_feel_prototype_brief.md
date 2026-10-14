@@ -7,7 +7,7 @@ G-0 runs as **two sequential halves** with one owner gate at the end:
 | **G-0a** | Physics core: pitch flight, bat-ball contact, batted-ball flight, plus `Tools/ArcadeHarness` prototype suites | **Claude Opus 5.5** | `pG/G-0a-opus` in `..\dnd-opus` |
 | **G-0b** | Playable standalone Godot scene over the G-0a core: placeholder 16-bit sprites, controls, landing readout, live tuning panel | **Claude Sonnet 5.5** | `pG/G-0b-sonnet` in `..\dnd-sonnet`, branched from the reviewed G-0a |
 
-**Reviewer:** Gemini 3.1 Pro (both halves). **Owner gate:** after G-0b: **"hitting is fun."** Until the owner says yes, iterate inside G-0; nothing downstream (G-2+) builds on this.
+**Reviewer:** GPT 6 Astra Pro (both halves; owner 2026-10-13, Gemini 3.1 Pro unavailable). G-0a also had a Claude Opus stand-in review on 2026-10-13, and its one bug is fixed (`c916426`). **Owner gate:** after G-0b: **"hitting is fun."** Until the owner says yes, iterate inside G-0; nothing downstream (G-2+) builds on this.
 **Spec:** [arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) §2 (architecture), §3.1–§3.3 (physics), §4.1 (ratings mapping), §5.1 (batting controls), §10.1–§10.2 (views), §12 (G-0 row).
 **Binding:** GEMINI.md §1–§11.
 
@@ -42,7 +42,7 @@ The pitch comes in, you swing, and the ball flies. You see where it lands, how h
 - **Determinism:** a fixed step, contact solved at the exact plane crossing, and every random draw from a caller-owned `RngState`. The same seed + the same inputs must give a bit-identical result.
 - **Zero allocation** in the per-pitch and per-step paths. Trajectories go into caller-provided buffers.
 - **Inert:** no file under `Assets/Simulation/Baseball/`, `Life/`, `Narrative/` or `Hustles/` changes. MC and Gritty harnesses are untouched by construction (`git diff --stat` is the evidence).
-- **Every number is a first-pass proposal** in one tuning class (`ArcadeTuning`), with a comment saying so. Gemini Pro Math owns the final values in G-1/G-3.
+- **Every number is a first-pass proposal** in one tuning class (`ArcadeTuning`), with a comment saying so. GPT 6 Astra Pro (Math) owns the final values in G-1/G-3.
 - UI rules (G-0b): read-only over the sim, `GetNode` paths verified with `godot_scene_mapper`, and node references cached in `_Ready`.
 
 ## 3. Inputs
@@ -128,7 +128,7 @@ Open: <anything unfinished, risks, owner questions>
 Recommended next: <slice> by <model> (reviewer: <model>)
 ```
 
-- **G-0a** hands off to **G-0b by Claude Sonnet 5.5** (reviewer Gemini Pro). G-0a's review by Gemini Pro can run in parallel.
+- **G-0a** hands off to **G-0b by Claude Sonnet 5.5** (reviewer GPT 6 Astra Pro). GPT 6 Astra Pro's independent review of G-0a can run in parallel.
 - **G-0b** hands off to **the owner** for the "hitting is fun" gate.
 
 Then add one compact line to [progress.md](../progress.md).

@@ -131,7 +131,7 @@ Counts, outs, innings and the game end mirror the macro sim's rules exactly, so 
 | **`arm`** | **NEW** | Throw velocity (fielders, catcher pop time) |
 | **`primary_position`** | **NEW** | Where the player stands; which fielding role the AI plays |
 
-Every tier keeps its own feel through **per-tier physics ranges** (e.g. HS fastball 70–85 mph, College 80–94, Pro 88–101), driven by the tier rating deltas already applied at roster load (`TierRatingDeltas`, values set in Phase 13), plus the park's real dimensions (§10.4). The mph ranges are first-pass *proposals* for Gemini Pro Math.
+Every tier keeps its own feel through **per-tier physics ranges** (e.g. HS fastball 70–85 mph, College 80–94, Pro 88–101), driven by the tier rating deltas already applied at roster load (`TierRatingDeltas`, values set in Phase 13), plus the park's real dimensions (§10.4). The mph ranges are first-pass *proposals* for GPT 6 Astra Pro (Math).
 
 ### 4.2 One modifier stack for both engines
 
@@ -295,7 +295,7 @@ Richer events fold into existing columns the way `PaOutcome` already folds them:
 5. **Rules integrity:** no impossible base-out states, runs = runners crossing home, three outs per half, regulation innings per tier.
 6. **Determinism:** the same seed + inputs → a byte-identical box score, and a watched game = the same game skipped.
 
-**Ownership:** Gemini 3.1 Pro Math owns the noise tables and physics constants (TEAM.md). Tuning happens **only** through them, as data edits. The harness re-runs after any change under `Assets/Simulation/Arcade/`, the same mandate `run_monte_carlo_batch` carries for the rest of `Assets/Simulation/`. If a change touches the shared `EffectiveRatings` stack, both harnesses run.
+**Ownership:** GPT 6 Astra Pro (Math) owns the noise tables and physics constants (TEAM.md). Tuning happens **only** through them, as data edits. The harness re-runs after any change under `Assets/Simulation/Arcade/`, the same mandate `run_monte_carlo_batch` carries for the rest of `Assets/Simulation/`. If a change touches the shared `EffectiveRatings` stack, both harnesses run.
 
 **The human is deliberately not calibrated to the league.** A skilled player can beat their ratings; that's the point of the choice. What *is* tuned is **difficulty** (§5.6). The scripted-skill bot harness from gameplay_core §1.4 carries over with three bots: perfect, average and poor. At the default difficulty, the targets are the owner's **O1** skill band (2026-10-10): the average bot ≈ the ratings-only line, and the perfect and poor bots ≈ the 40-to-70 rating gap (±.100 OPS), capped. Math sets the constants. Higher tiers keep it a challenge, because pitches are faster and nastier.
 
@@ -378,16 +378,16 @@ These replace gameplay_core's former §4 table, and they reuse the IDs G-1…G-9
 
 | Slice | Content | Recommended model | Reviewer | Gate |
 | :-- | :-- | :-- | :-- | :-- |
-| **G-0** | **Feel prototype:** standalone scene, one batter vs one pitcher, pitch flight + contact + batted-ball flight + landing readout. Placeholder sprites; no fielding, no DB. | Claude Opus 5.5 (physics) + Claude Sonnet 5.5 (scene) | Gemini Pro | **Owner verdict: "hitting is fun."** Iterate here until it is. |
-| **G-1** | Attribute audit (**done inside R-1**) → the ratings-to-physics mapping (§4.1): mph ranges, bat speed, reach, arm and speed curves | GPT 6 Astra Pro → Gemini Pro Math | Claude Opus | ~~Default difficulty target~~ decided (O1) |
-| **G-2** | Physics core + rules engine (§3), engine-independent; `ArcadeHarness` rules + determinism suites | GPT 6 Astra Pro | Gemini Pro + Claude Opus (merge gate) | Harness rules + determinism green |
-| **G-3** | AI for every role (§6); AI-vs-AI games calibrated to the Phase 13 bands | GPT 6 Astra Pro + Gemini Pro Math | Gemini Pro + Claude Opus | **§9 bands green, all three tiers** |
-| **G-4** | Integration: `EffectiveRatings` extraction (incl. R1-EFFECTS projections); `Player_Fielding` + ripples (§8); `ArcadeGame` flush; `PlayPendingArcadeGame`; autopilot routing; Classic setting; booth beats (§7.6) | GPT 6 Astra Pro | Gemini Pro + Claude Opus | MC full suite (resolver guard byte-exact); season-long arcade harness |
-| **G-5** | Arcade presentation: SubViewport, pitch/field views, 15b scorebug, controls + remapping, watch & skip, play-by-play, box score | Claude Sonnet 5.5 | Gemini Pro | Clean boot; playable end to end; watched = skipped |
-| **G-6** | Take-over-the-team toggle + full baserunning control | Claude Sonnet 5.5 + GPT 6 Astra Pro | Gemini Pro | Owner playtest |
-| **G-7** | Venue catalog (68 entries, incl. the dimensions physics reads) + venue screens + hotspots (gameplay_core §3) | Claude Sonnet 5.5 (+ Gemini Flash: catalog data) | Claude Opus | Every team resolves a venue |
+| **G-0** | **Feel prototype:** standalone scene, one batter vs one pitcher, pitch flight + contact + batted-ball flight + landing readout. Placeholder sprites; no fielding, no DB. | Claude Opus 5.5 (physics) + Claude Sonnet 5.5 (scene) | G-0a: Claude Opus stand-in (done) → GPT 6 Astra Pro (independent); G-0b: GPT 6 Astra Pro | **Owner verdict: "hitting is fun."** Iterate here until it is. |
+| **G-1** | Attribute audit (**done inside R-1**) → the ratings-to-physics mapping (§4.1): mph ranges, bat speed, reach, arm and speed curves | GPT 6 Astra Pro (mapping + Math) | Claude Opus | ~~Default difficulty target~~ decided (O1) |
+| **G-2** | Physics core + rules engine (§3), engine-independent; `ArcadeHarness` rules + determinism suites | GPT 6 Astra Pro | Claude Opus (sim diff + merge gate) | Harness rules + determinism green |
+| **G-3** | AI for every role (§6); AI-vs-AI games calibrated to the Phase 13 bands | GPT 6 Astra Pro (engine + Math) | Claude Opus | **§9 bands green, all three tiers** |
+| **G-4** | Integration: `EffectiveRatings` extraction (incl. R1-EFFECTS projections); `Player_Fielding` + ripples (§8); `ArcadeGame` flush; `PlayPendingArcadeGame`; autopilot routing; Classic setting; booth beats (§7.6) | GPT 6 Astra Pro | Claude Opus | MC full suite (resolver guard byte-exact); season-long arcade harness |
+| **G-5** | Arcade presentation: SubViewport, pitch/field views, 15b scorebug, controls + remapping, watch & skip, play-by-play, box score | Claude Sonnet 5.5 | GPT 6 Astra Pro | Clean boot; playable end to end; watched = skipped |
+| **G-6** | Take-over-the-team toggle + full baserunning control | Claude Sonnet 5.5 + GPT 6 Astra Pro | each other's part | Owner playtest |
+| **G-7** | Venue catalog (68 entries, incl. the dimensions physics reads) + venue screens + hotspots (gameplay_core §3) | Claude Sonnet 5.5 (+ Gemini 3.8 Flash: catalog data) | Claude Opus | Every team resolves a venue |
 | **G-8** | Art: 16-bit sprite set, palette-swap shader, per-venue field tilesets, venue screen art | Owner + artist/AI art tools (Flash: integration); inside 15d | Claude Opus (consistency) | **Owner taste** |
-| **G-9** | Tuning + difficulty presets (§5.6, §9) | Gemini Pro Math + Claude Sonnet 5.5 (data) | Claude Opus | **Owner sign-off; Classic's fate (§11)** |
+| **G-9** | Tuning + difficulty presets (§5.6, §9) | GPT 6 Astra Pro (Math) + Claude Sonnet 5.5 (data) | Claude Opus | **Owner sign-off; Classic's fate (§11)** |
 
 **Dependencies:**
 

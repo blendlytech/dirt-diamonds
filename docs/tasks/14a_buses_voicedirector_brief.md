@@ -1,10 +1,10 @@
 # Task Brief: 14a — Audio buses, `VoiceDirector` and the subtitle strip
 
-**Recommended model:** Gemini 3.1 Pro (TEAM.md §2)
+**Recommended model:** Claude Sonnet 5.5 (TEAM.md §2; reassigned from Gemini 3.1 Pro, unavailable from 2026-10-13, §1a)
 **Reviewer:** Claude Opus 5.5
 **Owner gate:** **ear check**: the owner listens to the ducking and the subtitle strip in a live boot
 **Spec:** [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) §3.1, §3.2, §11 (row 14a); GEMINI.md §1, §3, §5, §7
-**Branch / worktree:** `p14/14a-gemini` in your own worktree, e.g. `git worktree add ..\dnd-gemini-14a -b p14/14a-gemini main`. Your sandbox needs write access to `C:\Users\DELL\dirt_and_diamonds\.git`, because worktree commits live there.
+**Branch / worktree:** `p14/14a-sonnet` in your own worktree, e.g. `git worktree add ..\dnd-sonnet-14a -b p14/14a-sonnet origin/main`. Your sandbox needs write access to `C:\Users\DELL\dirt_and_diamonds\.git`, because worktree commits live there.
 
 ## 1. Context
 
@@ -57,7 +57,7 @@ Every game the avatar plays is called by their team's own announcer (GAME_VISION
 - [ ] The subtitle strip renders `SubtitleRequested` and honors its toggle.
 - [ ] Settings sliders and toggles persist across restarts.
 - [ ] All gates above pass; no `Assets/Simulation/` changes.
-- [ ] Committed on `p14/14a-gemini`, with one compact Session Log entry in `docs/progress.md`. **Then stop.**
+- [ ] Committed on `p14/14a-sonnet`, with one compact Session Log entry in `docs/progress.md`. **Then stop.**
 
 ## 7. Out of scope
 
