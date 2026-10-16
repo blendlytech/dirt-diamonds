@@ -42,6 +42,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
   - The repo is private.
   - Phase 13 lands 13-1…13-3 on an integration branch `p13/integration` and merges to `main` once the full MC suite is green with the new Pro guard.
 - **2026-10-13:** attended games are **true arcade physics**: real-time bat contact, ball flight and fielding decided by physics and skill. Ratings shape the physics. You control your player, with a take-over-the-team toggle. Fielding is assisted. 16-bit art. Watch the whole game, with skips. Recorded in GAME_VISION v2.1 §3/§5. Spec: [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md).
+- **2026-10-16:** **you control only your own player** in attended games: his at-bats, every pitch while he's on the mound (if a pitcher) and his fielding chances; baserunning is automatic for 1.0. You can follow the whole game pitch by pitch, including known family members in the same game (never hidden kin). **Take over the team (G-6) is deferred past 1.0.**
   - **Roster:** Gemini 3.1 Pro and Gemini 3.1 Pro Math are unavailable; Gemini 3.8 Flash stays. GPT 6 Astra Pro takes calibration/math and the independent review of Claude's sim diffs (Claude Opus reviews GPT's work); Claude Sonnet takes the presentation runtime (14a, 14d, 16a/b, 17a, L-7, S-4); Claude Opus takes 13-4 and 13-5. Succession table: [TEAM.md](TEAM.md) §1a.
 
 **Open for the owner:**
@@ -53,7 +54,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 - the two owner-authored functions, `ChooseFatherFallback` and `DiscoveryChance`;
 - operational verification that any auto-committer cannot target main/shared branches (policy settled, TEAM.md §5);
 - Math delivery of the accepted gameplay constants/contracts (R1-MATH: fatigue and life modifiers; its old pitching-centering part is retired);
-- the remaining Phase G choices (arcade §13): stolen bases, pickoffs and bunts in v1; takeover stats; Classic sim's fate; the art source. O1 and R-1 already settle difficulty, needs/stress, person stats and park factors.
+- the remaining Phase G choices (arcade §13): stolen bases, pickoffs and bunts in v1 (AI runners); Classic sim's fate; the art source (16-bit vs stylized 3D: G-0c/G-0d). O1 and R-1 already settle difficulty, needs/stress, person stats and park factors.
 
 **Gate baseline (2026-10-10):**
 
@@ -80,6 +81,8 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 ---
 
 ## Session Log (compact)
+
+- **2026-10-16 — Control scope narrowed (owner decision; Claude Opus 5.5; docs only):** you play only your own player (at-bats, every pitch if a pitcher, fielding chances); baserunning automatic for 1.0; follow the game pitch by pitch incl. known family in the same game (secrecy-safe: only revealed relationships); **G-6 take-over-the-team deferred past 1.0**. Applied to GAME_VISION (pillar 2, §5), arcade spec (locked table, §5.2–§5.5, §7.1–§7.2, §12, §13 Q2/Q3), gameplay_core, BUILD_PLAN, TEAM. Also: owner-run 16-bit sprite test (Rodin player 0.5 credit + free Mixamo baseball clips → Blender render → pixelized pitch-view mock) looked promising; G-0d brief pending the owner's go. Gates: none (docs only).
 
 - **2026-10-15 — Art direction: 16-bit → stylized 3D PROPOSED; G-0c brief (Claude Opus 5.5; docs only):** after the owner played the G-0 build and compared it with RBI Baseball 14, [review/visual_direction_3d_proposal.md](review/visual_direction_3d_proposal.md) sets out A (16-bit, current) vs B (stylized 3D, recommended) vs C (realistic 3D), what changes, the 3D animation-timing contract, art sourcing (the baseball animation set is the biggest gap) and a hardware target (60 fps at 1366×768 on a UHD 605 laptop). Nothing canonical changes until the owner accepts. New brief [tasks/G-0c_3d_look_test_brief.md](tasks/G-0c_3d_look_test_brief.md) (Sonnet, reviewer Astra) puts a 3D version in the owner's hands first. Gates: none (docs only).
 

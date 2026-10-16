@@ -50,7 +50,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 **Specs:** [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) (the attended game) and [design/gameplay_core.md](design/gameplay_core.md) (attributes, venues, handoff protocol).
 
 - **True arcade physics (2026-10-13):** every game your team plays is a real-time, 16-bit arcade ballgame. Bat contact, pitch and ball flight, fielding and baserunning are decided by physics and your input. **Ratings shape the physics:** bat speed, sweet-spot size, pitch speed and break, reach, arm and foot speed.
-- **Control and viewing:** you control your own player, or take over the whole team. Fielding is assisted. Watch the entire game and skip by pitch, at-bat, half-inning, inning, "my next moment" or to the final.
+- **Control and viewing:** you control only your own player (his at-bats, his pitching, his fielding chances; baserunning automatic for now), and follow the rest pitch by pitch, family included. Taking over the whole team is deferred past 1.0 (owner, 2026-10-16). Fielding is assisted. Watch the entire game and skip by pitch, at-bat, half-inning, inning, "my next moment" or to the final.
 - **Calibration:** background games stay on the macro sim. AI-vs-AI arcade games must hit the same Phase 13 per-tier bands (`Tools/ArcadeHarness`).
 - **Data:** `Player_Fielding` (defensive position, speed, arm) folds into schema v14.
 - **Venues:** all 68 teams get their own **interactive stadium or school screen** with hotspots, and their own **16-bit field**, built from reusable park kits with distinctive team dressing (R-1 accepted). **Park factors stay off for 1.0** (R-1 Q06): the physics uses tier-standard dimensions at launch, so venue identity is presentation-only.
@@ -59,14 +59,14 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 **Slices** (full table: arcade §12):
 
 - **G-0** feel prototype (G-0a physics **built**, Opus; G-0b scene, Sonnet) · **G-1** attribute audit (**done inside R-1**, GPT 6 Astra Pro) → ratings-to-physics mapping (GPT 6 Astra Pro → Math) · **G-2** physics core + rules (GPT 6 Astra Pro) · **G-3** AI + calibration (GPT 6 Astra Pro + Math; needs 13-3)
-- **G-4** integration, incl. `EffectiveRatings` and `Player_Fielding` (GPT 6 Astra Pro; needs 13-2) · **G-5** arcade presentation + watch & skip (Sonnet) · **G-6** team takeover (Sonnet + GPT 6 Astra Pro)
+- **G-4** integration, incl. `EffectiveRatings` and `Player_Fielding` (GPT 6 Astra Pro; needs 13-2) · **G-5** arcade presentation + watch & skip (Sonnet) · ~~**G-6** team takeover~~ (deferred past 1.0, owner 2026-10-16)
 - **G-7** venue catalog + screens (Sonnet + Flash) · **G-8** art (owner + artist/AI; inside 15d) · **G-9** tuning + difficulty (Math + Sonnet)
 
 **Retired by the arcade decision (2026-10-13):** the dice-table pitching mode (`pitching_mode.md`, old G-2 "Work the Book") and the Read v2 batting re-band (old G-8). Their docs are in `archive/`. Owner decision **O1** (the skill band) carries over as the arcade's default difficulty target. Claude Opus reviews and gates every GPT engine slice; GPT 6 Astra Pro reviews Claude's sim diffs (owner 2026-10-13, TEAM.md §1a).
 
 **Exit criteria:**
 
-- Every attended game plays on the arcade engine. You can bat, pitch, field and run, take over the team, and watch or skip any part.
+- Every attended game plays on the arcade engine. You bat, pitch (if you're a pitcher) and field as your own player, follow the rest pitch by pitch (family included), and watch or skip any part.
 - `ArcadeHarness`: per-tier bands green, monotonicity green, and watched = skipped.
 - MC full suite green, with the resolver guard byte-exact.
 - Difficulty presets land in Math's approved spread.

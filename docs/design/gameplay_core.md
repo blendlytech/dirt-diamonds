@@ -13,7 +13,7 @@
 | G2 | **Every team gets its own interactive stadium screen** (College and Pro) **or school screen** (HS), with its own art. |
 | G3 | **Every attribute is defined:** what it affects, by how much, and how it combines with the player's own gameplay skill. |
 | G4 | **Every task names its recommended model**, and every model stops when its task is done and tells the human which model is suggested for the next one (§5). |
-| G5 | **True arcade physics (2026-10-13).** Bat contact, ball trajectory and fielding are decided by real-time physics and the player's skill. Ratings shape the physics. You control your player, with a take-over-the-team toggle. Fielding is assisted. 16-bit art. Watch the entire game, with skips. Spec: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md). |
+| G5 | **True arcade physics (2026-10-13).** Bat contact, ball trajectory and fielding are decided by real-time physics and the player's skill. Ratings shape the physics. You control your player only (owner, 2026-10-16: takeover deferred past 1.0; baserunning automatic). Fielding is assisted. 16-bit art. Watch the entire game, with skips. Spec: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md). |
 
 ---
 
@@ -87,7 +87,7 @@ Each step clamps to [0, 100] (`TierEffects.Shift`). The order is pinned in code 
 | Batting: timing, contact cursor, power swing | [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §3.2, §5.1 |
 | Pitching: pitch, aim, release meter, aftertouch | arcade §3.1, §5.2 |
 | Fielding (assisted) and throws | arcade §3.4, §5.3 |
-| Baserunning; take over the team | arcade §3.5, §5.4, §5.5 |
+| Baserunning (automatic for 1.0); takeover (deferred) | arcade §3.5, §5.4, §5.5 |
 | Watch and skip; play-by-play; box score | arcade §7 |
 | Broadcast beats and ★ big plays | arcade §7.6 |
 
@@ -141,7 +141,7 @@ Away games show the **opponent's** venue (read-only hotspots: field, visitors' c
 - **G-3** AI + calibration;
 - **G-4** integration;
 - **G-5** arcade presentation + watch & skip;
-- **G-6** team takeover;
+- ~~**G-6** team takeover~~ (deferred past 1.0);
 - **G-7** venue catalog + screens (§3);
 - **G-8** art;
 - **G-9** tuning + difficulty.
@@ -172,7 +172,7 @@ The human starts the next model. No model starts another model's slice.
 4. **Person stats** (R-1 accepted): work_ethic → actual practice development first. Additional discipline/composure field scalers are deferred.
 5. **Park factors** (R-1 Q06): off for 1.0; tier-standard physics dimensions; distinct venue presentation stays in scope.
 6. **Fielding:** the R-1 "deferred beyond 1.0" is overridden by G5. Assisted fielding is in launch scope.
-7. **Still open** (arcade §13): stolen bases, pickoffs and bunts in v1; takeover stats; Classic's fate; the art source.
+7. **Still open** (arcade §13): stolen bases, pickoffs and bunts in v1; Classic's fate; the art source (takeover stats moot while takeover is deferred).
 
 ## Accepted R-1 additions (implementation pending)
 

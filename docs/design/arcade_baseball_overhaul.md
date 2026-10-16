@@ -9,7 +9,7 @@
 | Decision | Choice |
 | --- | --- |
 | Outcome authority | **True arcade physics.** Bat contact, ball trajectory and fielding are decided by real-time physics and player skill — not by the PA outcome tables. |
-| Who you control | **Your player by default**, plus a **"Take over the team" toggle** that hands you every batter, the pitcher and all fielders for your side. |
+| Who you control | **Your player only** (owner, 2026-10-16): his at-bats, every pitch while he's on the mound if he's a pitcher, and his fielding chances. Baserunning is automatic for 1.0. *The "Take over the team" toggle locked on 2026-10-09 is **deferred past 1.0** (§5.5).* |
 | Ratings | **Ratings shape the physics.** Power, bat speed, arm, foot speed etc. set what a player *can* do; timing and aim decide what *does* happen. Development keeps mattering. |
 | Fielding feel | **Assisted.** The fielder auto-breaks toward the ball; you steer the final approach, time the catch, choose the throw. |
 | Art | **16-bit** (SNES-era palette and animation density) plus modern game-feel effects. |
@@ -154,21 +154,23 @@ Gamepad first (Steam Deck), full keyboard support, all bindings remappable.
 
 The cursor's size is the Contact rating made visible. Discipline shows up as how early the pitch "reads" (a faint spin-colored trail on the ball).
 
-### 5.2 Pitching (when you pitch, or in takeover mode)
+### 5.2 Pitching (when your player pitches: every pitch while he's on the mound)
 
 Pick pitch type (face buttons, from the pitcher's arsenal) → aim with the stick → **release meter** (tap on the sweet spot; Control sets its width, fatigue shrinks it) → **aftertouch** with the stick in the first fraction of a second of flight.
 
 ### 5.3 Fielding — assisted
 
-The fielder breaks on contact automatically toward the predicted point. You steer the final approach (stick), **dive** (B), and the catch is automatic if the ball enters reach. Then throw by direction, RBI-style: **↑ second, ← third, → first, ↓ home**; hold to throw harder (faster, less accurate). In "my player" mode you only field balls your player is assigned; teammates field theirs.
+The fielder breaks on contact automatically toward the predicted point. You steer the final approach (stick), **dive** (B), and the catch is automatic if the ball enters reach. Then throw by direction, RBI-style: **↑ second, ← third, → first, ↓ home**; hold to throw harder (faster, less accurate). You field only the balls your player is assigned; AI teammates field theirs.
 
 ### 5.4 Baserunning
 
-On base: **advance / retreat** buttons. In takeover mode the d-pad selects which runner (same directional scheme as throws).
+**Automatic for 1.0 (owner, 2026-10-16).** The runner AI (§6) runs your player too, from his speed rating. Manual advance/retreat, steals and taking the extra base are a post-1.0 option, deferred together with takeover (§5.5).
 
 ### 5.5 Take over the team
 
-A toggle in the game HUD, usable between plate appearances. Off = you control only your player's at-bats, pitches (if a pitcher) and fielding chances. On = every batter, the pitcher and all fielders for your side. It can flip mid-game. Stats still credit whichever player was on the field — §13 asks whether takeover games should be flagged.
+**Deferred past 1.0 (owner, 2026-10-16).** You control only your player's at-bats, pitches (if a pitcher) and fielding chances; everyone else is AI on the same physics. The takeover toggle and manual baserunning (old G-6) are shelved, not deleted. If they return, §13 Q3 (takeover stats) returns with them.
+
+*Original design, kept for reference:* a HUD toggle, usable between plate appearances, handing you every batter, the pitcher and all fielders for your side.
 
 ### 5.6 Difficulty / assists
 
@@ -202,12 +204,15 @@ A skip bar on the game HUD:
 | Next pitch | Fast-forward to the next pitch result |
 | End of at-bat | Fast-forward to the PA's end |
 | End of half-inning / End of inning | As named |
-| **My next moment** | Fast-forward until your player bats, pitches, or has a fielding chance (or, in takeover mode, your team's next turn) |
+| **My next moment** | Fast-forward until your player bats, pitches, or has a fielding chance |
+| **Family's next moment** | Fast-forward until a known family member in this game (either team) bats, pitches or has a fielding chance. You watch it; the AI plays it |
 | End of game | Straight to the final + box score |
 
 ### 7.2 What happens to your own moments during a skip
 
-A setting, **"Stop skipping when I'm involved"** (default ON): any skip halts at your player's at-bat or fielding chance. With it OFF, your player is played by the AI using your ratings — same as the autopilot.
+A setting, **"Stop skipping when I'm involved"** (default ON): any skip halts at your player's at-bat or fielding chance. With it OFF, your player is played by the AI using your ratings — same as the autopilot. A second setting, **"Stop for family"** (default OFF), also halts at a known family member's moments so you can watch them.
+
+**Secrecy (GEMINI.md §10):** "family" means relationships the player already knows. A hidden kin link (the father before the reveal, a child placed for adoption, an unrevealed half-sibling) never triggers a family stop, a highlight or any cue. The family check goes through `LineageQueries` and the revealed-relationship state, never raw `Biological_Parentage`.
 
 ### 7.3 Determinism contract
 
@@ -384,7 +389,7 @@ These replace gameplay_core's former §4 table, and they reuse the IDs G-1…G-9
 | **G-3** | AI for every role (§6); AI-vs-AI games calibrated to the Phase 13 bands | GPT 6 Astra Pro (engine + Math) | Claude Opus | **§9 bands green, all three tiers** |
 | **G-4** | Integration: `EffectiveRatings` extraction (incl. R1-EFFECTS projections); `Player_Fielding` + ripples (§8); `ArcadeGame` flush; `PlayPendingArcadeGame`; autopilot routing; Classic setting; booth beats (§7.6) | GPT 6 Astra Pro | Claude Opus | MC full suite (resolver guard byte-exact); season-long arcade harness |
 | **G-5** | Arcade presentation: SubViewport, pitch/field views, 15b scorebug, controls + remapping, watch & skip, play-by-play, box score | Claude Sonnet 5.5 | GPT 6 Astra Pro | Clean boot; playable end to end; watched = skipped |
-| **G-6** | Take-over-the-team toggle + full baserunning control | Claude Sonnet 5.5 + GPT 6 Astra Pro | each other's part | Owner playtest |
+| ~~**G-6**~~ | **Deferred past 1.0 (owner, 2026-10-16).** Take-over-the-team toggle + manual baserunning | Claude Sonnet 5.5 + GPT 6 Astra Pro | each other's part | Owner playtest |
 | **G-7** | Venue catalog (68 entries, incl. the dimensions physics reads) + venue screens + hotspots (gameplay_core §3) | Claude Sonnet 5.5 (+ Gemini 3.8 Flash: catalog data) | Claude Opus | Every team resolves a venue |
 | **G-8** | Art: 16-bit sprite set, palette-swap shader, per-venue field tilesets, venue screen art | Owner + artist/AI art tools (Flash: integration); inside 15d | Claude Opus (consistency) | **Owner taste** |
 | **G-9** | Tuning + difficulty presets (§5.6, §9) | GPT 6 Astra Pro (Math) + Claude Sonnet 5.5 (data) | Claude Opus | **Owner sign-off; Classic's fate (§11)** |
@@ -403,8 +408,8 @@ These replace gameplay_core's former §4 table, and they reuse the IDs G-1…G-9
 ## 13. Open questions for the owner
 
 1. ~~High-school game length~~ **Settled by Phase 13:** HS plays 7 innings, College and Pro 9.
-2. **v1 extras:** stolen bases, pickoffs and bunts. In v1, or a follow-up slice? *Recommended: stolen bases in v1; pickoffs and bunts as follow-ups.*
-3. **Takeover stats:** should games played in takeover mode count normally for teammates' stats, the draft and the father-record chase, or be flagged? *Recommended: count normally, so the record chase stays simple. Takeover doesn't touch the avatar's own at-bats.*
+2. **v1 extras:** stolen bases, pickoffs and bunts (for the AI; your runner is automatic in 1.0). In v1, or a follow-up slice? *Recommended: stolen bases in v1; pickoffs and bunts as follow-ups.*
+3. ~~**Takeover stats**~~ **Moot for 1.0** (takeover deferred, owner 2026-10-16). If takeover returns: should games played in takeover mode count normally for teammates' stats, the draft and the father-record chase, or be flagged? *Recommended: count normally, so the record chase stays simple. Takeover doesn't touch the avatar's own at-bats.*
 4. **Classic sim:** keep it permanently as a "quick sim" option, or retire it once the arcade engine is proven?
 5. ~~Parks play differently?~~ **Settled for 1.0 by R-1 Q06: no.** The physics uses tier-standard dimensions; real geometry is a post-1.0 Math option.
 6. **Art source:** commission a pixel artist, license a sprite pack, curated AI-assisted pixel art, or a mix (e.g. a pack for crowds and tiles, an artist for players)?

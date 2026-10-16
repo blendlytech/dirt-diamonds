@@ -70,7 +70,7 @@ Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **re
 | **G-3** arcade AI + calibration to Phase 13 bands | GPT 6 Astra Pro (engine + Math) | Claude Opus | — |
 | **G-4** integration (`EffectiveRatings`, `Player_Fielding`, flush, autopilot, booth beats, R1-EFFECTS projections) | GPT 6 Astra Pro | Claude Opus | — |
 | **G-5** arcade presentation + controls + watch & skip | Claude Sonnet | GPT 6 Astra Pro | Playtest |
-| **G-6** take over the team + baserunning | Claude Sonnet + GPT 6 Astra Pro | Claude Opus (GPT part) / GPT 6 Astra Pro (Sonnet part) | Playtest |
+| ~~**G-6** take over the team + baserunning~~ | **Deferred past 1.0** (owner, 2026-10-16) | — | — |
 | **G-7** venue catalog (68) + venue screens (reusable kits + team dressing, R-1 Q13) | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
 | **G-8** art: 16-bit sprites, field kits, venue art | Owner + artist/AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste; art source** |
 | **G-9** tuning + difficulty presets (O1 skill band as the default target) | GPT 6 Astra Pro (Math) + Claude Sonnet (data) | Claude Opus | **Sign-off; Classic's fate** |
