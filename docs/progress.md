@@ -72,7 +72,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Very next steps
 
-1. **Owner: the G-0 "hitting is fun" playtest, DEFERRED (owner, 2026-10-14) until a controller is at hand.** G-0 is merged to `main` and approved for it (brief §11). Launch: open `Assets/UI/Arcade/ArcadePrototype.tscn`, press F6 (no career save is touched; keyboard also works). **Until the verdict, nothing that builds on the feel starts** (G-2 onward, per the brief and arcade §12) unless the owner waives the gate.
+1. **Claude Sonnet 5.5: G-0c 3D look test** ([brief](tasks/G-0c_3d_look_test_brief.md)): the G-0 prototype re-rendered in Godot 3D (RBI-style broadcast camera, lit field, CC0 placeholder players, marker-synced swing/pitch), for the owner's **art-direction decision**: stay 16-bit or go stylized 3D ([proposal](review/visual_direction_3d_proposal.md), PROPOSED). Must run on the owner's PC (Godot + .NET; FPS measured on the UHD 605 laptop). Reviewer: GPT 6 Astra Pro. **Then the owner gate:** look direction A/B/C, camera preset, and "hitting is fun" (the G-0 feel gate; keyboard is fine). Until that verdict, nothing that builds on the feel or the look starts (G-2 onward).
 2. **Claude Opus: 13-1** on `p13/integration`, the critical path (13-0 done). 13-1 now also carries `Player_Fielding` (arcade §8.1). Reviewer: GPT 6 Astra Pro.
 3. **GPT 6 Astra Pro (Math): R1-MATH**, the fatigue and life-modifier constants that feed `EffectiveRatings`. Reviewer: Claude Opus. Also open for Astra: **cross-platform determinism** — the ArcadeHarness 2,000-pitch replay hash differs between Linux (.NET 8.0.131) and Windows (.NET 8.0.422), before and after the G-0 repairs; each machine is self-consistent. Scope it before G-2 (see brief §12).
 4. **Claude Sonnet 5.5: 14a** buses + `VoiceDirector` (brief reassigned from Gemini Pro; branch `p14/14a-sonnet`). Reviewer: Claude Opus.
@@ -80,6 +80,8 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 ---
 
 ## Session Log (compact)
+
+- **2026-10-15 — Art direction: 16-bit → stylized 3D PROPOSED; G-0c brief (Claude Opus 5.5; docs only):** after the owner played the G-0 build and compared it with RBI Baseball 14, [review/visual_direction_3d_proposal.md](review/visual_direction_3d_proposal.md) sets out A (16-bit, current) vs B (stylized 3D, recommended) vs C (realistic 3D), what changes, the 3D animation-timing contract, art sourcing (the baseball animation set is the biggest gap) and a hardware target (60 fps at 1366×768 on a UHD 605 laptop). Nothing canonical changes until the owner accepts. New brief [tasks/G-0c_3d_look_test_brief.md](tasks/G-0c_3d_look_test_brief.md) (Sonnet, reviewer Astra) puts a 3D version in the owner's hands first. Gates: none (docs only).
 
 - **2026-10-14 — G-0 merged to `main` (Claude Opus 5.5, merge gate):** `pG/G-0-rereview-astra` @ `2f14786` (G-0a core + G-0b scene + review fixes + repairs, approved in brief §11) merged no-ff; progress.md conflict resolved by keeping both logs. Owner deferred the "hitting is fun" playtest (needs a controller); G-2 onward stays gated. New open item: cross-platform replay-hash mismatch (brief §12). Gates on the merge: ArcadeHarness 55/55; isolation (Baseball/Life/Narrative/Hustles vs `afcf751`) empty. Full build/boot as verified by Astra on the identical tree.
 
