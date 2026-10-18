@@ -31,17 +31,18 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 **Spec:** [design/league_restructure.md](design/league_restructure.md), which resolves the user's source spec (bottom of this file). It replaces the Phase 9 league model (6 tiers including Single-A, Double-A and Triple-A; 8 teams per tier; fixed 9+5+3 rosters; tier-ladder promotion).
 
 - **Three tiers, 68 teams:** HS 12 (2 conferences × 6), College 24 (2 × 3 divisions × 4), Pro 32 (2 × 4 divisions × 4). `LeagueTier` = HS 0 / College 1 / Pro 2, so shipped `tier >= 2` content gates keep meaning "pro ball".
-- **Seasons:** HS 10 games (Fridays), College 14 (Saturdays), Pro 64 (Tue/Thu/Sat); HS games are 7 innings. Persisted `Schedule_Games` replace the round-robin and the 26-game HS calendar.
+- **Seasons:** HS 10 games (Fridays), College 28 (Wednesday + Saturday, 14 weeks; owner 2026-10-18), Pro 64 (Tue/Thu/Sat); HS games are 7 innings. Persisted `Schedule_Games` replace the round-robin and the 26-game HS calendar.
 - **Rosters:** per-tier limits; Pro has 4 SP / 5 RP / 15 position players with active/inactive designations, the **Sunday roster lock**, and the **attrition & forfeit rule**. Roster constants become capacities (zero-alloc preserved). The replacement call-up is retired.
-- **Ride the ace:** starter selection with per-tier rest days produces the spec's 2-man Pro rotation naturally.
-- **Playoffs:** HS bracket of 6 with byes; College 18-team tournament (National Ranking + play-in, conference tournaments, a single-game final); Pro 12-team Bo3 rounds and a Bo5 Championship.
+- **Ride the ace:** starter selection with per-tier rest days produces the spec's 2-man Pro rotation naturally. College keeps its 4-man rotation by rest days, but its gaps are now 3–4 days, so College rest values and starter selection are **re-run under CS-M**.
+- **Playoffs:** HS bracket of 6 with byes; College 18-team tournament (National Ranking + play-in, single-elimination conference tournaments, then **The Red Dirt Series**: a best-of-3 between the two conference champions on consecutive days, Thu–Fri–Sat, game 3 only if needed; name pending the owner's trademark screen); Pro 12-team Bo3 rounds and a Bo5 Championship.
 - **Pipeline:** HS graduation → recruiting / Signing Day → College class years → declare after sophomore year → July Draft (4 rounds, reverse standings) → Pro. `PipelineManager` replaces `PromotionManager`.
 - **Calibration:** tier deltas HS −20 / College −16 / Pro 0; the resolver guard stays byte-exact; the 154-game MLB season guard is retired and a new Pro guard is recorded once (sanctioned).
 - **Saves:** schema v14 is a clean break (old saves are refused and backed up).
 
-**Slices:** 13-0 prerequisites (sqlite MCP, MC flake) → 13-1 schema + world-gen → 13-2 roster capacities + innings + starter selection → 13-3 schedules + calendars + re-band → 13-4 playoffs + ranking → 13-5 roster lock + forfeits → 13-6 pipeline + draft → 13-7 ripple (achievements, presence, docs, cards). Owners and gates are in spec §15.
+**Slices:** 13-0 prerequisites (sqlite MCP, MC flake) → *(CS-0 College format docs, 2026-10-18; CS-M College Math plan before 13-2/13-3/13-4 build College)* → 13-1 schema + world-gen → 13-2 roster capacities + innings + starter selection → 13-3 schedules + calendars + re-band → 13-4 playoffs + ranking → 13-5 roster lock + forfeits → 13-6 pipeline + draft → 13-7 ripple (achievements, presence, docs, cards). Owners and gates are in spec §15.
 
-- **Lineage hooks (Phase L depends on these):** `PipelineManager` publishes `ProContractSignedEvent` on **every** first Pro contract (drafted *or* signed from free agency); the playoffs publish `ChampionshipWonEvent` (also used by Phase 16b). See [design/temptation_and_lineage.md](design/temptation_and_lineage.md) §4.2/§4.4.
+- **Lineage hooks (Phase L depends on these):** `PipelineManager` publishes `ProContractSignedEvent` on **every** first Pro contract (drafted *or* signed from free agency); the playoffs publish `ChampionshipWonEvent` (also used by Phase 16b), which **carries the tier**: only a **Pro** World Championship can fire the reveal; a College title (the Red Dirt Series) or an HS State title feeds achievements and cutscenes only. See [design/temptation_and_lineage.md](design/temptation_and_lineage.md) §4.2/§4.4.
+- **Downstream content (logged by CS-0):** the six College division booths need a small Red Dirt Series beat set (game 1, series lead, elimination game, clinch, champion): a 14c content item for Gemini 3.8 Flash, unsized. The 13-4 bracket UI (Claude Sonnet) shows College series status (game 1 / 2 / 3, clinch, elimination). Spec: [design/league_restructure.md](design/league_restructure.md) §8.2.
 
 **Exit criteria:** a generated player goes HS → College → drafted → Pro across simulated seasons; all three leagues schedule, play and crown champions; per-tier bands green; the new Pro guard recorded; PipelineHarness population conservation within ±5% over 20 seasons.
 
@@ -177,6 +178,8 @@ Phase 13 is the critical path (engine + calibration). **Phase G runs alongside i
 ## Phase 13 Source Spec — Multi-Tiered League Specifications (user-authored, 2026-10-09)
 
 *Kept verbatim as the source of truth for intent. Every ambiguity is resolved, and flagged, in [design/league_restructure.md](design/league_restructure.md) §16.*
+
+*Amended by the owner on 2026-10-18 (recorded in [GAME_VISION.md](GAME_VISION.md) §4 and league_restructure §16-I6/I7): College now plays **2 games a week** (Wednesday + Saturday, 28 games), and its final is **The Red Dirt Series**, a best-of-3, in place of the single-game National Championship below. The text below stays as originally written.*
 
 **System Prompt / Instructions for League Simulation Engine:**
 

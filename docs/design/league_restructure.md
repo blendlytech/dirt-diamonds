@@ -1,7 +1,7 @@
 # League Restructure — HS → College → Draft → Pro (Phase 13)
 
 **Owner:** per-slice authors and reviewers are in [TEAM.md](../TEAM.md) §2 (owner-confirmed 2026-10-10), which **overrides the "Owner" column in §15 below**. Summary: Claude Opus 5.5 (13-0…13-3, 13-6 engine) · Gemini 3.1 Pro (13-4, 13-5; reviews Opus's slices) · Gemini 3.1 Pro Math (calibration) · Gemini 3.8 Flash (team seed data) · Claude Sonnet 5.5 (league UI, 13-7)
-**Status:** design complete 2026-10-09; no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 and the user-authored source spec in [BUILD_PLAN.md](../BUILD_PLAN.md) ("Phase 13 Source Spec"). Where this doc *interprets* the source spec, §16 says so explicitly.
+**Status:** design complete 2026-10-09; **College format updated 2026-10-18** (owner decision, slice CS-0: 28 games Wed + Sat, best-of-3 final "The Red Dirt Series"; §3, §6, §8.2, §16-I6…I8); no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 and the user-authored source spec in [BUILD_PLAN.md](../BUILD_PLAN.md) ("Phase 13 Source Spec"). Where this doc *interprets* the source spec, §16 says so explicitly.
 **Supersedes:** [tier_league_environments.md](../archive/tier_league_environments.md) (6-tier ladder), [promotion_advancement_gates.md](../archive/promotion_advancement_gates.md) (tier-ladder promotion), and the league portions of [phase_8_9_interleave_plan.md](../archive/phase_8_9_interleave_plan.md).
 
 ---
@@ -13,7 +13,7 @@
 | Tiers | 6: HS, College, MinorA, MinorAA, MinorAAA, MLB | **3: HS, College, Pro** |
 | Teams per tier | 8 everywhere | **HS 12 · College 24 · Pro 32** (68 total) |
 | Structure | 2 four-team "divisions" per tier | **Conferences and divisions** (§2) |
-| Season | 154-game round-robin (HS: 26 games, Tue/Fri) | **HS 10 + playoffs (Fri) · College 14 + tournament (Sat) · Pro 64 + playoffs (Tue/Thu/Sat)** |
+| Season | 154-game round-robin (HS: 26 games, Tue/Fri) | **HS 10 + playoffs (Fri) · College 28 + tournament (Wed + Sat) · Pro 64 + playoffs (Tue/Thu/Sat)** |
 | Innings | 9 | **HS 7**, College/Pro 9 |
 | Rosters | Fixed 9 + 5 SP + 3 RP for every team | **Per tier** (§5): Pro has strict org limits with active/inactive designations |
 | Absences | A nameless replacement-level call-up fills the slot | **No replacements.** The slot stays empty; the lineup reshuffles; too few players means a forfeit (§7) |
@@ -57,12 +57,12 @@ The full team assignment is **Appendix A**. Pro reuses all 32 existing pro-level
 
 ## 3. Season calendar
 
-Day-of-season 1 = January 1 (`GameCalendar`). All three tiers share the calendar year. The avatar is only ever in one tier, so overlapping seasons never compete for the avatar's time.
+Day-of-season 1 = January 1 (`GameCalendar`). All three tiers share the calendar year. The avatar is only ever in one tier, so overlapping seasons never compete for the avatar's time. **No tier plays on Sunday**, regular season or postseason (§16-I7).
 
 | Tier | Game day(s) | Regular season | Postseason | Practice days |
 | :-- | :-- | :-- | :-- | :-- |
 | HS | **Friday** | 10 weeks from the first Friday of March | 3 weeks (bracket of 6) | Mon–Thu after school |
-| College | **Saturday** | 14 weeks from the second Saturday of February | Play-in week + conference tournaments + National Championship (≤ 6 weeks) | Mon–Fri |
+| College | **Wednesday + Saturday** | 14 weeks, 28 games: opens on the Wednesday before the second Saturday of February, ends on the 14th Saturday | Play-in week + conference tournaments (Saturdays) + **The Red Dirt Series** (best-of-3, Thu–Fri–Sat) (≤ 6 weeks) | Mon, Tue, Thu, Fri |
 | Pro | **Tue / Thu / Sat** | 22 weeks from the first Tuesday of April (weeks 1–21: 3 games; week 22: 1 game = 64) | Bo3 rounds + Bo5 Championship (Sept–Oct) | Mon, Wed, Fri; **Sunday night = roster lock** |
 
 ### 3.1 Schedule construction (deterministic, generated once per season)
@@ -70,10 +70,10 @@ Day-of-season 1 = January 1 (`GameCalendar`). All three tiers share the calendar
 `SeasonScheduler.Generate(tier, seasonYear, rng)` runs at season rollover and writes `Schedule_Games` rows (§12). The schedule moves from "pure function of the day" to **persisted rows**, because conference/division formats and playoffs are not a simple circle method. Generation is seeded, so the same save seed produces the same schedule.
 
 - **HS (10 games):** double round-robin inside each 6-team conference (5 opponents × 2). Home/away alternates.
-- **College (14 games):** division double round-robin (3 × 2 = 6) plus one game against each of the 8 other teams in the conference (8). No cross-conference regular-season games; the National Championship is the only cross-conference matchup.
+- **College (28 games, owner 2026-10-18; shape per §16-I6):** the original pairings played twice. Division opponents × 4 (3 × 4 = 12: 2 home, 2 away each) plus the 8 other teams in the conference × 2 (16: 1 home, 1 away each). Home/away balanced at 14/14. No cross-conference regular-season games; the Red Dirt Series is the only cross-conference matchup. Each conference's 28 games split into 28 game days of 6 pairings (checked by construction on 2026-10-18: the three K4 division rounds × 4, plus an 8-round factorization of the cross-division games × 2), so the one-game-per-game-day constraint is always satisfiable. The order in which those rounds are interleaved is 13-3's seeded scheduler's choice.
 - **Pro (64 games):** division opponents × 8 (3 × 8 = 24), other conference teams × 2 (12 × 2 = 24), other conference's teams × 1 (16). Home/away balanced at 32/32.
 
-Every team plays at most one game per game day. The scheduler's constraint is "each team plays exactly once per game day". For Pro, `PairingsPerGameDay = 16`.
+Every team plays at most one game per game day. The scheduler's constraint is "each team plays exactly once per game day". For Pro, `PairingsPerGameDay = 16`; for College, 12.
 
 ### 3.2 What happens to the shipped HS calendar
 
@@ -134,8 +134,10 @@ The source spec says teams "heavily rely on their aces, often employing a 2-man 
 | Tier | Games/week | `MinRestDays` | Result |
 | :-- | :-- | :-- | :-- |
 | HS | 1 | 4 | The ace starts every game |
-| College | 1 | 4 | The ace starts every game |
+| College | 2 (Wed/Sat) | **Math value (CS-M)** | **Re-run under CS-M.** College keeps its 4-man rotation (≤ 4 SP) by rest days, but the gaps are now 3 days (Wed → Sat) and 4 days (Sat → Wed) instead of 7, so the ace can no longer start every game. The old value of 4 would give the ace one start a week. The rest value and the ace-heavy selection are re-proven for the 28-game cadence |
 | Pro | 3 (Tue/Thu/Sat) | **3** | The ace starts Tue → Sat → Tue → …, two of every three games; #2 takes the Thursdays. A natural 2-man rotation |
+
+**Red Dirt Series rule (hard, not a tuning value):** within one series, no starter may start two games. The short-rest fallback above skips any starter who already started in the series; if no one else qualifies, a reliever opens. So the ace can never start games 1 and 3 (Thursday and Saturday).
 
 **Workload risk (Math-owned calibration):** a start on short rest docks the starter's in-game stamina capacity by `ShortRestCapacityPenalty` and adds `OveruseInjuryRisk` per start, rolled through the shipped injury absence path (Phase 8c). Riding the ace wins games and wears out arms, which is the trade-off the spec implies. The macro sim stays complete-game (its §8 calibration is pinned to that shape), so macro starters follow the same selection rule without in-game fatigue.
 
@@ -147,7 +149,7 @@ The source spec says teams "heavily rely on their aces, often employing a 2-man 
 - **The avatar is a player, not a GM.** The coach designates the avatar too. Performance, health and coach affinity (`RelationshipGraph`) drive the call. Being made **inactive** means no games that week (practice only), a coach text, and a stress hit. Being activated after a stint inactive is a narrative beat.
 - **Attrition:** if an active player becomes absent mid-week (injury, suspension, arrest via the shipped `AvailabilityLedger`), **no inactive player may replace them.** The lineup reshuffles from the remaining active players.
 - **Forfeit:** before each game, `RosterManager.CanField(team, day)` requires **9 available active position players and at least 1 available active pitcher**. If that fails, the team forfeits (§4). This applies to both NPC teams and the avatar's team. The avatar gets a coach text, and the at-bat view never opens.
-- **College/HS:** no lock. The coach picks from the whole roster each game day, and absent players simply aren't picked. The same `CanField` check applies, so a decimated HS team forfeits too.
+- **College/HS:** no lock. The coach picks from the whole roster each game day, and absent players simply aren't picked. The same `CanField` check applies, so a decimated HS team forfeits too. The lock is Pro-only and doesn't forbid games, but no tier schedules a Sunday game anyway (§3, §16-I7).
 - **Retired everywhere:** the "nameless replacement-level call-up" that `AvailabilityLedger` currently uses to shadow absent players. With no minor leagues there's nobody to call up. Absence now means a real hole.
 
 ---
@@ -166,9 +168,15 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 - **National Ranking** (`RankingCalculator`, recomputed weekly, shown in the UI as "#7 nationally"):
   `RankScore = 0.50·Win% + 0.30·SOS + 0.20·RD_norm`, where `SOS` is opponents' combined win% and `RD_norm` is run differential per game mapped to [0,1] (clamped at ±5 runs/game). Weights are Math-owned knobs.
 - **Selection:** ranks 1–17 qualify automatically. **Play-in:** #18 vs #19, single game, for the 18th spot (played the week after the regular season).
-- **Conference tournaments:** each conference's qualifiers form a single-elimination bracket seeded by national rank. Top seeds get byes up to the next power of two. One game per week.
-- **National Championship:** a single game between the two conference tournament champions.
-- With uneven conference counts (e.g. 10 + 8), the byes absorb the difference automatically. The postseason is at most 6 weeks (play-in + up to 4 rounds + the final).
+- **Conference tournaments:** each conference's qualifiers form a single-elimination bracket seeded by national rank. Top seeds get byes up to the next power of two. One round per week, on Saturday (unchanged by the 2026-10-18 decision).
+- **The Red Dirt Series** *(name pending the owner's trademark screen; strings-table key, never a C# literal; §16 open items)*: a **best-of-3** between the two conference tournament champions, in the week after the conference finals, on **Thursday, Friday and Saturday**; game 3 is played only if the series is 1–1. The champion with the better national rank at selection hosts games 1 and 3 (the Pro Bo3 rule, §8.3). It is a `Playoff_Series` row with `best_of = 3`; its games are `Schedule_Games` rows with `series_id` and `game_in_series` 1–3. An unplayed game 3 never counts. Starters follow §6, including the Red Dirt Series rule.
+- With uneven conference counts (e.g. 10 + 8), the byes absorb the difference automatically. The postseason is at most 6 weeks (play-in + up to 4 rounds + the Red Dirt Series week).
+- **Series status UI (13-4, Claude Sonnet):** the bracket shows the Red Dirt Series as a series: game 1 / 2 / 3, the series score, "can clinch" and "elimination game" states, and the champion.
+- **Booth beats (Phase 14, logged here by CS-0):** the six College division booths need a small series-beat set (game 1, series lead, elimination game, clinch, champion). A 14c content item for Gemini 3.8 Flash; not sized here.
+
+### 8.2a Championships and the lineage reveal (all tiers)
+
+`PlayoffManager` publishes `ChampionshipWonEvent` once per tier per season, and the event **must carry the tier** (with at least the winning `teamId` and the season). The father reveal ([temptation_and_lineage.md](temptation_and_lineage.md) §4.4) fires **only on a Pro World Championship** with the avatar on the winning roster. An HS State title or a College Red Dirt Series title **never** triggers it, though either may feed achievements ([steam_commercial_release.md](steam_commercial_release.md) §3) and cutscenes (16b). 13-4's playoff checks assert that the tier is set on every publish.
 
 ### 8.3 Pro — series format (interpreted, §16-I3)
 
@@ -211,7 +219,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 
 ### 9.3 The Draft
 
-- **When:** the second Saturday of July (after the College National Championship and before the Pro stretch run).
+- **When:** the second Saturday of July (after the College final, the Red Dirt Series, and before the Pro stretch run).
 - **Order:** previous completed Pro season standings/playoffs: non-playoff teams first by reverse standings, playoff teams by elimination round, champion last. The inaugural draft uses a seeded deterministic team order. No current-season future playoff result is consulted; no lottery (R-1 Q09).
 - **Rounds:** 4 (128 picks). That matches steady-state turnover: 768 Pro roster spots ÷ about 6-season average careers ≈ 128 a year. Math owns the conservation check: in the PipelineHarness, Pro population stays within ±5% of capacity across 20 simulated seasons.
 - **Team AI:** best available by recruit value, with a role-need tiebreak (a team short on SP takes the SP).
@@ -222,7 +230,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 - After the draft and before the next season, any team over its 24-player org cap **releases** its lowest-value players to free agency.
 - **Free agency** is open only at the Sunday lock (the lock is the only roster-change moment) and only below the org cap. Unsigned free agents retire at season rollover if age ≥ 30 or after 2 unsigned seasons.
 - **Retirement** works as shipped (age, health floor, decline), and so does succession for the avatar.
-- **First Pro contract (Phase L hook).** `PipelineManager` publishes the additive Core event `ProContractSignedEvent(playerId, teamId, day, wasDrafted)` for **every** first Pro contract: the drafted signing (§9.3) **and** a free-agent signing of an undrafted player (§9.2/§9.4). The father's first text keys on it ([temptation_and_lineage.md](temptation_and_lineage.md) §4.2), and so does the Trailblazer's "first" (§8.1 there). The playoffs' `ChampionshipWonEvent` (also Phase 16b) drives the lineage reveal (§4.4 there).
+- **First Pro contract (Phase L hook).** `PipelineManager` publishes the additive Core event `ProContractSignedEvent(playerId, teamId, day, wasDrafted)` for **every** first Pro contract: the drafted signing (§9.3) **and** a free-agent signing of an undrafted player (§9.2/§9.4). The father's first text keys on it ([temptation_and_lineage.md](temptation_and_lineage.md) §4.2), and so does the Trailblazer's "first" (§8.1 there). The playoffs' `ChampionshipWonEvent` (also Phase 16b) carries the tier and drives the lineage reveal **only at Pro tier** (§8.2a here, §4.4 there).
 
 ### 9.5 What replaces `PromotionManager`
 
@@ -244,6 +252,7 @@ Higher seeds host. Standings tiebreakers in order: head-to-head, run differentia
 | First Pro game | At-bat view | Milestone | Pro team announcer intro |
 | Made inactive this week | Phone (coach) | — | Coach text |
 | Team forfeits | Phone + dashboard | — | — |
+| Red Dirt Series game (College final) | At-bat view + bracket series status | — (Championship on the clinch) | College booth series beats (14c) |
 | Playoff series win / Championship | Dashboard | **Championship** | Announcer signature win call |
 
 ---
@@ -262,7 +271,7 @@ The tier-delta mechanism ([tier_league_environments.md](../archive/tier_league_e
 
 ### 11.2 Acceptance bands (`run_monte_carlo_batch`)
 
-The AVG/OBP/SLG/K%/BB%/HR-per-PA bands for HS, College and Pro reuse the shipped HS, College and MLB rows verbatim. **Runs are expressed per 9 innings (R/9)** so 7-inning HS games compare cleanly. HS R/9 band 6.4–8.0 (equivalent to about 5.0–6.2 runs per 7-inning game).
+The AVG/OBP/SLG/K%/BB%/HR-per-PA bands for HS, College and Pro reuse the shipped HS, College and MLB rows verbatim. **Runs are expressed per 9 innings (R/9)** so 7-inning HS games compare cleanly. HS R/9 band 6.4–8.0 (equivalent to about 5.0–6.2 runs per 7-inning game). **College at 28 games (CS-M):** per-game rate bands hold as written; any season-total target is restated for 28 games, and the twice-a-week rest and workload values are re-proven. Each one is a Math value (CS-M), proven when 13-2…13-4 build the 28-game schedule.
 
 ### 11.3 The regression guards
 
@@ -343,7 +352,7 @@ All existing v13 tables (Players, Player_Ratings, stats, Relationships, Entity_F
 | `MicroGame.cs` | Regulation innings parameter; roster counts; starter selection (§6) |
 | `AvailabilityLedger.cs` | Replacement call-up retired; absence leaves a hole |
 | *new* `RosterManager` | Sunday lock, coach designations, `CanField` / forfeit |
-| *new* `PlayoffManager` | Seeding, brackets, series, champions; publishes `PlayoffSeriesDecidedEvent`, `ChampionshipWonEvent` |
+| *new* `PlayoffManager` | Seeding, brackets, series (incl. the College Bo3 Red Dirt Series), champions; publishes `PlayoffSeriesDecidedEvent`, `ChampionshipWonEvent` (carries the tier, §8.2a) |
 | *new* `RankingCalculator` | College national ranking (weekly) |
 | `PromotionManager.cs` → *new* `PipelineManager` | Graduation, recruiting, draft, releases (§9); publishes `RecruitingOffersEvent`, `DraftCompletedEvent` |
 | `CareerManager.cs` | Avatar pairing from schedule rows; draft/recruit handoffs (reusing the 9c handoff) |
@@ -352,7 +361,7 @@ All existing v13 tables (Players, Player_Ratings, stats, Relationships, Entity_F
 | `StatsNormalizer.cs` | Already per-tier; season shape changes only |
 | `AchievementManager.cs`, `RichPresenceWriter.cs` | New tiers and milestones ([steam_commercial_release.md](steam_commercial_release.md) §3) |
 | `ConditionEvaluator` | `tier` ordinals 0–2; the `-1` unrostered sentinel unchanged; the missing-tier COALESCE default becomes Pro(2) |
-| UI | Standings (conferences/divisions), Calendar (weekly game days + postseason), Schedule screen game-day blocks, **new:** Playoff Bracket, Recruiting Offers, Draft (declare + Draft Night board), Roster Status (active/inactive this week) |
+| UI | Standings (conferences/divisions), Calendar (weekly game days + postseason), Schedule screen game-day blocks, **new:** Playoff Bracket (with College series status, §8.2), Recruiting Offers, Draft (declare + Draft Night board), Roster Status (active/inactive this week) |
 
 Architectural boundaries are unchanged: `PipelineManager`, `RosterManager` and `PlayoffManager` live in `/Simulation/Baseball/`, talk to the Life sim only through bus events and the DB, and the UI stays read-only over DTOs.
 
@@ -372,9 +381,9 @@ The game hasn't released. On boot, a save with `user_version < 14` gets a dialog
 | :-- | :-- | :-- | :-- |
 | **13-0** | Prerequisites: sqlite MCP repaired; the 344/345 MC flake identified and seeded (failed-check recap on the harness tail) | Pro | MC green 20/20 runs |
 | **13-1** | Schema v14 + clean-break boot + `LeagueTier` collapse + Appendix A world-gen (68 teams, conferences/divisions, per-tier rosters) | Pro (Flash: seed tables) | SchemaValidator; world-gen round-trip; FK integrity |
-| **13-2** | `RosterCapacity` refactor + regulation innings + starter selection (§6) | Pro | **MC full suite**; zero-alloc checks; resolver guard byte-exact |
-| **13-3** | `SeasonScheduler` + `TierSeasonCalendar` + schedule-driven sims; per-tier bands; **new Pro guard recorded**; development gradient retune | Pro + Math | MC per-tier bands; new guard; CoreLoop |
-| **13-4** | `PlayoffManager` + `RankingCalculator` + bracket UI | Pro (Flash: UI) | Playoff checks (every tier crowns exactly one champion; series lengths legal; seeding/tiebreaks) |
+| **13-2** | `RosterCapacity` refactor + regulation innings + starter selection (§6), incl. the Red Dirt Series no-repeat-starter rule; **College `MinRestDays` and ace selection re-run under CS-M** | Pro | **MC full suite**; zero-alloc checks; resolver guard byte-exact; a College fixture where no starter starts two games of one series |
+| **13-3** | `SeasonScheduler` + `TierSeasonCalendar` + schedule-driven sims (**College 28 games, Wed + Sat, §3.1/§16-I6**); per-tier bands (**College re-banded per CS-M**); **new Pro guard recorded**; development gradient retune | Pro + Math | MC per-tier bands; new guard; CoreLoop; College: 28 games per team, 14/14 home/away, each pairing count per §3.1, one game per team per game day, no Sunday games |
+| **13-4** | `PlayoffManager` + `RankingCalculator` (weights: Math value, CS-M) + bracket UI with College series status; the Red Dirt Series Bo3 (Thu–Fri–Sat); tier-carrying `ChampionshipWonEvent` (§8.2a) | Pro (Sonnet: bracket UI, per TEAM.md) | Playoff checks (every tier crowns exactly one champion; series lengths legal; seeding/tiebreaks); the College final is a Bo3 on Thu–Fri–Sat that ends at 2 wins and never plays game 3 after a 2–0; `ChampionshipWonEvent.tier` set on every publish; an HS or College title never fires the reveal |
 | **13-5** | `RosterManager`: Sunday lock, attrition, forfeits; call-up retirement | Pro | Availability suite rewritten; forfeit fixtures |
 | **13-6** | `PipelineManager`: graduation, recruiting, draft, releases; Recruiting/Draft UI; avatar decisions | Pro + Math (Flash: UI) | **PipelineHarness**: 20-season run, population conservation ±5%, a generated player goes HS → College → drafted → Pro |
 | **13-7** | Ripple: achievements/rich presence, content tier docs, Steam README tokens, dashboard/standings/leaders cards | Flash → Pro review | GrittyEvents, full suite, live boot |
@@ -386,11 +395,16 @@ The game hasn't released. On boot, a save with `user_version < 14` gets a dialog
 Owner accepted R-1 Q09: I1–I5 below are adopted defaults, including prior-completed-season draft order and a seeded inaugural order. Names remain subject to owner selection and clearance.
 
 - **I1. College "2 extra open starting spots".** Read as **+2 active roster slots usable at any position** (active cap 20 vs Pro's 18). The alternative is 2 extra *lineup* spots (an 11-batter lineup), which would need resolver/lineup changes and is not recommended.
-- **I2. HS/College regular-season length.** The spec gives cadence (1/week) but not length. Chosen: HS 10 games (conference double round-robin), College 14 (division double + conference single).
+- **I2. HS/College regular-season length.** The spec gives cadence (1/week) but not length. Chosen: HS 10 games (conference double round-robin), College 14 (division double + conference single). **College superseded by the owner on 2026-10-18; see I6.**
+- **I6. College 28 games, Wednesday + Saturday (owner decision 2026-10-18; shape chosen by CS-0).** The owner set 28 games over the same 14 weeks, on Wednesday and Saturday. Shape chosen: every I2 pairing played twice, home and away (division × 4, rest of conference × 2; 14 home / 14 away; no cross-conference regular season). It keeps the I2 balance, needs no new pairing logic, and fits one game per team per game day (§3.1). Rest values, starter selection, College bands and ranking weights are Math values (CS-M).
+- **I7. The Red Dirt Series days and the Sunday rule (CS-0).** The final is a best-of-3 between the two conference champions on consecutive days, game 3 only if needed (owner, 2026-10-18). Days chosen: **Thursday–Friday–Saturday** of the week after the conference finals. The 13-5 Sunday lock is Pro-only (I5) and doesn't itself forbid games, but no tier plays on Sunday: Sunday is the life sim's off day and Pro's lock night, and a Thu–Sat series keeps that true even when it goes to game 3. Hosting: the better national rank hosts games 1 and 3. Within a series no starter starts twice (§6).
+- **I8. Championship reveal safety (CS-0).** `ChampionshipWonEvent` carries the tier. Only a Pro World Championship can fire the father reveal; HS and College titles feed achievements and cutscenes only (§8.2a).
 - **I3. Pro playoff field.** The spec gives formats (Bo3 early, Bo5 final) but not field size. Chosen: 12 teams (division winners + 2 wild cards per conference, top 2 seeds bye).
 - **I4. Draft timing and reporting.** Draft in July; picks report the following spring. No mid-season call-ups, because there are no minors and the Sunday lock is the only roster-change moment.
 - **I5. Lock scope.** The Sunday lock and forfeit-without-replacement are Pro rules (spec §5). College and HS have no lock, but the "can't field 9" forfeit applies everywhere, because no call-ups exist.
 - **Open: league and brand names.** The Pro league's name, conference names and the College league name all need a trademark screen before ship.
+- **Open: "The Red Dirt Series"** (owner's name for the College final, 2026-10-18) is **pending the owner's trademark screen**. Player-facing text uses a strings-table key (proposed: `league.college.final.name`), never a C# literal, so a rename is a data edit. Never use MLB's or the NCAA's championship-series names anywhere (both are trademarks); Pro keeps "World Championship".
+- **Open: College 28-game Math values** (CS-M, GPT 6 Astra Pro): `MinRestDays(College)`, ace selection, short-rest and workload values, College band restatement, National Ranking weights. Brief: [tasks/CS-M_college_math.md](../tasks/CS-M_college_math.md).
 - **Open: HS mercy rule** (10-run rule after 5 innings). Off by default.
 - **Open: college academic eligibility** (GPA floor to play). Not in v1; the GPA system already exists if wanted.
 
