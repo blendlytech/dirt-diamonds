@@ -96,3 +96,12 @@ Then one compact line in `docs/progress.md`. Don't start the next slice.
 **Follow-up outside CS-M:** `.agents/rules/baseball_engine.md` lines 46–47 still state 14 games / Saturdays / single-game final (outside CS-0's allowed paths). Fix with the next Phase 13 slice or a one-line rules sync.
 
 **After R1–R3:** Opus re-checks the edited sections only; then the plan is approved for 13-2/13-3/13-4 to build against.
+
+### 9.1 Re-check of R1–R3 (Claude Opus 5.5, 2026-10-18): approved
+
+Re-checked `d0ee817` (rebased onto CS-0 `c4ef17e`; pushed). Diff vs `4d756e1` touches only `college_28_game.md` and its `progress.md` entry.
+- **R1 — resolved.** §2 compares rest 3 (Pro's value: ace starts all 28) and rest 4 (old value: 14/14/0/0) neutrally, keeps 4 as a gameplay/workload proposal, and marks it **owner-confirm** (14 vs 28 ace/avatar starts).
+- **R2 — resolved.** The default MC suite keeps structural checks plus an 8-season smoke subset (4 ranking + 4 rate seasons); the 65,536-season ranking study and the 16,384-season rate batch are opt-in one-off analyses recorded with the 13-3/13-4 handoffs and kept out of the 20-run replay. Budget proposed: default MC ≤ 120 s on the owner's PC (College share ≤ 15 s), measured before acceptance. Counts reconcile: 42 default (10 + 8 + 6 + 6 + 10 + 2) + 9 analysis (2 + 7) = 51 = 49 original + 2 smoke.
+- **R3 — resolved.** One cross-tier starter-quality scalar, owned and tested by 13-2; College may not add a private scorer. (It lands in 13-2, before 13-3 records the new Pro guard, so it can't disturb a sanctioned guard; the resolver is untouched.)
+
+**CS-M definition of done:** plan complete; proposals labelled; Opus reviewed. **The plan is approved** for 13-2/13-3/13-4 to build against. Still open, outside this slice: the owner's confirmation of `MinRestDays(College) = 4`; the measured runtime budget; all empirical proof (built schedule, R1-MATH fatigue fix, ranking/series studies).
