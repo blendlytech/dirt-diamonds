@@ -134,7 +134,7 @@ The source spec says teams "heavily rely on their aces, often employing a 2-man 
 | Tier | Games/week | `MinRestDays` | Result |
 | :-- | :-- | :-- | :-- |
 | HS | 1 | 4 | The ace starts every game |
-| College | 2 (Wed/Sat) | **Math value (CS-M)** | **Re-run under CS-M.** College keeps its 4-man rotation (≤ 4 SP) by rest days, but the gaps are now 3 days (Wed → Sat) and 4 days (Sat → Wed) instead of 7, so the ace can no longer start every game. The old value of 4 would give the ace one start a week. The rest value and the ace-heavy selection are re-proven for the 28-game cadence |
+| College | 2 (Wed/Sat) | **Math value (CS-M)** | **Re-run under CS-M.** College keeps ≤ 4 SP and selection by rest days, but the gaps are now 3 days (Wed → Sat) and 4 days (Sat → Wed) instead of 7. The rest value decides how hard College rides its ace: at 4 (the old value) the ace starts once a week, on Wednesdays, and #2 takes Saturdays; at 3 (Pro's value, the same 3/4-day gap pattern Pro's ace pitches on) the ace starts every game. Neither is presumed here; CS-M proposes the value and the owner confirms it |
 | Pro | 3 (Tue/Thu/Sat) | **3** | The ace starts Tue → Sat → Tue → …, two of every three games; #2 takes the Thursdays. A natural 2-man rotation |
 
 **Red Dirt Series rule (hard, not a tuning value):** within one series, no starter may start two games. The short-rest fallback above skips any starter who already started in the series; if no one else qualifies, a reliever opens. So the ace can never start games 1 and 3 (Thursday and Saturday).
