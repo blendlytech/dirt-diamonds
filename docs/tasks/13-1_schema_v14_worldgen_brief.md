@@ -1,9 +1,9 @@
 # Task Brief: 13-1 — Schema v14, clean-break boot, `LeagueTier` collapse, 68-team world-gen
 
-**Status:** DRAFT 2026-10-18, awaiting the owner's approval. Do not start until this line says APPROVED.
+**Status:** **APPROVED by the owner 2026-10-18**, with every recommendation accepted: the §5.3 expected-red list, including the career boot stopping at `LeagueSimulator`'s 8-team check until 13-2/13-3 (the in-13-1 `TeamCount` alternative is rejected); the §3.2 interpretations 1–5 as written; the Appendix A placeholder names for the build (the TEAM.md team-names gate stays open for a later data-edit rename). **Not yet startable:** §0 preconditions 1, 2 and 4 are open (the CS chain isn't merged, `p13/integration` doesn't exist, and this session has no .NET machine).
 **Recommended model:** Claude Opus 5.5 (TEAM.md §2), with Gemini 3.8 Flash for the seed data in §3.3
 **Reviewer:** GPT 6 Astra Pro (independent review of Claude's sim diffs, TEAM.md §1a)
-**Owner gate:** team names (TEAM.md §2). The Appendix A names are placeholders that a later data edit can rename, so they don't block the build. **The owner also approves the expected-red list in §5.3**, mainly that the game won't boot into a career on `p13/integration` until 13-2/13-3 land.
+**Owner gate:** team names (TEAM.md §2), still open. The Appendix A names are placeholders that a later data edit can rename, so they don't block the build. The §5.3 expected-red list was approved on 2026-10-18.
 **Spec:** [league_restructure.md](../design/league_restructure.md) §1, §2, §5.1, §5.3, §12, §13, §14, §15 (13-1 row), §16-I1, Appendix A; [arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) §8.1 (`Player_Fielding`)
 **Branch / worktree:** `p13/13-1-opus`, branched from **`p13/integration`**, in your own worktree (`git worktree add ..\dnd-opus-131 -b p13/13-1-opus origin/p13/integration`). Merges into `p13/integration`, **never `main`** (§15).
 
@@ -121,7 +121,7 @@ Shipped facts this brief relies on (verified at `ebaee21`):
 
 - **The resolver guard** (MC per-PA §8 batch + §5 fixtures): byte-identical to the baseline. If the default MC run can't reach those checks because an earlier world-building suite throws, run them in isolation (add them to the `--only` filter as `resolver`) and report both runs.
 
-### 5.3 Expected red on `p13/integration` after 13-1 (the owner approves this list; the handoff reports the actual list)
+### 5.3 Expected red on `p13/integration` after 13-1 (owner-approved 2026-10-18; the handoff reports the actual list)
 
 - **Live career boot** stops at `LeagueSimulator.Initialize` ("requires exactly 8 teams"), since the per-tier team count and the schedule belong to 13-2/13-3. A fresh boot gets through schema + world-gen + the schools cross-check, then throws there. *Alternative (not recommended):* make `TeamCount` per instance inside 13-1. The circle-method schedule works for any even count (12/24/32 are all even), but it touches the zero-alloc buffers and drags 13-1 into the full MC gate that 13-2 owns.
 - **MonteCarlo default suite**: every suite that generates a world and runs a season (season-pipeline guard, tier ladder, availability, promotion). Report pass/total and the failing suite names, never a deleted check.
