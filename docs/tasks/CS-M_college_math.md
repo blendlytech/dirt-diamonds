@@ -68,3 +68,31 @@ Open: <values that need the built 28-game schedule to prove; any ranking-weight 
 Recommended next: 13-3 schedules + calendars + re-band by Claude Opus + GPT (Math) (reviewers: each other's part)
 ```
 Then one compact line in `docs/progress.md`. Don't start the next slice.
+
+---
+
+## 9. Review (Claude Opus 5.5, 2026-10-18)
+
+**Reviewed:** GPT 6 Astra Pro's `ed6ee10` on `p13/CS-M-gpt` (not pushed to GitHub at review time; read from the owner's worktree `C:\Users\DELL\.codex\worktrees\college-math\dnd-gpt`). Base: CS-0 `be11fba`.
+
+**Verdict: approve with three required changes (R1–R3) and one process item (P1).** All six §4 items are covered, every number is labelled a proposal, and the analytic claims reproduce.
+
+**Scope / isolation (checked by file hash against `be11fba`, CRLF-normalized):** only `docs/design/math/college_28_game.md` (new) and one `docs/progress.md` entry differ. `Assets/` (205 files) and `Tools/` (32 files) hash identical. Docs-only gate: pass.
+
+**Verified:** cited code matches (`LeagueSimulator.cs:489–506` modulo rotation and complete games; `PitcherFatigue` capacity 70 + 0.5 × stamina, comfort 0.6, FatigueC 0.25; College `TierBands` row .284–.304 … 5.8–7.1; `.agents/rules/baseball_engine.md:46–47` stale). Arithmetic reproduces: healthy rest-4 fixture 14/14/0/0 with zero short starts; only-SP case 1 + 14 + 13 = 28; 336 league games; win-rate SD .1336 → .0945; `1 − .99^k` = .1313 (k = 14) and .2453 (k = 28); P(game 3) .50 / .42 / .505; capacity 95 → 80.75; play-time ceiling 28 + 1 + 4 + 3 = 36.
+
+**Good catches, accepted as findings:** the run-denominator seam (harness ER/GS vs spec R/9; 13-3 reports both); the R1-MATH dependency (fatigue that contracts toward 50 improves sub-50 pitchers, so short-rest effects wait on the R1-MATH fix); the disconnected-conference limitation (see below).
+
+**Required changes:**
+- **R1. Rest-value rationale.** §2 rejects `MinRestDays = 3` as "contrary to the CS-0 intended ace limitation". CS-0 intended no limitation; its §6 wording presupposed one and is corrected in `c4ef17e`. Restate the choice neutrally: 3 is Pro's value on the same 3/4-day gap pattern and gives a one-ace College (A starts all 28); 4 is the old value and gives once-a-week aces (14/14/0/0). Keep 4 as the proposal if you hold it, on its own grounds, and mark it **owner-confirm**: it changes how often a pitcher avatar pitches (14 vs 28 starts).
+- **R2. Harness runtime.** The ranking study (2 × 256 world seeds × 8 × 16 ≈ 65k seasons) and `RunCollegeRateBatch` (128 × 8 × 16 ≈ 16k seasons, about 5.5M games) are far too heavy for the MC run every `Assets/Simulation/` change must pass. Split each into a one-off analysis batch (results recorded with the 13-3/13-4 handoff) and a small fixed-seed subset in the default suite, and give a runtime budget for the default suite on the owner's PC.
+- **R3. One starter-quality scalar.** The selection score (mean effective stuff/control, then stamina, then ID) must be one definition for every tier, owned by 13-2, not a College-only rule. State it as a 13-2 proposal.
+
+**Process:**
+- **P1.** Push `p13/CS-M-gpt` to GitHub so it can be merged.
+
+**Finding for the owner (no change recommended):** with no cross-conference regular-season games, the National Ranking can't tell which conference is stronger. This predates CS-0 (the 14-game design had it too). Both conferences are generated from the same rating bell, so they're equal in expectation; 17 of 24 teams qualify, so the effect is on seeding and hosting more than entry. Recommendation: accept and keep GPT's stress test as a reported diagnostic.
+
+**Follow-up outside CS-M:** `.agents/rules/baseball_engine.md` lines 46–47 still state 14 games / Saturdays / single-game final (outside CS-0's allowed paths). Fix with the next Phase 13 slice or a one-line rules sync.
+
+**After R1–R3:** Opus re-checks the edited sections only; then the plan is approved for 13-2/13-3/13-4 to build against.
