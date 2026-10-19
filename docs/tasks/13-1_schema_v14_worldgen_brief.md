@@ -134,16 +134,18 @@ A clean break makes some checks meaningless: the v3→v4 and v6→v7 migration f
 
 ## 6. Definition of done
 
-- [ ] Preconditions §0 recorded (base sha, baseline numbers).
-- [ ] v14 DDL complete; `validate_sqlite_schema` run on a scratch DB; `user_version = 14`.
-- [ ] Three-value `LeagueTier`; `TierCount = 3`; three `TierEffects` rows; no `MinorA`/`MinorAA`/`MinorAAA`/`MLB` identifier left in `Assets/` or `Tools/` (`git grep -n -E "LeagueTier\.(Minor|MLB)"` → none).
-- [ ] No `COALESCE(tt.tier, 5)` left (`git grep -n "tt.tier, 5"` → none).
-- [ ] World-gen produces Appendix A exactly, deterministically, in one transaction, with `Player_Fielding` for every player.
-- [ ] `schools.json` has 12 entries keyed 101–112; boot's cross-check passes.
-- [ ] Clean-break boot + dialog behave per §3.2.5; the `.bak` is never deleted or overwritten.
-- [ ] §5.1 all green; §5.2 unchanged; §5.3 actual list recorded; §5.4 retirements listed.
-- [ ] Committed on `p13/13-1-opus` and pushed. Not merged.
-- [ ] Handoff note + one `progress.md` line. **Then stop.**
+*Ticked by Claude Opus 5.5 on 2026-10-18 at `0db094d`; evidence in §8.1.*
+
+- [x] Preconditions §0 recorded (base sha, baseline numbers).
+- [x] v14 DDL complete; `validate_sqlite_schema` run on a scratch DB; `user_version = 14`.
+- [x] Three-value `LeagueTier`; `TierCount = 3`; three `TierEffects` rows; no `MinorA`/`MinorAA`/`MinorAAA`/`MLB` identifier left in `Assets/` or `Tools/` (`git grep -n -E "LeagueTier\.(Minor|MLB)"` → none).
+- [x] No `COALESCE(tt.tier, 5)` left (`git grep -n "tt.tier, 5"` → none).
+- [x] World-gen produces Appendix A exactly, deterministically, in one transaction, with `Player_Fielding` for every player.
+- [x] `schools.json` has 12 entries keyed 101–112; boot's cross-check passes (run headless through the same `ValidateAgainstRoster`; not run in a live Godot boot).
+- [x] Clean-break boot + dialog behave per §3.2.5; the `.bak` is never deleted or overwritten (the flow is proven headless through `SaveCompatibility`; the dialog itself is not exercised in a live Godot boot).
+- [x] §5.1 all green; §5.2 unchanged; §5.3 actual list recorded; §5.4 retirements listed.
+- [x] Committed on `p13/13-1-opus` and pushed. Not merged.
+- [x] Handoff + one `progress.md` line. **Then stop.**
 
 ## 7. Out of scope
 
@@ -171,6 +173,45 @@ Recommended next: 13-1 review by GPT 6 Astra Pro; then 13-2 by Claude Opus (revi
 ```
 
 Then add one compact line to [progress.md](../progress.md). Don't start 13-2.
+
+### 8.1 Handoff as delivered (Claude Opus 5.5, 2026-10-18)
+
+```text
+Done: schema v14 (§12 + Player_Fielding), LeagueTier HS/College/Pro, Appendix A world-gen (68 teams,
+      one deterministic transaction), consent-based clean-break boot + dialog
+      · Base: p13/integration @ 4e6002d (+ fold of p13/13-1a-review-opus @ 1a2c749) · Commit: 0db094d
+Gates: build → 0 warnings / 0 errors; SchemaValidator → 167/167; worldgen-v14 → 23/23;
+       determinism → same (seed → byte-identical dumps, sha A4B89F1135D8; other seed → same structure,
+       new ratings); resolver guard → byte-exact (13/13, every line identical to the baseline incl.
+       the allocation sink); isolation → no forbidden path (one out-of-list file: Assets/UI/Main.cs)
+Expected red (actual): MonteCarlo default 154/180. Green: resolver 13/13, worldgen-v14 23/23,
+       micro-analytic, read-model-a0, development-curve, scouting-grade, portrait-tile. RED (25 suites):
+       season-pipeline 2/4, micro-game 0/1, career-ids 0/1, career-wiring 0/1, v4-bullpen-arsenal 1/2,
+       rivalry 3/4, heir-genetics 9/10, lineage-succession 0/1, lineage-failure 0/1, succession-edge 0/1,
+       nurture-blend 8/9, conception-request 0/1, backstory-person 9/10, person-effects 15/16,
+       tier-ladder 2/3, availability 3/4, equipment 5/6, promotion-sweep 3/4, promotion-stream 0/1,
+       promotion-avatar 0/1, promotion-record 0/1, development-arc 3/4, development-stream 0/1,
+       practice-seam 5/6, development-equilibrium 0/1. Causes: LeagueSimulator "requires exactly 8
+       teams" (19), PromotionManager 6-tier check (2), MicroGame 9+5+3 attended-team check (2),
+       fixtures hard-coding team ids 1–8 (2), season-pipeline 8-team roster shape (1).
+       GrittyEvents 363/363, CoreLoop 22/22 (pins + tier assertions moved to the v14 meaning).
+       Live career boot: stops at LeagueSimulator.Initialize as approved (not run in Godot).
+Retired checks: SchemaValidator "v4 backfill: pitcher role defaults to Starter", "v4 backfill: three
+       arsenal rows, usage sums to 100", "v4 backfill: stuff-derived ratings (80 → FB 80/40, BRK 60/80,
+       OFF 55/85)", "v4 backfill is OR IGNORE (re-apply never clobbers existing rows)" → the v3→v4
+       backfill is gone (clean break) → "v14 clean break: re-apply backfills no role, arsenal or
+       potential". MC "EnsureV4 tops a short bullpen back up and is then a no-op" → v3→v4 top-up gone
+       → worldgen-v14 "every pitcher has a role and a 3-pitch arsenal…". MC "EnsureTierLeagues seeds 5
+       missing tiers once (idempotent): 48 teams…" → v6→v7 top-up gone → worldgen-v14 "68 teams,
+       12 HS / 24 College / 32 Pro" + per-team rosters. The pre-v7 "missing tier reads as MLB" readings
+       became "missing tier reads as Pro" (SchemaValidator + Gritty).
+Season guard moved to: not computable in 13-1 — the guard's suite (tier-ladder) stops at the HS
+       sim's 8-team check before any season runs. 13-3 records the new Pro guard.
+Interpretations used: §3.2.1–5 kept as written. Details: backup tag is always ".v13.bak" (spec name)
+       whatever the pre-v14 version; the Player_Person standing heal is the one DDL backfill kept (intake,
+       fillers and newborns rely on it); RichPresence keeps emitting the minted #Tier_MLB for Pro until
+       17a; fielding depth weights / secondary rate / neighbours are Math PROPOSALs on their own stream.
+```
 
 ## 9. Review (GPT 6 Astra Pro)
 
