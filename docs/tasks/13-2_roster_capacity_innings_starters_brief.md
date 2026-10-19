@@ -132,6 +132,35 @@ Recommended next: 13-2 review by GPT 6 Astra Pro; then 13-3 by Claude Opus + GPT
 
 Then add one compact line to [progress.md](../progress.md). Don't start 13-3.
 
+### 8.1 Handoff as delivered (Claude Opus 5.5, 2026-10-18)
+
+```text
+Done: RosterCapacity, TierRules (innings HS 7 / College 9 / Pro 9; rest HS 4 / College 3 / Pro 3; D5 knobs 0),
+      shared StarterSelection + PitcherRestLedger (Pitcher_Rest v14 table), D3 LineupBuilder, per-instance
+      team count on the interim round-robin (D1-A). The career boot now completes on a fresh v14 world
+      (headless Godot 4.7, scratch APPDATA: "league generated (68 teams)", no errors).
+      · Base: p13/integration @ d951efe (+ brief 6018428/4d64902) · Commit: a73075f (+ uid cleanup)
+Gates: build → 0/0; Schema → 174/174; resolver → 13/13, every line byte-identical to base; starters → 17/17;
+       innings → 5/5; capacity → 6/6; lineups → 8/8; worldgen-v14 23/23; ui-strings 3/3; CoreLoop 22/22;
+       Gritty 363/363; NeedsDecay 117; Hustle 95; Holdem 63; Arcade 55/55
+MC default: 354/362 before the D5 check was added (starters re-run 17/17 after; full count not re-run).
+       Red (8 suites, approved): tier-ladder 10/11 (Pro R/9 4.16 vs band floor 4.2 on one flat season;
+       season-pipeline Pro R/G 4.23/4.21 passes; 13-3 re-bands); promotion-sweep 3/4, promotion-stream 0/1,
+       promotion-avatar 0/1, promotion-record 0/1, development-arc 3/4, practice-seam 5/6,
+       development-equilibrium 0/1 (PromotionManager's six-tier ladder, 13-6).
+       Now green again: season-pipeline, micro-game, career-ids/wiring, v4-bullpen-arsenal, rivalry,
+       heir-genetics, lineage-*, nurture, conception, backstory, person-effects, availability, equipment,
+       development-stream.
+Spec changes to checks (not deletions): 9+5+3 roster invariants → v14 generated shape per tier; fixture team
+       ids 1–8 → Pro 301–308 (ProTeam); tier bands → spec §11.2 rows with R/9; "MLB regression guard" →
+       Pro world-vs-solo identity (PA 194444 / H 43645 / ER 20527; 13-3 records the new Pro guard).
+Decisions used: D1–D6 as approved. Absent starters are now filtered (§6) instead of shadowed.
+Open: real D5 values need R1-MATH (PitcherFatigue is outside 13-2); a pitcher avatar who isn't a top-3
+       starter rarely starts under ride-the-ace (owner/13-5 call); MicroGame's old "EnsureV4" error text is
+       gone; no live Godot UI check of lineups.
+Recommended next: 13-2 review by GPT 6 Astra Pro; then 13-3 by Claude Opus + GPT 6 Astra Pro (Math)
+```
+
 ## 9. Review (GPT 6 Astra Pro)
 
 *Reserved for the reviewer: verdict, findings, gate re-runs.*
