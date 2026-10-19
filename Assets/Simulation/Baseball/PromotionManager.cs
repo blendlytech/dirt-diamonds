@@ -88,6 +88,13 @@ public static class PromotionProfile
     };
 
     /// <summary>§3.1 amateur age caps: over the cap without earning promotion = washed out to free agency.</summary>
+    /// <summary>
+    /// The 9c ladder's league shape (8 teams per tier), formerly
+    /// LeagueSimulator.TeamCount. Schema v14 has no such ladder; slice 13-6
+    /// replaces this pass with PipelineManager, so it stays expected-red.
+    /// </summary>
+    public const int LadderTeamsPerTier = 8;
+
     public const int HighSchoolAgeCap = 19;
     public const int CollegeAgeCap = 23;
 
@@ -436,7 +443,7 @@ public sealed class PromotionManager
     public void RunOffseason(int completedSeasonYear)
     {
         // ---- bulk loads (the whole pass reads up front, never mid-sweep) ----
-        var teams = new List<TeamRow>(LeagueDirectory.TierCount * LeagueSimulator.TeamCount);
+        var teams = new List<TeamRow>(LeagueDirectory.TierCount * RosterCapacity.MaxTeamsPerTier);
         _baseball.LoadAllTeams(teams);
         if (teams.Count == 0)
         {
@@ -451,10 +458,10 @@ public sealed class PromotionManager
         }
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
-            if (teamsPerTier[t] != LeagueSimulator.TeamCount)
+            if (teamsPerTier[t] != PromotionProfile.LadderTeamsPerTier)
             {
                 throw new InvalidOperationException(
-                    $"Promotion pass requires the full 6-tier ladder; tier {(LeagueTier)t} has {teamsPerTier[t]}/{LeagueSimulator.TeamCount} teams. " +
+                    $"Promotion pass requires the full 6-tier ladder; tier {(LeagueTier)t} has {teamsPerTier[t]}/{PromotionProfile.LadderTeamsPerTier} teams. " +
                     "Schema v14 has no such ladder; slice 13-6 replaces this pass with PipelineManager.");
             }
         }
@@ -468,7 +475,7 @@ public sealed class PromotionManager
         }
 
         var roster = new List<RosterPlayerRow>(
-            LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+            LeagueDirectory.TierCount * RosterCapacity.MaxTeamsPerTier * RosterCapacity.MaxRoster);
         _baseball.LoadRoster(roster);
 
         // 9d-2 (development doc §6): the sweep's scouting projects real

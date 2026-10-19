@@ -754,11 +754,11 @@ public sealed class CareerManager
     private void ActivateAvatar(string avatarId, int teamId)
     {
         // 9a: the schedule index must be TIER-relative — LeagueSchedule's
-        // round-robin runs 0..7 WITHIN one league, so _teamIds holds only the
+        // round-robin runs within one league, so _teamIds holds only the
         // avatar tier's teams (ordered by team_id, matching the tier sim's own
         // team-index order) and _avatarTeamIndex indexes into that.
         LeagueSimulator league = ResolveLeagueFor(teamId);
-        var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
+        var teams = new List<TeamRow>(RosterCapacity.MaxTeamsPerTier);
         _baseball.LoadTeamsByTier(league.Tier, teams);
         _teamIds = new int[teams.Count];
         for (int t = 0; t < teams.Count; t++)
@@ -780,6 +780,9 @@ public sealed class CareerManager
         _avatarPlayerId = avatarId;
         _avatarTeamId = teamId;
         _avatarTier = league.Tier;
+        // 13-2 (brief D3): the avatar always starts — if the legal-defense
+        // pick leaves them out, they take the DH spot.
+        _micro.SetFeaturedPlayer(avatarId);
         league.SetAttendedTeam(teamId);
 
         // 9b: announce the activation so the Life-sim bridge can re-point the
@@ -797,7 +800,7 @@ public sealed class CareerManager
     /// </summary>
     private string FindDisplacedPlayer(int teamId, PitcherRole role)
     {
-        var roster = new List<RosterPlayerRow>(LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+        var roster = new List<RosterPlayerRow>(RosterCapacity.MaxTeamsPerTier * RosterCapacity.MaxRoster);
         _baseball.LoadRoster(roster);
 
         bool isPitcher = role != PitcherRole.None;
@@ -1424,7 +1427,7 @@ public sealed class CareerManager
         {
             return;
         }
-        if (!LeagueSchedule.TryGetPairingFor(scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
+        if (!LeagueSchedule.TryGetPairingFor(_teamIds.Length, scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
         {
             return;
         }
@@ -1473,7 +1476,7 @@ public sealed class CareerManager
             return false;
         }
         if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, dayOfSeason, out int scheduleDay)
-            || !LeagueSchedule.TryGetPairingFor(scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
+            || !LeagueSchedule.TryGetPairingFor(_teamIds.Length, scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
         {
             return false;
         }
@@ -1523,6 +1526,8 @@ public sealed class CareerManager
             // pending game forfeited a day late). Version+day-gated, so this
             // is a no-op on the common no-absence path.
             _micro.RefreshAvailability(_pending.AbsoluteDay);
+            // 13-2: §6 rest is counted on the game's calendar day.
+            _micro.SetGameDay(_pending.AbsoluteDay);
             MicroGameResult result = _micro.PlayGame(
                 _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot,
                 ref batterPolicy, ref pitcherPolicy, ref _rng);

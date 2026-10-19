@@ -436,18 +436,23 @@ public sealed partial class GameManager : Node
         // own league, each with its own forked rng stream. All three run the
         // same day loop off the bus; the avatar's tier is resolved by
         // CareerManager through the directory. Phase 13 integration state
-        // (13-1 brief §5.3, owner-approved): the sims still require 8 teams per
-        // tier, so they refuse the 68-team v14 world at Initialize until slices
-        // 13-2 (roster capacities) and 13-3 (schedules) land.
+        // (13-2 brief D1-A): each sim runs its tier's own team count on the
+        // interim 154-day round-robin until 13-3's persisted schedules land.
         Leagues = new LeagueDirectory();
         var normalizer = new StatsNormalizer(_database, Baseball);
+        // 13-2 (league_restructure.md §6): ONE rest ledger for every tier sim
+        // and the micro-sim, so the attended game and the background league
+        // agree on who is rested. Hydrated from Pitcher_Rest on first use.
+        var restLedger = new PitcherRestLedger();
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
             var tierSim = new LeagueSimulator(
                 _database, Baseball, normalizer, new RngState(rng.NextUInt64() | 1UL), (LeagueTier)t);
             // HS-6: person levers bake at Initialize, so the source must be
-            // wired first (unlike the per-PA ledgers below).
+            // wired first (unlike the per-PA ledgers below); the rest ledger
+            // hydrates there too.
             tierSim.Persons = Persons;
+            tierSim.RestLedger = restLedger;
             tierSim.Initialize();
             tierSim.Rivalries = _rivalryLedger;
             tierSim.Availability = Absences;
@@ -465,6 +470,7 @@ public sealed partial class GameManager : Node
         // HS-6: wired before Initialize for the same bake-time reason as the
         // tier sims above.
         Micro.Persons = Persons;
+        Micro.RestLedger = restLedger;
         Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
         Micro.Availability = Absences;

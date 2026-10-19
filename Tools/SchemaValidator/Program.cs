@@ -36,6 +36,8 @@ internal static class Program
         // Schema v14 (Phase 13, league_restructure.md §12; Player_Fielding, arcade §8.1).
         "Conferences", "Divisions", "Player_Fielding", "Schedule_Games", "Playoff_Series", "Team_Seasons",
         "Roster_Designations", "College_Enrollment", "Recruiting_Offers", "Draft_Picks",
+        // Schema v14, slice 13-2 (brief D4): the starter-rest memory.
+        "Pitcher_Rest",
     };
 
     private static int Main(string[] args)
@@ -668,7 +670,29 @@ internal static class Program
             && ScalarLong(db, "SELECT COUNT(*) FROM Player_Fielding WHERE player_id = @id AND secondary_position = '2B';", otherPlayerId) == 1;
         Check("v14 Player_Fielding round-trip (NULL and '2B' secondary; upsert keeps one row)", nullRoundTrip && setRoundTrip);
 
+        // ---- Pitcher_Rest (13-2, brief D4) ----
+        Check("v14 columns: Pitcher_Rest", VerifyColumnTypes(db, "Pitcher_Rest", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT", ["last_start_day"] = "INTEGER",
+        }));
+        Check("index: Pitcher_Rest(player_id)", HasIndexPrefix(db, "Pitcher_Rest", "player_id"));
+        db.RunInBatch(() =>
+        {
+            baseball.UpsertPitcherRest(fieldingPlayerId, 400);
+            baseball.UpsertPitcherRest(fieldingPlayerId, 403);
+            baseball.UpsertPitcherRest(otherPlayerId, 12);
+        });
+        var rest = new List<(string PlayerId, long LastStartDay)>();
+        baseball.LoadAllPitcherRest(rest);
+        Check("v14 Pitcher_Rest round-trip: upsert keeps one row per pitcher with the latest day",
+            rest.Count == 2 && rest.Contains((fieldingPlayerId, 403L)) && rest.Contains((otherPlayerId, 12L)));
+        Check("v14 FK rejects an orphan Pitcher_Rest row; CHECK rejects a negative day",
+            Rejects(db, "INSERT INTO Pitcher_Rest (player_id, last_start_day) VALUES ('ghost-no-such-player', 1);")
+            && Rejects(db, "UPDATE Pitcher_Rest SET last_start_day = -1 WHERE player_id = @id;", otherPlayerId));
+
         queries.Delete(fieldingPlayerId);
+        Check("v14 delete cascades to Pitcher_Rest",
+            ScalarLong(db, "SELECT COUNT(*) FROM Pitcher_Rest WHERE player_id = @id;", fieldingPlayerId) == 0);
         Check("v14 delete cascades to Player_Fielding",
             ScalarLong(db, "SELECT COUNT(*) FROM Player_Fielding WHERE player_id = @id;", fieldingPlayerId) == 0);
 

@@ -1,6 +1,6 @@
 namespace DirtAndDiamonds.Simulation.Baseball;
 
-/// <summary>One scheduled game: team INDEXES (0..TeamCount-1, ordered by team_id), not team ids.</summary>
+/// <summary>One scheduled game: team INDEXES (0..teamCount-1 within a tier, ordered by team_id), not team ids.</summary>
 public readonly struct SchedulePairing
 {
     public readonly int HomeTeam;
@@ -20,33 +20,33 @@ public readonly struct SchedulePairing
 /// truth; the driver must know which game the avatar's team plays today in
 /// order to claim it from the macro sim).
 ///
-/// Circle-method round-robin with team index (TeamCount-1) fixed; home/away
-/// alternates by cycle+slot so pairings balance over the 22 cycles. Every
-/// team plays every regular-season day. GetDayPairings emits slots in the
-/// exact order the macro sim historically played them, so consuming the
-/// pairings preserves the macro rng draw order bit-for-bit.
+/// Circle-method round-robin over <c>teamCount</c> teams (any even count;
+/// slice 13-2 generalised the shipped 8-team version, brief D1-A) with team
+/// index (teamCount-1) fixed; home/away alternates by cycle+slot. Every team
+/// plays every regular-season day, one round per day, cycling through the
+/// interim 154-day window. With 8 teams the pairings, and their emit order,
+/// are exactly the shipped ones. Slice 13-3 replaces this with persisted
+/// per-tier schedules (league_restructure.md §3).
 /// </summary>
 public static class LeagueSchedule
 {
-    public const int PairingsPerDay = LeagueSimulator.TeamCount / 2;
-
-    private const int RoundsPerCycle = LeagueSimulator.TeamCount - 1;
-
     /// <summary>
-    /// Fills <paramref name="destination"/> (length ≥ <see cref="PairingsPerDay"/>)
-    /// with the day's games in macro play order. Caller guards the regular
-    /// season (1..<see cref="LeagueSimulator.RegularSeasonDays"/>).
+    /// Fills <paramref name="destination"/> (length ≥ teamCount / 2) with the
+    /// day's games in macro play order. Caller guards the regular season
+    /// (1..<see cref="LeagueSimulator.RegularSeasonDays"/>).
     /// </summary>
-    public static void GetDayPairings(int dayOfSeason, Span<SchedulePairing> destination)
+    public static void GetDayPairings(int teamCount, int dayOfSeason, Span<SchedulePairing> destination)
     {
-        int cycle = (dayOfSeason - 1) / RoundsPerCycle;
-        int round = (dayOfSeason - 1) % RoundsPerCycle;
+        int roundsPerCycle = teamCount - 1;
+        int pairingsPerDay = teamCount / 2;
+        int cycle = (dayOfSeason - 1) / roundsPerCycle;
+        int round = (dayOfSeason - 1) % roundsPerCycle;
 
-        destination[0] = OrientPair(LeagueSimulator.TeamCount - 1, round, cycle, 0);
-        for (int i = 1; i < PairingsPerDay; i++)
+        destination[0] = OrientPair(teamCount - 1, round, cycle, 0);
+        for (int i = 1; i < pairingsPerDay; i++)
         {
-            int a = (round + i) % RoundsPerCycle;
-            int b = (round - i + RoundsPerCycle) % RoundsPerCycle;
+            int a = (round + i) % roundsPerCycle;
+            int b = (round - i + roundsPerCycle) % roundsPerCycle;
             destination[i] = OrientPair(a, b, cycle, i);
         }
     }
@@ -56,7 +56,7 @@ public static class LeagueSchedule
     /// Always found inside the regular season (every team plays every day);
     /// false only for offseason days.
     /// </summary>
-    public static bool TryGetPairingFor(int dayOfSeason, int teamIndex, out SchedulePairing pairing)
+    public static bool TryGetPairingFor(int teamCount, int dayOfSeason, int teamIndex, out SchedulePairing pairing)
     {
         if (dayOfSeason < 1 || dayOfSeason > LeagueSimulator.RegularSeasonDays)
         {
@@ -64,13 +64,14 @@ public static class LeagueSchedule
             return false;
         }
 
-        Span<SchedulePairing> pairings = stackalloc SchedulePairing[PairingsPerDay];
-        GetDayPairings(dayOfSeason, pairings);
-        foreach (SchedulePairing candidate in pairings)
+        int pairingsPerDay = teamCount / 2;
+        Span<SchedulePairing> pairings = stackalloc SchedulePairing[RosterCapacity.MaxTeamsPerTier / 2];
+        GetDayPairings(teamCount, dayOfSeason, pairings[..pairingsPerDay]);
+        for (int i = 0; i < pairingsPerDay; i++)
         {
-            if (candidate.HomeTeam == teamIndex || candidate.AwayTeam == teamIndex)
+            if (pairings[i].HomeTeam == teamIndex || pairings[i].AwayTeam == teamIndex)
             {
-                pairing = candidate;
+                pairing = pairings[i];
                 return true;
             }
         }
