@@ -19,11 +19,11 @@ namespace DirtAndDiamonds.Data;
 ///
 /// Tier and Gpa (the HS onboarding arc, docs/reference/hs_onboarding_events.md
 /// §1) are the third/fourth additions. Tier LEFT JOINs Team_Tiers: a
-/// rostered team missing its tier row COALESCEs to MLB(5) (the v6→v7
+/// rostered team missing its tier row COALESCEs to Pro(2) (formerly the v6→v7
 /// backfill convention), but an UNROSTERED subject (NULL team_id — the
 /// seeded parent NPCs, a benched/displaced teammate) reads as the sentinel
 /// −1, which matches no real `>=`/`==` gate any shipped content authors
-/// (every real gate is 0–5) — this is the load-bearing safety keeping a
+/// (every real gate is 0–2) — this is the load-bearing safety keeping a
 /// `scope: any` tier-gated event from ever reaching an unrostered subject.
 /// DISCLOSED CAVEAT: the sentinel does NOT defeat a `&lt;` comparison
 /// (−1 &lt; N holds for any N ≥ 0); no shipped event gates tier with `&lt;`,
@@ -77,9 +77,9 @@ public sealed class NarrativePollQueries
     //
     // Tier + Gpa (schema unchanged — Team_Tiers since v7, Player_Person since
     // v11 — MCP-validated against the live save 2026-07-10): tier's CASE
-    // reads a NULL p.team_id as sentinel −1 BEFORE the COALESCE-to-MLB(5)
+    // reads a NULL p.team_id as sentinel −1 BEFORE the COALESCE-to-Pro(2)
     // convention would otherwise apply, so an unrostered subject can never
-    // read as MLB tier (docs/reference/hs_onboarding_events.md §1.1). gpa is a
+    // read as Pro tier (docs/reference/hs_onboarding_events.md §1.1). gpa is a
     // plain PK LEFT JOIN + COALESCE, the strictness precedent exactly.
     private const string SqlSelectPollPlayers =
         "WITH RelPairs AS (" +
@@ -100,7 +100,7 @@ public sealed class NarrativePollQueries
         "  WHERE partner_rel.pid = p.player_id AND partner_rel.type_enum = 'Partner' " +
         "    AND teammate.team_id = p.team_id AND teammate.player_id != p.player_id" +
         ") THEN 1 ELSE 0 END, " +
-        "CASE WHEN p.team_id IS NULL THEN -1 ELSE COALESCE(tt.tier, 5) END, " +
+        "CASE WHEN p.team_id IS NULL THEN -1 ELSE COALESCE(tt.tier, 2) END, " +
         "COALESCE(pp.gpa, 2.5) " +
         "FROM Players p " +
         "LEFT JOIN Family_Background f ON f.player_id = p.player_id " +

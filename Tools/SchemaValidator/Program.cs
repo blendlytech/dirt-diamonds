@@ -33,6 +33,9 @@ internal static class Program
         "Player_Absences", "Player_Equipment", "Player_Potential",
         "Player_Person", "Family_Background", "Phone_State", "Player_Items", "Child_Development",
         "Child_Rearing_Commitment", "Relationship_History",
+        // Schema v14 (Phase 13, league_restructure.md §12; Player_Fielding, arcade §8.1).
+        "Conferences", "Divisions", "Player_Fielding", "Schedule_Games", "Playoff_Series", "Team_Seasons",
+        "Roster_Designations", "College_Enrollment", "Recruiting_Offers", "Draft_Picks",
     };
 
     private static int Main(string[] args)
@@ -79,6 +82,7 @@ internal static class Program
             {
                 schemaPath ??= FindSchemaScript();
                 RunScratchValidation(schemaPath, playerCount);
+                RunCleanBreakChecks(schemaPath);
             }
         }
         catch (Exception ex)
@@ -138,7 +142,7 @@ internal static class Program
             Check("foreign_keys enforced on open", foreignKeys);
 
             db.InitializeSchema(schemaPath);
-            Check("schema applies + user_version = 13", db.GetSchemaVersion() == 13, $"user_version={db.GetSchemaVersion()}");
+            Check("schema applies + user_version = 14", db.GetSchemaVersion() == 14, $"user_version={db.GetSchemaVersion()}");
 
             db.InitializeSchema(schemaPath);
             Check("schema re-apply is idempotent", true);
@@ -212,9 +216,13 @@ internal static class Program
             Check("day-advance batch transaction", stopwatch.ElapsedMilliseconds < 5_000,
                 $"{statements:N0} statements in {stopwatch.ElapsedMilliseconds} ms ({statements * 1000 / tickMs:N0} stmts/sec)");
 
-            // --- Schema v4: role/arsenal backfill migration ------------------
+            // --- Schema v4 role/arsenal tables (their backfill retired in v14) --
             // Runs after the benchmark: the cascade check deletes players[3].
             RunV4MigrationChecks(db, queries, schemaPath, players[3].PlayerId, players[4].PlayerId);
+
+            // --- Schema v14: league structure, Player_Fielding, §12 tables ----
+            // The fielding cascade check deletes players[9].
+            RunV14Checks(db, queries, schemaPath, players[9].PlayerId, players[10].PlayerId);
 
             // --- Schema v11: High School person layer ------------------------
             // The cascade check deletes players[5]; players[6..8] survive.
@@ -263,16 +271,20 @@ internal static class Program
     }
 
     /// <summary>
-    /// Proves the v3→v4 pure-SQL migration: a pitcher who exists in
-    /// Player_Ratings without role/arsenal rows (the v3 state) gains a Starter
-    /// role and the 60/25/15 stuff-derived arsenal when the idempotent script
-    /// re-applies — and a re-apply never overwrites rows that already exist
-    /// (INSERT OR IGNORE), so post-v4 generated arsenals survive every boot.
+    /// The schema v4 role/arsenal tables. Their v3→v4 backfill was RETIRED by
+    /// the v14 clean break (13-1 brief §3.2.2/§5.4): a pre-v14 save is refused,
+    /// never migrated, and every path that creates a pitcher writes its own
+    /// role and arsenal rows. Retired checks, by name: "v4 backfill: pitcher
+    /// role defaults to Starter", "v4 backfill: three arsenal rows, usage sums
+    /// to 100", "v4 backfill: stuff-derived ratings (80 → FB 80/40, BRK 60/80,
+    /// OFF 55/85)" and "v4 backfill is OR IGNORE (re-apply never clobbers
+    /// existing rows)". Their replacement proves the removal; the CHECK and
+    /// cascade checks below stay.
     /// </summary>
     private static void RunV4MigrationChecks(
         DatabaseManager db, PlayerQueries queries, string schemaPath, string pitcherId, string checkSubjectId)
     {
-        // Stage the v3 state: ratings row flagged as pitcher, no satellite rows.
+        // Stage a bare pitcher: a ratings row with no role/arsenal/potential rows.
         SqliteCommand insertRatings = db.GetPooledCommand(
             "INSERT INTO Player_Ratings (player_id, is_pitcher, pit_stuff) VALUES (@id, 1, @stuff);");
         if (insertRatings.Parameters.Count == 0)
@@ -284,36 +296,24 @@ internal static class Program
         insertRatings.Parameters["@stuff"].Value = 80;
         db.ExecuteNonQuery(insertRatings);
 
-        db.InitializeSchema(schemaPath); // the boot-time migration pass
+        db.InitializeSchema(schemaPath); // the boot-time schema pass
 
-        Check("v4 backfill: pitcher role defaults to Starter",
-            ScalarLong(db, "SELECT COALESCE((SELECT role FROM Pitcher_Roles WHERE player_id = @id), -1);", pitcherId) == 1);
+        Check("v14 clean break: re-apply backfills no role, arsenal or potential (v3→v4 / v9→v10 backfills retired)",
+            ScalarLong(db, "SELECT COUNT(*) FROM Pitcher_Roles WHERE player_id = @id;", pitcherId) == 0 &&
+            ScalarLong(db, "SELECT COUNT(*) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 0 &&
+            ScalarLong(db, "SELECT COUNT(*) FROM Player_Potential WHERE player_id = @id;", pitcherId) == 0);
 
-        Check("v4 backfill: three arsenal rows, usage sums to 100",
-            ScalarLong(db, "SELECT COUNT(*) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 3 &&
-            ScalarLong(db, "SELECT SUM(usage_weight) FROM Pitch_Arsenals WHERE player_id = @id;", pitcherId) == 100);
-
-        Check("v4 backfill: stuff-derived ratings (80 → FB 80/40, BRK 60/80, OFF 55/85)",
-            ScalarLong(db, "SELECT velocity FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Fastball';", pitcherId) == 80 &&
-            ScalarLong(db, "SELECT movement FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Breaking';", pitcherId) == 80 &&
-            ScalarLong(db, "SELECT velocity FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Offspeed';", pitcherId) == 55 &&
-            ScalarLong(db, "SELECT movement FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Offspeed';", pitcherId) == 85);
-
-        // Perturb, re-apply, and prove OR IGNORE left the existing rows alone.
-        SqliteCommand perturb = db.GetPooledCommand(
-            "UPDATE Pitcher_Roles SET role = 2 WHERE player_id = @id; " +
-            "UPDATE Pitch_Arsenals SET velocity = 99 WHERE player_id = @id AND pitch_type = 'Fastball';");
-        if (perturb.Parameters.Count == 0)
+        // Write the satellites the way every creation path now does.
+        SqliteCommand stage = db.GetPooledCommand(
+            "INSERT INTO Pitcher_Roles (player_id, role) VALUES (@id, 1); " +
+            "INSERT INTO Pitch_Arsenals (player_id, pitch_type, velocity, movement, usage_weight) VALUES " +
+            "(@id, 'Fastball', 80, 40, 60), (@id, 'Breaking', 60, 80, 25), (@id, 'Offspeed', 55, 85, 15);");
+        if (stage.Parameters.Count == 0)
         {
-            perturb.Parameters.Add("@id", SqliteType.Text);
+            stage.Parameters.Add("@id", SqliteType.Text);
         }
-        perturb.Parameters["@id"].Value = pitcherId;
-        db.ExecuteNonQuery(perturb);
-
-        db.InitializeSchema(schemaPath);
-        Check("v4 backfill is OR IGNORE (re-apply never clobbers existing rows)",
-            ScalarLong(db, "SELECT role FROM Pitcher_Roles WHERE player_id = @id;", pitcherId) == 2 &&
-            ScalarLong(db, "SELECT velocity FROM Pitch_Arsenals WHERE player_id = @id AND pitch_type = 'Fastball';", pitcherId) == 99);
+        stage.Parameters["@id"].Value = pitcherId;
+        db.ExecuteNonQuery(stage);
 
         // CHECK constraint coverage on the new tables.
         bool badRoleRejected = false;
@@ -503,6 +503,342 @@ internal static class Program
         queries.Delete(subjectId);
         Check("v11+v12 delete cascades across all six person-layer tables",
             ScalarLong(db, "SELECT (SELECT COUNT(*) FROM Player_Person WHERE player_id = @id) + (SELECT COUNT(*) FROM Family_Background WHERE player_id = @id) + (SELECT COUNT(*) FROM Phone_State WHERE player_id = @id) + (SELECT COUNT(*) FROM Player_Items WHERE player_id = @id) + (SELECT COUNT(*) FROM Child_Development WHERE child_id = @id) + (SELECT COUNT(*) FROM Child_Rearing_Commitment WHERE player_id = @id);", subjectId) == 0);
+    }
+
+    /// <summary>
+    /// Schema v14 (league_restructure.md §12, arcade §8.1): every §12 table and
+    /// column introspected through pragma_table_info, the static league
+    /// structure, the Teams v14 columns, Player_Fielding round-trip and cascade,
+    /// and the CHECK/FK constraints the 13-1 brief §5.1 names. Each constraint
+    /// check has a positive control, so a rejection is attributable to the
+    /// constraint under test and not to a missing parent row.
+    /// </summary>
+    private static void RunV14Checks(
+        DatabaseManager db, PlayerQueries queries, string schemaPath, string fieldingPlayerId, string otherPlayerId)
+    {
+        var baseball = new BaseballQueries(db);
+
+        // --- §12 tables and columns (pragma_table_info) --------------------
+        Check("v14 columns: Conferences", VerifyColumnTypes(db, "Conferences", new Dictionary<string, string>
+        {
+            ["conference_id"] = "INTEGER", ["tier"] = "INTEGER", ["name"] = "TEXT",
+        }));
+        Check("v14 columns: Divisions", VerifyColumnTypes(db, "Divisions", new Dictionary<string, string>
+        {
+            ["division_id"] = "INTEGER", ["conference_id"] = "INTEGER", ["name"] = "TEXT",
+        }));
+        Check("v14 columns: Teams (conference_id, division_id, home_park)", VerifyColumnTypes(db, "Teams", new Dictionary<string, string>
+        {
+            ["team_id"] = "INTEGER", ["city"] = "TEXT", ["name"] = "TEXT", ["abbreviation"] = "TEXT",
+            ["conference_id"] = "INTEGER", ["division_id"] = "INTEGER", ["home_park"] = "TEXT",
+        }));
+        Check("v14 columns: Player_Fielding", VerifyColumnTypes(db, "Player_Fielding", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT", ["defensive_position"] = "TEXT", ["secondary_position"] = "TEXT",
+            ["speed"] = "INTEGER", ["arm"] = "INTEGER",
+        }));
+        Check("v14 columns: Schedule_Games", VerifyColumnTypes(db, "Schedule_Games", new Dictionary<string, string>
+        {
+            ["game_id"] = "INTEGER", ["season_year"] = "INTEGER", ["tier"] = "INTEGER", ["day_of_season"] = "INTEGER",
+            ["home_team_id"] = "INTEGER", ["away_team_id"] = "INTEGER", ["phase"] = "INTEGER", ["series_id"] = "INTEGER",
+            ["game_in_series"] = "INTEGER", ["status"] = "INTEGER", ["home_score"] = "INTEGER", ["away_score"] = "INTEGER",
+        }));
+        Check("v14 columns: Playoff_Series", VerifyColumnTypes(db, "Playoff_Series", new Dictionary<string, string>
+        {
+            ["series_id"] = "INTEGER", ["season_year"] = "INTEGER", ["tier"] = "INTEGER", ["round"] = "INTEGER",
+            ["best_of"] = "INTEGER", ["high_seed_team_id"] = "INTEGER", ["low_seed_team_id"] = "INTEGER",
+            ["high_wins"] = "INTEGER", ["low_wins"] = "INTEGER", ["winner_team_id"] = "INTEGER",
+        }));
+        Check("v14 columns: Team_Seasons", VerifyColumnTypes(db, "Team_Seasons", new Dictionary<string, string>
+        {
+            ["team_id"] = "INTEGER", ["season_year"] = "INTEGER", ["wins"] = "INTEGER", ["losses"] = "INTEGER",
+            ["runs_scored"] = "INTEGER", ["runs_allowed"] = "INTEGER", ["national_rank"] = "INTEGER", ["seed"] = "INTEGER",
+        }));
+        Check("v14 columns: Roster_Designations", VerifyColumnTypes(db, "Roster_Designations", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT", ["team_id"] = "INTEGER", ["is_active"] = "INTEGER", ["locked_through_day"] = "INTEGER",
+        }));
+        Check("v14 columns: College_Enrollment", VerifyColumnTypes(db, "College_Enrollment", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT", ["team_id"] = "INTEGER", ["entry_season"] = "INTEGER",
+            ["class_year"] = "INTEGER", ["declared_season"] = "INTEGER",
+        }));
+        Check("v14 columns: Recruiting_Offers", VerifyColumnTypes(db, "Recruiting_Offers", new Dictionary<string, string>
+        {
+            ["player_id"] = "TEXT", ["team_id"] = "INTEGER", ["season_year"] = "INTEGER", ["status"] = "INTEGER",
+        }));
+        Check("v14 columns: Draft_Picks", VerifyColumnTypes(db, "Draft_Picks", new Dictionary<string, string>
+        {
+            ["season_year"] = "INTEGER", ["overall_pick"] = "INTEGER", ["round"] = "INTEGER",
+            ["team_id"] = "INTEGER", ["player_id"] = "TEXT",
+        }));
+        Check("index: Schedule_Games(season_year, tier, day_of_season) — the §12 ix_sched_day",
+            HasIndexPrefix(db, "Schedule_Games", "season_year", "tier", "day_of_season"));
+        Check("index: Player_Fielding(player_id)", HasIndexPrefix(db, "Player_Fielding", "player_id"));
+
+        // --- Static league structure + Teams v14 columns -------------------
+        baseball.EnsureLeagueStructure();
+        baseball.EnsureLeagueStructure();
+        var conferences = new List<ConferenceRow>();
+        var divisions = new List<DivisionRow>();
+        baseball.LoadConferences(conferences);
+        baseball.LoadDivisions(divisions);
+        bool twoPerTier = true;
+        for (int t = 0; t < 3; t++)
+        {
+            twoPerTier &= conferences.Count(c => (int)c.Tier == t) == 2;
+        }
+        Check("v14 league structure: 6 conferences (2 per tier), 14 divisions, idempotent",
+            conferences.Count == 6 && divisions.Count == 14 && twoPerTier,
+            $"conferences={conferences.Count} divisions={divisions.Count}");
+
+        TeamSeed hsSeed = LeagueStructure.Teams[0];   // 101, North, no division
+        TeamSeed hsSeed2 = LeagueStructure.Teams[1];  // 102
+        TeamSeed proSeed = LeagueStructure.Teams[^1]; // 332, Pacific
+        baseball.InsertTeam(LeagueStructure.ToTeamRow(hsSeed, "Validator High Field"));
+        baseball.UpsertTeamTier(hsSeed.TeamId, hsSeed.Tier);
+        baseball.InsertTeam(LeagueStructure.ToTeamRow(hsSeed2, "Validator Second Field"));
+        baseball.UpsertTeamTier(hsSeed2.TeamId, hsSeed2.Tier);
+        baseball.InsertTeam(LeagueStructure.ToTeamRow(proSeed, "Validator Ballpark")); // no tier row on purpose
+        var teams = new List<TeamRow>();
+        baseball.LoadAllTeams(teams);
+        TeamRow hs = teams.Find(t => t.TeamId == hsSeed.TeamId);
+        TeamRow pro = teams.Find(t => t.TeamId == proSeed.TeamId);
+        Check("v14 Teams round-trip: conference, NULL HS division, home park",
+            hs.ConferenceId == 11 && hs.DivisionId is null && hs.HomePark == "Validator High Field" && hs.Tier == LeagueTier.HS &&
+            pro.ConferenceId == 32 && pro.DivisionId == 324 && pro.HomePark == "Validator Ballpark");
+        // Replaces the retired "pre-v7 tier defaults to MLB" reading (v6→v7 backfill).
+        Check("v14: a team missing its Team_Tiers row reads as Pro (COALESCE 2)",
+            baseball.TryGetTeamTier(proSeed.TeamId, out LeagueTier untiered) && untiered == LeagueTier.Pro
+            && pro.Tier == LeagueTier.Pro);
+
+        // --- CHECK constraints (each with a positive control) ---------------
+        Check("v14 CHECK rejects Team_Tiers tier 3 (accepts 2)",
+            Accepts(db, "UPDATE Team_Tiers SET tier = 2 WHERE team_id = 101;")
+            && Rejects(db, "UPDATE Team_Tiers SET tier = 3 WHERE team_id = 101;")
+            && Accepts(db, "UPDATE Team_Tiers SET tier = 0 WHERE team_id = 101;"));
+        Check("v14 CHECK rejects Conferences tier 3",
+            Rejects(db, "INSERT INTO Conferences (conference_id, tier, name) VALUES (99, 3, 'Minor');"));
+        Check("v14 CHECK rejects a bad defensive_position (accepts 'C')",
+            Rejects(db, "INSERT INTO Player_Fielding (player_id, defensive_position) VALUES (@id, 'DH');", fieldingPlayerId)
+            && Accepts(db, "INSERT INTO Player_Fielding (player_id, defensive_position) VALUES (@id, 'C');", fieldingPlayerId));
+        Check("v14 CHECK rejects a secondary_position equal to the primary",
+            Rejects(db, "UPDATE Player_Fielding SET secondary_position = 'C' WHERE player_id = @id;", fieldingPlayerId));
+        Check("v14 CHECK rejects best_of = 2 (accepts 3)",
+            Rejects(db, "INSERT INTO Playoff_Series (series_id, season_year, tier, round, best_of, high_seed_team_id, low_seed_team_id) " +
+                "VALUES (1, 2026, 0, 1, 2, 101, 102);")
+            && Accepts(db, "INSERT INTO Playoff_Series (series_id, season_year, tier, round, best_of, high_seed_team_id, low_seed_team_id) " +
+                "VALUES (1, 2026, 0, 1, 3, 101, 102);"));
+        Check("v14 CHECK rejects Schedule_Games phase 3 and status 3 (accepts 2/2)",
+            Rejects(db, "INSERT INTO Schedule_Games (game_id, season_year, tier, day_of_season, home_team_id, away_team_id, phase) " +
+                "VALUES (1, 2026, 0, 64, 101, 102, 3);")
+            && Rejects(db, "INSERT INTO Schedule_Games (game_id, season_year, tier, day_of_season, home_team_id, away_team_id, phase, status) " +
+                "VALUES (1, 2026, 0, 64, 101, 102, 0, 3);")
+            && Accepts(db, "INSERT INTO Schedule_Games (game_id, season_year, tier, day_of_season, home_team_id, away_team_id, phase, status, series_id, game_in_series) " +
+                "VALUES (1, 2026, 0, 64, 101, 102, 2, 2, 1, 1);"));
+
+        // --- FK constraints --------------------------------------------------
+        Check("v14 FK rejects an orphan Player_Fielding row",
+            Rejects(db, "INSERT INTO Player_Fielding (player_id, defensive_position) VALUES ('ghost-no-such-player', 'C');"));
+        Check("v14 FK rejects a Teams row with an unknown conference",
+            Rejects(db, "INSERT INTO Teams (team_id, city, name, abbreviation, conference_id, home_park) " +
+                "VALUES (999, 'Nowhere', 'Ghosts', 'GHO', 77, 'Nowhere Park');"));
+        Check("v14 NOT NULL rejects a Teams row without a home park",
+            Rejects(db, "INSERT INTO Teams (team_id, city, name, abbreviation, conference_id) " +
+                "VALUES (998, 'Nowhere', 'Ghosts', 'GHO', 11);"));
+        Check("v14 FK rejects a Schedule_Games row naming an unknown team",
+            Rejects(db, "INSERT INTO Schedule_Games (game_id, season_year, tier, day_of_season, home_team_id, away_team_id, phase) " +
+                "VALUES (2, 2026, 0, 64, 101, 4242, 0);"));
+
+        // --- Player_Fielding through the query layer --------------------------
+        baseball.UpsertFielding(new PlayerFieldingRow
+        {
+            PlayerId = otherPlayerId, DefensivePosition = FieldingPosition.Shortstop,
+            SecondaryPosition = null, Speed = 61, Arm = 47,
+        });
+        bool nullRoundTrip = baseball.TryGetFielding(otherPlayerId, out PlayerFieldingRow f1)
+            && f1.DefensivePosition == FieldingPosition.Shortstop && f1.SecondaryPosition is null && f1.Speed == 61 && f1.Arm == 47;
+        baseball.UpsertFielding(new PlayerFieldingRow
+        {
+            PlayerId = otherPlayerId, DefensivePosition = FieldingPosition.Shortstop,
+            SecondaryPosition = FieldingPosition.SecondBase, Speed = 62, Arm = 48,
+        });
+        bool setRoundTrip = baseball.TryGetFielding(otherPlayerId, out PlayerFieldingRow f2)
+            && f2.SecondaryPosition == FieldingPosition.SecondBase && f2.Speed == 62
+            && ScalarLong(db, "SELECT COUNT(*) FROM Player_Fielding WHERE player_id = @id AND secondary_position = '2B';", otherPlayerId) == 1;
+        Check("v14 Player_Fielding round-trip (NULL and '2B' secondary; upsert keeps one row)", nullRoundTrip && setRoundTrip);
+
+        queries.Delete(fieldingPlayerId);
+        Check("v14 delete cascades to Player_Fielding",
+            ScalarLong(db, "SELECT COUNT(*) FROM Player_Fielding WHERE player_id = @id;", fieldingPlayerId) == 0);
+
+        db.InitializeSchema(schemaPath);
+        Check("v14 re-apply keeps structure and fielding rows (idempotent)",
+            ScalarLong(db, "SELECT COUNT(*) FROM Conferences WHERE @id = @id;", otherPlayerId) == 6
+            && ScalarLong(db, "SELECT COUNT(*) FROM Player_Fielding WHERE player_id = @id;", otherPlayerId) == 1);
+    }
+
+    /// <summary>
+    /// The v14 clean break end to end on scratch files (13-1 brief §3.2.5 and
+    /// §5.1 "Clean break"), through the exact <see cref="SaveCompatibility"/>
+    /// code GameManager runs. Uses its own temp folder, never the live save.
+    /// </summary>
+    private static void RunCleanBreakChecks(string schemaPath)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"dd_cleanbreak_{Environment.ProcessId}");
+        if (Directory.Exists(dir))
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        Directory.CreateDirectory(dir);
+        string save = Path.Combine(dir, "dirt_and_diamonds.db");
+        string bak = Path.Combine(dir, "dirt_and_diamonds.v13.bak");
+        string bak1 = Path.Combine(dir, "dirt_and_diamonds.v13.1.bak");
+        string bak2 = Path.Combine(dir, "dirt_and_diamonds.v13.2.bak");
+        string bak3 = Path.Combine(dir, "dirt_and_diamonds.v13.3.bak");
+
+        try
+        {
+            Check("clean break: a missing save is a fresh world (no refusal)",
+                SaveCompatibility.Inspect(save, out int v0) == SaveRefusal.None && v0 == 0 && !File.Exists(save));
+
+            File.WriteAllBytes(save, Array.Empty<byte>());
+            Check("clean break: a 0-byte save is a fresh world (no refusal, file untouched)",
+                SaveCompatibility.Inspect(save, out int vz) == SaveRefusal.None && vz == 0
+                && File.Exists(save) && new FileInfo(save).Length == 0);
+            DeleteDatabaseFiles(save);
+
+            WriteVersionedSave(save, 0, withMarker: false);
+            Check("clean break: an empty SQLite file (user_version 0) is a fresh world",
+                SaveCompatibility.Inspect(save, out int ve) == SaveRefusal.None && ve == 0);
+            DeleteDatabaseFiles(save);
+
+            WriteVersionedSave(save, 13, withMarker: true);
+            string original = FileHash(save);
+            SaveRefusal older = SaveCompatibility.Inspect(save, out int v13);
+            Check("clean break: a v13 save is refused (OlderSave) and untouched until confirm",
+                older == SaveRefusal.OlderSave && v13 == 13 && FileHash(save) == original && !File.Exists(bak),
+                $"refusal={older} version={v13}");
+
+            string moved = SaveCompatibility.ConfirmCleanBreak(save);
+            Check("clean break: confirm renames the save to .v13.bak with its original bytes (hash match)",
+                moved == bak && File.Exists(bak) && FileHash(bak) == original
+                && !File.Exists(save) && !File.Exists(save + "-wal") && !File.Exists(save + "-shm"));
+
+            int fresh;
+            using (var db = new DatabaseManager(save))
+            {
+                db.InitializeSchema(schemaPath);
+                fresh = db.GetSchemaVersion();
+            }
+            Check("clean break: boot then opens a new save at v14 (no refusal)",
+                fresh == 14 && SaveCompatibility.Inspect(save, out _) == SaveRefusal.None);
+            DeleteDatabaseFiles(save);
+
+            WriteVersionedSave(save, 13, withMarker: true);
+            string second = FileHash(save);
+            string moved1 = SaveCompatibility.ConfirmCleanBreak(save);
+            Check("clean break: an existing .v13.bak is never overwritten (the next one is .v13.1.bak)",
+                moved1 == bak1 && FileHash(bak) == original && FileHash(bak1) == second);
+
+            File.WriteAllBytes(save, new byte[] { 1, 2, 3 });
+            File.WriteAllBytes(save + "-wal", new byte[] { 4, 5 });
+            File.WriteAllBytes(save + "-shm", new byte[] { 6 });
+            string moved2 = SaveCompatibility.MoveAside(save);
+            Check("clean break: -wal/-shm sidecars move with the save under the same suffix",
+                moved2 == bak2
+                && File.ReadAllBytes(bak2).SequenceEqual(new byte[] { 1, 2, 3 })
+                && File.ReadAllBytes(bak2 + "-wal").SequenceEqual(new byte[] { 4, 5 })
+                && File.ReadAllBytes(bak2 + "-shm").SequenceEqual(new byte[] { 6 })
+                && !File.Exists(save) && !File.Exists(save + "-wal") && !File.Exists(save + "-shm"));
+
+            WriteVersionedSave(save, 15, withMarker: true);
+            string newer = FileHash(save);
+            SaveRefusal newerRefusal = SaveCompatibility.Inspect(save, out int v15);
+            bool confirmThrew = false;
+            try
+            {
+                SaveCompatibility.ConfirmCleanBreak(save);
+            }
+            catch (InvalidOperationException)
+            {
+                confirmThrew = true;
+            }
+            Check("clean break: a v15 save is refused (NewerSave), never renamed, bytes unchanged",
+                newerRefusal == SaveRefusal.NewerSave && v15 == 15 && confirmThrew
+                && File.Exists(save) && FileHash(save) == newer && !File.Exists(bak3));
+            DeleteDatabaseFiles(save);
+
+            WriteVersionedSave(save, 14, withMarker: true);
+            Check("clean break: a v14 save loads (no refusal)",
+                SaveCompatibility.Inspect(save, out int v14) == SaveRefusal.None && v14 == 14);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A lingering handle only leaves temp files behind; never fatal.
+            }
+        }
+    }
+
+    /// <summary>A scratch save at <paramref name="version"/>, written and closed through the game's own manager.</summary>
+    private static void WriteVersionedSave(string path, int version, bool withMarker)
+    {
+        using var db = new DatabaseManager(path);
+        db.ApplySchema(withMarker
+            ? $"CREATE TABLE IF NOT EXISTS Marker (x INTEGER) STRICT; INSERT INTO Marker VALUES ({version}); PRAGMA user_version = {version};"
+            : $"PRAGMA user_version = {version};");
+    }
+
+    private static string FileHash(string path) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+
+    /// <summary>True when <paramref name="sql"/> fails with SQLITE_CONSTRAINT (CHECK, FK or NOT NULL).</summary>
+    private static bool Rejects(DatabaseManager db, string sql, string? playerId = null)
+    {
+        try
+        {
+            Execute(db, sql, playerId);
+            return false;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>The positive control: true when <paramref name="sql"/> succeeds.</summary>
+    private static bool Accepts(DatabaseManager db, string sql, string? playerId = null)
+    {
+        try
+        {
+            Execute(db, sql, playerId);
+            return true;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    private static void Execute(DatabaseManager db, string sql, string? playerId)
+    {
+        SqliteCommand cmd = db.GetPooledCommand(sql);
+        if (playerId is not null)
+        {
+            if (cmd.Parameters.Count == 0)
+            {
+                cmd.Parameters.Add("@id", SqliteType.Text);
+            }
+            cmd.Parameters["@id"].Value = playerId;
+        }
+        db.ExecuteNonQuery(cmd);
     }
 
     // HS-4: PersonRow accessors keyed by the PersonStatId ordinal (0 =

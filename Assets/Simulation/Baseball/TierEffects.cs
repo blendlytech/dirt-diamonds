@@ -37,9 +37,10 @@ public readonly struct TierRatingDeltas
 /// Initialize — a tier is a property of the whole league, so the per-PA hot
 /// path pays nothing.
 ///
-/// The MLB vector is all-zero BY CONTRACT: <see cref="Shift"/> of a 0–100
-/// rating by 0 is the identity, so an MLB (or pre-v7) world's rating arrays
-/// are bit-identical to the pre-tier code and the M1 calibration cannot move.
+/// The Pro vector (the former MLB row) is all-zero BY CONTRACT:
+/// <see cref="Shift"/> of a 0–100 rating by 0 is the identity, so a Pro
+/// world's rating arrays are bit-identical to the pre-tier code and the M1
+/// calibration cannot move.
 /// Delta values are the design doc's §2 table — tuning is a data edit here,
 /// never a logic edit, and every change re-runs run_monte_carlo_batch.
 /// </summary>
@@ -47,18 +48,17 @@ public static class TierEffects
 {
     // The §2 table: batter knobs held at zero in every tier (ratings are
     // tier-relative — an average hitter is a 50 everywhere); the environment
-    // is carried entirely by the run-prevention triple, degraded −4 per rung
-    // descending from MLB. See the doc's §1 for why this is the one monotone
-    // lever that lifts AVG/OBP/SLG/BB%/R/G together while easing K%.
+    // is carried entirely by the run-prevention triple. See the doc's §1 for
+    // why this is the one monotone lever that lifts AVG/OBP/SLG/BB%/R/G
+    // together while easing K%. Schema v14 (league_restructure.md §11.1)
+    // keeps the HS and College rows, drops the three minor-league rows, and
+    // Pro takes the MLB row; no value changed.
     private static readonly TierRatingDeltas[] DeltasByTier =
     {
         //                   bPow bCon bDis pStf pCtl dFld
         new TierRatingDeltas(0, 0, 0, -20, -20, -20), // HS
         new TierRatingDeltas(0, 0, 0, -16, -16, -16), // College
-        new TierRatingDeltas(0, 0, 0, -12, -12, -12), // MinorA
-        new TierRatingDeltas(0, 0, 0, -8, -8, -8),    // MinorAA
-        new TierRatingDeltas(0, 0, 0, -4, -4, -4),    // MinorAAA
-        new TierRatingDeltas(0, 0, 0, 0, 0, 0),       // MLB — all-zero by contract, never edit
+        new TierRatingDeltas(0, 0, 0, 0, 0, 0),       // Pro (the former MLB row) — all-zero by contract, never edit
     };
 
     /// <summary>The §2 delta vector for one tier.</summary>

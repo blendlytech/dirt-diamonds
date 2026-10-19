@@ -123,6 +123,28 @@ public sealed class DatabaseManager : IDisposable
         Convert.ToInt32(ExecuteConstantScalar("PRAGMA user_version;") ?? 0);
 
     /// <summary>
+    /// Reads a save file's PRAGMA user_version WITHOUT opening it as a save:
+    /// read-only, unpooled, no WAL or pragma setup, so the file's bytes are left
+    /// exactly as found. Boot uses it to decide whether the save can load at all
+    /// (<see cref="SaveCompatibility"/>, the v14 clean break) before any
+    /// <see cref="DatabaseManager"/> or schema script touches the path.
+    /// </summary>
+    public static int PeekSchemaVersion(string dbPath)
+    {
+        var builder = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        };
+        using var connection = new SqliteConnection(builder.ConnectionString);
+        connection.Open();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "PRAGMA user_version;";
+        return Convert.ToInt32(command.ExecuteScalar() ?? 0);
+    }
+
+    /// <summary>
     /// Journal mode, FK enforcement and schema version in one call, for boot-time
     /// assertions and the validation harness.
     /// </summary>

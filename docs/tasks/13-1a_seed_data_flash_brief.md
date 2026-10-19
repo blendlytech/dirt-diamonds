@@ -79,3 +79,15 @@ Recommended next: Claude Opus reviews 13-1a and folds it into 13-1 (reviewer of 
 ```
 
 Then add one compact line to [progress.md](../progress.md). Don't start 13-1.
+
+## 9. Review (Claude Opus 5.5, 2026-10-18)
+
+**Verdict: APPROVED with one condition (C1), applied in this review commit.** Reviewed `e40ad96` on `p13/13-1a-flash` (base `p13/integration` @ `4e6002d`; author commit only, scope = the §2 allowed paths). Opus is not the author, so this is an independent review.
+
+**Re-run independently (own script, not Flash's):** both files parse; `schools.json` 12 entries, ids 101–112 in Appendix A order, abbreviations match for every id, every loader field present (3 image paths, 3 named colors); the 8 shipped entries are identical to `main` apart from `team_id` (8/8); the 12 primary hexes are unique; `home_parks.json` 68 rows, ids 101–112 / 201–224 / 301–332 in order, abbreviations 68/68, names unique case-insensitively, longest 27 chars; no MLB/NCAA, championship-series or "Diamond League" strings. New-school copy is all-ages and clean, with nothing about lineage, crime or vice.
+
+- **C1 (fixed here):** 301 "Bayport Harbor Yards" closely echoes "The Ballpark at Harbor Yard", a real former minor-league park in Bridgeport, CT, which §2 forbids. Renamed to **"Bayport Tidewater Park"** (still unique, 22 chars). It's a one-string data edit; the rest of Flash's data is unchanged.
+- **Note for 13-1 (not blocking):** the `schools.json` `"//"` comment still cites `LeagueGenerator.TierTeamSeeds[HS]`, which 13-1 replaces with the Appendix A table. Update the comment when 13-1 rewrites the generator.
+- **Note for the owner (17b):** several Pro parks borrow real regional names (Pine Belt, Piedmont, Sandia, Central Valley). That's allowed (real places, no stadium echo), but list them for the trademark screen with the rest of the names.
+
+**Fold:** the 13-1 session folds `p13/13-1a-review-opus` (this commit), not `e40ad96`, into `p13/13-1-opus`.

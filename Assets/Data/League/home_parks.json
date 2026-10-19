@@ -1,0 +1,345 @@
+{
+  "//": "Home park names for all 68 teams across High School (101–112), College (201–224), and Pro (301–332). Appendix A order. Used for broadcast announcer intros, schedule displays, and UI until the G-7 venue catalog lands. Unique fictional names, <= 40 chars.",
+  "parks": [
+    {
+      "team_id": 101,
+      "abbreviation": "CRW",
+      "home_park": "Crestwood High Field"
+    },
+    {
+      "team_id": 102,
+      "abbreviation": "LKS",
+      "home_park": "Lakeside High Field"
+    },
+    {
+      "team_id": 103,
+      "abbreviation": "FRV",
+      "home_park": "Fairview High Field"
+    },
+    {
+      "team_id": 104,
+      "abbreviation": "OKR",
+      "home_park": "Oak Ridge High Field"
+    },
+    {
+      "team_id": 105,
+      "abbreviation": "BRK",
+      "home_park": "Brookhaven High Field"
+    },
+    {
+      "team_id": 106,
+      "abbreviation": "CDG",
+      "home_park": "Cedar Grove High Field"
+    },
+    {
+      "team_id": 107,
+      "abbreviation": "PNH",
+      "home_park": "Pinehurst High Field"
+    },
+    {
+      "team_id": 108,
+      "abbreviation": "WSF",
+      "home_park": "Westfield High Field"
+    },
+    {
+      "team_id": 109,
+      "abbreviation": "SMT",
+      "home_park": "Summit High Field"
+    },
+    {
+      "team_id": 110,
+      "abbreviation": "RVT",
+      "home_park": "Riverton High Field"
+    },
+    {
+      "team_id": 111,
+      "abbreviation": "GRF",
+      "home_park": "Granite Falls High Field"
+    },
+    {
+      "team_id": 112,
+      "abbreviation": "HLC",
+      "home_park": "Hillcrest High Field"
+    },
+    {
+      "team_id": 201,
+      "abbreviation": "ASH",
+      "home_park": "Ashford State Stadium"
+    },
+    {
+      "team_id": 202,
+      "abbreviation": "BLV",
+      "home_park": "Blue Valley Field"
+    },
+    {
+      "team_id": 203,
+      "abbreviation": "GLH",
+      "home_park": "Glenhaven Campus Park"
+    },
+    {
+      "team_id": 204,
+      "abbreviation": "SMS",
+      "home_park": "Saltmarsh State Stadium"
+    },
+    {
+      "team_id": 205,
+      "abbreviation": "CVT",
+      "home_park": "Carverton Tech Field"
+    },
+    {
+      "team_id": 206,
+      "abbreviation": "DNM",
+      "home_park": "Dunmore Varsity Stadium"
+    },
+    {
+      "team_id": 207,
+      "abbreviation": "MRB",
+      "home_park": "Marbury College Grounds"
+    },
+    {
+      "team_id": 208,
+      "abbreviation": "WXF",
+      "home_park": "Wexford Campus Stadium"
+    },
+    {
+      "team_id": 209,
+      "abbreviation": "LRV",
+      "home_park": "Lorain Valley Park"
+    },
+    {
+      "team_id": 210,
+      "abbreviation": "NGT",
+      "home_park": "Northgate Stadium"
+    },
+    {
+      "team_id": 211,
+      "abbreviation": "UNM",
+      "home_park": "Union Mills Field"
+    },
+    {
+      "team_id": 212,
+      "abbreviation": "VNC",
+      "home_park": "Vance County Stadium"
+    },
+    {
+      "team_id": 213,
+      "abbreviation": "ELU",
+      "home_park": "Eastlake Varsity Field"
+    },
+    {
+      "team_id": 214,
+      "abbreviation": "MAM",
+      "home_park": "Midland Athletic Field"
+    },
+    {
+      "team_id": 215,
+      "abbreviation": "KSS",
+      "home_park": "Kessler State Field"
+    },
+    {
+      "team_id": 216,
+      "abbreviation": "YKP",
+      "home_park": "York Plains Stadium"
+    },
+    {
+      "team_id": 217,
+      "abbreviation": "FTG",
+      "home_park": "Fort Garland Field"
+    },
+    {
+      "team_id": 218,
+      "abbreviation": "HOL",
+      "home_park": "Hollis Varsity Park"
+    },
+    {
+      "team_id": 219,
+      "abbreviation": "OXB",
+      "home_park": "Oxbow A&M Stadium"
+    },
+    {
+      "team_id": 220,
+      "abbreviation": "RST",
+      "home_park": "Redstone Tech Field"
+    },
+    {
+      "team_id": 221,
+      "abbreviation": "PLC",
+      "home_park": "Pell City College Park"
+    },
+    {
+      "team_id": 222,
+      "abbreviation": "QRH",
+      "home_park": "Quarry Hill Stadium"
+    },
+    {
+      "team_id": 223,
+      "abbreviation": "TOL",
+      "home_park": "Tolland Athletic Field"
+    },
+    {
+      "team_id": 224,
+      "abbreviation": "ZNR",
+      "home_park": "Zion Ridge Campus Park"
+    },
+    {
+      "team_id": 301,
+      "abbreviation": "BAY",
+      "home_park": "Bayport Tidewater Park"
+    },
+    {
+      "team_id": 302,
+      "abbreviation": "KBR",
+      "home_park": "Kingsbridge Marina Park"
+    },
+    {
+      "team_id": 303,
+      "abbreviation": "HBV",
+      "home_park": "Harborview Point Ballpark"
+    },
+    {
+      "team_id": 304,
+      "abbreviation": "SCR",
+      "home_park": "Scranton Iron Works Yard"
+    },
+    {
+      "team_id": 305,
+      "abbreviation": "CLT",
+      "home_park": "Charlotte Crown Grounds"
+    },
+    {
+      "team_id": 306,
+      "abbreviation": "DRM",
+      "home_park": "Durham Basin Yards"
+    },
+    {
+      "team_id": 307,
+      "abbreviation": "RNK",
+      "home_park": "Roanoke Mountain Ballpark"
+    },
+    {
+      "team_id": 308,
+      "abbreviation": "PLM",
+      "home_park": "Palmetto Marsh Park"
+    },
+    {
+      "team_id": 309,
+      "abbreviation": "IRV",
+      "home_park": "Ironvale Foundry Yard"
+    },
+    {
+      "team_id": 310,
+      "abbreviation": "TLD",
+      "home_park": "Toledo Great Lakes Yard"
+    },
+    {
+      "team_id": 311,
+      "abbreviation": "GLN",
+      "home_park": "Galena Riverfront Park"
+    },
+    {
+      "team_id": 312,
+      "abbreviation": "NRW",
+      "home_park": "Norwood Forge Ballpark"
+    },
+    {
+      "team_id": 313,
+      "abbreviation": "HTB",
+      "home_park": "Pine Belt Ballpark"
+    },
+    {
+      "team_id": 314,
+      "abbreviation": "CHT",
+      "home_park": "Chattahoochee River Stadium"
+    },
+    {
+      "team_id": 315,
+      "abbreviation": "KNP",
+      "home_park": "Piedmont Diamond Yard"
+    },
+    {
+      "team_id": 316,
+      "abbreviation": "LRD",
+      "home_park": "Laredo Borderland Grounds"
+    },
+    {
+      "team_id": 317,
+      "abbreviation": "OMA",
+      "home_park": "Omaha Prairie Yards"
+    },
+    {
+      "team_id": 318,
+      "abbreviation": "CDR",
+      "home_park": "Cedar Rapids Meadow Park"
+    },
+    {
+      "team_id": 319,
+      "abbreviation": "SXB",
+      "home_park": "Sioux Bend River Stadium"
+    },
+    {
+      "team_id": 320,
+      "abbreviation": "TWF",
+      "home_park": "Twin Forks Rapids Park"
+    },
+    {
+      "team_id": 321,
+      "abbreviation": "BZM",
+      "home_park": "Bozeman Valley Grounds"
+    },
+    {
+      "team_id": 322,
+      "abbreviation": "PRV",
+      "home_park": "Provo Canyon Ballpark"
+    },
+    {
+      "team_id": 323,
+      "abbreviation": "ABQ",
+      "home_park": "Sandia Vista Ballpark"
+    },
+    {
+      "team_id": 324,
+      "abbreviation": "DST",
+      "home_park": "Dustfield Basin Park"
+    },
+    {
+      "team_id": 325,
+      "abbreviation": "MRJ",
+      "home_park": "Mesa Roja Sun Stadium"
+    },
+    {
+      "team_id": 326,
+      "abbreviation": "SBW",
+      "home_park": "Sablewood Basin Grounds"
+    },
+    {
+      "team_id": 327,
+      "abbreviation": "FRS",
+      "home_park": "Central Valley Ballpark"
+    },
+    {
+      "team_id": 328,
+      "abbreviation": "MDS",
+      "home_park": "Modesto Orchard Yards"
+    },
+    {
+      "team_id": 329,
+      "abbreviation": "SLK",
+      "home_park": "Silverlake Pier Park"
+    },
+    {
+      "team_id": 330,
+      "abbreviation": "CAS",
+      "home_park": "Cascadia Evergreen Yards"
+    },
+    {
+      "team_id": 331,
+      "abbreviation": "TAC",
+      "home_park": "Tacoma Sound Stadium"
+    },
+    {
+      "team_id": 332,
+      "abbreviation": "YBC",
+      "home_park": "Yuba Basin Yards"
+    }
+  ]
+}

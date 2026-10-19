@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.League;
 using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Family;
@@ -46,6 +47,9 @@ public sealed partial class GameManager : Node
     // NOTE: same export-filter caveat — schools.json (HS team branding) must
     // join the Phase 9 export include filters like the other content .json.
     private const string SchoolsResourcePath = "res://Assets/Data/Schools/schools.json";
+
+    // Schema v14 home parks (13-1a content), read once at world-gen.
+    private const string HomeParksResourcePath = "res://Assets/Data/League/home_parks.json";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -203,6 +207,22 @@ public sealed partial class GameManager : Node
     /// <summary>Phase 11a: the sole Steam SDK owner — public like Career/Hustles so 11b's achievement subscriber and 11d's presence writer route through its guarded wrappers, never Steamworks directly.</summary>
     public SteamIntegration Steam { get; private set; } = null!;
 
+    /// <summary>
+    /// Schema v14 clean break (league_restructure.md §14, 13-1 brief §3.2.5):
+    /// non-<see cref="SaveRefusal.None"/> when boot found a save it can't open
+    /// and stopped before touching it. The clean-break dialog reads this flag
+    /// and answers with <see cref="ConfirmCleanBreak"/> (older saves only) or a
+    /// quit. While it is set, nothing past <see cref="Steam"/> is constructed
+    /// and <c>_Process</c> is off.
+    /// </summary>
+    public SaveRefusal PendingSaveRefusal { get; private set; }
+
+    /// <summary>The refused save's PRAGMA user_version (0 when nothing was refused).</summary>
+    public int RefusedSaveVersion { get; private set; }
+
+    /// <summary>Where <see cref="ConfirmCleanBreak"/> moved the old save (null until it has).</summary>
+    public string? CleanBreakBackupPath { get; private set; }
+
     // Phase 11b: the achievements bus subscriber — private like _rivalryLedger
     // (nothing reads it; it exists exactly as long as the bus does).
     private AchievementManager _achievements = null!;
@@ -271,7 +291,33 @@ public sealed partial class GameManager : Node
         Steam = new SteamIntegration();
         Steam.Initialize();
 
+        BootCareer();
+    }
+
+    /// <summary>
+    /// The career boot: open the save, apply the schema, generate or load the
+    /// world, wire every system. Schema v14 clean break: the save's
+    /// user_version is read BEFORE the schema script (or anything else) touches
+    /// the file. A pre-v14 or newer-build save sets
+    /// <see cref="PendingSaveRefusal"/> and stops here with the file untouched;
+    /// <see cref="ConfirmCleanBreak"/> re-enters from the top once the player
+    /// agrees to start over.
+    /// </summary>
+    private void BootCareer()
+    {
         string databasePath = ProjectSettings.GlobalizePath(SaveFilePath);
+        PendingSaveRefusal = SaveCompatibility.Inspect(databasePath, out int saveVersion);
+        RefusedSaveVersion = PendingSaveRefusal == SaveRefusal.None ? 0 : saveVersion;
+        if (PendingSaveRefusal != SaveRefusal.None)
+        {
+            // Nothing below exists yet, so nothing may pump.
+            SetProcess(false);
+            GD.Print(
+                $"[GameManager] Save at '{databasePath}' is schema v{saveVersion} ({PendingSaveRefusal}); " +
+                $"this build is v{SaveCompatibility.CurrentSchemaVersion}. Career boot stopped; awaiting the player.");
+            return;
+        }
+
         _database = new DatabaseManager(databasePath);
 
         string ddl = FileAccess.GetFileAsString(SchemaResourcePath);
@@ -306,22 +352,48 @@ public sealed partial class GameManager : Node
                 ? bootSpeed
                 : (long)TimeSpeed.Normal);
 
+        // Schema v14 home parks (13-1a content): pure data like schools.json,
+        // cross-checked against the Appendix A table before world-gen writes
+        // them into Teams.home_park. A content edit that breaks the join fails
+        // here, never at a broadcast intro.
+        string homeParksJson = FileAccess.GetFileAsString(HomeParksResourcePath);
+        if (string.IsNullOrWhiteSpace(homeParksJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{HomeParksResourcePath}' ({FileAccess.GetOpenError()}) — the home park catalog is missing.");
+        }
+        HomeParkCatalog homeParks = HomeParkCatalog.Parse(homeParksJson);
+        homeParks.ValidateAgainst(LeagueStructure.Teams);
+
         // World-gen on first boot only; an existing save keeps its league.
         // In-game runs are not required to be replay-deterministic (that is
         // the harness's contract), so a wall-clock seed is fine here.
         var rng = new RngState(unchecked((ulong)System.Environment.TickCount64) | 1UL);
-        // HS-2: Persons wired in so fresh worlds seed the §2.5 organic
-        // person-stat spread at generation (from the per-player fork — the
-        // rating draws are untouched); migrated saves keep their backfilled
-        // neutral rows (INSERT OR IGNORE never clobbers).
+        // Schema v14 (league_restructure.md §5.3, Appendix A): 68 teams in
+        // three tiers, per-tier rosters, Player_Fielding for every player, one
+        // transaction. HS-2: Persons wired in so the world seeds the §2.5
+        // organic person-stat spread (from the per-player fork — the rating
+        // draws are untouched).
         bool newLeague = LeagueGenerator.GenerateIfEmpty(
-            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
-        // v3→v4 save top-up: invents the relievers the DDL backfill cannot
-        // (roles/arsenals for migrated pitchers come from the schema script).
-        LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
-        // v6→v7 world top-up (Phase 9a): seeds the five ladder tiers below MLB
-        // on both migrated saves and fresh worlds. No-op once they exist.
-        LeagueGenerator.EnsureTierLeagues(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
+            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons,
+            homeParks.ToHomeParkMap());
+
+        // HS team branding (schools.json) — pure content like the item catalog
+        // below, then the loud boot-time cross-check against the live HS roster
+        // world-gen just wrote: every HS team needs a school, abbreviations must
+        // agree, no orphan entries. A content edit that breaks the join fails
+        // here, never at the team picker. (13-1 moved this ahead of the sims, so
+        // a fresh v14 boot validates it before the sims' expected-red stop.)
+        string schoolsJson = FileAccess.GetFileAsString(SchoolsResourcePath);
+        if (string.IsNullOrWhiteSpace(schoolsJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{SchoolsResourcePath}' ({FileAccess.GetOpenError()}) — the school catalog is missing.");
+        }
+        Schools = SchoolCatalogJson.Parse(schoolsJson);
+        var hsRosterAudit = new List<TeamRow>();
+        Baseball.LoadTeamsByTier(LeagueTier.HS, hsRosterAudit);
+        Schools.ValidateAgainstRoster(hsRosterAudit);
 
         // Split the wall-clock stream before the sims copy it, so no two
         // consumers ever replay each other's draws.
@@ -361,9 +433,12 @@ public sealed partial class GameManager : Node
         PersonLevers.AttachTo(Events);
 
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
-        // own 8-team league, each with its own forked rng stream. All six run
-        // the same day loop off the bus; the avatar's tier is resolved by
-        // CareerManager through the directory.
+        // own league, each with its own forked rng stream. All three run the
+        // same day loop off the bus; the avatar's tier is resolved by
+        // CareerManager through the directory. Phase 13 integration state
+        // (13-1 brief §5.3, owner-approved): the sims still require 8 teams per
+        // tier, so they refuse the 68-team v14 world at Initialize until slices
+        // 13-2 (roster capacities) and 13-3 (schedules) land.
         Leagues = new LeagueDirectory();
         var normalizer = new StatsNormalizer(_database, Baseball);
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
@@ -563,22 +638,6 @@ public sealed partial class GameManager : Node
         Persons.LoadAllItems(ownedItemsAudit);
         Items.ValidateOwnership(ownedItemsAudit);
 
-        // HS team branding (schools.json) — pure content like the item catalog
-        // above, then the loud boot-time cross-check against the live HS roster
-        // (seeded by EnsureTierLeagues earlier this boot): every HS team needs a
-        // school, abbreviations must agree, no orphan entries. A content edit
-        // that breaks the join fails here, never at the team picker.
-        string schoolsJson = FileAccess.GetFileAsString(SchoolsResourcePath);
-        if (string.IsNullOrWhiteSpace(schoolsJson))
-        {
-            throw new InvalidOperationException(
-                $"Could not read '{SchoolsResourcePath}' ({FileAccess.GetOpenError()}) — the school catalog is missing.");
-        }
-        Schools = SchoolCatalogJson.Parse(schoolsJson);
-        var hsRosterAudit = new List<TeamRow>();
-        Baseball.LoadTeamsByTier(LeagueTier.HS, hsRosterAudit);
-        Schools.ValidateAgainstRoster(hsRosterAudit);
-
         // HS-3: Marketplace purchase orchestration — the same request/response
         // shape as GearShop above, over Player_Items instead of
         // Player_Equipment.
@@ -673,6 +732,31 @@ public sealed partial class GameManager : Node
             $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}, " +
             $"relationships {Relationships.EdgeCount}, gritty events {GrittyEvents.Count} (dispatcher polling), " +
             $"clock {TimeOfDay.MinuteOfDay} min @ {TimeOfDay.Speed}.");
+
+        // The boot completed: the bus and Steam may pump (off since a refusal,
+        // and still off if a post-confirm re-boot threw part-way).
+        SetProcess(true);
+    }
+
+    /// <summary>
+    /// The clean-break dialog's "Start a new career" intent. Only for an older
+    /// save (<see cref="SaveRefusal.OlderSave"/>): folds its WAL in, renames it
+    /// to <c>dirt_and_diamonds.v13.bak</c> (never deleted or overwritten; a
+    /// taken name moves on to <c>.v13.1.bak</c>, …) and re-runs the career boot
+    /// on the now-empty save path. A newer-build save is never renamed: this
+    /// throws instead.
+    /// </summary>
+    public void ConfirmCleanBreak()
+    {
+        if (PendingSaveRefusal != SaveRefusal.OlderSave)
+        {
+            throw new InvalidOperationException(
+                $"ConfirmCleanBreak needs a pending older-save refusal; the pending refusal is {PendingSaveRefusal}.");
+        }
+        string databasePath = ProjectSettings.GlobalizePath(SaveFilePath);
+        CleanBreakBackupPath = SaveCompatibility.ConfirmCleanBreak(databasePath);
+        GD.Print($"[GameManager] Older save moved to '{CleanBreakBackupPath}'; starting a new career.");
+        BootCareer();
     }
 
     public override void _Process(double delta)
