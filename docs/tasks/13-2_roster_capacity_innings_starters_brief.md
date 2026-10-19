@@ -1,6 +1,6 @@
 # Task Brief: 13-2 — Roster capacities, regulation innings, ride-the-ace starter selection
 
-**Status:** **DRAFT, awaiting owner approval** (Claude Opus 5.5, 2026-10-18). Six owner decisions are open in §3.2 (D1–D6); each has a recommendation. Not startable until the owner approves them.
+**Status:** **APPROVED by the owner 2026-10-18**: decisions D1–D6 as recommended (D1-A per-instance team count on the interim generalised circle schedule; D2 CS-M starter-quality scalar; D3 legal-defense lineups; D4 `Pitcher_Rest` v14 table; D5 workload knobs neutral at 0; D6 the §5.3 expected-red list under D1-A).
 **Recommended model:** Claude Opus 5.5 (TEAM.md §2)
 **Reviewer:** GPT 6 Astra Pro (sim diff + Math, TEAM.md §2)
 **Owner gate:** this brief's decisions D1–D6 and the §5.3 expected-red list.
