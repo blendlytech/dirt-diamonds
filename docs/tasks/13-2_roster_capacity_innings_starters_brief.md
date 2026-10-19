@@ -163,4 +163,54 @@ Recommended next: 13-2 review by GPT 6 Astra Pro; then 13-3 by Claude Opus + GPT
 
 ## 9. Review (GPT 6 Astra Pro)
 
-*Reserved for the reviewer: verdict, findings, gate re-runs.*
+### 9.1 Verdict (GPT 6 Astra Pro, 2026-10-18)
+
+**Changes requested.** Reviewed delivered head `00eaa00` (implementation `a73075f`) against integration `d951efe`, on reviewer branch `p13/13-2-review-gpt` in the standalone reviewer clone. D1–D6 remain owner-approved; this review does not reopen them. Two independently reproduced correctness issues need an Opus fix and reviewer re-check before merge or 13-3. No product code changed and nothing merged.
+
+### 9.2 Findings
+
+**R1 — [P2] Re-rank pitchers after effective person ratings change.** `Assets/Simulation/Baseball/MicroGame.cs:713` updates `_pitcherRatings` during `RefreshPersonCache`, but `_starterSlots` and `_relieverSlots` remain in the ordering built at Initialize (`:499–500`). `SelectPitcher` assumes those arrays are currently quality-sorted (`:607–608`). A committed happiness/confidence change can therefore leave the old ace starting ahead of a now-better fully rested starter. Reload/re-Initialize sorts again and selects a different player from the same committed state, violating D2 and the existing refresh/re-Initialize equivalence contract. This affects actual pitcher selection and the rest/stat attribution even when the final score happens to match.
+
+Reproduction (scratch-only program linked to the delivered sources): generate spread-0 world with seed 123; on Pro team 301, order its SP IDs ordinally and set their stuff/control pairs to 51/51, 50/50, 40/40, 40/40, with neutral person rows. Initialize a MicroGame with a PersonLedger. Commit the first starter's happiness/confidence to 0 and publish `PersonLeversChangedEvent(id, 0, 0, 50)`; dispatch it. His effective pair becomes 49/49. Compare day-10 starts against a freshly initialized MicroGame reading the same DB, both with fresh rest ledgers, opponent 302 and RNG seed 777. The running micro chooses `325ff771-c274-0d7e-1bea-d58c8cb188c1`; re-Initialize correctly chooses `cc7bc8c6-2f20-3fc8-8d9a-768edeecd261`. Both games happened to finish 2–6, demonstrating why score-only equivalence is insufficient. Fix by maintaining the ranked slot order when the relevant ratings change, or selecting by current quality without allocation. Add a regression that changes only one pitcher enough to cross the ranking and compares **starter IDs/rest/stat attribution**, not only scores. Preserve the neutral fast path and zero-allocation contract.
+
+**R2 — [P2] Do not acknowledge rest writes before the transaction commits.** `Assets/Simulation/Baseball/PitcherRestLedger.cs:66` clears `_dirty` inside `FlushDirty`, before its callers commit (`LeagueSimulator.cs:1048–1049`, `MicroGame.cs:1438–1439`). If the encompassing transaction rolls back after those writes, a retry has no dirty rows to persist: memory remembers the start while reload does not. This is distinct from the explicitly deferred mid-cycle quit loss in D4/R1-SAVE-1; it loses a write on transaction rollback/retry.
+
+Reproduction on a generated scratch DB: hydrate a fresh ledger, `RecordStart(validPitcherId, 123)`, BeginBatch → FlushDirty → RollbackBatch; then BeginBatch → FlushDirty → CommitBatch. `LoadAllPitcherRest` contains no row for that pitcher, while `TryGetLastStart` still reports 123. Defer clearing/acknowledging the successfully written dirty snapshot until commit succeeds (and retain it on rollback); account for all callers of the shared ledger. Add rollback/retry plus fresh-ledger reload coverage. The existing successful-commit round-trip test cannot expose this failure.
+
+### 9.3 Independent gate re-runs
+
+| Gate | Result on delivered head |
+| :-- | :-- |
+| `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** |
+| SchemaValidator Release | **174/174** |
+| MC default Release | **355/363**, eight approved reds; the author's 354/362 predates the final D5 check |
+| MC isolated `--only resolver` | **13/13**; complete output exactly matches a fresh isolated resolver run from base `d951efe` |
+| `starters` within the full run | **17/17** |
+| `innings` within the full run | **5/5** |
+| `capacity` within the full run | **6/6** |
+| `lineups` within the full run | **8/8** |
+| `worldgen-v14`, `ui-strings` within the full run | **23/23**, **3/3** |
+| CoreLoopHarness Release | **22/22** |
+| GrittyEventsHarness Release | **363/363** |
+| Godot 4.7 headless fresh boot | **Pass:** isolated scratch APPDATA, schema v14/WAL/FKs on, 68 teams, 1,571 life NPCs, no game errors; no live save touched |
+| Focused review reproductions | **R1 reproduced; R2 reproduced** as above; these are additional checks, not included in 355/363 |
+| Diff isolation | 18 changed files; implementation stays within §2 allowed paths. No resolver, BaseOutMatrices, PitcherFatigue, Arcade, Life, UI-scene or design-spec changes |
+
+Allocation evidence in the full run: resolver 0 B, selector 0 B over 10,000 selections, warm macro days **HS/College/Pro each 0 B**, and warm attended games **0 B**. The completed new suites do not invalidate the two narrower failures above. Arcade/NeedsDecay/Hustle/Holdem were not independently rerun because their implementations are untouched; §8.1's results for those remain author-reported.
+
+Actual red suites exactly match §8.1: `tier-ladder 10/11` (Pro R/9 **4.16**, below the provisional 4.2 floor; K 22.6%, BB 9.1%, HR 3.2%); `promotion-sweep 3/4`, `promotion-stream 0/1`, `promotion-avatar 0/1`, `promotion-record 0/1`, `development-arc 3/4`, `practice-seam 5/6`, `development-equilibrium 0/1` (all seven fail at the retained six-tier promotion guard). No additional default-suite red. These eight are accepted D6 integration reds, not review blockers.
+
+The base resolver run used an untouched `git archive` extraction under `.git/review132/base` and the base's own `--only resolver` filter. The entire captured output matches the head, including the allocation sink 73839 and batch rate lines. Fresh Godot boot used `.git/review132/appdata`; Steam took its existing unavailable-native-DLL fallback, so Steam service integration was not exercised. Scratch repro code/databases/logs remain untracked inside `.git/review132`, not in the review diff.
+
+### 9.4 Design / Math / gate audit
+
+- **Math D2:** the integer sum of tier/person-baked stuff and control is exactly order-equivalent to their mean; stamina descending then ordinal player-ID ties are deterministic. Accept that scalar and the pure selector's rested-first, gap-first fallback and series-used exclusion. Calendar differences HS 4 / College 3 / Pro 3 implement the owner's choice; the 28/0/0/0 College, Pro Tue/Sat ace, weekly HS and synthetic Bo3 fixtures pass. R1 concerns keeping this accepted order current, not changing the scalar.
+- **Capacity / schedule / innings:** fixed 9/8/6/6 capacities, per-team pitcher counts, 12/24/32 tier team counts, generalised circle pairing and the retained 154-day integration window match D1. The shared capacity check rejects excess SP/position counts rather than truncating. Both sims use tier regulation length and the same top-half home-lead termination rule; warm allocation gates pass. The existing sparse HS calendar remains until 13-3; this is not validation of the future production calendars.
+- **Lineups:** generated worlds cover all eight field positions; both sims use the same deterministic builder, primary before secondary, best bat/ID tie order and original roster-slot batting order. The featured position-player avatar takes DH if otherwise benched. Existing out-of-position assignments have no new rating effect, as approved; two-catcher/position-effect policy remains G-4. The defense computation retains its mean/tier/teamwork formula. No new physical identity or Life dependency appears.
+- **Rest:** one GameManager ledger is shared across tiers and micro; CareerManager supplies the absolute pending-game day; starts persist in the existing flush batches. `Pitcher_Rest` is STRICT, PK/FK with cascade, non-negative day, and bound/cached query parameters. Successful hydration, year-boundary and commit/reload gates pass. R2 is the untested rollback boundary.
+- **D5:** both Math constants remain 0, no extra RNG draw; the helper returns 1. The delivered sims only count short-rest starts and refer to the helper in a comment; they do not apply a nonzero capacity factor. Thus the passing D5 check proves the neutral constants/helper, not a future nonzero effect wired through PitcherFatigue. Keep that limitation explicit for R1-MATH; no nonzero values or fatigue semantics are approved here.
+- **Check changes:** old 9+5+3/world-eight-team assertions were replaced by v14 per-tier roster assertions, capacity checks and equivalent identities; fixture IDs were re-keyed to Pro 301+. Six-tier integrity/no-op labels now cover the three tiers; tier rate checks use the approved R/9 rows. The former “MLB regression guard” remains an actual world-versus-solo equality assertion under the Pro label, **not** a replacement frozen baseline. Do not use the observed PA 194444 / H 43645 / ER 20527 as the 13-3 guard without its prescribed sanction. No forbidden resolver recalibration or suppressed default failure found.
+
+### 9.5 Handoff
+
+Owner: **Changes requested for R1 and R2.** Review record only in §9 plus one progress entry, on `p13/13-2-review-gpt` (the commit containing this section identifies the review). Opus should fix those two issues and add focused coverage, then GPT re-checks the changed paths and relevant gates. **Recommended next: 13-2 fixes by Claude Opus → GPT 6 Astra Pro re-review → owner-approved Opus merge into `p13/integration` (never main) → 13-3 by Claude Opus plus GPT 6 Astra Pro for Math.** No merge or 13-3 implementation started by this review.
