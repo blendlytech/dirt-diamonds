@@ -31,24 +31,24 @@ theme_override_constants/separation = 14
 [node name="TitleLabel" type="Label" parent="Center/Panel/Layout"]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
-text = "This save can't be loaded"
+text = "ui.clean_break.title"
 
 [node name="OlderBodyLabel" type="Label" parent="Center/Panel/Layout"]
 layout_mode = 2
 autowrap_mode = 3
-text = "This save is from an older version of Dirt & Diamonds and can't be loaded. Start a new career?"
+text = "ui.clean_break.older.body"
 
 [node name="OlderSubtitleLabel" type="Label" parent="Center/Panel/Layout"]
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"
 autowrap_mode = 3
-text = "Your old save is kept on this computer as dirt_and_diamonds.v13.bak. Nothing is deleted. The backup stays local and doesn't sync to Steam Cloud."
+text = "ui.clean_break.older.subtitle"
 
 [node name="NewerBodyLabel" type="Label" parent="Center/Panel/Layout"]
 visible = false
 layout_mode = 2
 autowrap_mode = 3
-text = "This save is from a newer version of Dirt & Diamonds and can't be loaded by this one. Your save hasn't been changed. Update the game to keep playing it."
+text = "ui.clean_break.newer.body"
 
 [node name="Buttons" type="HBoxContainer" parent="Center/Panel/Layout"]
 layout_mode = 2
@@ -57,9 +57,9 @@ theme_override_constants/separation = 12
 
 [node name="QuitButton" type="Button" parent="Center/Panel/Layout/Buttons"]
 layout_mode = 2
-text = "Quit"
+text = "ui.clean_break.quit"
 
 [node name="StartButton" type="Button" parent="Center/Panel/Layout/Buttons"]
 layout_mode = 2
 theme_type_variation = &"AccentButton"
-text = "Start a new career"
+text = "ui.clean_break.start"

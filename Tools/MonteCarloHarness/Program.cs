@@ -111,6 +111,7 @@ internal static class Program
         {
             ("resolver", RunResolverFixtures),
             ("resolver", () => RunMonteCarloBatch(paCount)),
+            ("ui-strings", () => RunUiStringsSuite(repoRoot)),
             ("worldgen-v14", () => RunWorldGenV14Suite(schemaPath, repoRoot, worldGenScratchPath,
                 worldGenScratchPath + ".b", worldGenScratchPath + ".c", worldGenScratchPath + ".tx")),
             ("season-pipeline", () => RunSeasonPipeline(schemaPath, scratchPath)),
@@ -6727,6 +6728,124 @@ internal static class Program
         var directory = new LeagueDirectory();
         directory.Register(league);
         return directory;
+    }
+
+    // ------------------------------------------------------------------
+    // 13-1: the strings table (Assets/Localization/strings.csv). Pure file
+    // checks, no Godot: every keyed scene text has an English row, and the
+    // project registers the imported translation. `--only ui-strings`.
+    // ------------------------------------------------------------------
+
+    private static readonly string[] KeyedScenes = { "Assets/UI/CleanBreakDialog.tscn" };
+
+    private static void RunUiStringsSuite(string repoRoot)
+    {
+        Console.WriteLine("--- Strings table (13-1): keys, scene coverage, project registration ---");
+        const string translationRes = "res://Assets/Localization/strings.en.translation";
+
+        List<string[]> rows = ParseCsv(File.ReadAllText(Path.Combine(repoRoot, "Assets", "Localization", "strings.csv")));
+        bool header = rows.Count > 0 && rows[0].Length == 2 && rows[0][0] == "keys" && rows[0][1] == "en";
+        var table = new Dictionary<string, string>(StringComparer.Ordinal);
+        bool wellFormed = header;
+        var keyPattern = new System.Text.RegularExpressions.Regex(@"^[a-z0-9_]+(\.[a-z0-9_]+)+$");
+        for (int i = 1; i < rows.Count; i++)
+        {
+            wellFormed &= rows[i].Length == 2 && keyPattern.IsMatch(rows[i][0])
+                && rows[i][1].Trim().Length > 0 && table.TryAdd(rows[i][0], rows[i][1]);
+        }
+        Check("strings.csv: header keys,en; dotted lowercase keys, unique, every English text non-empty",
+            wellFormed && table.Count > 0, $"{table.Count} keys");
+
+        var missing = new List<string>();
+        int keyed = 0;
+        foreach (string scene in KeyedScenes)
+        {
+            foreach (string line in File.ReadAllLines(Path.Combine(repoRoot, scene)))
+            {
+                if (!line.StartsWith("text = \"", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                string key = line["text = \"".Length..^1];
+                keyed++;
+                if (!table.ContainsKey(key))
+                {
+                    missing.Add($"{Path.GetFileName(scene)}: {key}");
+                }
+            }
+        }
+        Check("every text in a keyed scene (CleanBreakDialog.tscn) is a strings-table key",
+            keyed > 0 && missing.Count == 0, missing.Count == 0 ? $"{keyed} texts" : string.Join(", ", missing));
+
+        string project = File.ReadAllText(Path.Combine(repoRoot, "project.godot"));
+        string import = File.ReadAllText(Path.Combine(repoRoot, "Assets", "Localization", "strings.csv.import"));
+        Check("project.godot registers the imported strings translation; the import targets it and it exists",
+            project.Contains("[internationalization]", StringComparison.Ordinal)
+            && project.Contains($"locale/translations=PackedStringArray(\"{translationRes}\")", StringComparison.Ordinal)
+            && import.Contains($"dest_files=[\"{translationRes}\"]", StringComparison.Ordinal)
+            && File.Exists(Path.Combine(repoRoot, "Assets", "Localization", "strings.en.translation")));
+    }
+
+    /// <summary>Minimal RFC 4180 reader for the strings table: quoted fields, doubled quotes, CRLF or LF.</summary>
+    private static List<string[]> ParseCsv(string text)
+    {
+        var rows = new List<string[]>();
+        var fields = new List<string>();
+        var field = new System.Text.StringBuilder();
+        bool quoted = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (quoted)
+            {
+                if (c == '"' && i + 1 < text.Length && text[i + 1] == '"')
+                {
+                    field.Append('"');
+                    i++;
+                }
+                else if (c == '"')
+                {
+                    quoted = false;
+                }
+                else
+                {
+                    field.Append(c);
+                }
+            }
+            else if (c == '"')
+            {
+                quoted = true;
+            }
+            else if (c == ',')
+            {
+                fields.Add(field.ToString());
+                field.Clear();
+            }
+            else if (c == '\n' || c == '\r')
+            {
+                if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                {
+                    i++;
+                }
+                fields.Add(field.ToString());
+                field.Clear();
+                if (fields.Count > 1 || fields[0].Length > 0)
+                {
+                    rows.Add(fields.ToArray());
+                }
+                fields.Clear();
+            }
+            else
+            {
+                field.Append(c);
+            }
+        }
+        if (field.Length > 0 || fields.Count > 0)
+        {
+            fields.Add(field.ToString());
+            rows.Add(fields.ToArray());
+        }
+        return rows;
     }
 
     // ------------------------------------------------------------------

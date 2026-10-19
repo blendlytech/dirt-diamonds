@@ -213,6 +213,16 @@ Interpretations used: §3.2.1–5 kept as written. Details: backup tag is always
        17a; fielding depth weights / secondary rate / neighbours are Math PROPOSALs on their own stream.
 ```
 
+### 8.2 Review condition resolved (Claude Opus 5.5, 2026-10-18; owner chose the strings table)
+
+GPT's §9.1 condition (the dialog's copy was scene source text, not strings-table keys) is resolved:
+
+- New project strings table `Assets/Localization/strings.csv` (Godot CSV translation, `keys,en`; dotted lowercase keys, the `league.college.final.name` style). Six keys `ui.clean_break.{title, older.body, older.subtitle, newer.body, quit, start}`; the English text is unchanged.
+- `CleanBreakDialog.tscn` texts are now those keys (Godot auto-translate renders them); `project.godot` gains `[internationalization] locale/translations` → `res://Assets/Localization/strings.en.translation`. The importer output (`strings.csv.import`, `strings.en.translation`) and the `.uid` files of the four new 13-1 scripts are committed, the repo's `*.import` policy.
+- Gates: build 0/0; SchemaValidator 167/167; new MC suite `--only ui-strings` 3/3 (table well-formed, every keyed-scene text has a row, project registration and import target exist; a mutated key fails it); MC default **157/183** (= 154/180 + 3, the same 25 approved red suites); resolver lines identical to the baseline; Gritty 363/363. Headless Godot 4.7 with `APPDATA` redirected to scratch: locale `en_US`, all six keys resolve to their English text.
+- Correction to the progress line: **six** checks were retired (four SchemaValidator, two MC), as §8.1 and §9.3 list, not five.
+- Not re-reviewed by GPT: this follow-up landed after the §9 verdict. The owner directed the merge into `p13/integration` after it.
+
 ## 9. Review (GPT 6 Astra Pro)
 
 ### 9.1 Verdict and scope (2026-10-18)

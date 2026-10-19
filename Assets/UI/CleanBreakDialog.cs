@@ -16,8 +16,10 @@ namespace DirtAndDiamonds.UI;
 /// <c>dirt_and_diamonds.v13.bak</c> and boots a new world) or <b>Quit</b>. A
 /// newer build's save offers only Quit: it is never renamed.
 ///
-/// All player-facing copy lives in CleanBreakDialog.tscn (Godot's
-/// translation-ready scene text), never in this script. Uses the current
+/// All player-facing copy is in the strings table
+/// (Assets/Localization/strings.csv, keys <c>ui.clean_break.*</c>, registered
+/// in project.godot). The scene's texts are those keys and Godot's
+/// auto-translate renders them; this script holds no copy. Uses the current
 /// theme as is; slice 15b restyles it. Node paths verified against
 /// CleanBreakDialog.tscn.
 /// </summary>
