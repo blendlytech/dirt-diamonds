@@ -22,7 +22,8 @@ Primary objective: highly optimized, performant code with strict separation betw
 ## 2. League Rules (Phase 13, spec: [docs/design/league_restructure.md](docs/design/league_restructure.md))
 
 - Three tiers: `LeagueTier` HS = 0, College = 1, Pro = 2. **No minor leagues.** HS 12 teams, College 24, Pro 32.
-- HS games are 7 innings; College and Pro are 9. HS and College play 1 game a week; Pro plays 64 games (~3 a week).
+- HS games are 7 innings; College and Pro are 9. HS plays 10 games, 1 a week (Friday); College plays 28 games, 2 a week (Wednesday + Saturday, 14 weeks); Pro plays 64 games (~3 a week, Tue/Thu/Sat). No tier plays on Sunday.
+- Playoffs: HS single-elimination bracket of 6; College 18-team single-elimination tournament ending in **The Red Dirt Series** (best-of-3 on consecutive days, Thu–Fri–Sat, game 3 only if needed; name pending the owner's trademark screen, so a strings-table key, never a C# literal); Pro Bo3 rounds and a Bo5 World Championship. Never use MLB's or the NCAA's championship-series names anywhere (trademarks). `ChampionshipWonEvent` carries the tier, and only a Pro title can fire the lineage reveal.
 - Pro rosters: ≤ 4 SP (≤ 3 active), ≤ 5 RP (3 active), 15 position players (12 active). Sunday-night roster lock. Absent players are never replaced; a team that can't field 9 position players and a pitcher forfeits.
 - Progression: graduation → recruiting → College → draft-eligible after sophomore year → Draft → Pro.
 - Roster sizes are **capacities**, never per-tier array sizes: fixed buffers, loops to per-team counts.

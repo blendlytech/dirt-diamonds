@@ -43,12 +43,13 @@ Three tiers only: `LeagueTier` HS = 0, College = 1, Pro = 2. There are no minor 
 | :-- | :-- | :-- | :-- |
 | Teams | 12 (2 conf × 6) | 24 (2 conf × 3 div × 4) | 32 (2 conf × 4 div × 4) |
 | Innings | 7 | 9 | 9 |
-| Regular season | 10 games, Fridays | 14 games, Saturdays | 64 games, Tue/Thu/Sat |
-| Playoffs | 6-team bracket, #1 seeds bye | 18-team tournament (17 ranked + play-in) → single-game final | 12 teams, Bo3 rounds → Bo5 Championship |
+| Regular season | 10 games, Fridays | 28 games, Wednesday + Saturday (14 weeks) | 64 games, Tue/Thu/Sat |
+| Playoffs | 6-team bracket, #1 seeds bye | 18-team single-elimination tournament (17 ranked + play-in) → **The Red Dirt Series**, best-of-3 Thu–Fri–Sat, game 3 only if needed | 12 teams, Bo3 rounds → Bo5 World Championship |
 
 - Regulation innings are a per-tier parameter (`TierRules.RegulationInnings`), never a literal `9`.
 - Roster sizes are capacities (`RosterCapacity`); loops run to per-team counts so buffers stay fixed-size and allocation-free.
-- Starter selection: the best available starter with `days since last start >= MinRestDays(tier)` (HS/College 4, Pro 3). This produces the ace-heavy 2-man Pro rotation by design.
+- No tier plays on Sunday. The Red Dirt Series name is pending the owner's trademark screen: player-facing text uses a strings-table key, never a C# literal. Never use MLB's or the NCAA's championship-series names. `ChampionshipWonEvent` carries the tier; only a Pro title can fire the lineage reveal.
+- Starter selection: the best available starter with `days since last start >= MinRestDays(tier)` (HS 4, College 3, Pro 3; a day count is the calendar-date difference, so Wed → Sat = 3). This makes the College ace start every game (owner, 2026-10-18) and produces the ace-heavy 2-man Pro rotation by design. Within one series no starter starts twice; the short-rest fallback skips them and a reliever opens if no one else qualifies.
 - Pro: Sunday-night roster lock; absent players are never replaced; a team that can't field 9 position players plus a pitcher forfeits (7–0 HS, 9–0 otherwise, no stats credited).
 - Tier environments: effective-rating deltas on pitStuff/pitControl/teamDefense: HS −20, College −16, Pro 0. Never edit the resolver's calibration tables to create tier identity.
 - Pro is calibrated to MLB norms (AVG .240–.260, OBP .308–.325, SLG .395–.430). Runs are banded per 9 innings so 7-inning HS games compare cleanly.

@@ -53,9 +53,9 @@ Full rules: [design/league_restructure.md](design/league_restructure.md). The ow
 | **Teams** | 12 | 24 | 32 |
 | **Structure** | 2 conferences × 6 | 2 conferences × 3 divisions × 4 | 2 conferences × 4 divisions × 4 |
 | **Game length** | 7 innings | 9 innings | 9 innings |
-| **Schedule** | 10 games, 1 a week (Fridays) | 14 games, 1 a week (Saturdays) | 64 games, ~3 a week (Tue/Thu/Sat) |
+| **Schedule** | 10 games, 1 a week (Fridays) | 28 games, 2 a week (Wednesday + Saturday) over 14 weeks | 64 games, ~3 a week (Tue/Thu/Sat) |
 | **Rosters** | Wide open | Pro limits + 2 extra active spots | Strict: 4 SP, 5 RP, 15 position players (active/inactive) |
-| **Playoffs** | Top 3 per conference, single elimination, #1 seeds get a bye | 18-team tournament (17 by National Ranking + 1 play-in), conference tournaments → single-game National Championship | Best-of-3 rounds → Best-of-5 Championship |
+| **Playoffs** | Top 3 per conference, single elimination, #1 seeds get a bye | 18-team tournament (17 by National Ranking + 1 play-in), single-elimination conference tournaments → **The Red Dirt Series** (pending trademark screen): best-of-3 between the two conference champions on consecutive days, game 3 only if needed | Best-of-3 rounds → Best-of-5 Championship |
 | **Exit** | Graduate → recruiting | Draft-eligible after sophomore year | Retirement, a ban or death → succession |
 
 Pro-only rules: the **Sunday roster lock** (designations fixed for the week) and the **attrition & forfeit rule** (absent players are never replaced; a team that can't field 9 position players plus a pitcher forfeits).
@@ -63,7 +63,7 @@ Pro-only rules: the **Sunday roster lock** (designations fixed for the week) and
 ## 5. The player's loop
 
 - **Daily:** split 24 hours across Sleep / School / Practice / Game / Work / Free, then watch the real-time clock run. Pause, slow it down or speed it up any time.
-- **Weekly:** HS and College play one game a week, and the week builds toward it. Pro plays about three a week and sets rosters on Sunday night.
+- **Weekly:** HS plays one game a week (Friday), and the week builds toward it. College plays two (Wednesday and Saturday). Pro plays about three a week and sets rosters on Sunday night.
 - **Game day:** you arrive at **your team's own venue** (an interactive stadium or school screen with its own art: field, clubhouse, coach's office, training room, stands). Then you **play the game** on the 16-bit arcade field, called live by your announcer:
   - **Batting:** time the swing and place the contact cursor. Contact sets the cursor's size, power sets the bat speed, and discipline sets how early you read the pitch.
   - **Pitching:** pick the pitch, aim it, hit the release meter, and steer the break. Control sets the meter and scatter, stuff and the arsenal set speed and movement, and stamina sets how long it all holds.
