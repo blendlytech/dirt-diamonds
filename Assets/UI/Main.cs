@@ -42,7 +42,13 @@ public sealed partial class Main : Node
     [Export]
     public PackedScene TwoPanelShellScene { get; set; } = null!;
 
+    // Schema v14 clean break (13-1): the dialog Main shows instead of every
+    // other screen while GameManager.PendingSaveRefusal is set. Loaded by
+    // path, not exported, so Main.tscn stays untouched.
+    private const string CleanBreakDialogPath = "res://Assets/UI/CleanBreakDialog.tscn";
+
     private Node _screenContainer = null!;
+    private readonly Dictionary<Node, ProcessModeEnum> _parkedOverlays = new();
     private ScheduleScreen? _scheduleScreen;
     private EquipmentShopScreen _equipmentShop = null!;
     private TutorialOverlay _tutorialOverlay = null!;
@@ -102,6 +108,20 @@ public sealed partial class Main : Node
             child.QueueFree();
         }
 
+        // Schema v14 clean break: a refused save stops the career boot before
+        // Career exists, so the dialog is the only screen until the player
+        // answers, and the permanent overlays (which poll Career every frame)
+        // are parked until then.
+        if (GameManager.Instance!.PendingSaveRefusal != SaveRefusal.None)
+        {
+            ParkOverlays();
+            var dialog = GD.Load<PackedScene>(CleanBreakDialogPath).Instantiate<CleanBreakDialog>();
+            dialog.CleanBreakConfirmed += OnCleanBreakConfirmed;
+            _screenContainer.AddChild(dialog);
+            return;
+        }
+        UnparkOverlays();
+
         if (GameManager.Instance!.Career.HasAvatar)
         {
             Node shell = TwoPanelShellScene.Instantiate();
@@ -131,6 +151,29 @@ public sealed partial class Main : Node
     }
 
     private void OnAvatarCreated() => ShowAppropriateScreen();
+
+    private void OnCleanBreakConfirmed() => ShowAppropriateScreen();
+
+    private void ParkOverlays()
+    {
+        foreach (Node child in GetChildren())
+        {
+            if (child != _screenContainer && !_parkedOverlays.ContainsKey(child))
+            {
+                _parkedOverlays.Add(child, child.ProcessMode);
+                child.ProcessMode = ProcessModeEnum.Disabled;
+            }
+        }
+    }
+
+    private void UnparkOverlays()
+    {
+        foreach (KeyValuePair<Node, ProcessModeEnum> parked in _parkedOverlays)
+        {
+            parked.Key.ProcessMode = parked.Value;
+        }
+        _parkedOverlays.Clear();
+    }
 
     private void OnHustleLaunchRequested(int workActivity) =>
         _scheduleScreen?.SelectWorkActivity((WorkActivity)workActivity);

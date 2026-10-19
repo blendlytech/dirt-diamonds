@@ -19,6 +19,9 @@
       stops building.
     -->
     <Compile Include="..\..\Assets\Data\Database\*.cs" Link="Data\%(Filename)%(Extension)" />
+    <!-- 13-1: the world-gen suite reads the 13-1a content through the game's own loaders. -->
+    <Compile Include="..\..\Assets\Data\League\*.cs" Link="Data\League\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Data\Schools\*.cs" Link="Data\Schools\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
     <!--

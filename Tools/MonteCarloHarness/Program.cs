@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.League;
 using DirtAndDiamonds.Simulation.Baseball;
 using DirtAndDiamonds.UI.Portraits;
 using DirtAndDiamonds.UI.Scouting;
@@ -25,10 +26,20 @@ namespace DirtAndDiamonds.Tools.MonteCarloHarness;
 ///   4. The per-day game loop is allocation-free once warm (flat GC profile).
 ///
 /// Usage: dotnet run --project Tools/MonteCarloHarness -c Release [-- --repo &lt;path&gt;] [--pa &lt;count&gt;]
+/// [--only &lt;suite&gt;[,&lt;suite&gt;…]]. --only runs just the named suites (e.g.
+/// <c>worldgen-v14</c>, <c>resolver</c>) and exits non-zero on any failure; the
+/// default runs every suite. Each suite runs in its own guard, so one suite's
+/// unhandled exception is recorded as that suite's failure and the others
+/// still run (Phase 13 integration: the world-building suites are expected
+/// red until 13-2/13-3, 13-1 brief §5.3).
 /// </summary>
 internal static class Program
 {
     private static readonly List<(string Name, bool Pass, string Detail)> Results = new();
+
+    // The suite each Results entry came from (parallel list), for the per-suite recap.
+    private static readonly List<string> ResultSuites = new();
+    private static string _currentSuite = "";
 
     private const ulong BatchSeed = 0xD1A3_0D05UL; // arbitrary fixed seeds — determinism is the point
     private const ulong LeagueSeed = 20260703UL;
@@ -40,11 +51,18 @@ internal static class Program
     {
         string? repoRoot = null;
         int paCount = 100_000;
+        HashSet<string>? only = null;
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--repo")
             {
                 repoRoot = args[i + 1];
+            }
+            else if (args[i] == "--only")
+            {
+                only = new HashSet<string>(
+                    args[i + 1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                    StringComparer.Ordinal);
             }
             else if (args[i] == "--pa" && int.TryParse(args[i + 1], out int parsed))
             {
@@ -85,48 +103,90 @@ internal static class Program
         string devEquilibriumScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_devequilibrium_{Guid.NewGuid():N}.db");
         string backstoryScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_backstory_{Guid.NewGuid():N}.db");
         string personFxScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_personfx_{Guid.NewGuid():N}.db");
+        string worldGenScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_worldgen_{Guid.NewGuid():N}.db");
+
+        // The suite registry, in run order. "resolver" is the per-PA guard
+        // (§5 fixtures + §8 batch) that must stay byte-exact through Phase 13.
+        var suites = new List<(string Name, Action Run)>
+        {
+            ("resolver", RunResolverFixtures),
+            ("resolver", () => RunMonteCarloBatch(paCount)),
+            ("worldgen-v14", () => RunWorldGenV14Suite(schemaPath, repoRoot, worldGenScratchPath,
+                worldGenScratchPath + ".b", worldGenScratchPath + ".c", worldGenScratchPath + ".tx")),
+            ("season-pipeline", () => RunSeasonPipeline(schemaPath, scratchPath)),
+            ("micro-analytic", RunMicroAnalyticSuite),
+            ("micro-game", () => RunMicroGameSuite(schemaPath, microScratchPath)),
+            ("read-model-a0", RunReadModelA0Sweep),
+            ("career-ids", () => RunCareerIdsSuite(schemaPath, careerIdsScratchPath1, careerIdsScratchPath2)),
+            ("career-wiring", () => RunCareerWiringSuite(schemaPath, careerScratchPath)),
+            ("v4-bullpen-arsenal", () => RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath)),
+            ("rivalry", () => RunRivalrySuite(schemaPath, rivalryScratchPath)),
+            ("heir-genetics", () => RunHeirGeneticsSuite(schemaPath, heirScratchPath)),
+            ("lineage-succession", () => RunLineageSuccessionSuite(schemaPath, lineageScratchPath)),
+            ("lineage-failure", () => RunLineageFailureSuite(schemaPath, lineageFailScratchPath)),
+            ("succession-edge", () => RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath)),
+            ("nurture-blend", () => RunNurtureBlendSuite(schemaPath, nurtureScratchPath)),
+            ("conception-request", () => RunConceptionRequestSuite(schemaPath, conceptionScratchPath)),
+            ("backstory-person", () => RunBackstoryPersonSuite(schemaPath, backstoryScratchPath)),
+            ("person-effects", () => RunPersonEffectsSuite(schemaPath, personFxScratchPath)),
+            ("tier-ladder", () => RunTierLadderSuite(schemaPath, tierScratchPath)),
+            ("availability", () => RunAvailabilitySuite(schemaPath, availScratchPath)),
+            ("equipment", () => RunEquipmentSuite(schemaPath, equipScratchPath)),
+            ("promotion-sweep", () => RunPromotionSweepSuite(schemaPath, promoScratchPath)),
+            ("promotion-stream", () => RunPromotionStreamSuite(schemaPath, promoStreamScratchPath)),
+            ("promotion-avatar", () => RunPromotionAvatarSuite(schemaPath, promoAvatarScratchPath)),
+            ("promotion-record", () => RunPromotionRecordSuite(schemaPath, promoRecordScratchPath)),
+            ("development-curve", RunDevelopmentCurveSuite),
+            ("development-arc", () => RunDevelopmentArcSuite(schemaPath, devScratchPath)),
+            ("development-stream", () => RunDevelopmentStreamSuite(schemaPath, devStreamScratchPath)),
+            ("practice-seam", () => RunPracticeSeamSuite(schemaPath, practiceScratchPath)),
+            ("development-equilibrium", () => RunDevelopmentEquilibriumSuite(schemaPath, devEquilibriumScratchPath)),
+            ("scouting-grade", RunScoutingGradeSuite),
+            ("portrait-tile", RunPortraitTileSuite),
+        };
 
         try
         {
-            RunResolverFixtures();
-            RunMonteCarloBatch(paCount);
-            RunSeasonPipeline(schemaPath, scratchPath);
-            RunMicroAnalyticSuite();
-            RunMicroGameSuite(schemaPath, microScratchPath);
-            RunReadModelA0Sweep();
-            RunCareerIdsSuite(schemaPath, careerIdsScratchPath1, careerIdsScratchPath2);
-            RunCareerWiringSuite(schemaPath, careerScratchPath);
-            RunV4BullpenArsenalSuite(schemaPath, v4ScratchPath);
-            RunRivalrySuite(schemaPath, rivalryScratchPath);
-            RunHeirGeneticsSuite(schemaPath, heirScratchPath);
-            RunLineageSuccessionSuite(schemaPath, lineageScratchPath);
-            RunLineageFailureSuite(schemaPath, lineageFailScratchPath);
-            RunSuccessionEdgeSuite(schemaPath, lineageEdgeScratchPath);
-            RunNurtureBlendSuite(schemaPath, nurtureScratchPath);
-            RunConceptionRequestSuite(schemaPath, conceptionScratchPath);
-            RunBackstoryPersonSuite(schemaPath, backstoryScratchPath);
-            RunPersonEffectsSuite(schemaPath, personFxScratchPath);
-            RunTierLadderSuite(schemaPath, tierScratchPath);
-            RunAvailabilitySuite(schemaPath, availScratchPath);
-            RunEquipmentSuite(schemaPath, equipScratchPath);
-            RunPromotionSweepSuite(schemaPath, promoScratchPath);
-            RunPromotionStreamSuite(schemaPath, promoStreamScratchPath);
-            RunPromotionAvatarSuite(schemaPath, promoAvatarScratchPath);
-            RunPromotionRecordSuite(schemaPath, promoRecordScratchPath);
-            RunDevelopmentCurveSuite();
-            RunDevelopmentArcSuite(schemaPath, devScratchPath);
-            RunDevelopmentStreamSuite(schemaPath, devStreamScratchPath);
-            RunPracticeSeamSuite(schemaPath, practiceScratchPath);
-            RunDevelopmentEquilibriumSuite(schemaPath, devEquilibriumScratchPath);
-            RunScoutingGradeSuite();
-            RunPortraitTileSuite();
-        }
-        catch (Exception ex)
-        {
-            Check($"unhandled {ex.GetType().Name}", false, ex.Message);
+            if (only is not null)
+            {
+                foreach (string name in only)
+                {
+                    _currentSuite = name;
+                    if (!suites.Any(s => s.Name == name))
+                    {
+                        Check($"--only: unknown suite '{name}'", false,
+                            "known: " + string.Join(", ", suites.Select(s => s.Name).Distinct()));
+                    }
+                }
+            }
+            foreach ((string name, Action run) in suites)
+            {
+                if (only is not null && !only.Contains(name))
+                {
+                    continue;
+                }
+                _currentSuite = name;
+                try
+                {
+                    run();
+                }
+                catch (Exception ex)
+                {
+                    Check($"unhandled {ex.GetType().Name} in suite '{name}'", false, ex.Message);
+                }
+            }
         }
         finally
         {
+            foreach (string variant in new[]
+                {
+                    worldGenScratchPath, worldGenScratchPath + ".b", worldGenScratchPath + ".c", worldGenScratchPath + ".tx",
+                })
+            {
+                TryDelete(variant);
+                TryDelete(variant + "-wal");
+                TryDelete(variant + "-shm");
+            }
             TryDelete(scratchPath);
             TryDelete(scratchPath + "-wal");
             TryDelete(scratchPath + "-shm");
@@ -214,6 +274,21 @@ internal static class Program
             }
         }
         Console.WriteLine($"\n{Results.Count - failed}/{Results.Count} checks passed.");
+        Console.WriteLine("Per suite (pass/total):");
+        foreach (string suite in ResultSuites.Distinct())
+        {
+            int total = 0;
+            int passed = 0;
+            for (int i = 0; i < Results.Count; i++)
+            {
+                if (ResultSuites[i] == suite)
+                {
+                    total++;
+                    passed += Results[i].Pass ? 1 : 0;
+                }
+            }
+            Console.WriteLine($"  {(passed == total ? "ok  " : "RED ")} {suite}: {passed}/{total}");
+        }
         if (failed > 0)
         {
             Console.WriteLine("Failed Checks:");
@@ -361,7 +436,7 @@ internal static class Program
 
         using var db = new DatabaseManager(scratchPath);
         db.InitializeSchema(schemaPath);
-        Check("scratch schema applies at v13", db.GetSchemaVersion() == 13, $"user_version={db.GetSchemaVersion()}");
+        Check("scratch schema applies at v14", db.GetSchemaVersion() == 14, $"user_version={db.GetSchemaVersion()}");
 
         var players = new PlayerQueries(db);
         var baseball = new BaseballQueries(db);
@@ -1609,21 +1684,10 @@ internal static class Program
             && usageByPitcher.Count == pitcherCount && usageByPitcher.Values.All(v => v == 100),
             $"{arsenals.Count} rows / {pitcherCount} pitchers");
 
-        // ---- EnsureV4 top-up: bench two relievers, re-run, bullpen refills ----
-        string benchedA = roster.First(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever).PlayerId;
-        string benchedB = roster.Last(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever).PlayerId;
-        db.RunInBatch(() =>
-        {
-            players.SetTeam(benchedA, null);
-            players.SetTeam(benchedB, null);
-        });
-        var topUpRng = new RngState(LeagueSeed + 41);
-        bool toppedUp = LeagueGenerator.EnsureV4(db, players, baseball, ratingSpread: 0, ref topUpRng);
-        bool secondIsNoOp = !LeagueGenerator.EnsureV4(db, players, baseball, ratingSpread: 0, ref topUpRng);
-        baseball.LoadRoster(roster);
-        int refilled = roster.Count(r => r.TeamId == 5 && r.Role == PitcherRole.Reliever);
-        Check("EnsureV4 tops a short bullpen back up and is then a no-op",
-            toppedUp && secondIsNoOp && refilled == LeagueSimulator.BullpenSize, $"team 5 relievers {refilled}");
+        // (RETIRED in 13-1: "EnsureV4 tops a short bullpen back up and is then a
+        // no-op". The v3→v4 save top-up went with the v14 clean break — a pre-v14
+        // save is refused, never migrated. Replacement: worldgen-v14's "every
+        // pitcher has a role and a 3-pitch arsenal" on the generated world.)
 
         // ---- bullpen substitution over flushed games ----
         var micro = new MicroGame(db, baseball) { LoggingEnabled = false };
@@ -3900,9 +3964,9 @@ internal static class Program
             hsFixtureOk,
             $"p=[{hsProbs[0]:F5} {hsProbs[1]:F5} {hsProbs[2]:F5} {hsProbs[3]:F5} {hsProbs[4]:F5} {hsProbs[5]:F5} {hsProbs[6]:F5}]");
 
-        // ---- §2 MLB contract: the MLB delta vector is exactly zero ----
-        TierRatingDeltas mlb = TierEffects.For(LeagueTier.MLB);
-        Check("§2 MLB contract: delta vector all-zero, Shift(r, 0) is the identity over 0–100",
+        // ---- §2 Pro contract: the Pro (former MLB) delta vector is exactly zero ----
+        TierRatingDeltas mlb = TierEffects.For(LeagueTier.Pro);
+        Check("§2 Pro contract (the former MLB row): delta vector all-zero, Shift(r, 0) is the identity over 0–100",
             mlb.BatPower == 0 && mlb.BatContact == 0 && mlb.BatDiscipline == 0
             && mlb.PitStuff == 0 && mlb.PitControl == 0 && mlb.Defense == 0
             && Enumerable.Range(0, 101).All(r => TierEffects.Shift(r, 0) == r));
@@ -3916,23 +3980,11 @@ internal static class Program
 
         var genRng = new RngState(LeagueSeed);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-        var tierGenRng = new RngState(LeagueSeed + 1);
-        bool tiersSeeded = LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref tierGenRng);
-        bool secondSkipped = !LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref tierGenRng);
-
-        bool tierCountsOk = baseball.CountTeams() == 6 * LeagueSimulator.TeamCount;
-        var tierRoster = new List<RosterPlayerRow>();
-        for (int t = 0; t < LeagueDirectory.TierCount; t++)
-        {
-            tierCountsOk &= baseball.CountTeamsInTier((LeagueTier)t) == LeagueSimulator.TeamCount;
-            tierCountsOk &= baseball.LoadRosterByTier((LeagueTier)t, tierRoster)
-                == LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam;
-        }
-        var globalRoster = new List<RosterPlayerRow>();
-        Check("EnsureTierLeagues seeds 5 missing tiers once (idempotent): 48 teams, 8 + full 9+5+3 per tier",
-            tiersSeeded && secondSkipped && tierCountsOk
-            && baseball.LoadRoster(globalRoster) == 6 * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam,
-            $"teams={baseball.CountTeams()} roster={globalRoster.Count}");
+        // (RETIRED in 13-1: "EnsureTierLeagues seeds 5 missing tiers once
+        // (idempotent): 48 teams, 8 + full 9+5+3 per tier". The v6→v7 world
+        // top-up is gone: GenerateIfEmpty writes all three v14 tiers itself.
+        // Replacement: worldgen-v14's "68 teams, 12 HS / 24 College / 32 Pro"
+        // and per-team roster checks.)
 
         // One season, all six sims on the same bus/clock. The MLB sim's seed is
         // shared with the reference world below, so its season must come out
@@ -4013,7 +4065,7 @@ internal static class Program
         refClock.Initialize(StartYear);
         var refLeague = new LeagueSimulator(
             refDb, refBaseball, new StatsNormalizer(refDb, refBaseball),
-            new RngState(SeasonSeed + (ulong)LeagueTier.MLB));
+            new RngState(SeasonSeed + (ulong)LeagueTier.Pro));
         refLeague.Initialize();
         refLeague.AttachTo(refBus);
         for (int i = 0; i < GlobalState.DaysPerSeason; i++)
@@ -4021,8 +4073,8 @@ internal static class Program
             refClock.AdvanceDay();
             refBus.DispatchPending();
         }
-        LeagueBattingTotals mlbBat = baseball.LoadLeagueBattingTotals(StartYear, LeagueTier.MLB);
-        LeaguePitchingTotals mlbPit = baseball.LoadLeaguePitchingTotals(StartYear, LeagueTier.MLB);
+        LeagueBattingTotals mlbBat = baseball.LoadLeagueBattingTotals(StartYear, LeagueTier.Pro);
+        LeaguePitchingTotals mlbPit = baseball.LoadLeaguePitchingTotals(StartYear, LeagueTier.Pro);
         LeagueBattingTotals refBat = refBaseball.LoadLeagueBattingTotals(StartYear);
         LeaguePitchingTotals refPit = refBaseball.LoadLeaguePitchingTotals(StartYear);
         Check("MLB regression guard: the 6-tier world's MLB season is BIT-IDENTICAL to a same-seed MLB-only world",
@@ -4667,7 +4719,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var genRng = new RngState(LeagueSeed + 90);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
 
         // Fixtures (deterministic picks — rosters load ordered by team, player):
         // an elite young HS bat (cream), a hopeless MLB bat (dreg), and the
@@ -4676,7 +4727,7 @@ internal static class Program
         baseball.LoadRosterByTier(LeagueTier.HS, tierRoster);
         string cream = NthOfRole(tierRoster, PitcherRole.None, 0);
         string agedOut = NthOfRole(tierRoster, PitcherRole.None, 1);
-        baseball.LoadRosterByTier(LeagueTier.MLB, tierRoster);
+        baseball.LoadRosterByTier(LeagueTier.Pro, tierRoster);
         string dreg = NthOfRole(tierRoster, PitcherRole.None, 0);
         string retiree = NthOfRole(tierRoster, PitcherRole.None, 1);
         string broken = NthOfRole(tierRoster, PitcherRole.Starter, 0);
@@ -4774,7 +4825,7 @@ internal static class Program
         bool creamOk = true;
         for (int k = 0; k < creamPath.Count; k++)
         {
-            creamOk &= creamPath[k].Rostered && (int)creamPath[k].Tier == Math.Min(k + 1, (int)LeagueTier.MLB);
+            creamOk &= creamPath[k].Rostered && (int)creamPath[k].Tier == Math.Min(k + 1, (int)LeagueTier.Pro);
         }
         Check("§10.3 cream rises: a max-rated 15-year-old climbs exactly one rung per offseason, HS→MLB in 5, then holds",
             creamOk,
@@ -4783,7 +4834,7 @@ internal static class Program
         bool dregOk = true;
         for (int k = 0; k < 4; k++)
         {
-            dregOk &= dregPath[k].Rostered && (int)dregPath[k].Tier == (int)LeagueTier.MLB - (k + 1);
+            dregOk &= dregPath[k].Rostered && (int)dregPath[k].Tier == (int)LeagueTier.Pro - (k + 1);
         }
         for (int k = 4; k < dregPath.Count; k++)
         {
@@ -4854,7 +4905,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var rng = new RngState(LeagueSeed + 91);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
         var state = new GlobalState();
         var bus = new EventBus();
         var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
@@ -4906,7 +4956,6 @@ internal static class Program
             var baseball = new BaseballQueries(db);
             var rng = new RngState(LeagueSeed + 95);
             LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref rng);
-            LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref rng);
             // Pin ages inside every tier's window (HS cap 19, College cap 23,
             // retirement 42) so the pass finds no removals — and spread-0
             // ratings mean no swaps — leaving it a provable no-op.
@@ -5001,7 +5050,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var genRng = new RngState(LeagueSeed + 97);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref genRng);
 
         var state = new GlobalState();
         var bus = new EventBus();
@@ -5213,7 +5261,6 @@ internal static class Program
             var gbaseball = new BaseballQueries(gdb);
             var grng = new RngState(LeagueSeed + 197);
             LeagueGenerator.GenerateIfEmpty(gdb, gplayers, gbaseball, ratingSpread: 0, ref grng);
-            LeagueGenerator.EnsureTierLeagues(gdb, gplayers, gbaseball, ratingSpread: 0, ref grng);
 
             // Pin every age inside its tier window (the no-op-pass recipe): no
             // removals, and spread-0 ratings mean no NPC swaps.
@@ -5326,7 +5373,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var rng = new RngState(LeagueSeed + seedSalt);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref rng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref rng);
 
         var pin = new List<RosterPlayerRow>();
         db.RunInBatch(() =>
@@ -5582,7 +5628,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var genRng = new RngState(LeagueSeed + 100);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
 
         // ---- §3.3 generation shape: every ratings row has a ceiling row and
         // current ≤ potential per rating; the HS discount has real teeth ----
@@ -5623,7 +5668,7 @@ internal static class Program
         // health-worn MLB veteran (§10.4), in one 24-offseason world ----
         string prospect = NthOfRole(hsRoster, PitcherRole.None, 0);
         var mlbRoster = new List<RosterPlayerRow>();
-        baseball.LoadRosterByTier(LeagueTier.MLB, mlbRoster);
+        baseball.LoadRosterByTier(LeagueTier.Pro, mlbRoster);
         string veteran = NthOfRole(mlbRoster, PitcherRole.None, 0);
 
         players.SetAge(prospect, 15);
@@ -5753,7 +5798,7 @@ internal static class Program
         bool reachedMlb = false;
         foreach ((bool rostered, LeagueTier tier, _) in prospectPath)
         {
-            reachedMlb |= rostered && tier == LeagueTier.MLB;
+            reachedMlb |= rostered && tier == LeagueTier.Pro;
         }
         int finalSum = prospectPath[Years - 1].BatSum; // age 39
         // The raw seed provably can never clear a boundary himself: even
@@ -5785,7 +5830,7 @@ internal static class Program
         }
         foreach ((bool rostered, LeagueTier tier, _) in veteranPath)
         {
-            relegatedBeforeOut |= rostered && tier < LeagueTier.MLB;
+            relegatedBeforeOut |= rostered && tier < LeagueTier.Pro;
         }
         Check("§10.4 decline arc: the health-worn veteran's ratings fall EVERY season he remains rostered, and 9c's EXISTING merit swaps relegate him below MLB",
             declinedWhileRostered && relegatedBeforeOut,
@@ -5832,7 +5877,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var rng = new RngState(LeagueSeed + 101);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
         var state = new GlobalState();
         var bus = new EventBus();
         var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
@@ -5898,7 +5942,6 @@ internal static class Program
             var baseball = new BaseballQueries(db);
             var rng = new RngState(LeagueSeed + 105);
             LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
-            LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng);
             // Pin every rostered age to the peak (27): youthWeight, ageWeight
             // and the phase-scaled jitter are all exactly zero there, so the
             // pass evaluates the full roster and writes nothing. (No aging
@@ -6030,7 +6073,6 @@ internal static class Program
             var baseball = new BaseballQueries(db);
             var genRng = new RngState(LeagueSeed + 212);
             LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-            LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref genRng);
 
             var hsRoster = new List<RosterPlayerRow>();
             baseball.LoadRosterByTier(LeagueTier.HS, hsRoster);
@@ -6131,7 +6173,6 @@ internal static class Program
             var baseball = new BaseballQueries(db);
             var genRng = new RngState(LeagueSeed + 211);
             LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-            LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref genRng);
 
             var state = new GlobalState();
             var bus = new EventBus();
@@ -6237,7 +6278,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var genRng = new RngState(LeagueSeed + 900);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref genRng);
 
         var state = new GlobalState();
         var bus = new EventBus();
@@ -6377,7 +6417,6 @@ internal static class Program
         var baseball = new BaseballQueries(db);
         var genRng = new RngState(LeagueSeed + 210);
         LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-        LeagueGenerator.EnsureTierLeagues(db, players, baseball, ratingSpread: 0, ref genRng);
 
         var tierRows = new List<RosterPlayerRow>();
         db.RunInBatch(() =>
@@ -6690,7 +6729,485 @@ internal static class Program
         return directory;
     }
 
-    private static void Check(string name, bool pass, string detail = "") =>
+    // ------------------------------------------------------------------
+    // 13-1: schema v14 world-gen (league_restructure.md §2/§5/Appendix A,
+    // arcade §8.1 Player_Fielding). `--only worldgen-v14` runs just this.
+    // ------------------------------------------------------------------
+
+    private const ulong WorldGenSeed = 0x1301_0014UL;
+
+    /// <summary>One Appendix A cell entry, parsed from the spec itself.</summary>
+    private readonly record struct AppendixATeam(
+        int TeamId, LeagueTier Tier, string Conference, string? Division, string DisplayName, string Abbreviation,
+        bool IsNew);
+
+    private static void RunWorldGenV14Suite(
+        string schemaPath, string repoRoot, string pathA, string pathB, string pathC, string pathTx)
+    {
+        Console.WriteLine("--- Schema v14 world-gen (13-1): Appendix A, per-tier rosters, Player_Fielding, determinism ---");
+
+        // Inputs: the spec's own Appendix A, and the 13-1a content files.
+        List<AppendixATeam> appendix = ParseAppendixA(Path.Combine(repoRoot, "docs", "design", "league_restructure.md"));
+        Check("Appendix A parsed from league_restructure.md: 68 teams, 12 HS / 24 College / 32 Pro",
+            appendix.Count == 68
+            && appendix.Count(a => a.Tier == LeagueTier.HS) == 12
+            && appendix.Count(a => a.Tier == LeagueTier.College) == 24
+            && appendix.Count(a => a.Tier == LeagueTier.Pro) == 32,
+            $"parsed {appendix.Count}");
+
+        bool tableMatchesSpec = appendix.Count == LeagueStructure.Teams.Length;
+        for (int i = 0; tableMatchesSpec && i < appendix.Count; i++)
+        {
+            TeamSeed seed = LeagueStructure.Teams[i];
+            tableMatchesSpec = seed.TeamId == appendix[i].TeamId && seed.Abbreviation == appendix[i].Abbreviation
+                && seed.City + " " + seed.Name == appendix[i].DisplayName && seed.IsPlaceholder == appendix[i].IsNew;
+        }
+        Check("LeagueStructure.Teams transcribes Appendix A (ids, names, abbreviations, *new* placeholder marks)",
+            tableMatchesSpec);
+
+        HomeParkCatalog parks = HomeParkCatalog.Parse(
+            File.ReadAllText(Path.Combine(repoRoot, "Assets", "Data", "League", "home_parks.json")));
+        bool parksValid = true;
+        string parksError = "";
+        try
+        {
+            parks.ValidateAgainst(LeagueStructure.Teams);
+        }
+        catch (InvalidOperationException ex)
+        {
+            parksValid = false;
+            parksError = ex.Message;
+        }
+        Check("home_parks.json: exactly one park per team (68), abbreviations agree, names unique",
+            parksValid && parks.Count == 68, parksError);
+        IReadOnlyDictionary<int, string> parkMap = parks.ToHomeParkMap();
+
+        // ---- world A: the live-world shape (spread 25, persons wired) ----
+        string dumpA;
+        string structureA;
+        string ratingsA;
+        using (var db = new DatabaseManager(pathA))
+        {
+            db.InitializeSchema(schemaPath);
+            Check("worldgen: scratch schema applies at v14", db.GetSchemaVersion() == 14, $"user_version={db.GetSchemaVersion()}");
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var persons = new PersonQueries(db);
+            var rng = new RngState(WorldGenSeed);
+            bool generated = LeagueGenerator.GenerateIfEmpty(
+                db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng, persons, parkMap);
+            var again = new RngState(WorldGenSeed);
+            bool skipped = !LeagueGenerator.GenerateIfEmpty(
+                db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref again, persons, parkMap);
+            Check("worldgen: generates once, a second call is a no-op, no batch left open",
+                generated && skipped && !db.IsBatchActive);
+
+            foreach ((string name, bool pass, string detail) in WorldGenInvariants(db, players, baseball, appendix, parkMap))
+            {
+                Check(name, pass, detail);
+            }
+
+            var schools = DirtAndDiamonds.Data.Schools.SchoolCatalogJson.Parse(
+                File.ReadAllText(Path.Combine(repoRoot, "Assets", "Data", "Schools", "schools.json")));
+            var hsTeams = new List<TeamRow>();
+            baseball.LoadTeamsByTier(LeagueTier.HS, hsTeams);
+            string schoolsError = "";
+            try
+            {
+                schools.ValidateAgainstRoster(hsTeams);
+            }
+            catch (InvalidOperationException ex)
+            {
+                schoolsError = ex.Message;
+            }
+            Check("schools.json: 12 entries keyed 101–112 pass boot's cross-check against the generated HS teams",
+                schoolsError.Length == 0 && schools.Count == 12
+                && schools.Entries.Select(e => e.TeamId).SequenceEqual(Enumerable.Range(101, 12)),
+                schoolsError);
+
+            (dumpA, structureA, ratingsA) = DumpWorld(db);
+        }
+
+        // ---- determinism: world B from the same seed ----
+        string dumpB;
+        using (var db = new DatabaseManager(pathB))
+        {
+            db.InitializeSchema(schemaPath);
+            var rng = new RngState(WorldGenSeed);
+            LeagueGenerator.GenerateIfEmpty(
+                db, new PlayerQueries(db), new BaseballQueries(db), LeagueGenerator.DefaultRatingSpread, ref rng,
+                new PersonQueries(db), parkMap);
+            (dumpB, _, _) = DumpWorld(db);
+        }
+        Check("worldgen determinism: same seed → byte-identical dumps of every world table (PK order)",
+            dumpA == dumpB, $"sha {Sha12(dumpA)} vs {Sha12(dumpB)}, {dumpA.Length:N0} chars");
+
+        // ---- a different seed: same structure, different ratings, invariants hold ----
+        using (var db = new DatabaseManager(pathC))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var rng = new RngState(WorldGenSeed ^ 0xA5A5_A5A5UL);
+            LeagueGenerator.GenerateIfEmpty(
+                db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng, new PersonQueries(db), parkMap);
+            List<(string Name, bool Pass, string Detail)> invariants =
+                WorldGenInvariants(db, players, baseball, appendix, parkMap);
+            List<string> failed = invariants.Where(r => !r.Pass).Select(r => r.Name).ToList();
+            (_, string structureC, string ratingsC) = DumpWorld(db);
+            Check("worldgen determinism: a different seed → same structure, different ratings, every invariant holds",
+                structureA == structureC && ratingsA != ratingsC && failed.Count == 0,
+                failed.Count == 0 ? $"structure sha {Sha12(structureC)}" : "failed: " + string.Join("; ", failed));
+        }
+
+        // ---- one transaction: a failure mid-generation leaves nothing behind ----
+        using (var db = new DatabaseManager(pathTx))
+        {
+            db.InitializeSchema(schemaPath);
+            var baseball = new BaseballQueries(db);
+            var players = new PlayerQueries(db);
+            var shortMap = parkMap.Where(kv => kv.Key != 332).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var rng = new RngState(WorldGenSeed);
+            bool threw = false;
+            try
+            {
+                LeagueGenerator.GenerateIfEmpty(
+                    db, players, baseball, LeagueGenerator.DefaultRatingSpread, ref rng, new PersonQueries(db), shortMap);
+            }
+            catch (InvalidOperationException)
+            {
+                threw = true;
+            }
+            Check("worldgen is one transaction: a missing home park (team 332) rolls back every row it wrote",
+                threw && !db.IsBatchActive && baseball.CountTeams() == 0
+                && CountRows(db, "SELECT COUNT(*) FROM Conferences;") == 0
+                && CountRows(db, "SELECT COUNT(*) FROM Players;") == 0);
+        }
+    }
+
+    /// <summary>
+    /// The 13-1 brief §5.1 world-gen checks, as named results, so world A
+    /// reports each and the different-seed world C reports them as one.
+    /// </summary>
+    private static List<(string Name, bool Pass, string Detail)> WorldGenInvariants(
+        DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
+        List<AppendixATeam> appendix, IReadOnlyDictionary<int, string> parkMap)
+    {
+        var results = new List<(string, bool, string)>();
+
+        // ---- teams, ids, Appendix A cell by cell ----
+        int hs = baseball.CountTeamsInTier(LeagueTier.HS);
+        int college = baseball.CountTeamsInTier(LeagueTier.College);
+        int pro = baseball.CountTeamsInTier(LeagueTier.Pro);
+        results.Add(("worldgen: 68 teams, 12 HS / 24 College / 32 Pro",
+            baseball.CountTeams() == 68 && hs == 12 && college == 24 && pro == 32,
+            $"teams={baseball.CountTeams()} HS={hs} College={college} Pro={pro}"));
+
+        var teams = new List<TeamRow>();
+        baseball.LoadAllTeams(teams);
+        IEnumerable<int> expectedIds = Enumerable.Range(101, 12).Concat(Enumerable.Range(201, 24)).Concat(Enumerable.Range(301, 32));
+        results.Add(("worldgen: team ids exactly 101–112, 201–224, 301–332",
+            teams.Select(t => t.TeamId).SequenceEqual(expectedIds), ""));
+
+        var conferences = new List<ConferenceRow>();
+        var divisions = new List<DivisionRow>();
+        baseball.LoadConferences(conferences);
+        baseball.LoadDivisions(divisions);
+        Dictionary<int, ConferenceRow> conferenceById = conferences.ToDictionary(c => c.ConferenceId);
+        Dictionary<int, DivisionRow> divisionById = divisions.ToDictionary(d => d.DivisionId);
+
+        var mismatches = new List<string>();
+        Dictionary<int, TeamRow> teamById = teams.ToDictionary(t => t.TeamId);
+        foreach (AppendixATeam cell in appendix)
+        {
+            if (!teamById.TryGetValue(cell.TeamId, out TeamRow team))
+            {
+                mismatches.Add($"{cell.TeamId} missing");
+                continue;
+            }
+            string? divisionName = team.DivisionId is int d && divisionById.TryGetValue(d, out DivisionRow div) ? div.Name : null;
+            bool divisionInConference = team.DivisionId is not int dd
+                || (divisionById.TryGetValue(dd, out DivisionRow dr) && dr.ConferenceId == team.ConferenceId);
+            bool ok = team.City + " " + team.Name == cell.DisplayName
+                && team.Abbreviation == cell.Abbreviation
+                && team.Tier == cell.Tier
+                && conferenceById.TryGetValue(team.ConferenceId, out ConferenceRow conf)
+                && conf.Name == cell.Conference && conf.Tier == cell.Tier
+                && divisionName == cell.Division
+                && divisionInConference
+                && team.League == LeagueStructure.LeagueLabel(cell.Tier);
+            if (!ok)
+            {
+                mismatches.Add($"{cell.TeamId} {cell.Abbreviation}");
+            }
+        }
+        results.Add(("worldgen: every team equals its Appendix A cell (name, abbreviation, tier, conference, division, league label)",
+            mismatches.Count == 0 && conferences.Count == 6 && divisions.Count == 14,
+            mismatches.Count == 0 ? $"{conferences.Count} conferences, {divisions.Count} divisions" : string.Join(", ", mismatches.Take(8))));
+
+        results.Add(("worldgen: HS teams have a NULL division; every College/Pro team has one",
+            teams.All(t => (t.Tier == LeagueTier.HS) == (t.DivisionId is null)), ""));
+
+        results.Add(("worldgen: every Teams.home_park is its home_parks.json row",
+            teams.All(t => parkMap.TryGetValue(t.TeamId, out string? park) && park == t.HomePark), ""));
+
+        // ---- rosters: per-team counts (§5.1, brief §3.2.3) ----
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRoster(roster);
+        var countFailures = new List<string>();
+        foreach (TeamRow team in teams)
+        {
+            int position = 0, starters = 0, relievers = 0;
+            foreach (RosterPlayerRow row in roster)
+            {
+                if (row.TeamId != team.TeamId)
+                {
+                    continue;
+                }
+                if (row.Role == PitcherRole.Starter)
+                {
+                    starters++;
+                }
+                else if (row.Role == PitcherRole.Reliever)
+                {
+                    relievers++;
+                }
+                else
+                {
+                    position++;
+                }
+            }
+            bool ok = team.Tier switch
+            {
+                LeagueTier.HS => position is >= 11 and <= 14 && starters is >= 3 and <= 4 && relievers is >= 2 and <= 4,
+                // College: the brief's 15/4/5 target, inside every §5.1 cap (≤17/≤4/≤5, org 26).
+                LeagueTier.College => position == 15 && starters == 4 && relievers == 5
+                    && position <= 17 && starters <= 4 && relievers <= 5 && position + starters + relievers <= 26,
+                // Pro: exactly 15/4/5 = the 24-man org cap.
+                _ => position == 15 && starters == 4 && relievers == 5,
+            };
+            if (!ok)
+            {
+                countFailures.Add($"{team.TeamId}: {position}/{starters}/{relievers}");
+            }
+        }
+        results.Add(("worldgen: per-team rosters (pos/SP/RP) — HS 11–14/3–4/2–4, College 15/4/5 (≤ caps), Pro 15/4/5",
+            countFailures.Count == 0,
+            countFailures.Count == 0 ? $"{roster.Count} rostered" : string.Join(", ", countFailures.Take(8))));
+
+        // ---- ages (§5.3) ----
+        var allPlayers = new List<PlayerRow>();
+        players.LoadAll(allPlayers);
+        var ageFailures = new List<string>();
+        foreach (PlayerRow p in allPlayers)
+        {
+            if (p.TeamId is not int teamId || !teamById.TryGetValue(teamId, out TeamRow team))
+            {
+                ageFailures.Add($"{p.PlayerId[..8]} unrostered");
+                continue;
+            }
+            bool ok = team.Tier switch
+            {
+                LeagueTier.HS => p.Age is >= 15 and <= 18,
+                LeagueTier.College => p.Age is >= 18 and <= 22,
+                _ => p.Age is >= 21 and <= 36,
+            };
+            if (!ok)
+            {
+                ageFailures.Add($"{teamId}: age {p.Age}");
+            }
+        }
+        results.Add(("worldgen: ages inside §5.3 — HS 15–18, College 18–22, Pro 21–36",
+            ageFailures.Count == 0, ageFailures.Count == 0 ? $"{allPlayers.Count} players" : string.Join(", ", ageFailures.Take(8))));
+
+        // ---- satellites: every player has each row it should, and only those ----
+        results.Add(("worldgen: every player is rostered exactly once (no player on two teams, none unrostered)",
+            allPlayers.Count == roster.Count && roster.Select(r => r.PlayerId).Distinct().Count() == roster.Count,
+            $"players={allPlayers.Count} roster={roster.Count}"));
+        long noRatings = CountRows(db,
+            "SELECT COUNT(*) FROM Players p WHERE NOT EXISTS (SELECT 1 FROM Player_Ratings r WHERE r.player_id = p.player_id);");
+        long noPotential = CountRows(db,
+            "SELECT COUNT(*) FROM Players p WHERE NOT EXISTS (SELECT 1 FROM Player_Potential r WHERE r.player_id = p.player_id);");
+        long noPerson = CountRows(db,
+            "SELECT COUNT(*) FROM Players p WHERE NOT EXISTS (SELECT 1 FROM Player_Person r WHERE r.player_id = p.player_id);");
+        results.Add(("worldgen: every player has ratings, potential and a person row",
+            noRatings == 0 && noPotential == 0 && noPerson == 0,
+            $"missing ratings={noRatings} potential={noPotential} person={noPerson}"));
+        long pitcherNoRole = CountRows(db,
+            "SELECT COUNT(*) FROM Player_Ratings r WHERE r.is_pitcher = 1 AND NOT EXISTS (SELECT 1 FROM Pitcher_Roles x WHERE x.player_id = r.player_id);");
+        long batterWithRole = CountRows(db,
+            "SELECT COUNT(*) FROM Pitcher_Roles x JOIN Player_Ratings r ON r.player_id = x.player_id WHERE r.is_pitcher = 0;");
+        long badArsenal = CountRows(db,
+            "SELECT COUNT(*) FROM Player_Ratings r WHERE r.is_pitcher = 1 AND " +
+            "((SELECT COUNT(*) FROM Pitch_Arsenals a WHERE a.player_id = r.player_id) <> 3 " +
+            "OR (SELECT SUM(usage_weight) FROM Pitch_Arsenals a WHERE a.player_id = r.player_id) <> 100);");
+        long batterArsenal = CountRows(db,
+            "SELECT COUNT(*) FROM Pitch_Arsenals a JOIN Player_Ratings r ON r.player_id = a.player_id WHERE r.is_pitcher = 0;");
+        results.Add(("worldgen: every pitcher has a role and a 3-pitch arsenal summing to 100; no position player has either",
+            pitcherNoRole == 0 && batterWithRole == 0 && badArsenal == 0 && batterArsenal == 0,
+            $"pitcher-no-role={pitcherNoRole} batter-role={batterWithRole} bad-arsenal={badArsenal} batter-arsenal={batterArsenal}"));
+
+        // ---- Player_Fielding ----
+        var fielding = new List<PlayerFieldingRow>();
+        baseball.LoadAllFielding(fielding);
+        long noFielding = CountRows(db,
+            "SELECT COUNT(*) FROM Players p WHERE NOT EXISTS (SELECT 1 FROM Player_Fielding f WHERE f.player_id = p.player_id);");
+        results.Add(("worldgen: exactly one Player_Fielding row per player",
+            noFielding == 0 && fielding.Count == allPlayers.Count && fielding.Select(f => f.PlayerId).Distinct().Count() == fielding.Count,
+            $"rows={fielding.Count} players={allPlayers.Count} missing={noFielding}"));
+
+        Dictionary<string, PlayerFieldingRow> fieldingById = fielding.ToDictionary(f => f.PlayerId);
+        bool pitchersAreP = roster.All(r => fieldingById.TryGetValue(r.PlayerId, out PlayerFieldingRow f)
+            && (f.DefensivePosition == FieldingPosition.P) == r.IsPitcher
+            && (!r.IsPitcher || f.SecondaryPosition is null));
+        bool secondaryLegal = fielding.All(f => f.SecondaryPosition is null
+            || (f.SecondaryPosition != f.DefensivePosition && f.SecondaryPosition != FieldingPosition.P));
+        bool ratingsInRange = fielding.All(f => f.Speed is >= 0 and <= 100 && f.Arm is >= 0 and <= 100);
+        results.Add(("worldgen: pitchers field 'P' (no secondary); position players never; secondaries legal; speed/arm 0–100",
+            pitchersAreP && secondaryLegal && ratingsInRange, ""));
+
+        var uncovered = new List<string>();
+        foreach (TeamRow team in teams)
+        {
+            var covered = new HashSet<FieldingPosition>();
+            foreach (RosterPlayerRow row in roster)
+            {
+                if (row.TeamId == team.TeamId && !row.IsPitcher && fieldingById.TryGetValue(row.PlayerId, out PlayerFieldingRow f))
+                {
+                    covered.Add(f.DefensivePosition);
+                }
+            }
+            if (!FieldingPositions.Field.All(covered.Contains))
+            {
+                uncovered.Add(team.TeamId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        results.Add(("worldgen: every team's position players cover all 8 field positions (C 1B 2B 3B SS LF CF RF)",
+            uncovered.Count == 0, uncovered.Count == 0 ? "" : "uncovered: " + string.Join(", ", uncovered)));
+
+        results.Add(("worldgen: integrity_check ok, foreign_key_check clean",
+            db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0, ""));
+        return results;
+    }
+
+    /// <summary>
+    /// Parses league_restructure.md's Appendix A tables (the spec, not the
+    /// code's transcription of it): row order within a tier is team-id order.
+    /// </summary>
+    private static List<AppendixATeam> ParseAppendixA(string specPath)
+    {
+        string text = File.ReadAllText(specPath);
+        int start = text.IndexOf("## Appendix A", StringComparison.Ordinal);
+        var result = new List<AppendixATeam>(68);
+        if (start < 0)
+        {
+            return result;
+        }
+        var cellPattern = new System.Text.RegularExpressions.Regex(@"^(?<name>.+?) \((?<abbr>[A-Z]{3})\)(?<new> \*new\*)?$");
+        var nextNumber = new int[LeagueDirectory.TierCount];
+        LeagueTier? tier = null;
+        foreach (string rawLine in text[start..].Split('\n'))
+        {
+            string line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("### ", StringComparison.Ordinal))
+            {
+                tier = line.StartsWith("### Pro", StringComparison.Ordinal) ? LeagueTier.Pro
+                    : line.StartsWith("### College", StringComparison.Ordinal) ? LeagueTier.College
+                    : line.StartsWith("### High School", StringComparison.Ordinal) ? LeagueTier.HS
+                    : null;
+                continue;
+            }
+            if (tier is not LeagueTier t || !line.StartsWith("| ", StringComparison.Ordinal)
+                || line.StartsWith("| :--", StringComparison.Ordinal) || line.StartsWith("| Conference", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            string[] cells = line.Trim().Trim('|').Split('|').Select(c => c.Trim()).ToArray();
+            string conference = cells[0];
+            string? division = t == LeagueTier.HS ? null : cells[1];
+            foreach (string entry in cells[^1].Split(" · "))
+            {
+                System.Text.RegularExpressions.Match m = cellPattern.Match(entry.Trim());
+                if (!m.Success)
+                {
+                    continue;
+                }
+                int teamId = LeagueStructure.TeamIdBase(t) + ++nextNumber[(int)t];
+                result.Add(new AppendixATeam(
+                    teamId, t, conference, division, m.Groups["name"].Value, m.Groups["abbr"].Value, m.Groups["new"].Success));
+            }
+        }
+        result.Sort((a, b) => a.TeamId.CompareTo(b.TeamId));
+        return result;
+    }
+
+    /// <summary>
+    /// Every world table dumped in PK order, invariant-culture, doubles
+    /// round-trip formatted: (full dump, structure-only dump, ratings dump).
+    /// </summary>
+    private static (string All, string Structure, string Ratings) DumpWorld(DatabaseManager db)
+    {
+        string[] structure =
+        {
+            "SELECT * FROM Conferences ORDER BY conference_id;",
+            "SELECT * FROM Divisions ORDER BY division_id;",
+            "SELECT * FROM Teams ORDER BY team_id;",
+            "SELECT * FROM Team_Tiers ORDER BY team_id;",
+        };
+        string[] people =
+        {
+            "SELECT * FROM Players ORDER BY player_id;",
+            "SELECT * FROM Player_Ratings ORDER BY player_id;",
+            "SELECT * FROM Player_Potential ORDER BY player_id;",
+            "SELECT * FROM Pitcher_Roles ORDER BY player_id;",
+            "SELECT * FROM Pitch_Arsenals ORDER BY player_id, pitch_type;",
+            "SELECT * FROM Player_Person ORDER BY player_id;",
+            "SELECT * FROM Player_Fielding ORDER BY player_id;",
+        };
+        string structureDump = DumpQueries(db, structure);
+        string ratingsDump = DumpQueries(db, new[] { "SELECT * FROM Player_Ratings ORDER BY player_id;" });
+        return (structureDump + DumpQueries(db, people), structureDump, ratingsDump);
+    }
+
+    private static string DumpQueries(DatabaseManager db, string[] queries)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (string sql in queries)
+        {
+            sb.Append("## ").Append(sql).Append('\n');
+            using Microsoft.Data.Sqlite.SqliteDataReader reader = db.ExecuteReader(db.GetPooledCommand(sql));
+            while (reader.Read())
+            {
+                for (int c = 0; c < reader.FieldCount; c++)
+                {
+                    object value = reader.GetValue(c);
+                    sb.Append(value switch
+                    {
+                        DBNull => "NULL",
+                        double d => d.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                        IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+                        _ => value.ToString(),
+                    }).Append('|');
+                }
+                sb.Append('\n');
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static long CountRows(DatabaseManager db, string sql) =>
+        Convert.ToInt64(db.ExecuteScalar(db.GetPooledCommand(sql)) ?? -1L, System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Sha12(string text) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)))[..12];
+
+    private static void Check(string name, bool pass, string detail = "")
+    {
+        ResultSuites.Add(_currentSuite);
+        AddResult(name, pass, detail);
+    }
+
+    private static void AddResult(string name, bool pass, string detail) =>
         Results.Add((name, pass, detail));
 
     private static string? FindRepoRoot()

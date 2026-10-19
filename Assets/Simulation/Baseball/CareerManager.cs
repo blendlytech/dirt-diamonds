@@ -1023,7 +1023,7 @@ public sealed class CareerManager
                 {
                     // No signable free agent of the vacated role: invent a
                     // replacement-level (spread 0 = league-average) filler,
-                    // the same path EnsureV4 uses to invent relievers.
+                    // through world-gen's own GeneratePlayer path.
                     (string fillerId, int fillerStuff) = LeagueGenerator.GeneratePlayer(
                         _players, _baseball, teamId, retireeRole, ratingSpread: 0, ref _rng);
                     if (retireeRole != PitcherRole.None)
