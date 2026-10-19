@@ -4447,31 +4447,35 @@ internal static class Program
     {
         Console.WriteLine("--- School catalog (HS team branding) ---");
 
-        // The shipped file covers the 8-team HS tier (team_ids 101–108); every
-        // entry carries a non-empty display name, an image path, and a
-        // validated primary hex.
+        // The shipped file covers the 12-team HS tier (schema v14, Appendix A:
+        // team_ids 101–112, North 101–106 / South 107–112); every entry
+        // carries a non-empty display name, an image path, and a validated
+        // primary hex.
         string shipped = File.ReadAllText(Path.Combine(_repoRoot, "Assets", "Data", "Schools", "schools.json"));
         SchoolCatalog catalog = SchoolCatalogJson.Parse(shipped);
-        bool wellFormed = catalog.Count == 8;
+        bool wellFormed = catalog.Count == 12;
         foreach (SchoolDefinition s in catalog.Entries)
         {
-            wellFormed &= s.TeamId is >= 101 and <= 108
+            wellFormed &= s.TeamId is >= 101 and <= 112
                 && !string.IsNullOrWhiteSpace(s.DisplayName)
                 && !string.IsNullOrWhiteSpace(s.LogoPath)
                 && s.Primary.Hex.Length == 7 && s.Primary.Hex[0] == '#';
         }
-        Check("shipped schools.json covers HS team_ids 101-108 with names, colors, images",
+        Check("shipped schools.json covers HS team_ids 101-112 (schema v14, Appendix A) with names, colors, images",
             wellFormed, $"{catalog.Count} schools");
 
         // The roster cross-check contract: the HS-tier (team_id, abbreviation)
-        // pairs LeagueGenerator seeds. Pinned as literals here because this
+        // pairs world-gen seeds (league_restructure.md Appendix A, schema v14;
+        // the 13-1 re-key moved PNH/WSF/SMT/RVT to 107–110). Pinned as
+        // literals here because this
         // harness deliberately does not compile the Baseball world-gen assembly
         // (the item-catalog check's transport-gift precedent); GameManager's
         // boot check is the live-roster mirror from the other side.
         var roster = new List<TeamRow>
         {
             HsTeam(101, "CRW"), HsTeam(102, "LKS"), HsTeam(103, "FRV"), HsTeam(104, "OKR"),
-            HsTeam(105, "PNH"), HsTeam(106, "WSF"), HsTeam(107, "SMT"), HsTeam(108, "RVT"),
+            HsTeam(105, "BRK"), HsTeam(106, "CDG"), HsTeam(107, "PNH"), HsTeam(108, "WSF"),
+            HsTeam(109, "SMT"), HsTeam(110, "RVT"), HsTeam(111, "GRF"), HsTeam(112, "HLC"),
         };
         Check("ValidateAgainstRoster passes over the shipped HS roster",
             !ThrowsAny(() => catalog.ValidateAgainstRoster(roster)));
@@ -4486,7 +4490,7 @@ internal static class Program
             ThrowsAny(() => catalog.ValidateAgainstRoster(wrongAbbr)));
 
         var orphan = new List<TeamRow>(roster);
-        orphan.RemoveAt(orphan.Count - 1); // roster lacks 108; catalog still has it
+        orphan.RemoveAt(orphan.Count - 1); // roster lacks 112; catalog still has it
         Check("cross-check rejects an orphaned school entry",
             ThrowsAny(() => catalog.ValidateAgainstRoster(orphan)));
 

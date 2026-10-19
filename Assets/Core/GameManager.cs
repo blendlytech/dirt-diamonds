@@ -317,7 +317,6 @@ public sealed partial class GameManager : Node
                 $"this build is v{SaveCompatibility.CurrentSchemaVersion}. Career boot stopped; awaiting the player.");
             return;
         }
-        SetProcess(true);
 
         _database = new DatabaseManager(databasePath);
 
@@ -733,6 +732,10 @@ public sealed partial class GameManager : Node
             $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}, " +
             $"relationships {Relationships.EdgeCount}, gritty events {GrittyEvents.Count} (dispatcher polling), " +
             $"clock {TimeOfDay.MinuteOfDay} min @ {TimeOfDay.Speed}.");
+
+        // The boot completed: the bus and Steam may pump (off since a refusal,
+        // and still off if a post-confirm re-boot threw part-way).
+        SetProcess(true);
     }
 
     /// <summary>

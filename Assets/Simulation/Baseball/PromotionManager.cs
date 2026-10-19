@@ -455,7 +455,7 @@ public sealed class PromotionManager
             {
                 throw new InvalidOperationException(
                     $"Promotion pass requires the full 6-tier ladder; tier {(LeagueTier)t} has {teamsPerTier[t]}/{LeagueSimulator.TeamCount} teams. " +
-                    "Run LeagueGenerator.EnsureTierLeagues first.");
+                    "Schema v14 has no such ladder; slice 13-6 replaces this pass with PipelineManager.");
             }
         }
 
