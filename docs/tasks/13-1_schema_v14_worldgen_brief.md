@@ -38,7 +38,7 @@ Shipped facts this brief relies on (verified at `ebaee21`):
   - `Assets/UI/`: one new minimal clean-break dialog (scene + script), plus compile-only tier-name edits in `PlayerScreen.cs`, `LeagueScreen.cs`, `CalendarScreen.cs`, `NewGameScreen.cs`.
   - `Assets/Platform/Steam/AchievementManager.cs`, `RichPresenceWriter.cs`: compile-only (§4.6).
   - `Assets/Economy/Family/FamilyService.cs`: compile-only, if the enum change touches it.
-  - `Assets/Data/Schools/schools.json`: the 4 new HS schools.
+  - `Assets/Data/Schools/schools.json` and `Assets/Data/League/home_parks.json`: folded in from 13-1a (Flash), plus their loader (`Assets/Data/League/`).
   - `Tools/SchemaValidator/`, `Tools/MonteCarloHarness/`, `Tools/CoreLoopHarness/`, `Tools/GrittyEventsHarness/`: version pins, enum renames, new checks and the explicit retirement of migration checks (§5.4).
   - `docs/progress.md` (one line) and this brief's §9 review section (the reviewer's).
 - **Not allowed:** `Assets/Simulation/Arcade/` (it mirrors the tier as its own type, `ArcadeTuning.cs:3`, and must stay that way; editing it pulls in the ArcadeHarness gate), `Assets/Simulation/Life/`, `AtBatResolver.cs`, `BaseOutMatrices.cs`, `MicroGame.cs`, `LeagueSchedule.cs`, any spec under `docs/design/` (a spec error goes in the handoff), `GEMINI.md`, `.agents/`.
@@ -83,7 +83,7 @@ Shipped facts this brief relies on (verified at `ebaee21`):
 
 - **4 new `schools.json` entries** for Brookhaven Bulldogs (BRK), Cedar Grove Comets (CDG), Granite Falls Gators (GRF) and Hillcrest Hurricanes (HLC), following the file's entry contract (team_id, abbreviation, school_name, mascot, colors). Team ids follow Appendix A order: North 101–106 (the six North schools in table order), South 107–112. **That renumbers 4 of the 8 shipped schools** (shipped HS ids 101–108 were East/West blocks of 4). Re-key every entry, not just the new ones, and boot's cross-check will catch a miss.
 - **`home_park` for all 68 teams**: fictional, trademark-safe park names. If Flash's list isn't ready, 13-1 ships the placeholder `"{City} Ballpark"` (HS: `"{School} Field"`), each marked as a placeholder in a code comment. G-7's venue catalog replaces them later.
-- Flash writes into a data table that 13-1 consumes, never into C# logic.
+- Flash writes into a data table that 13-1 consumes, never into C# logic. **Brief: [13-1a_seed_data_flash_brief.md](13-1a_seed_data_flash_brief.md)**, which delivers `schools.json` (12 entries) and `Assets/Data/League/home_parks.json` (68 rows) on `p13/13-1a-flash`. 13-1 reads `home_parks.json` with the same load-and-validate pattern as `schools.json` (loud failure on a missing or mismatched row), and its allowed paths include that file and `Assets/Data/League/`. The 4 new schools' image files don't exist yet: the career boot is expected-red anyway (§5.3), and the team picker showing missing art for them is listed as open for the art pipeline.
 
 ## 4. Outputs
 
