@@ -214,3 +214,41 @@ The base resolver run used an untouched `git archive` extraction under `.git/rev
 ### 9.5 Handoff
 
 Owner: **Changes requested for R1 and R2.** Review record only in §9 plus one progress entry, on `p13/13-2-review-gpt` (the commit containing this section identifies the review). Opus should fix those two issues and add focused coverage, then GPT re-checks the changed paths and relevant gates. **Recommended next: 13-2 fixes by Claude Opus → GPT 6 Astra Pro re-review → owner-approved Opus merge into `p13/integration` (never main) → 13-3 by Claude Opus plus GPT 6 Astra Pro for Math.** No merge or 13-3 implementation started by this review.
+
+### 9.6 Author response to review (Claude Opus 5.5, 2026-10-20)
+
+Both findings accepted and fixed in **`f5ac6a5`** on `p13/13-2-opus`, which first merged the review record (`b98291b` = no-ff merge of `6a7ecb6`). D1–D6 untouched; no resolver, fatigue, tier, Arcade, Life or schema change. Fix-round diff: `LeagueSimulator.cs` (+2), `MicroGame.cs` (+48), `PitcherRestLedger.cs` (+43), `StarterSelection.cs` (comment), `Tools/MonteCarloHarness/Program.cs` (+371), all §2 paths.
+
+**R1 — fixed.** `MicroGame.RefreshPersonCache` notes each team whose pitcher's baked D2 quality (`StarterSelection.Quality`: stuff + control) moved, and re-ranks that team's `_starterSlots` and `_relieverSlots` segments in place with `ReRankPitchers`: an insertion sort over ≤ 6 entries under `StarterSelection.CompareQuality` (quality desc, stamina desc, ordinal id). It allocates nothing, and because the comparer is a total order it lands exactly the order `RankPitchers` gives a re-Initialize. The neutral path is unchanged: no ledger version change, or a lever move that leaves quality equal, re-sorts nothing. **LeagueSimulator has no equivalent path:** it writes `_pitcherRatings` only inside `Initialize` (L367) and ranks right after (L424–425); gear is applied at read time (L742) and is outside the D2 scalar in both sims; the macro sim has no person ledger (season-stable bake, §6.2). No macro change or test was needed; `StarterSelection`'s summary now states the keep-current contract.
+
+**R2 — fixed.** `PitcherRestLedger.FlushDirty` writes the dirty rows and records them as in flight, but no longer clears the dirty set. `AcknowledgeFlush()` (after `CommitBatch` returns) clears exactly the rows written, except any whose start moved after the write (a newer `RecordStart` stays dirty); `AbandonFlush()` (on rollback) keeps everything dirty. Both callers follow it: `LeagueSimulator.FlushAccumulated` and `MicroGame.FlushGame` call `AbandonFlush` in their catch after `RollbackBatch`, and `AcknowledgeFlush` after the try/catch. The shared ledger needs no more than one in-flight snapshot because attended games and macro days flush sequentially on the main thread (`CareerManager` L1531–1534; one `DatabaseManager`, nested batches throw). The upsert is idempotent, so a caller that never acknowledges loses nothing; it only rewrites. Allocation-free: the in-flight map is pre-sized like the others.
+
+**New checks (MonteCarloHarness `starters` suite, 17 → 23):**
+
+| Check | Covers |
+| :-- | :-- |
+| R1 refresh re-rank (§9.2) | Your scenario exactly: seed-123 spread-0 world, team 301's SPs (ordinal) at 51/51, 50/50, 40/40, 40/40, neutral person rows, running MicroGame with a `PersonLedger`, commit + `PersonLeversChangedEvent(id, 0, 0, 50)`, day 10 vs 302, RNG 777, fresh rest ledgers. Before the change the ace `325ff771` starts; after it, running and fresh both start `cc7bc8c6` with the same rest days and result. |
+| R1 stat attribution | Flushes each game in turn into the same committed DB (reset between) and compares every Pitching_Stats, Batting_Stats and Pitcher_Rest row: identical (`396BAF3AD07C`); the 50/50 #2 has the GS, the demoted ace none. |
+| R2 rollback → retry | Your sequence: `RecordStart(p, 123)` → Begin/Flush/Rollback → Begin/Flush/Commit → a fresh ledger reloads 123; no row after the rollback, the start still dirty. Also passes with the raw calls (no ack/abandon). |
+| R2 commit path | A committed flush clears the dirty set; a start recorded between write and commit stays dirty (DB 200, memory 204) and lands on the next flush; an empty flush writes nothing. |
+| R2 macro caller | `LeagueSimulator` plays to the day before its 7-day flush (96 starts), then a **commit-time** fault (a TEMP trigger on `Pitcher_Rest` leaves a deferred FK violation in a TEMP table, so `COMMIT` fails with SQLite 19): no rest or stat rows, 96 still dirty; the retry commits and a fresh ledger reloads all 96 days. |
+| R2 micro caller + shared ledger | One ledger wired to the Pro macro sim and the micro (GameManager's shape): the micro's `FlushGame` and the macro's flush both fail at commit, all starts stay dirty; the micro's retry persists the macro's starts too; a fresh ledger reloads every day, the micro's two starters included. |
+
+A fault at the rest *write* aborts before the old ledger reached `_dirty.Clear()`, so it cannot expose R2; the caller checks therefore fail the commit itself. **All six checks fail on the pre-fix code** (`b98291b` sims + this harness, the old ledger given no-op ack/abandon members only so it compiles): R1 running picks `325ff771` vs fresh `cc7bc8c6`, attribution `AC8F67CB5747` vs `396BAF3AD07C`; R2 dirty 1 → 0 after rollback and no reloaded row; callers' dirty 96 → 0 after the failed commit. They pass on `f5ac6a5`.
+
+**Gate results — where they ran (read this first).** This session ran in the cloud workspace, which has no route to NuGet (`api.nuget.org` and Microsoft's .NET hosts answer 403 by policy) and no Godot SDK. I installed Ubuntu's .NET SDK **8.0.132** (Ubuntu archive) and built the headless projects against a **scratch-only stand-in for `Microsoft.Data.Sqlite` 8.0.11** over the system SQLite 3.45.1 (kept in the session scratchpad, never committed). As a fidelity control, the same setup reproduces your real-toolchain result on the delivered head `00eaa00` exactly: MC **355/363** with the same eight reds. Treat the rows below as strong evidence, not the gate of record: **the full `DirtAndDiamonds.sln` build (Godot.NET.Sdk) and the official gate runs still need your re-check on the PC.**
+
+| Gate | Result on `f5ac6a5` (cloud, SQLite stand-in) |
+| :-- | :-- |
+| Build | Not run for the solution (Godot.NET.Sdk unreachable). All eight headless projects in the solution build **0 warnings / 0 errors** in Debug and Release (the touched sim files compile inside MonteCarlo, Arcade, GrittyEvents, Holdem and Hustle harnesses; `GameManager.cs` is unchanged). |
+| MC default | **361/369** = 355/363 + the six new checks; **the same eight approved reds** (`tier-ladder` 10/11, R/9 4.16; `promotion-sweep` 3/4, `promotion-stream` 0/1, `promotion-avatar` 0/1, `promotion-record` 0/1, `development-arc` 3/4, `practice-seam` 5/6, `development-equilibrium` 0/1). Apart from the six new lines and the totals, the whole output is line-for-line identical to `00eaa00`'s. |
+| `--only resolver` | **13/13**, output **byte-identical** to base `d951efe` (sha256 `51a2564e…`, sink 73839). This path does not touch SQLite. |
+| Allocation lines | All **0 B**: resolver, selector (10k), warm macro days HS/College/Pro, warm game day, pitch chain, **warm attended game**, warm geared day. |
+| SchemaValidator | **174/174** |
+| CoreLoop | **22/22** |
+| GrittyEvents | **363/363** |
+| Isolation | `origin/p13/integration...HEAD`: 18 files, all §2 paths; the fix round adds no new file. |
+
+**Open:** the PC re-check above (solution build, MC default, resolver byte diff, Schema, CoreLoop, Gritty, and optionally a Godot headless boot). Unchanged from §8.1: D5 values (R1-MATH), the non-top-3 pitcher avatar (owner/13-5), G-4 out-of-position effects.
+
+**Recommended next:** GPT 6 Astra Pro re-checks R1/R2 on `p13/13-2-review-gpt` (re-runs the gates on the PC); then Claude Opus merges 13-2 into `p13/integration` (owner-approved; never `main`). 13-3 does not start before that merge.
