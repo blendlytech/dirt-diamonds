@@ -7501,6 +7501,7 @@ internal static class Program
             ledger.HydrateOnce(baseball);
             ledger.RecordStart(ace, GlobalState.DaysPerSeason - 1); // the season's last day
             db.RunInBatch(() => ledger.FlushDirty(baseball));
+            ledger.AcknowledgeFlush(); // the caller contract (review R2): acknowledge after the commit
 
             var reloaded = new PitcherRestLedger();
             reloaded.HydrateOnce(baseball);
@@ -7559,6 +7560,12 @@ internal static class Program
                 $"macro short {macro.ShortRestStarts}, micro short {micro.ShortRestStarts}");
         }
 
+        // ---- review R1: a person refresh re-ranks the micro's pitchers (§9.2 scenario) ----
+        RunStarterRefreshRankCheck(schemaPath, scratchPath + ".r1");
+
+        // ---- review R2: rest rows are acknowledged only after the batch commits ----
+        RunRestLedgerCommitBoundaryChecks(schemaPath, scratchPath + ".r2");
+
         // ---- D5: the workload knobs ship neutral ----
         Check("D5 neutral workload knobs: penalty 0 and risk 0, so a short-rest start's capacity factor is exactly 1 (no extra draw exists)",
             TierRules.ShortRestCapacityPenalty == 0.0 && TierRules.OveruseInjuryRisk == 0.0
@@ -7584,6 +7591,370 @@ internal static class Program
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Check("starter selection allocates zero bytes over 10k selections", allocated == 0, $"{allocated} B (sink {sink})");
+    }
+
+    // Per-player attribution of one flushed game (13-2 review R1): every
+    // counting column, no surrogate stat_id, ordered for a byte comparison.
+    private static readonly string[] AttributionQueries =
+    {
+        "SELECT player_id, season_year, g, gs, w, l, sv, outs_recorded, h_allowed, er, bb, so FROM Pitching_Stats ORDER BY player_id;",
+        "SELECT player_id, season_year, pa, ab, h, doubles, triples, hr, bb, so, rbi, sb FROM Batting_Stats ORDER BY player_id;",
+        "SELECT player_id, last_start_day FROM Pitcher_Rest ORDER BY player_id;",
+    };
+
+    /// <summary>
+    /// 13-2 review R1, Astra's §9.2 scenario: seed-123 spread-0 world, Pro
+    /// team 301's starters (ordinal ids) at stuff/control 51/51, 50/50, 40/40,
+    /// 40/40 with neutral person rows. A RUNNING MicroGame (initialized before
+    /// the change) and a FRESH one initialized over the same committed DB must
+    /// start the same pitcher on day 10 vs 302 (RNG 777) after the ace's
+    /// committed happiness/confidence drop to 0 (49/49 baked) is announced —
+    /// and attribute the game's starts, rest and stat lines identically.
+    /// </summary>
+    private static void RunStarterRefreshRankCheck(string schemaPath, string dbPath)
+    {
+        using var db = new DatabaseManager(dbPath);
+        db.InitializeSchema(schemaPath);
+        var players = new PlayerQueries(db);
+        var baseball = new BaseballQueries(db);
+        var persons = new PersonQueries(db);
+        var genRng = new RngState(123);
+        LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+        int teamId = ProTeam(1);
+        int opponentId = ProTeam(2);
+        var roster = new List<RosterPlayerRow>();
+        baseball.LoadRosterByTier(LeagueTier.Pro, roster);
+        string[] sp = roster.Where(r => r.TeamId == teamId && r.IsPitcher && r.Role == PitcherRole.Starter)
+            .Select(r => r.PlayerId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        int[] pairs = { 51, 50, 40, 40 };
+        if (sp.Length != pairs.Length)
+        {
+            Check("R1 refresh re-rank: Pro team 301 has the four starters the §9.2 scenario needs", false, $"{sp.Length} SP");
+            return;
+        }
+        for (int k = 0; k < sp.Length; k++)
+        {
+            baseball.TryGetRatings(sp[k], out PlayerRatingsRow ratings);
+            ratings.PitStuff = pairs[k];
+            ratings.PitControl = pairs[k];
+            baseball.UpsertRatings(in ratings);
+            persons.Upsert(PersonRow.Neutral(sp[k]));
+        }
+
+        MicroGame NewMicro(PersonLedger levers) => new(db, baseball)
+        {
+            LoggingEnabled = false, Persons = persons, PersonLevers = levers, RestLedger = new PitcherRestLedger(),
+        };
+        (MicroGameResult Result, string Starter) PlayDay10(MicroGame micro)
+        {
+            micro.SetGameDay(10);
+            var policy = new NeutralBatterPolicy();
+            var rng = new RngState(777);
+            MicroGameResult result = micro.PlayGame(teamId, opponentId, MicroGame.NoHuman, ref policy, ref rng);
+            return (result, micro.LastStarters.Home);
+        }
+        bool SameRest(MicroGame a, MicroGame b) => sp.All(id =>
+            a.RestLedger.TryGetLastStart(id, out long da) == b.RestLedger.TryGetLastStart(id, out long dbDay) && da == dbDay);
+
+        var bus = new EventBus();
+        var levers = new PersonLedger();
+        levers.AttachTo(bus);
+        MicroGame running = NewMicro(levers);
+        running.Initialize(); // ranks the 51/51 ace first
+        MicroGame control = NewMicro(new PersonLedger());
+        control.Initialize();
+        string controlStarter = PlayDay10(control).Starter;
+
+        // Commit, then announce (the read-back publish contract): 51 − 2 = 49/49.
+        PersonRow dropped = PersonRow.Neutral(sp[0]);
+        dropped.Happiness = 0;
+        dropped.Confidence = 0;
+        persons.Upsert(in dropped);
+        bus.Publish(new PersonLeversChangedEvent(sp[0], 0, 0, 50));
+        bus.DispatchPending();
+
+        (MicroGameResult runningResult, string runningStarter) = PlayDay10(running);
+        MicroGame fresh = NewMicro(new PersonLedger());
+        fresh.Initialize(); // fresh rank over the committed rows: 50/50 first
+        (MicroGameResult freshResult, string freshStarter) = PlayDay10(fresh);
+
+        Check("R1 refresh re-rank (§9.2): after the ace's committed lever drop (49/49), the running micro starts the "
+            + "same pitcher as a fresh Initialize — the 50/50 #2 — with the same rest days and result",
+            controlStarter == sp[0] && runningStarter == sp[1] && freshStarter == sp[1]
+            && SameRest(running, fresh) && running.RestLedger.TryGetLastStart(sp[1], out long restDay) && restDay == 10
+            && !running.RestLedger.TryGetLastStart(sp[0], out _) && MicroResultsEqual(runningResult, freshResult),
+            $"before {controlStarter[..8]}, running {runningStarter[..8]}, fresh {freshStarter[..8]}; " +
+            $"score {runningResult.AwayScore}-{runningResult.HomeScore} vs {freshResult.AwayScore}-{freshResult.HomeScore}");
+
+        // Stat attribution: flush each game into the same committed DB in turn
+        // (reset between) and compare every per-player counting line and rest row.
+        running.FlushGame(StartYear, 10);
+        string runningRows = DumpQueries(db, AttributionQueries);
+        db.RunInBatch(() =>
+        {
+            db.ExecuteNonQuery(db.GetPooledCommand("DELETE FROM Pitching_Stats;"));
+            db.ExecuteNonQuery(db.GetPooledCommand("DELETE FROM Batting_Stats;"));
+            db.ExecuteNonQuery(db.GetPooledCommand("DELETE FROM Pitcher_Rest;"));
+        });
+        fresh.FlushGame(StartYear, 10);
+        string freshRows = DumpQueries(db, AttributionQueries);
+        string starts = DumpQueries(db, new[] { "SELECT player_id FROM Pitching_Stats WHERE gs = 1 ORDER BY player_id;" });
+        Check("R1 refresh re-rank: running and fresh micro attribute the game identically — every pitching/batting "
+            + "line and Pitcher_Rest row; the 50/50 #2 gets the GS, the demoted ace none",
+            runningRows == freshRows && starts.Contains(sp[1] + "|", StringComparison.Ordinal)
+            && !starts.Contains(sp[0] + "|", StringComparison.Ordinal),
+            $"running {Sha12(runningRows)}, fresh {Sha12(freshRows)}");
+    }
+
+    // A commit-time failure AFTER the rest rows are written (13-2 review R2):
+    // a TEMP trigger on Pitcher_Rest leaves a deferred foreign-key violation
+    // in a TEMP table, so the batch's COMMIT fails and the caller rolls back.
+    // (A failure at the rest write itself aborts before the old ledger cleared
+    // its dirty set, so only a commit-time fault exposes the R2 defect.)
+    private static readonly string[] RestCommitFaultOn =
+    {
+        "CREATE TEMP TABLE r2_parent (id INTEGER PRIMARY KEY);",
+        "CREATE TEMP TABLE r2_child (parent_id INTEGER REFERENCES r2_parent(id) DEFERRABLE INITIALLY DEFERRED);",
+        "CREATE TEMP TRIGGER r2_fault_insert AFTER INSERT ON main.Pitcher_Rest BEGIN INSERT INTO r2_child VALUES (-1); END;",
+        "CREATE TEMP TRIGGER r2_fault_update AFTER UPDATE ON main.Pitcher_Rest BEGIN INSERT INTO r2_child VALUES (-1); END;",
+    };
+
+    private static readonly string[] RestCommitFaultOff =
+    {
+        "DROP TRIGGER IF EXISTS temp.r2_fault_insert;",
+        "DROP TRIGGER IF EXISTS temp.r2_fault_update;",
+        "DROP TABLE IF EXISTS temp.r2_child;",
+        "DROP TABLE IF EXISTS temp.r2_parent;",
+    };
+
+    /// <summary>Arms (or disarms) the commit-time fault on this connection.</summary>
+    private static void SetRestCommitFault(DatabaseManager db, bool on)
+    {
+        foreach (string sql in on ? RestCommitFaultOn : RestCommitFaultOff)
+        {
+            db.ExecuteNonQuery(db.GetPooledCommand(sql));
+        }
+    }
+
+    private static bool Throws(Action action, out string message)
+    {
+        try
+        {
+            action();
+            message = "none";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            return true;
+        }
+    }
+
+    /// <summary>True when a fresh ledger hydrated from the DB holds exactly <paramref name="ledger"/>'s day for every id.</summary>
+    private static bool ReloadMatches(BaseballQueries baseball, PitcherRestLedger ledger, IEnumerable<string> ids, out int started)
+    {
+        var reloaded = new PitcherRestLedger();
+        reloaded.HydrateOnce(baseball);
+        started = 0;
+        bool same = true;
+        foreach (string id in ids)
+        {
+            bool inMemory = ledger.TryGetLastStart(id, out long memoryDay);
+            bool onDisk = reloaded.TryGetLastStart(id, out long diskDay);
+            same &= inMemory == onDisk && memoryDay == diskDay;
+            started += inMemory ? 1 : 0;
+        }
+        return same && reloaded.Count == ledger.Count;
+    }
+
+    /// <summary>
+    /// 13-2 review R2: <see cref="PitcherRestLedger"/> acknowledges written
+    /// rows only after the encompassing batch commits. Covers the ledger
+    /// contract (Astra's §9.2 sequence), a newer start landing mid-batch, both
+    /// real callers (LeagueSimulator's cycle flush, MicroGame.FlushGame) under
+    /// an injected commit-time failure, and the shared-ledger case (one
+    /// caller's rollback, another caller's retry).
+    /// </summary>
+    private static void RunRestLedgerCommitBoundaryChecks(string schemaPath, string dbPath)
+    {
+        const string RestRowsSql = "SELECT COUNT(*) FROM Pitcher_Rest;";
+        const string PitchingRowsSql = "SELECT COUNT(*) FROM Pitching_Stats;";
+
+        // ---- the ledger contract on its own (§9.2 sequence) ----
+        using (var db = new DatabaseManager(dbPath + ".unit"))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(Slice132Seed + 3);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var roster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.Pro, roster);
+            string[] starters = roster.Where(r => r.Role == PitcherRole.Starter).Select(r => r.PlayerId).Take(3).ToArray();
+
+            var ledger = new PitcherRestLedger();
+            ledger.HydrateOnce(baseball);
+            ledger.RecordStart(starters[0], 123);
+            db.BeginBatch();
+            ledger.FlushDirty(baseball);
+            db.RollbackBatch();
+            ledger.AbandonFlush();
+            long rowsAfterRollback = CountRows(db, RestRowsSql);
+            int dirtyAfterRollback = ledger.DirtyCount;
+            db.BeginBatch();
+            ledger.FlushDirty(baseball);
+            db.CommitBatch();
+            ledger.AcknowledgeFlush();
+            var reloaded = new PitcherRestLedger();
+            reloaded.HydrateOnce(baseball);
+            bool retried = reloaded.TryGetLastStart(starters[0], out long reloadedDay) && reloadedDay == 123;
+
+            // A caller that never acknowledges or abandons (the raw §9.2 calls) still loses nothing.
+            ledger.RecordStart(starters[1], 130);
+            db.BeginBatch();
+            ledger.FlushDirty(baseball);
+            db.RollbackBatch();
+            db.BeginBatch();
+            ledger.FlushDirty(baseball);
+            db.CommitBatch();
+            var rawReload = new PitcherRestLedger();
+            rawReload.HydrateOnce(baseball);
+            bool rawRetried = rawReload.TryGetLastStart(starters[1], out long rawDay) && rawDay == 130;
+            ledger.AcknowledgeFlush();
+
+            Check("R2 rollback → retry: a rolled-back flush writes nothing and keeps the start dirty; "
+                + "the committed retry persists it and a fresh ledger reloads day 123 (also without ack/abandon calls)",
+                rowsAfterRollback == 0 && dirtyAfterRollback == 1 && retried && ledger.DirtyCount == 0 && rawRetried,
+                $"rows after rollback {rowsAfterRollback}, dirty {dirtyAfterRollback}, reload {reloadedDay}, raw reload {rawDay}");
+
+            // Successful commit unchanged; a start recorded between the write and the commit is not acknowledged.
+            ledger.RecordStart(starters[2], 200);
+            db.BeginBatch();
+            ledger.FlushDirty(baseball);
+            ledger.RecordStart(starters[2], 204);
+            db.CommitBatch();
+            ledger.AcknowledgeFlush();
+            int dirtyAfterNewer = ledger.DirtyCount;
+            var midReload = new PitcherRestLedger();
+            midReload.HydrateOnce(baseball);
+            midReload.TryGetLastStart(starters[2], out long committedDay);
+            db.RunInBatch(() => ledger.FlushDirty(baseball));
+            ledger.AcknowledgeFlush();
+            long rowsBeforeEmpty = CountRows(db, RestRowsSql);
+            db.RunInBatch(() => ledger.FlushDirty(baseball)); // nothing dirty: writes nothing
+            ledger.AcknowledgeFlush();
+            bool finalMatches = ReloadMatches(baseball, ledger, starters, out _);
+            Check("R2 commit path: a committed flush clears the dirty set; a newer start recorded before the commit "
+                + "stays dirty and lands on the next flush; an empty flush writes nothing",
+                dirtyAfterNewer == 1 && committedDay == 200 && ledger.DirtyCount == 0 && finalMatches
+                && CountRows(db, RestRowsSql) == rowsBeforeEmpty && rowsBeforeEmpty == 3,
+                $"dirty after newer {dirtyAfterNewer}, committed {committedDay}, rows {rowsBeforeEmpty}");
+        }
+
+        // ---- the macro caller: LeagueSimulator's cycle flush ----
+        using (var db = new DatabaseManager(dbPath + ".macro"))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(Slice132Seed + 4);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var roster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.Pro, roster);
+            string[] pitchers = roster.Where(r => r.IsPitcher).Select(r => r.PlayerId).ToArray();
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+            clock.Initialize(StartYear);
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed), LeagueTier.Pro);
+            league.Initialize();
+            league.AttachTo(bus);
+            // Play up to the day before the first cycle flush: starts recorded, nothing flushed yet.
+            while (state.DayOfSeason % LeagueSimulator.FlushCadenceDays != LeagueSimulator.FlushCadenceDays - 1)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            int dirtyBefore = league.RestLedger.DirtyCount;
+
+            SetRestCommitFault(db, on: true);
+            bool threw = Throws(league.FlushPending, out string failure);
+            long restRows = CountRows(db, RestRowsSql);
+            long statRows = CountRows(db, PitchingRowsSql);
+            int dirtyAfterRollback = league.RestLedger.DirtyCount;
+            SetRestCommitFault(db, on: false);
+            league.FlushPending();
+            bool reloadOk = ReloadMatches(baseball, league.RestLedger, pitchers, out int started);
+            Check("R2 macro caller (LeagueSimulator flush): a batch whose COMMIT fails after the rest rows were written "
+                + "rolls back to no rest or stat rows with every start still dirty; the retry commits them and a fresh ledger reloads the same days",
+                threw && restRows == 0 && statRows == 0 && dirtyBefore > 0 && dirtyAfterRollback == dirtyBefore
+                && league.RestLedger.DirtyCount == 0 && reloadOk && started == dirtyBefore
+                && CountRows(db, PitchingRowsSql) > 0 && !db.IsBatchActive && db.RunForeignKeyCheck() == 0,
+                $"threw {threw}, dirty {dirtyBefore}→{dirtyAfterRollback}→{league.RestLedger.DirtyCount}, " +
+                $"rows after rollback {restRows}/{statRows}, started {started}; failure: {failure}");
+        }
+
+        // ---- the micro caller, and one ledger shared by both callers ----
+        using (var db = new DatabaseManager(dbPath + ".shared"))
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(Slice132Seed + 5);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var roster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.Pro, roster);
+            string[] pitchers = roster.Where(r => r.IsPitcher).Select(r => r.PlayerId).ToArray();
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var clock = new TimeManager(db, new GameStateQueries(db), state, bus);
+            clock.Initialize(StartYear);
+            var shared = new PitcherRestLedger(); // GameManager's wiring: one ledger, every sim
+            var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed), LeagueTier.Pro)
+            {
+                RestLedger = shared,
+            };
+            league.Initialize();
+            league.AttachTo(bus);
+            var micro = new MicroGame(db, baseball) { LoggingEnabled = false, RestLedger = shared };
+            micro.Initialize();
+            // Play up to the day before the first cycle flush: starts recorded, nothing flushed yet.
+            while (state.DayOfSeason % LeagueSimulator.FlushCadenceDays != LeagueSimulator.FlushCadenceDays - 1)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            long microDay = state.CurrentDay + 1;
+            micro.SetGameDay(microDay);
+            var policy = new NeutralBatterPolicy();
+            var rng = new RngState(MicroSeed + 1322);
+            micro.PlayGame(ProTeam(1), ProTeam(2), MicroGame.NoHuman, ref policy, ref rng);
+            (string microHome, string microAway) = micro.LastStarters;
+            int dirtyBefore = shared.DirtyCount;
+
+            SetRestCommitFault(db, on: true);
+            bool microThrew = Throws(() => micro.FlushGame(StartYear, (int)microDay), out string microFailure);
+            bool macroThrew = Throws(league.FlushPending, out _);
+            long restRows = CountRows(db, RestRowsSql);
+            int dirtyAfterBoth = shared.DirtyCount;
+            SetRestCommitFault(db, on: false);
+            micro.FlushGame(StartYear, (int)microDay); // the micro's retry carries the macro's rolled-back rows too
+            int dirtyAfterMicroRetry = shared.DirtyCount;
+            bool reloadOk = ReloadMatches(baseball, shared, pitchers, out int started);
+            bool microStartsDurable = shared.TryGetLastStart(microHome, out long homeDay) && homeDay == microDay
+                && shared.TryGetLastStart(microAway, out long awayDay) && awayDay == microDay;
+            league.FlushPending(); // the macro's stats retry; its rest rows are already durable
+            Check("R2 micro caller (MicroGame.FlushGame) + shared ledger: both callers' failed-COMMIT batches keep every "
+                + "start dirty; the micro's retry persists the macro's starts too, and a fresh ledger reloads every day",
+                microThrew && macroThrew && restRows == 0 && dirtyBefore > 0 && dirtyAfterBoth == dirtyBefore
+                && dirtyAfterMicroRetry == 0 && reloadOk && started == dirtyBefore && microStartsDurable
+                && shared.DirtyCount == 0 && CountRows(db, PitchingRowsSql) > 0 && !db.IsBatchActive
+                && db.RunForeignKeyCheck() == 0 && db.RunIntegrityCheck() == "ok",
+                $"threw micro {microThrew} macro {macroThrew}, dirty {dirtyBefore}→{dirtyAfterBoth}→{dirtyAfterMicroRetry}, " +
+                $"rows after rollback {restRows}, started {started}; failure: {microFailure}");
+        }
     }
 
     private static void RunInningsSuite(string schemaPath, string scratchPath)

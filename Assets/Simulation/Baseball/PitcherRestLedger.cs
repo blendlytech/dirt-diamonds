@@ -13,6 +13,8 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// rows that changed are written inside whichever sim batch flushes next (the
 /// macro 7-day flush or an attended game's flush), so rest can trail by at
 /// most what an unflushed stat line can (R-1 B01, fixed by R1-SAVE-1).
+/// A written row is acknowledged only after that batch commits; on a
+/// rollback it stays dirty for whichever sim flushes next (review R2).
 ///
 /// Allocation: the maps are pre-sized, so recording a start on the warm game
 /// path never allocates.
@@ -24,6 +26,8 @@ public sealed class PitcherRestLedger
 
     private readonly Dictionary<string, long> _lastStartDay = new(InitialCapacity, StringComparer.Ordinal);
     private readonly HashSet<string> _dirty = new(InitialCapacity, StringComparer.Ordinal);
+    // What the last FlushDirty wrote (player → day), acknowledged on commit (13-2 review R2).
+    private readonly Dictionary<string, long> _inFlight = new(InitialCapacity, StringComparer.Ordinal);
     private bool _hydrated;
 
     /// <summary>Loads Pitcher_Rest once; later calls (every re-Initialize) are no-ops, so in-memory starts are never clobbered by a staler row.</summary>
@@ -52,19 +56,52 @@ public sealed class PitcherRestLedger
         _dirty.Add(playerId);
     }
 
-    /// <summary>Writes every changed row through the caller's OPEN batch, then clears the dirty set.</summary>
+    /// <summary>
+    /// Writes every changed row through the caller's OPEN batch. The rows
+    /// stay dirty: the caller calls <see cref="AcknowledgeFlush"/> only after
+    /// its <c>CommitBatch</c> succeeds, so a rolled-back batch leaves them
+    /// for the next flush to write again (13-2 review R2). The upsert is
+    /// idempotent, so re-writing a row is always safe.
+    /// </summary>
     public void FlushDirty(BaseballQueries queries)
     {
+        _inFlight.Clear();
         if (_dirty.Count == 0)
         {
             return;
         }
         foreach (string playerId in _dirty)
         {
-            queries.UpsertPitcherRest(playerId, _lastStartDay[playerId]);
+            long day = _lastStartDay[playerId];
+            queries.UpsertPitcherRest(playerId, day);
+            _inFlight[playerId] = day;
         }
-        _dirty.Clear();
     }
+
+    /// <summary>
+    /// The caller's batch committed: the rows the last <see cref="FlushDirty"/>
+    /// wrote are durable, so they stop being dirty. A row whose start moved
+    /// after it was written (a newer <see cref="RecordStart"/>) stays dirty.
+    /// Call this only after <c>CommitBatch</c> returns; after a rollback,
+    /// call nothing (or <see cref="AbandonFlush"/>) and the rows stay dirty.
+    /// </summary>
+    public void AcknowledgeFlush()
+    {
+        foreach (KeyValuePair<string, long> written in _inFlight)
+        {
+            if (_lastStartDay[written.Key] == written.Value)
+            {
+                _dirty.Remove(written.Key);
+            }
+        }
+        _inFlight.Clear();
+    }
+
+    /// <summary>The caller's batch rolled back: forget what the last flush wrote; every row stays dirty.</summary>
+    public void AbandonFlush() => _inFlight.Clear();
+
+    /// <summary>Rows recorded since the last acknowledged flush (harness visibility).</summary>
+    public int DirtyCount => _dirty.Count;
 
     public int Count => _lastStartDay.Count;
 }

@@ -1051,8 +1051,10 @@ public sealed class LeagueSimulator
         catch
         {
             _db.RollbackBatch();
+            RestLedger.AbandonFlush(); // review R2: rolled back, so the rows stay dirty
             throw;
         }
+        RestLedger.AcknowledgeFlush(); // review R2: durable only once committed
 
         // Rates are denormalized after the counting-stat batch, in the
         // normalizer's own transaction — tier-scoped (9a) so six sims flushing

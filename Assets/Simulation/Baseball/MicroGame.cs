@@ -673,7 +673,9 @@ public sealed class MicroGame
     /// this shares <see cref="BakeSlotRatings"/> (and the retained
     /// fielding/teamwork sums) with Initialize, refresh ≡ re-Initialize
     /// whenever ledger and Player_Person agree — which the read-back publish
-    /// contract guarantees. Ids outside the roster are skipped; the linear
+    /// contract guarantees. That equivalence includes WHO pitches: a moved
+    /// pitcher's team re-ranks its starter/reliever tables in place (13-2
+    /// review R1). Ids outside the roster are skipped; the linear
     /// <see cref="FindRosterSlot"/> probe is fine here (moved levers are
     /// sparse — typically the avatar — and rebuilds are gated).
     /// </summary>
@@ -686,6 +688,11 @@ public sealed class MicroGame
         _personVersionSeen = PersonLevers.Version;
 
         Span<bool> defenseDirty = stackalloc bool[_teamCount];
+        // 13-2 review R1: a pitcher's re-baked stuff/control moves his D2
+        // quality, so his team's ranked starter/reliever tables re-sort below
+        // — SelectPitcher scans them in rank order, and a re-Initialize ranks
+        // after the same bake.
+        Span<bool> pitcherOrderDirty = stackalloc bool[_teamCount];
         PersonLevers.CopyAll(_personScratch);
         for (int i = 0; i < _personScratch.Count; i++)
         {
@@ -710,7 +717,13 @@ public sealed class MicroGame
                 defenseDirty[_slotTeam[slot]] = true;
             }
             _slotPersonDeltas[slot] = next;
+            PitcherRatings before = _pitcherRatings[slot];
             BakeSlotRatings(slot, in next);
+            if (_roster[slot].IsPitcher
+                && StarterSelection.Quality(in before) != StarterSelection.Quality(in _pitcherRatings[slot]))
+            {
+                pitcherOrderDirty[_slotTeam[slot]] = true;
+            }
         }
         for (int t = 0; t < _teamCount; t++)
         {
@@ -720,6 +733,37 @@ public sealed class MicroGame
                     _teamFieldingSum[t], RosterCapacity.Lineup,
                     _teamTierDeltas[t].Defense, _teamTeamworkSum[t]);
             }
+            if (pitcherOrderDirty[t])
+            {
+                ReRankPitchers(_starterSlots, t * RosterCapacity.MaxStarters, _starterCount[t]);
+                ReRankPitchers(_relieverSlots, t * RosterCapacity.MaxRelievers, _relieverCount[t]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Restores one team's ranked pitcher table to the D2 order in place
+    /// after a person refresh re-baked a pitcher (13-2 review R1). Insertion
+    /// sort over ≤ <see cref="RosterCapacity.MaxStarters"/> entries:
+    /// allocation-free, and because <see cref="StarterSelection.CompareQuality"/>
+    /// is a total order (player ids are distinct), it lands exactly the order
+    /// <see cref="RankPitchers"/> gives a re-Initialize over the same bake.
+    /// </summary>
+    private void ReRankPitchers(int[] table, int offset, int count)
+    {
+        int end = offset + count;
+        for (int i = offset + 1; i < end; i++)
+        {
+            int slot = table[i];
+            int j = i - 1;
+            while (j >= offset && StarterSelection.CompareQuality(
+                in _pitcherRatings[slot], _roster[slot].PlayerId,
+                in _pitcherRatings[table[j]], _roster[table[j]].PlayerId) < 0)
+            {
+                table[j + 1] = table[j];
+                j--;
+            }
+            table[j + 1] = slot;
         }
     }
 
@@ -1441,8 +1485,10 @@ public sealed class MicroGame
         catch
         {
             _db.RollbackBatch();
+            RestLedger.AbandonFlush(); // review R2: rolled back, so the rows stay dirty
             throw;
         }
+        RestLedger.AcknowledgeFlush(); // review R2: durable only once committed
 
         Array.Clear(_batting);
         Array.Clear(_pitching);

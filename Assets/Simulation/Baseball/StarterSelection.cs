@@ -21,9 +21,11 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// Quality (brief D2, CS-M §2): the starter's tier-and-person-baked stuff +
 /// control (the mean, scaled), before in-game fatigue; ties by stamina
 /// descending, then player id ascending. Callers rank each team's starters
-/// once at Initialize with <see cref="CompareQuality"/> and pass candidates in
-/// that order, so selection itself is a scan: pure, allocation-free, and it
-/// draws no random number.
+/// at Initialize with <see cref="CompareQuality"/>, keep that order current
+/// whenever a baked rating moves (MicroGame's per-game person refresh
+/// re-ranks in place; the macro sim bakes only at Initialize), and pass
+/// candidates in that order, so selection itself is a scan: pure,
+/// allocation-free, and it draws no random number.
 /// </summary>
 public static class StarterSelection
 {
