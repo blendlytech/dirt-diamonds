@@ -308,3 +308,15 @@ These official-toolchain numbers equal §9.6's cloud-session numbers (361/369, t
 **Gates as merged:** build 0/0; MC default 361/369 with exactly the eight approved D6 reds; `--only resolver` 13/13 byte-identical to `d951efe`; all allocation lines 0 B; SchemaValidator 174/174; CoreLoop 22/22; GrittyEvents 363/363; isolation §2 only (§9.7, owner's PC). Godot headless boot not re-run (fix round touches no boot path; Astra's `00eaa00` pass stands).
 
 **Next:** 13-3 by Claude Opus + GPT 6 Astra Pro (Math), from `p13/integration` @ this merge.
+
+### 9.9 Post-merge code read (GPT 6 Astra Pro)
+
+**2026-10-25 — Accept. No blocking findings.** Independently read all five files in `b98291b..f5ac6a5` against §9.2, the author's §9.6 and Sonnet's §9.7, at merged integration head `fdbe17e` on `p13/13-2-review-gpt`. This discharges the post-merge read owed under §9.8; it does not extend the owner's one-round waiver.
+
+- **R1 closed:** the refresh precedes selection; changed stuff/control quality marks the affected team and insertion-sorts both pitcher tables under the original total order. Stamina is the unchanged raw roster byte, so the quality-change trigger covers every order-changing person refresh. The macro only bakes/ranks at Initialize. The focused reproduction now selects `cc7bc8c6` in both running/fresh games, and every persisted attribution row matches (`396BAF3AD07C`).
+- **R2 closed:** dirty rows survive writes and rollback. Acknowledge occurs only after successful commit in both callers and preserves a newer in-memory start. Read the commit-time fault fixtures (including shared-ledger retry), not just their pass labels: they fail after rest writes, at the boundary that originally lost dirtiness.
+- **§9.7 observations accepted:** the single in-flight snapshot requires sequential flushes, including across the attended worker and macro clock; the database's nested-batch rejection alone is not a concurrency guarantee. Keep §9.8's explicit-contract and reliever/increase/tie-break coverage follow-ups with Opus. One caller may persist another's rest before its stats retry; this does not make the rollback fix wrong or close R1-SAVE-1's broader save-boundary work. D5 still counts short rest without applying capacity or injury effects; no nonzero tuning is approved by this review.
+
+**Independent gate:** `dotnet run --project Tools/MonteCarloHarness -c Release -- --only starters,resolver` on the owner's Windows PC: **36/36 (starters 23/23, resolver 13/13)**, selector/resolver allocations **0 B**. R2 rollback leaves dirty count 1, both real caller faults preserve 96 starts, and retries/reloads pass. The full suite, solution build, mutation experiment and base-output byte comparison were not repeated; §9.7 remains their evidence. No source edits, new baseline or merge. Review record plus one progress line only; push only `p13/13-2-review-gpt`.
+
+**Recommended next:** R1-MATH by GPT 6 Astra Pro (reviewer Claude Opus 5.5), then an owner-sent 13-3 Math brief review. Any later fix belongs to Opus on integration.
