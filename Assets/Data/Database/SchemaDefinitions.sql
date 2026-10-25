@@ -564,6 +564,20 @@ CREATE TABLE IF NOT EXISTS Player_Fielding (
 ) STRICT;
 
 -- ----------------------------------------------------------------------------
+-- Pitcher_Rest — schema v14 (slice 13-2, brief D4; league_restructure.md §6).
+-- The absolute game day of each pitcher's last start: the one memory "ride
+-- the ace" starter selection reads (gap since last start ≥ MinRestDays), so
+-- rest survives week and year boundaries and a reload. No row = never
+-- started = fully rested. Written by the sims' existing flush batches through
+-- PitcherRestLedger. A v14 addition, not a v15: v14 is unreleased. The PK is
+-- the hydration index.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Pitcher_Rest (
+    player_id      TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    last_start_day INTEGER NOT NULL CHECK (last_start_day >= 0)
+) STRICT;
+
+-- ----------------------------------------------------------------------------
 -- Phase 13 league tables — schema v14 (league_restructure.md §12). 13-1
 -- creates them so the version is complete; they stay empty until their
 -- writers land: Schedule_Games (13-3 SeasonScheduler), Playoff_Series +

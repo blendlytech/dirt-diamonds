@@ -81,6 +81,15 @@ public sealed class BaseballQueries
         "SELECT player_id, defensive_position, secondary_position, speed, arm " +
         "FROM Player_Fielding ORDER BY player_id;";
 
+    // Pitcher_Rest (schema v14, slice 13-2): the rest ledger's persistence.
+    // Both ride the player_id PK (validated on a v14 scratch db).
+    private const string SqlUpsertPitcherRest =
+        "INSERT INTO Pitcher_Rest (player_id, last_start_day) VALUES (@playerId, @day) " +
+        "ON CONFLICT (player_id) DO UPDATE SET last_start_day = excluded.last_start_day;";
+
+    private const string SqlSelectAllPitcherRest =
+        "SELECT player_id, last_start_day FROM Pitcher_Rest ORDER BY player_id;";
+
     private const string SqlSelectFieldingById =
         "SELECT player_id, defensive_position, secondary_position, speed, arm " +
         "FROM Player_Fielding WHERE player_id = @playerId;";
@@ -420,6 +429,8 @@ public sealed class BaseballQueries
     private readonly SqliteCommand _upsertFielding;
     private readonly SqliteCommand _selectAllFielding;
     private readonly SqliteCommand _selectFieldingById;
+    private readonly SqliteCommand _upsertPitcherRest;
+    private readonly SqliteCommand _selectAllPitcherRest;
     private readonly SqliteCommand _selectAllTeams;
     private readonly SqliteCommand _selectTeamsByTier;
     private readonly SqliteCommand _countTeams;
@@ -482,6 +493,8 @@ public sealed class BaseballQueries
             ("@speed", SqliteType.Integer), ("@arm", SqliteType.Integer));
         _selectAllFielding = Acquire(SqlSelectAllFielding);
         _selectFieldingById = Acquire(SqlSelectFieldingById, ("@playerId", SqliteType.Text));
+        _upsertPitcherRest = Acquire(SqlUpsertPitcherRest, ("@playerId", SqliteType.Text), ("@day", SqliteType.Integer));
+        _selectAllPitcherRest = Acquire(SqlSelectAllPitcherRest);
 
         _selectAllTeams = Acquire(SqlSelectAllTeams);
         _selectTeamsByTier = Acquire(SqlSelectTeamsByTier, ("@tier", SqliteType.Integer));
@@ -800,6 +813,31 @@ public sealed class BaseballQueries
         Speed = reader.GetInt32(3),
         Arm = reader.GetInt32(4),
     };
+
+    // ------------------------------------------------------------------
+    // Pitcher rest (schema v14, slice 13-2)
+    // ------------------------------------------------------------------
+
+    /// <summary>Records a pitcher's last start day; joins the caller's open batch (PitcherRestLedger.FlushDirty).</summary>
+    public void UpsertPitcherRest(string playerId, long lastStartDay)
+    {
+        SqliteParameterCollection p = _upsertPitcherRest.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@day"].Value = lastStartDay;
+        _db.ExecuteNonQuery(_upsertPitcherRest);
+    }
+
+    /// <summary>Loads every Pitcher_Rest row, ordered by player_id (PitcherRestLedger.HydrateOnce).</summary>
+    public int LoadAllPitcherRest(List<(string PlayerId, long LastStartDay)> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllPitcherRest);
+        while (reader.Read())
+        {
+            destination.Add((reader.GetString(0), reader.GetInt64(1)));
+        }
+        return destination.Count;
+    }
 
     // ------------------------------------------------------------------
     // Ratings & roster
