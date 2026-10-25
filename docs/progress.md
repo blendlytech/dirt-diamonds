@@ -82,6 +82,16 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Session Log (compact)
 
+- **2026-10-25 — 13-3 spec issues resolved (Claude Opus 5.5, `p13/13-3-brief-opus` @ `cb4050b`; docs only; owner-requested):** applied the approved D1–D9 to their spec homes in `league_restructure.md`:
+  - §3 table: Pro week 22 is a Tuesday.
+  - §3.1: seed + ensure, fixed dates, HS venues, Pro construction.
+  - §3.2: planner blocks. §4: stale citation.
+  - §11.2: R/9 vs ER/GS, pooled gating.
+  - §11.3: guard shape and timing; the gradient split between 13-3 and 13-6.
+  - §15: `main` after 13-6; the 13-3/13-6 rows. §16-I9…I12.
+
+  Downstream: BUILD_PLAN, the progress status lines, the `development_decline_curves.md` banner, and a supersession banner on CS-M's `college_28_game.md` (Astra folds it in). The MC skill text stays with the 13-3 build. Gates: `git diff --check` clean; stale-statement grep → none outside history; links resolve. **Next: Astra's 13-3 Math check (+ the owed 13-2 §9.9 read) → 13-3 build.**
+
 - **2026-10-25 — 13-3 brief: owner approves D1–D9 as recommended (Claude Opus 5.5 recorded it, `p13/13-3-brief-opus`; docs only).** Still open before the build: GPT 6 Astra Pro's Math check of §3.3/§5.1/§9 (recorded in brief §10), then the brief merges into `p13/integration`. Gates: none. **Next: Astra's Math check → 13-3 build by Claude Opus + Math by Astra.**
 
 - **2026-10-25 — 13-3 brief DRAFTED (Claude Opus 5.5, `p13/13-3-brief-opus` from `p13/integration` `fdbe17e`; docs only), awaiting Astra's Math check + owner approval:** [tasks/13-3_schedules_calendars_reband_guard_brief.md](tasks/13-3_schedules_calendars_reband_guard_brief.md). The fixed sim calendar (day 1 = Monday) puts HS on days 61–124, College on 38–132 and Pro on 93–240 (64 games), with the Draft on day 195. A real season has 6.5%/18%/42% of the interim games, so bands need pooled samples. Owner decisions D1–D9 cover: the schedule seed and ensuring the current and next season (D1); pairing construction (D2); in-season planner locks for all tiers plus offseason sliders (D3); writing results to `Schedule_Games` (D4); band gating and the Pro R/9 floor (D5); the guard shape (D6); moving the equilibrium gradient to 13-6, since `PromotionManager` throws on v14 (D7); the red list (D8); merging to `main` after 13-6 (D9). Math split M1–M5 (Astra) vs B1–B7 (Opus); 13-2 carry-forwards included; 7 spec issues listed. Gates: none (docs only). **Next: GPT 6 Astra Pro checks the Math sections ∥ the owner approves D1–D9; then the 13-3 build by Claude Opus + Math by Astra.**
