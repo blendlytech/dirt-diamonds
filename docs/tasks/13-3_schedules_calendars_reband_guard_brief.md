@@ -301,6 +301,74 @@ Recommended next: 13-4 playoffs + ranking by Claude Opus (reviewer GPT 6 Astra P
 
 Then add one compact line to [progress.md](../progress.md). Don't start 13-4.
 
+### 8.1 Handoff as delivered — Opus build part (Claude Opus 5.5, 2026-10-25)
+
+```text
+Done (B1–B7): TierSeasonCalendar (HS 61–124, College 38–132, Pro 93–240 / 64 games incl. week-22 Tue, Draft 195,
+      practice days + windows, D3 locked blocks in-season / free offseason); SeasonScheduler (seeded D2 constructions,
+      own stream per schedule_seed/year/tier, ensure current + next season once); ScheduleQueries + SeasonSchedule (one
+      in-memory table for the tier sim and CareerManager; HsSeasonCalendar, LeagueSchedule, RegularSeasonDays deleted);
+      D4 results final in the macro flush and the attended game's flush (kept on rollback); GameManager seed via
+      rng.Split() + boot ensure + D3 blocks; the "callers flush sequentially" ledger contract; harness + skill.
+      · Base: p13/integration @ fdbe17e + brief 84736d4 · Commits: 5ec08b4 (build), + this docs/cleanup commit
+Baseline (§0, this PC, before any edit): build 0/0; MC 361/369 = the 8 D6 reds; resolver sha 6d924228…; MC 124 s
+      (Astra measured 184 s on the same PC: wall time varies with load).
+Gates (owner's PC, head 5ec08b4): build 0/0; Schema 174/174; resolver 13/13, output byte-identical to the baseline;
+      calendar 8/8; schedule 26/26 (CS-M College checks 1–9, determinism/reload = 10, D1 ensure/seed, D4 results +
+      rollback + attended); season-pipeline 16/16 (guard candidate); starters 26/26 (+3 carry-forwards); innings 5/5;
+      capacity 6/6; lineups 8/8; worldgen-v14 23/23; ui-strings 3/3; development-tiers 2/2; availability 14/14;
+      college-rate-smoke 2/2 (in tier-ladder); every allocation line 0 B; CoreLoop 22/22; Gritty 363/363;
+      MC wall 90 s (D10: ≤ baseline + 30 s ✓; the pilot predicted the pooled bands at +21 s);
+      Godot 4.7 headless fresh boot (scratch APPDATA): v14/WAL/FKs on, 68 teams, 1,567 NPCs, random schedule_seed
+      persisted, 2026 + 2027 schedules for every tier (60 / 336 / 1,024), FK clean; the only errors are theme fonts
+      missing from this fresh worktree's import cache (`--import` segfaulted inside Godot; no code path involved);
+      isolation: brief §2 paths only (Godot-generated .uid/.tmp files dropped, as in 13-2).
+REPLAY 20× — NOT COMPLETED: the C: drive filled up (16 KB free) during the runs, so suites died on SQLite "database or
+      disk is full" and the check count fell 409 → 101; that measures the disk, not determinism. Run 1, before the disk
+      filled, matched the gate run apart from four suites lost to disk errors. This session's leftover scratch files
+      (236, ~130 MB) were removed; 116 MB free remains, too little to re-run. Pre-existing leak found and fixed: 13-2's
+      R1/R2 fixture DBs (.starters.r1/.r2/.r2.macro/.r2.shared) were missing from the harness cleanup list.
+      The replay must be re-run once disk space is freed (also Astra's M3).
+MC default: 402/410. Red (actual): the 7 approved promotion suites (promotion-sweep 3/4, promotion-stream 0/1,
+      promotion-avatar 0/1, promotion-record 0/1, development-arc 3/4, practice-seam 5/6, development-equilibrium 0/1;
+      PromotionManager, 13-6) + tier-ladder 13/14: pooled Pro R/9 4.164 [4.103, 4.225] (SE .026), ER/GS 4.191,
+      below the 4.2 floor → D5: no sim change; Astra's M1 measures, then the owner chooses.
+Pooled bands (D5 default design, flat): HS 64 seasons R/9 6.931 [6.808, 7.054] (SE .0615 vs target .06), College 16
+      R/9 6.237 [6.170, 6.303], Pro 8 R/9 4.164; every slash/K/BB/HR point in band; ladder strictly monotone. Pro
+      outs/GS 27.17 > 27, so R/9 < ER/GS here (extras outweigh skipped home ninths; brief §10.2 Q2).
+New Pro guard CANDIDATE (D6): PA 81433 / H 18471 / ER 8803; ledger SHA-256
+      932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84 (both seasons' counting rows, keyed by
+      season/player, invariant encoding). Awaiting Astra's 20/20 reproduction (M3) and the owner's sanction.
+Retired / restated checks (old → new → reason; never deleted to match a count):
+  - season-pipeline "[year] run environment R/G in 4.2–4.8" → pooled Pro R/9 band in tier-ladder → D5, one season is noise
+  - tier-ladder one-season "§4 [tier] slash", "§4 [tier] K/BB/HR + R/9", "strictly monotone" → the same three on the
+    pooled sample (one season is now reported) → D5
+  - season-pipeline game counts 153/154 days × 16 → 1,024 per season, both seasons → calendar; the day-1 artifact is gone
+  - career-wiring "by day 40, avatar PA > 100" → by the 25th Pro game day, PA > 50 → Pro opens day 93
+  - career-wiring "suppression accounting (153 days)" → a 64-game Pro season → calendar
+  - career-wiring "avatar PA 450–800" → 188–335 (§10.3 Q7 pilot envelope; Astra signs the final band) → 64 games
+  - career-wiring "next day parks a fresh pending game" → "the next game day … (off days park none)" → Tue → Thu
+  - lineage "GS/W/L identities" counts → 64-game seasons, played through Pro's last game + Sunday flush
+  - starters parity "8 days" → 8 Pro game days; "daily games with rest 3 make a 3-man rotation" → "Pro Tue/Thu/Sat
+    with rest 3 never needs short rest (2-man rotation)" → the interim calendar played daily
+  - starters R2 macro/micro callers: "day before the first flush" day 6 → day 97 (Pro's opening week, 96 starts)
+  - innings: 154 ticks → through Pro's last game + Sunday flush
+  - capacity / season-pipeline / equipment allocation probes: days 1–27 → each tier's real game days (HS 3 + 7)
+  - availability: windows moved onto Pro's calendar (baseline to day 98, suspended 99–105, back 106–112); benching
+    "next 3 days" → next 7; "the next day parks" → "the next game day parks"
+  - promotion-avatar (red until 13-6): HS 26 games → 10 (compile only)
+Mutation (carry-forwards): with MicroGame.ReRankPitchers disabled, starters fails exactly the 3 new checks + the 2
+      R1 checks (21/26); restored byte-for-byte.
+Decisions used: D1–D10 as approved; no change.
+Open: the 20× replay (needs free disk); M1–M5 (Astra): pooled-sample verdict + Pro floor (owner choice per D5), M2
+      College analysis (`-- --college-analysis rates --pilot` first), M3 guard reproduction, M4 practice constants +
+      goldens (shared .001 candidate to test; DevelopmentManager untouched until then), M5 review. A live career still
+      stops at the first rollover (PromotionManager, 13-6). New scripts carry no .uid yet (13-2 precedent).
+Recommended next: owner frees disk space (≥ 5 GB suggested); then GPT 6 Astra Pro — M1/M2/M4 on p13/13-3-opus,
+      M3 (incl. the 20× replay) + M5 review on p13/13-3-math-gpt; Claude Opus reviews the Math record and applies
+      the M-values; owner sanctions the guard; then the merge into p13/integration.
+```
+
 ## 9. Questions for Astra's Math check of this brief (answer before owner approval)
 
 1. **Sample sizes (D5/M1).** What pooled sample per tier gives a usable standard error inside ≤ 120 s? One HS season has 120 team-games. If the per-team-game run SD is about 3.5 (an assumption, not a measurement), one HS season's R/9 SE is about 0.32 against a 1.6-wide band.

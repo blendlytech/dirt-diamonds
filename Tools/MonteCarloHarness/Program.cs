@@ -218,6 +218,9 @@ internal static partial class Program
                     slice132ScratchPath + ".starters.reload", slice132ScratchPath + ".starters.parity",
                     slice132ScratchPath + ".starters.cf.rp", slice132ScratchPath + ".starters.cf.up",
                     slice132ScratchPath + ".starters.cf.tie",
+                    // 13-2's R1/R2 fixtures (added in 13-3: they leaked one set per run).
+                    slice132ScratchPath + ".starters.r1", slice132ScratchPath + ".starters.r2",
+                    slice132ScratchPath + ".starters.r2.macro", slice132ScratchPath + ".starters.r2.shared",
                     slice133ScratchPath + ".schedule", slice133ScratchPath + ".devtiers",
                     slice132ScratchPath + ".innings", slice132ScratchPath + ".capacity",
                     slice132ScratchPath + ".capacity.over", slice132ScratchPath + ".lineups",
