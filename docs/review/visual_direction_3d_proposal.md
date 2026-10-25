@@ -35,7 +35,7 @@
 ## 3. What changes if accepted (applied by Claude Opus after the owner's yes)
 
 1. **GAME_VISION.md**, first, because a change of direction goes there before the specs:
-   - §3 pillar 2: "a **real-time arcade ballgame with true physics**, in a 16-bit style (owner, 2026-10-13)" → "a **real-time arcade ballgame with true physics**, in a **stylized 3D broadcast style** (owner, <date>)".
+   - §3 pillar 2: "a **real-time arcade ballgame with true physics**, in a 16-bit style (owner, 2026-10-13)" → "a **real-time arcade ballgame with true physics**, in a **stylized 3D broadcast style** (owner, `<date>`)".
    - §5 game day: "play the game on the 16-bit arcade field" → "play the game on the 3D arcade field".
 2. **arcade_baseball_overhaul.md**:
    - the title and the locked "Art" row;

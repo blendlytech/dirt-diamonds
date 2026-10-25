@@ -107,7 +107,7 @@ The executed cell gives `inZone` directly; **no `zDraw`/`zRef` location draw hap
 | `e` | effort | [−1, 1] |
 | `sPitch` | `EffortStuffGain·e / 50` (stuff *deviation from the pitcher's own effective stuff*; the rating itself is already in p*) | ±0.12 |
 | `vRel⁺` | `max(0, (velocity(type) − velocityMean)/50)` · (Fastball 1.0, else `VeloOffTypeWeight`) | [0, 1] |
-| `t` | timing disruption: `clamp(|velocity(type) − velocityPrev| / VeloDiffScale, 0, 1)`; `velocityPrev` = previous pitch of this PA, or `velocityMean` on the first pitch | [0, 1] |
+| `t` | timing disruption: `clamp(&#124;velocity(type) − velocityPrev&#124; / VeloDiffScale, 0, 1)`; `velocityPrev` = previous pitch of this PA, or `velocityMean` on the first pitch | [0, 1] |
 | `mRel` | `(movement(type) − movementMean)/50` | ±1 |
 | `loc` | executed-cell grade: Heart / Side / Corner / Chase / Waste | enum |
 | `aZ, aT, aC` | anticipation terms from the book (§4.4) | [−1, 1] |
