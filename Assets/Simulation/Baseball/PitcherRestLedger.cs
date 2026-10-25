@@ -15,6 +15,13 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// most what an unflushed stat line can (R-1 B01, fixed by R1-SAVE-1).
 /// A written row is acknowledged only after that batch commits; on a
 /// rollback it stays dirty for whichever sim flushes next (review R2).
+/// **Callers flush sequentially:** one in-flight snapshot is safe only because
+/// no two flushes of this shared ledger overlap — <see cref="DatabaseManager"/>
+/// refuses nested batches, and the clock is gated while an attended game runs
+/// on its worker (<c>CareerManager</c>'s in-flight flag,
+/// <c>GameManager.InteractiveGameInFlight</c>), so macro days never flush
+/// mid-game. A future slice that flushes concurrently must give each flush
+/// its own snapshot first (13-2 review §9.7 observation 1).
 ///
 /// Allocation: the maps are pre-sized, so recording a start on the warm game
 /// path never allocates.

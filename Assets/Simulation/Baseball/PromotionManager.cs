@@ -25,8 +25,9 @@ public static class PromotionProfile
     public const double PitcherIpShrink = 40.0;
 
     /// <summary>
-    /// HS-tier batter shrinkage. HS plays HsSeasonCalendar's sparse spring
-    /// season (~26 games ⇒ a regular sees ~110 PA, not ~600), so the shared
+    /// HS-tier batter shrinkage. HS played the shipped sparse spring season
+    /// (~26 games ⇒ a regular sees ~110 PA, not ~600; 13-3's TierSeasonCalendar
+    /// plays 10, and 13-6 retires this pass), so the shared
     /// <see cref="BatterPaShrink"/> would crush every HS line toward
     /// league-average regardless of merit. Chosen so a full-season HS regular
     /// keeps the same signal fraction a ~600-PA regular keeps under the

@@ -23,15 +23,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// </summary>
 public sealed class LeagueSimulator
 {
-    /// <summary>
-    /// The interim season window (slice 13-2, brief D1-A): 154 game days, one
-    /// round-robin round per day for any even team count (12/24/32 since
-    /// schema v14). Slice 13-3 replaces it with persisted per-tier schedules
-    /// (league_restructure.md §3).
-    /// </summary>
-    public const int RegularSeasonDays = 154;
-
-    /// <summary>Stats (and the rest ledger) flush every this many season days — the shipped 7-day cadence.</summary>
+    /// <summary>Stats (and the rest ledger) flush every this many season days — the shipped 7-day cadence (every Sunday).</summary>
     internal const int FlushCadenceDays = 7;
 
     // §7 discretionary-advance calibration knobs (tuning order step 4). The
@@ -77,6 +69,19 @@ public sealed class LeagueSimulator
     private byte[] _teamDefense = Array.Empty<byte>();
     private int _regulationInnings = 9;
     private int _minRestDays;
+
+    // Slice 13-3 (league_restructure.md §3.1): the persisted schedule. The
+    // current season plays; the next one is loaded too so the calendar can
+    // look across New Year. Results of played games wait for the flush (D4).
+    private readonly ScheduleQueries _scheduleQueries;
+    private readonly GameStateQueries _gameState;
+    private readonly List<ScheduledGameRow> _scheduleScratch = new();
+    private SeasonSchedule _currentSeason;
+    private SeasonSchedule _nextSeason;
+    private readonly long[] _resultGameIds;
+    private readonly int[] _resultHomeScores;
+    private readonly int[] _resultAwayScores;
+    private int _resultCount;
 
     /// <summary>
     /// Last-start days for §6 starter selection (slice 13-2). Each sim owns a
@@ -209,6 +214,73 @@ public sealed class LeagueSimulator
         // Allocate the handler delegates once so Attach/Detach never churn.
         _onDayAdvanced = OnDayAdvanced;
         _onSeasonRolledOver = OnSeasonRolledOver;
+        _scheduleQueries = new ScheduleQueries(db);
+        _gameState = new GameStateQueries(db);
+        _currentSeason = new SeasonSchedule(tier);
+        _nextSeason = new SeasonSchedule(tier);
+        int capacity = TierSeasonCalendar.GameDays(tier).Length * RosterCapacity.MaxTeamsPerTier / 2;
+        _resultGameIds = new long[capacity];
+        _resultHomeScores = new int[capacity];
+        _resultAwayScores = new int[capacity];
+    }
+
+    /// <summary>The loaded current season's schedule (empty until <see cref="PrepareSeason"/>).</summary>
+    public SeasonSchedule CurrentSeason => _currentSeason;
+
+    /// <summary>
+    /// Makes <paramref name="seasonYear"/> the playing season (13-3 brief D1):
+    /// ensures it and the next season are persisted (generated once, never
+    /// regenerated) and loads both. The day handler calls it when the season
+    /// year changes; GameManager calls it at boot. A no-op when already current.
+    /// </summary>
+    public void PrepareSeason(int seasonYear)
+    {
+        if (_currentSeason.SeasonYear == seasonYear)
+        {
+            return;
+        }
+        if (_teamIds.Length == 0)
+        {
+            throw new InvalidOperationException("LeagueSimulator.PrepareSeason needs Initialize() first (the team-index order).");
+        }
+        SeasonScheduler.EnsureSeasons(_db, _queries, _scheduleQueries, _gameState, Tier, seasonYear);
+        if (_nextSeason.SeasonYear == seasonYear)
+        {
+            (_currentSeason, _nextSeason) = (_nextSeason, _currentSeason);
+            _currentSeason.Reindex(_teamIds);
+        }
+        else
+        {
+            _currentSeason.Load(_scheduleQueries, seasonYear, _teamIds, _scheduleScratch);
+        }
+        if (_nextSeason.SeasonYear != seasonYear + 1)
+        {
+            _nextSeason.Load(_scheduleQueries, seasonYear + 1, _teamIds, _scheduleScratch);
+        }
+    }
+
+    /// <summary>
+    /// The scheduled game <paramref name="teamId"/> plays on the day, from the
+    /// loaded current or next season; false on off days and for any season
+    /// not loaded. Pure memory reads: the career driver claims the avatar's
+    /// game and the calendar looks ahead through this, never the database.
+    /// </summary>
+    public bool TryGetScheduledGame(int seasonYear, int dayOfSeason, int teamId,
+        out long gameId, out int homeTeamId, out int awayTeamId)
+    {
+        SeasonSchedule? season = _currentSeason.SeasonYear == seasonYear ? _currentSeason
+            : _nextSeason.SeasonYear == seasonYear ? _nextSeason : null;
+        if (season is not null && season.TryFindGame(dayOfSeason, teamId, out int game))
+        {
+            gameId = season.GameId(game);
+            homeTeamId = season.HomeTeamId(game);
+            awayTeamId = season.AwayTeamId(game);
+            return true;
+        }
+        gameId = 0;
+        homeTeamId = 0;
+        awayTeamId = 0;
+        return false;
     }
 
     /// <summary>Season counting stats for one batter — flushed to Batting_Stats.</summary>
@@ -238,8 +310,8 @@ public sealed class LeagueSimulator
         if (teams.Count < 2 || teams.Count % 2 != 0 || teams.Count > RosterCapacity.MaxTeamsPerTier)
         {
             throw new InvalidOperationException(
-                $"League tier {Tier} needs an even team count from 2 to {RosterCapacity.MaxTeamsPerTier} " +
-                $"for the interim round-robin; found {teams.Count}. Run LeagueGenerator first.");
+                $"League tier {Tier} needs an even team count from 2 to {RosterCapacity.MaxTeamsPerTier}; " +
+                $"found {teams.Count}. Run LeagueGenerator first.");
         }
         _teamCount = teams.Count;
         _regulationInnings = TierRules.RegulationInnings(Tier);
@@ -425,6 +497,16 @@ public sealed class LeagueSimulator
             _relieverCount[t] = RankPitchers(relievers[t], _relieverSlots, t * RosterCapacity.MaxRelievers);
         }
 
+        // A re-Initialize (development pass, succession) keeps the loaded
+        // schedules; only the team-index order is re-mapped.
+        if (_currentSeason.SeasonYear != 0)
+        {
+            _currentSeason.Reindex(_teamIds);
+        }
+        if (_nextSeason.SeasonYear != 0)
+        {
+            _nextSeason.Reindex(_teamIds);
+        }
         _initialized = true;
     }
 
@@ -498,31 +580,37 @@ public sealed class LeagueSimulator
         {
             throw new InvalidOperationException("LeagueSimulator received a day event before Initialize().");
         }
-        if (e.DayOfSeason > RegularSeasonDays)
-        {
-            return; // offseason
-        }
+        // 13-3: a new season year loads (and, the first time, generates) its
+        // persisted schedule; it never waits on the rollover handlers (D1).
+        PrepareSeason(e.SeasonYear);
 
-        // HS plays a realistic sparse spring schedule (HsSeasonCalendar);
-        // every other tier maps identity (scheduleDay == dayOfSeason), so
-        // their rng draw order stays bit-for-bit what it always was.
-        if (HsSeasonCalendar.TryGetLeagueScheduleDay(Tier, e.DayOfSeason, out int scheduleDay))
+        // Only the tier's TierSeasonCalendar game days have games (§3).
+        if (TierSeasonCalendar.IsGameDay(Tier, e.DayOfSeason))
         {
             RefreshAvailability(e.Day);
-            SimulateGameDay(scheduleDay, e.Day);
+            SimulateGameDay(e.DayOfSeason, e.Day);
             _unflushedSeasonYear = e.SeasonYear;
         }
 
-        // Flush every 7 season days (154 is a multiple of 7, so the last day
-        // is covered). Keeping the database at most a week stale matters once
-        // the player's own stats are on the line; additive upserts make the
-        // cadence safe. Runs on HS off days too — FlushAccumulated row-guards
-        // on Pa/G > 0, so an empty flush writes nothing.
+        // Flush every 7 season days (every Sunday: day 1 is a Monday). Every
+        // tier's last regular game falls before a Sunday flush. Keeping the
+        // database at most a week stale matters once the player's own stats
+        // are on the line; additive upserts make the cadence safe. Runs on
+        // off days too — FlushAccumulated row-guards on Pa/G > 0, so an empty
+        // flush writes nothing.
         if (e.DayOfSeason % FlushCadenceDays == 0)
         {
             FlushAccumulated(e.SeasonYear);
         }
     }
+
+    /// <summary>
+    /// The day handler without a bus or clock: run_monte_carlo_batch drives
+    /// pooled replicate seasons through exactly the path a published
+    /// <see cref="DayAdvancedEvent"/> takes (13-3 brief D5), minus the clock's
+    /// own per-day Game_State write.
+    /// </summary>
+    internal void ProcessDay(DayAdvancedEvent e) => OnDayAdvanced(e);
 
     private void OnSeasonRolledOver(SeasonRolledOverEvent e)
     {
@@ -553,11 +641,12 @@ public sealed class LeagueSimulator
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Plays one season day's games from the shared <see cref="LeagueSchedule"/>.
-    /// The attended team's pairing is skipped: that game is played in the
-    /// micro-sim, which records its starters in the shared rest ledger.
-    /// Internal so run_monte_carlo_batch can drive and profile it directly;
-    /// this overload treats the season day as the absolute day.
+    /// Plays one day's scheduled games from the loaded season (13-3). The
+    /// attended team's game is skipped: that game is played in the
+    /// micro-sim, which records its starters in the shared rest ledger and
+    /// its own result. Internal so run_monte_carlo_batch can drive and
+    /// profile it directly (after <see cref="PrepareSeason"/>); this overload
+    /// treats the season day as the absolute day. Off days play nothing.
     /// </summary>
     internal void SimulateGameDay(int dayOfSeason) => SimulateGameDay(dayOfSeason, dayOfSeason);
 
@@ -569,18 +658,16 @@ public sealed class LeagueSimulator
     {
         RefreshRivalryCache();
         RefreshEquipmentCache();
-        Span<SchedulePairing> pairings = stackalloc SchedulePairing[RosterCapacity.MaxTeamsPerTier / 2];
-        int pairingCount = _teamCount / 2;
-        LeagueSchedule.GetDayPairings(_teamCount, dayOfSeason, pairings[..pairingCount]);
-
-        for (int p = 0; p < pairingCount; p++)
+        int count = _currentSeason.GamesOn(dayOfSeason, out int first);
+        for (int g = first; g < first + count; g++)
         {
-            SchedulePairing pairing = pairings[p];
-            if (pairing.HomeTeam == _attendedTeamIndex || pairing.AwayTeam == _attendedTeamIndex)
+            int home = _currentSeason.HomeIndex(g);
+            int away = _currentSeason.AwayIndex(g);
+            if (home == _attendedTeamIndex || away == _attendedTeamIndex)
             {
                 continue;
             }
-            PlayGame(pairing.HomeTeam, pairing.AwayTeam, absoluteDay);
+            PlayGame(home, away, absoluteDay, _currentSeason.GameId(g));
         }
     }
 
@@ -648,7 +735,7 @@ public sealed class LeagueSimulator
         return starterCount > 0 ? _starterSlots[starterBase] : _relieverSlots[relieverBase];
     }
 
-    private void PlayGame(int homeTeam, int awayTeam, long day)
+    private void PlayGame(int homeTeam, int awayTeam, long day, long gameId)
     {
         int homeStarter = SelectPitcher(homeTeam, day, out bool homeStarterOut);
         int awayStarter = SelectPitcher(awayTeam, day, out bool awayStarterOut);
@@ -697,6 +784,17 @@ public sealed class LeagueSimulator
             _pitching[awayStarterStat].W++;
             _pitching[homeStarterStat].L++;
         }
+
+        // 13-3 (D4): the final score rides the next flush batch.
+        if (_resultCount == _resultGameIds.Length)
+        {
+            throw new InvalidOperationException(
+                $"{Tier} sim played {_resultCount} games without a flush — more than a season holds.");
+        }
+        _resultGameIds[_resultCount] = gameId;
+        _resultHomeScores[_resultCount] = homeScore;
+        _resultAwayScores[_resultCount] = awayScore;
+        _resultCount++;
 
         // §6 post-game hook bookkeeping: every flagged participant logs a game
         // under the influence; the DB costs apply at flush.
@@ -1046,6 +1144,12 @@ public sealed class LeagueSimulator
             // 13-2 (brief D4): the starts made since the last flush ride the
             // same batch, so rest is never staler than the stats beside it.
             RestLedger.FlushDirty(_queries);
+            // 13-3 (brief D4): so do the played games' results. On a rollback
+            // they stay buffered with the stats and land on the retry.
+            for (int r = 0; r < _resultCount; r++)
+            {
+                _scheduleQueries.RecordFinal(_resultGameIds[r], _resultHomeScores[r], _resultAwayScores[r]);
+            }
             _db.CommitBatch();
         }
         catch
@@ -1064,6 +1168,7 @@ public sealed class LeagueSimulator
         Array.Clear(_batting);
         Array.Clear(_pitching);
         Array.Clear(_pedGamesPlayed);
+        _resultCount = 0;
         _unflushedSeasonYear = 0;
     }
 }

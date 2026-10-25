@@ -15,13 +15,17 @@ public readonly struct PendingAttendedGame
     public readonly int HomeTeamId;
     public readonly int AwayTeamId;
 
-    public PendingAttendedGame(int seasonYear, int dayOfSeason, long absoluteDay, int homeTeamId, int awayTeamId)
+    /// <summary>The Schedule_Games row this game is (slice 13-3); its result is written in the game's flush.</summary>
+    public readonly long GameId;
+
+    public PendingAttendedGame(int seasonYear, int dayOfSeason, long absoluteDay, int homeTeamId, int awayTeamId, long gameId)
     {
         SeasonYear = seasonYear;
         DayOfSeason = dayOfSeason;
         AbsoluteDay = absoluteDay;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
+        GameId = gameId;
     }
 }
 
@@ -139,9 +143,9 @@ public readonly struct BirthAnnouncement
 
 /// <summary>
 /// The Phase 5 career driver: owns the player avatar and every game of the
-/// avatar's team. On each <see cref="DayAdvancedEvent"/> it derives the team's
-/// pairing from the shared <see cref="LeagueSchedule"/> (the macro sim skips
-/// that pairing — see <see cref="LeagueSimulator.SetAttendedTeam"/>) and plays
+/// avatar's team. On each <see cref="DayAdvancedEvent"/> it reads the team's
+/// game from its tier sim's persisted schedule (13-3; the macro sim skips
+/// that game — see <see cref="LeagueSimulator.SetAttendedTeam"/>) and plays
 /// it through <see cref="MicroGame"/>: immediately under the neutral autopilot
 /// when <see cref="AutopilotAttendedGames"/> is set (skipped days, headless
 /// runs), or parked as a <see cref="PendingAttendedGame"/> for the UI to play
@@ -185,16 +189,14 @@ public sealed class CareerManager
     /// <summary>The bus <see cref="AttachTo"/> wired, kept for the <see cref="ChildBornEvent"/> announce.</summary>
     private EventBus? _bus;
 
-    private int[] _teamIds = Array.Empty<int>();
     private string? _avatarPlayerId;
     private int _avatarTeamId;
-    private int _avatarTeamIndex = -1;
     private int _avatarSlot = MicroGame.NoHuman;
 
     // The avatar's league tier, cached by ActivateAvatar (every avatar-pointing
     // path — boot, creation, succession, promotion — funnels through it).
-    // Drives the tier-aware game calendar: an HS avatar only has games on
-    // HsSeasonCalendar's sparse spring schedule.
+    // Selects whose schedule the avatar's games come from (13-3: each tier's
+    // TierSeasonCalendar days, persisted per season).
     private LeagueTier _avatarTier;
 
     private PendingAttendedGame _pending;
@@ -753,24 +755,10 @@ public sealed class CareerManager
 
     private void ActivateAvatar(string avatarId, int teamId)
     {
-        // 9a: the schedule index must be TIER-relative — LeagueSchedule's
-        // round-robin runs within one league, so _teamIds holds only the
-        // avatar tier's teams (ordered by team_id, matching the tier sim's own
-        // team-index order) and _avatarTeamIndex indexes into that.
+        // 9a: the avatar's games come from its tier's sim (13-3: that sim's
+        // persisted schedule, looked up by team id), so the tier is all the
+        // activation needs; ResolveLeagueFor fails loudly on an untiered team.
         LeagueSimulator league = ResolveLeagueFor(teamId);
-        var teams = new List<TeamRow>(RosterCapacity.MaxTeamsPerTier);
-        _baseball.LoadTeamsByTier(league.Tier, teams);
-        _teamIds = new int[teams.Count];
-        for (int t = 0; t < teams.Count; t++)
-        {
-            _teamIds[t] = teams[t].TeamId;
-        }
-
-        _avatarTeamIndex = Array.IndexOf(_teamIds, teamId);
-        if (_avatarTeamIndex < 0)
-        {
-            throw new InvalidOperationException($"Avatar team_id {teamId} has no Teams row in tier {league.Tier}.");
-        }
         _avatarSlot = _micro.FindRosterSlot(avatarId);
         if (_avatarSlot == MicroGame.NoHuman)
         {
@@ -1099,8 +1087,8 @@ public sealed class CareerManager
     /// Initialize(); this re-reads the avatar's (possibly new) team, clears
     /// the attended-team claim on every registered tier sim — a cross-tier
     /// move must not leave the ORIGIN sim skipping its old team's games
-    /// forever — and runs the standard activation: tier-relative
-    /// _avatarTeamIndex against the new tier's teams, _avatarSlot re-found,
+    /// forever — and runs the standard activation: the new tier resolved,
+    /// _avatarSlot re-found,
     /// SetAttendedTeam on the new tier's sim, AvatarChangedEvent republished
     /// (the 9b bridge re-points the Life-sim clock + school gate from it).
     /// The avatar keeps every prior stat row — they persist by player_id.
@@ -1414,27 +1402,18 @@ public sealed class CareerManager
         // autopilot before today's schedule is looked at.
         ResolvePendingWithAutopilot();
 
-        if (e.DayOfSeason > LeagueSimulator.RegularSeasonDays)
-        {
-            return; // offseason
-        }
-        // Same tier-aware seam the macro sim uses: an HS avatar only has a
-        // game on HsSeasonCalendar's sparse days (scheduleDay = the game's
-        // ordinal); every other tier maps identity. Keeping the two call
-        // sites on ONE mapping is what guarantees the attended-team skip in
-        // the HS macro sim lines up with the game claimed here.
-        if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, e.DayOfSeason, out int scheduleDay))
-        {
-            return;
-        }
-        if (!LeagueSchedule.TryGetPairingFor(_teamIds.Length, scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
+        // 13-3: the avatar's game is the tier sim's own persisted schedule
+        // row (attached before this handler, so today's season is loaded).
+        // One table for both is what guarantees the macro sim's
+        // attended-team skip lines up with the game claimed here. Off days
+        // and the offseason simply have no row.
+        if (!_leagues.Get(_avatarTier).TryGetScheduledGame(
+                e.SeasonYear, e.DayOfSeason, _avatarTeamId, out long gameId, out int homeTeamId, out int awayTeamId))
         {
             return;
         }
 
-        _pending = new PendingAttendedGame(
-            e.SeasonYear, e.DayOfSeason, e.Day,
-            _teamIds[pairing.HomeTeam], _teamIds[pairing.AwayTeam]);
+        _pending = new PendingAttendedGame(e.SeasonYear, e.DayOfSeason, e.Day, homeTeamId, awayTeamId, gameId);
         _hasPending = true;
 
         if (AutopilotAttendedGames || IsAvatarAbsentOn(e.Day))
@@ -1456,11 +1435,12 @@ public sealed class CareerManager
     }
 
     /// <summary>
-    /// The avatar team's scheduled pairing on an arbitrary absolute day —
-    /// pure math over the same tier-aware seam <see cref="OnDayAdvanced"/>
-    /// claims games through, so a browsable calendar UI can look ahead at
-    /// future matchups without touching any pending-game state. False on
-    /// off days, offseason days, and when no avatar exists.
+    /// The avatar team's scheduled game on an arbitrary absolute day — read
+    /// from the same in-memory schedule <see cref="OnDayAdvanced"/> claims
+    /// games from (the current and next season are loaded), so a browsable
+    /// calendar UI can look ahead at future matchups without touching any
+    /// pending-game state or the database. False on off days, the offseason,
+    /// seasons not loaded, and when no avatar exists.
     /// </summary>
     public bool TryGetScheduledGameFor(long day, out int homeTeamId, out int awayTeamId)
     {
@@ -1470,19 +1450,9 @@ public sealed class CareerManager
         {
             return false;
         }
-        int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
-        if (dayOfSeason > LeagueSimulator.RegularSeasonDays)
-        {
-            return false;
-        }
-        if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, dayOfSeason, out int scheduleDay)
-            || !LeagueSchedule.TryGetPairingFor(_teamIds.Length, scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
-        {
-            return false;
-        }
-        homeTeamId = _teamIds[pairing.HomeTeam];
-        awayTeamId = _teamIds[pairing.AwayTeam];
-        return true;
+        return _leagues.Get(_avatarTier).TryGetScheduledGame(
+            _state.SeasonYearForDay(day), GlobalState.DayOfSeasonForDay(day), _avatarTeamId,
+            out _, out homeTeamId, out awayTeamId);
     }
 
     /// <summary>
@@ -1528,6 +1498,8 @@ public sealed class CareerManager
             _micro.RefreshAvailability(_pending.AbsoluteDay);
             // 13-2: §6 rest is counted on the game's calendar day.
             _micro.SetGameDay(_pending.AbsoluteDay);
+            // 13-3 (D4): the game's Schedule_Games row goes final in its flush.
+            _micro.SetScheduledGame(_pending.GameId);
             MicroGameResult result = _micro.PlayGame(
                 _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot,
                 ref batterPolicy, ref pitcherPolicy, ref _rng);
