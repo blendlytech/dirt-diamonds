@@ -252,3 +252,45 @@ A fault at the rest *write* aborts before the old ledger reached `_dirty.Clear()
 **Open:** the PC re-check above (solution build, MC default, resolver byte diff, Schema, CoreLoop, Gritty, and optionally a Godot headless boot). Unchanged from §8.1: D5 values (R1-MATH), the non-top-3 pitcher avatar (owner/13-5), G-4 out-of-position effects.
 
 **Recommended next:** GPT 6 Astra Pro re-checks R1/R2 on `p13/13-2-review-gpt` (re-runs the gates on the PC); then Claude Opus merges 13-2 into `p13/integration` (owner-approved; never `main`). 13-3 does not start before that merge.
+
+### 9.7 Stand-in re-review (Claude Sonnet 5.5, 2026-10-25)
+
+**Verdict: Approve, no blocking findings.** A same-family stand-in for GPT 6 Astra Pro's re-check (TEAM.md §1a): it is **not independent**, so the owner decides whether it unlocks the merge or waits for Astra. Reviewed `b98291b..f5ac6a5` (head `c362dc6`) in worktree `dnd-sonnet-132review`, branch `p13/13-2-rereview-sonnet`. No product code changed in this review and nothing was merged.
+
+**R1 (re-rank after a person refresh): fixed.**
+- `RefreshPersonCache` runs before `SelectPitcher` in `PlayGame` (L988 → L1014), so the re-rank lands before the game's selection.
+- `BakeSlotRatings` is the only writer of `_pitcherRatings` after Initialize. Stamina is a raw roster byte, not person-baked, so the `StarterSelection.Quality` trigger (stuff + control) is exactly what can move the D2 order.
+- `ReRankPitchers` is an allocation-free insertion sort under `CompareQuality`, a total order (player ids are distinct), so it reproduces what `RankPitchers` gives a re-Initialize. Both tables are re-ranked, and two pitchers moving in opposite directions in one refresh is handled by the single pass per team.
+- `LeagueSimulator` has no stale-order path: `_pitcherRatings` is written only in `Initialize` (L367) and ranked right after (L424–425). Gear is applied at read time (L742), outside the D2 scalar, and the macro sim has no person ledger. Agree with §9.6: no macro change needed.
+
+**R2 (acknowledge rest rows only after commit): fixed.**
+- `FlushDirty` records an in-flight snapshot and keeps the rows dirty. `AcknowledgeFlush` clears only rows whose day still equals what was written (a newer `RecordStart` stays dirty). `AbandonFlush` clears the snapshot only.
+- Both callers (`LeagueSimulator.FlushAccumulated`, `MicroGame.FlushGame`) call `AbandonFlush` after `RollbackBatch` in the catch and `AcknowledgeFlush` only after the try/catch, so after `CommitBatch` returned. `FlushDirty`, `AcknowledgeFlush` and `AbandonFlush` have no other callers in `Assets/` or `Tools/` apart from the harness. The upsert is idempotent, so a forgotten acknowledge costs a rewrite, never a lost row.
+- Rest now behaves like the stat accumulators beside it: both survive a rollback and are retried.
+
+**Mutation check (done here, not only reported).** With the re-rank disabled and the ledger clearing `_dirty` inside `FlushDirty`, `-- --only starters` fails exactly the six new checks (R1 ×2, R2 ×4; the pre-fix dirty 96 → 0 is visible in the output). The working tree was restored (`git checkout -- Assets`) and `git status` was clean afterwards. The checks are not vacuous.
+
+**Observations (none blocking; for the owner or Opus, no action required for the merge):**
+1. **The single in-flight snapshot relies on sequential flushes.** `_inFlight` is one map on a ledger shared by every sim. It is safe because `DatabaseManager` allows one batch at a time and the clock is gated while an attended game runs (`CareerManager._gameInFlight`, `GameManager.InteractiveGameInFlight`); `BaseballDashboard` runs `PlayPendingGame` on `Task.Run`, so that gate matters. If a future slice ever flushes macro days while an attended game is in flight, an acknowledge could clear another flush's snapshot before its commit. Suggest one sentence in `PitcherRestLedger`'s summary stating "callers flush sequentially" (this review changes no code, so it is recorded here only).
+2. **Coverage is starter-table-only for R1.** The reliever table goes through the same `ReRankPitchers`, so the risk is low, but no check exercises a reliever re-rank, a rating *increase* promoting a lower-ranked starter, or a stamina tie-break after a refresh. A cheap extra case for the next harness pass, not a blocker.
+3. **Rest can now be durable before the stats beside it** (the shared-ledger check shows the micro's retry persisting the macro's rolled-back rest rows while the macro's stats retry later). The `LeagueSimulator` comment says rest is "never staler than the stats beside it"; that is still true (it can only be fresher). No correctness effect.
+4. **D5 limitation from §9.4 stands:** the delivered sims count short-rest starts but apply no capacity factor; nonzero values belong to R1-MATH.
+
+**Gates (this PC, head `c362dc6`):**
+
+| Gate | Result |
+| :-- | :-- |
+| `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** |
+| MonteCarloHarness Release (default) | **361/369**, exactly the eight approved D6 reds: `tier-ladder` 10/11 (Pro R/9 4.16), `promotion-sweep` 3/4, `promotion-stream` 0/1, `promotion-avatar` 0/1, `promotion-record` 0/1, `development-arc` 3/4, `practice-seam` 5/6, `development-equilibrium` 0/1 (the retained six-tier promotion guard). No other red. |
+| New suites in that run | `starters` **23/23** (17 + the six new checks), `innings` 5/5, `capacity` 6/6, `lineups` 8/8, `worldgen-v14` 23/23, `ui-strings` 3/3 |
+| `-- --only resolver` | **13/13**; full output **byte-identical** to the same command in a scratch `git archive d951efe` extraction (both sha256 `6c0155ed…9ef0`, 20 lines) |
+| Allocation lines (full run) | **all 0 B**: resolver, selector (10k), warm macro days HS/College/Pro, warm game day, pitch chain, warm attended game, warm geared day |
+| SchemaValidator Release | **174/174** |
+| CoreLoopHarness Release | **22/22** |
+| GrittyEventsHarness Release | **363/363** |
+| `git diff --stat origin/p13/integration...HEAD` | 18 files, all within brief §2 allowed paths (sims, `Assets/Core/GameManager.cs`, `Assets/Data/Database/`, the three harnesses, `docs/progress.md`, this brief) |
+| Godot 4.7 headless boot | **Not run** (needs the owner's Godot path; optional per the review brief). The fix round touches no boot path; Astra's `00eaa00` boot pass stands. |
+
+These official-toolchain numbers equal §9.6's cloud-session numbers (361/369, the same eight reds, all allocation lines 0 B), so the SQLite stand-in caveat in §9.6 is closed.
+
+**Handoff:** Recommended next: the owner decides whether this stand-in review unlocks the merge (waiver) or waits for GPT 6 Astra Pro's independent re-check; then Claude Opus merges 13-2 into `p13/integration` (owner-approved; never `main`). 13-3 does not start before that merge.
