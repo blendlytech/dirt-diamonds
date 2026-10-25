@@ -313,7 +313,17 @@ Then add one compact line to [progress.md](../progress.md). Don't start 13-4.
 
 ---
 
-### Spec issues found while drafting (for the owner; not edited, per the brief rules)
+### Spec issues found while drafting — **resolved 2026-10-25** (owner: "resolve these problems")
+
+After the owner approved D1–D9, Opus applied each decision to its spec home on `p13/13-3-brief-opus`:
+- **1, 2:** spec §11.3, §15 (the integration paragraph and the 13-3/13-6 rows) and §16-I11/I12; BUILD_PLAN Phase 13; progress.md status lines.
+- **3:** §3 table, §3.1 and §16-I9.
+- **4:** §3.2 and §16-I10; the `development_decline_curves.md` banner.
+- **5:** §11.2 and §16-I11.
+- **6:** a dated supersession banner in `college_28_game.md`. The author's body is untouched; Astra folds it in at the Math check.
+- **7:** §4.
+
+`.agents/skills/run_monte_carlo_batch/SKILL.md` stays with the build (§4.1 item 9), because its new guard values don't exist yet. The original list, for the record:
 
 1. **§11.3 / §15:** the new guard is recorded "on the first fully green run", and `p13/integration` merges when the "full MC suite is green" after 13-3. Neither can happen before 13-6, because the promotion suites stay red until then (D9).
 2. **§11.3:** the development gradient is "retuned per slice 13-3", but its equilibrium needs 13-6's pipeline (D7).

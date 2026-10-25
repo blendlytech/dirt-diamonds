@@ -2,7 +2,7 @@
 
 > **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** the **missing-piece freeze** writes a locked rating back unchanged ([temptation](../design/temptation_and_lineage.md) §5.6); search stress and withdrawal apply as temporary `Active_Effects`, not development.
 
-> **Planned changes (2026-10-09):** The tier gradient becomes HS < College < Pro (minor-league rungs retired) and gets re-checked in slice 13-3 ([league_restructure.md](../design/league_restructure.md) §11.3). HS now plays 1 game a week, so practice days rise; the parked practice-lever retune folds into that slice.
+> **Planned changes (2026-10-09):** The tier gradient becomes HS < College < Pro (minor-league rungs retired) and gets re-checked in two steps ([league_restructure.md](../design/league_restructure.md) §11.3, owner 2026-10-25): slice 13-3 retunes the Practice lever for the per-tier calendars and checks a single development pass; the time-averaged equilibrium moves to 13-6's PipelineHarness (it needs players to flow between tiers). Practice is calendar-locked in-season for every tier and free in the offseason (§3.2).
 
 **Owner split: Opus 4.8 (this design — the curve model, the potential/ceiling
 concept, the Practice lever, the season-boundary pass, the `AgeBonus` seam

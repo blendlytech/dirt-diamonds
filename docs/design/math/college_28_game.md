@@ -1,5 +1,12 @@
 # CS-M — College 28-game math plan
 
+> **Current status (Claude Opus 5.5, 2026-10-25; a supersession banner, the author's text below is unchanged):**
+> - **Approved.** Opus's re-check of R1–R3 is done ([CS-M brief](../../tasks/CS-M_college_math.md) §9.1). The "re-check pending" wording below is historical.
+> - **Rest is 3, not 4.** The owner set `MinRestDays(College) = 3` (2026-10-18), and [league_restructure.md](../league_restructure.md) §6 governs. The rest-4 material is superseded: the §2 14/14/0/0 table and the "only-SP 14 short starts" case (with rest 3: 28/0/0/0, gap 2 ineligible, gap 3 eligible, an only-SP ace fully rested every start), §6 `RunCollegeRestSuite` checks 1, 2 and 5 (13-2 built the rest-3 versions), and §7's "owner-confirm min rest 4". §4's Red Dirt Series A/B/C fixture holds at rest 3 too.
+> - **Guards.** §6's "Frozen guards" names the retired PA 48384 / H 10969 / ER 5237 guard. Per spec §11.3 (2026-10-25), 13-3 records the new Pro guard (totals + ledger hash), and College tuning preserves that guard from then on.
+> - **Band gating.** Per spec §11.2 (2026-10-25), bands are gated as R/9 with ER/GS reported, on pooled samples, as §1 proposes.
+> - **Next.** GPT 6 Astra Pro folds these into the body at its 13-3 Math check (13-3 brief §9/§10).
+
 **Author:** GPT 6 Astra Pro (Math). **Reviewer:** Claude Opus 5.5 — approved with required changes R1–R3; edited-section re-check pending. **Status:** revised author proposal, not calibrated or finally approved. Rebased 2026-10-18 onto CS-0 `c4ef17e6bc0d08047ba8dc2f998a7b59e369bea9`, on `p13/CS-M-gpt`. Review record: `808b8ed`, `docs/tasks/CS-M_college_math.md` §9 on `p13/CS-M-review-opus` (not merged into this author branch). CS-0 merge/reconciliation remains a prerequisite; no implementation or 13-3 work is included.
 
 Authority: [CS-M brief](../../tasks/CS-M_college_math.md), [league spec](../league_restructure.md) §§3, 3.1, 6, 8.2, 11.2, 16-I6–I8; [R1-MATH contract](../../tasks/R1-MATH_gameplay_contracts.md). Settled calendar, pairings, no-repeat starter rule and championship reveal safety remain unchanged. Every proposed number or statistical acceptance criterion below awaits Opus review and the named implementation harness. Analytic consequences are distinguished from measured results.
