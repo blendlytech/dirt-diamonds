@@ -2,7 +2,7 @@
 
 **Status:** **ADOPTED by the owner 2026-10-13.** Active engine spec for **Phase G**. Design only, no code yet. Author: Claude Opus 5.5 (first draft 2026-10-09; reconciled 2026-10-13 with GAME_VISION v2.1, the 3-tier league and the v14/v15 schema plan).
 **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 pillar 2 and §5. [gameplay_core.md](gameplay_core.md) remains the Phase G umbrella (attributes, venues, handoff protocol). **This doc owns the attended game:** physics, controls, AI, watch/skip, the arcade calibration contract and the ballgame's look.
-**Supersedes, once G-4 ships:** the attended-game input and presentation path, i.e. "Read the Pitch" ([at_bat_read_input_model.md](../reference/at_bat_read_input_model.md)), [at_bat_presentation.md](../reference/at_bat_presentation.md) and `AtBatView`. It also replaces gameplay_core's former §2.2 pitching mode and §2.3 fielding moments. Those reference docs move to `archive/` when G-4 lands.
+**Supersedes, once G-4 ships:** the attended-game input and presentation path, i.e. "Read the Pitch" ([at_bat_read_input_model.md](../reference/at_bat_read_input_model.md)), [at_bat_presentation.md](../reference/at_bat_presentation.md) and `AtBatView`. It also replaces gameplay_core's former §2.2 pitching mode and §2.3 fielding moments. Those reference docs move to `archive/` when G-4 lands. What 12d got right (the per-pitch reveal, input gating, holds for the booth and cutscenes) carries over in §7.7.
 
 **Locked by the owner (2026-10-09, confirmed 2026-10-13):**
 
@@ -241,6 +241,43 @@ Physics also produces **real signals the tables never had**, so the voice spec's
 - **★ big plays** still raise `BigPlay(kind, contextDto, callClipId)` to the `CutsceneDirector`. `ArcadeGame` supplies richer `kind` values. The motion-comic cutscene stays the default for ★ plays. The in-engine **instant replay** (§10.5) is a separate button, offered on any play.
 - **During a skip** the booth is silent and no cutscenes fire. When play resumes, the booth may play one "here's where we stand" call (its existing inning-change category).
 - **RNG boundary:** the arcade sim draws only from its own `RngState` stream. The booth and replay camera use presentation RNG, so watching, skipping and booth variety can never change a result.
+
+### 7.7 Pacing, reveals and holds (the 12d rules, in real time)
+
+The shipped at-bat presentation ([at_bat_presentation.md](../reference/at_bat_presentation.md), Phase 12d) solved three problems the arcade game still has: the player must see *why* each pitch ended the way it did, a stray press must never pre-answer the next pitch, and the booth and cutscenes need a place to land. The mechanism changes; the rules carry over.
+
+**Live ball vs dead ball.** `ArcadeWorld` ticks only while the ball is live: from the pitcher's set to the end of the play. Between pitches it's dead-ball time, and the world doesn't tick. **Every hold happens in dead-ball time** (the reveals, a booth call, a big-play cutscene, a replay, a pitching change), and the next pitch's set waits until they all clear. A hold stops the tick counter, and the recorded input stream is indexed by tick, not wall time, so a hold can never change a result. This replaces 12d's "sim races, UI paces" queue: there's no blocking `PlayerIntentBridge` round-trip to drain, because the sim and the UI share one clock (§2).
+
+**Input windows.** The UI forwards the human's input into `ArcadeInput` only inside the player's live windows and drops it everywhere else. Only accepted frames are recorded, so replays and watched = skipped (§7.3) hold.
+
+| You are | Window opens | Window closes |
+| :-- | :-- | :-- |
+| Batting | The pitcher comes set (box shift allowed until release) | The ball passes the contact plane |
+| Pitching | The pitch-select prompt | The aftertouch window ends |
+| Fielding | Contact, if the ball is assigned to your player | The play is dead |
+
+**The per-pitch reveal, on both sides of the ball.** After every pitch your player is part of, a short reveal (a 15b component, strings-table copy) tells the truth. The order is 12d's: what you read → what it really was → the count ticks. The scorebug never moves ahead of the reveal.
+
+| You were | The reveal shows | Source |
+| :-- | :-- | :-- |
+| Batting, took | The call and where it crossed ("Ball, low and away" / "Strike, caught looking") | `PitchCall`, `PitchFlight.AtPlate` |
+| Batting, swung | A timing grade (early / on time / late) and, on contact, exit velocity and launch angle | `ContactResult.TimingFraction`, `ExitVelocityMph`, `LaunchAngleDeg` |
+| Pitching | Pitch type, mph, where it crossed vs where you aimed, the release-meter grade, the result | release, flight, `PitchCall` |
+| Fielding | The play's result: clean catch, bobble, throw on line or off line | fielder kinematics (§3.4) |
+
+The reveal shows **physical observables only**: what a radar gun, a camera and an umpire would report. It never shows noise-table values, AI error draws or probabilities (12d's "facts, not internals" line). Pitches you only watch get a play-by-play line, not a reveal.
+
+**The PA reveal.** Bigger than a pitch reveal, scaled by the folded `PaOutcome` plus `PlayDetail`: a 430-foot home run lands harder than a groundout, and a diving catch against you still gets its moment. Bases and score finish ticking on this beat.
+
+**Holds and their limits:**
+
+- a booth call after `PaReveal`: up to 4 s ([voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) §7, item 5);
+- a ★ big-play cutscene: its own length, always skippable, inside the cutscene rate limits ([cutscenes_motion_comic.md](cutscenes_motion_comic.md) §3.1);
+- instant replay (§10.5): offered as a button in dead-ball time, never auto-played.
+
+At 2×/4× play speed only big plays hold. During a skip nothing holds, and every beat still lands in the play-by-play log (§7.4).
+
+**What 12d leaves behind.** The blocking `PlayerIntentBridge` handshake, the `PitchResult` / `OnPitchResolved` seam and `AtBatView`'s beat queue stay in the code for the Classic sim only (§11). 12d's batter-only and typographic-only limits are lifted: you pitch and field too, and the 16-bit field is the picture.
 
 ---
 

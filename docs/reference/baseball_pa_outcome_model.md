@@ -14,7 +14,7 @@ Every constant below is a **calibration knob**, not a law. The acceptance target
 
 ## 1. Outcome space
 
-Each PA resolves to exactly one of **seven** mutually exclusive terminal outcomes:
+Each PA resolves to exactly one of **eight** mutually exclusive terminal outcomes:
 
 | # | Outcome  | `PaOutcome` | Counts as AB? | Is a hit? | Total bases |
 |---|----------|-------------|:-------------:|:---------:|:-----------:|
@@ -25,6 +25,7 @@ Each PA resolves to exactly one of **seven** mutually exclusive terminal outcome
 | 4 | Double                 | `Double`    | yes | yes | 2 |
 | 5 | Triple                 | `Triple`    | yes | yes | 3 |
 | 6 | Home run               | `HomeRun`   | yes | yes | 4 |
+| 7 | Reached by error       | `ReachedByError`  | no | no | Varies
 
 **Deliberate simplifications for the macro-sim** (all documented so the micro-sim and box-score UI don't assume otherwise):
 
