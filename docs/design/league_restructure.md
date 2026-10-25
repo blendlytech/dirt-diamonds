@@ -287,7 +287,7 @@ The AVG/OBP/SLG/K%/BB%/HR-per-PA bands for HS, College and Pro reuse the shipped
 **How the bands are gated (owner, 2026-10-25, §16-I11):**
 - **The denominator changes.** The shipped MLB run band was gated per game (ER / GS), not per 9 innings. 13-3 gates **R/9 = 27 × runs / outs** and reports ER/GS beside it on the same sample, so the denominator change stays visible.
 - **The numeric rows stay as written.** If GPT 6 Astra Pro's pooled measurement puts Pro R/9 below 4.2, the owner chooses between restating the Pro run floor (with the R/G → R/9 rationale) and re-centring runs through `BaseOutAdvancement` in a separately sanctioned change. 13-3 changes no sim value for it.
-- **Pooled samples.** One real season is a small sample (HS 60 games, College 336, Pro 1,024, against 924 / 1,848 / 2,464 on the interim round-robin). So every band is gated on a pooled, fixed-seed sample of real-calendar seasons, sized per tier by GPT 6 Astra Pro within the default MC budget (CS-M §6). CS-M's opt-in batch is the calibration evidence.
+- **Pooled samples.** One real season is a small sample (HS 60 games, College 336, Pro 1,024, against 156 on HS's shipped 26-game calendar and 1,848 / 2,464 on the interim round-robin). So every band is gated on a pooled, fixed-seed sample of real-calendar seasons, sized per tier by GPT 6 Astra Pro within the default MC runtime budget (13-3 brief D10). CS-M's opt-in batch is the calibration evidence.
 
 ### 11.3 The regression guards
 

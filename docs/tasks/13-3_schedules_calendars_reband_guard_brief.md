@@ -1,6 +1,6 @@
 # Task Brief: 13-3 — Season schedules and calendars, per-tier re-band, new Pro guard, development gradient
 
-**Status:** **D1–D9 APPROVED by the owner 2026-10-25, all as recommended:** D1 a persisted schedule seed, with the current and next season ensured; D2 the construction and interpretations as written; D3-A in-season locks for every tier plus offseason sliders; D4 results written in 13-3; D5 the pooled R/9 gating, with any floor restatement returning to the owner; D6 the totals plus the ledger hash; D7 the equilibrium gradient moves to 13-6; D8 the §5.3 red list; D9 `main` after 13-6. **Still open:** GPT 6 Astra Pro's check of the Math sections (§3.3, §5.1 band and guard rows, §9). Its answers can refine the M-deliverables but don't reopen D1–D9 without the owner. The build starts only after that check is recorded in §10 and this brief is merged into `p13/integration` (§0).
+**Status:** **D1–D9 APPROVED by the owner 2026-10-25, all as recommended:** D1 a persisted schedule seed, with the current and next season ensured; D2 the construction and interpretations as written; D3-A in-season locks for every tier plus offseason sliders; D4 results written in 13-3; D5 the pooled R/9 gating, with any floor restatement returning to the owner; D6 the totals plus the ledger hash; D7 the equilibrium gradient moves to 13-6; D8 the §5.3 red list; D9 `main` after 13-6. **D10** (the runtime budget, added after Astra's measurement) is **pending owner**; it gates only the pooled checks, not the build's start. **Math check done** (§10.1–10.3, changes requested), and Opus reconciled the brief (§10.4). Its answers refine the M-deliverables and don't reopen D1–D9. **The build can start** once this brief reaches the build branch (§0).
 **Recommended model:** Claude Opus 5.5 (engine + harness) **and** GPT 6 Astra Pro (Math) — TEAM.md §2, 13-3 row
 **Reviewer:** each reviews the other's part (TEAM.md §1a): GPT 6 Astra Pro independently reviews Opus's sim diff; Claude Opus reviews Astra's Math record. Opus stays the merge gate. The owner's 2026-10-25 independence waiver (13-2 brief §9.8) covered the 13-2 fix round only and does **not** apply here.
 **Owner gate:** D1–D9 now; **sanction of the new Pro guard** at the end (TEAM.md §2).
@@ -10,15 +10,15 @@
 ## 0. Preconditions (check first; stop and report if any fails)
 
 1. 13-2 is merged into `p13/integration` (`d240b3a`, record `fdbe17e`). ✔ at drafting.
-2. This brief is approved (D1–D9), its Math sections are checked by Astra, and it's merged into `p13/integration`.
-3. Astra's owed post-merge read of `f5ac6a5` (13-2 brief §9.8 → §9.9) is recorded, or explicitly still owed. Any finding is fixed on `p13/integration` before 13-3 branches.
-4. **Astra can run the harnesses on the owner's PC.** Its 13-2 re-check was blocked by tooling. Without working tools there's no Math phase and no independent review. Stop and report; no waiver is implied.
+2. This brief is approved (D1–D9), its Math sections are checked by Astra (§10), and it's on the build branch. ✔ 2026-10-25, apart from D10 (pending owner, needed before the pooled checks are installed). Like 13-2's brief, it can reach `p13/integration` with the build, or earlier as a docs merge; Astra's §9.9 13-2 record (`cfb3c09` on `p13/13-2-review-gpt`) merges into `p13/integration` along with it.
+3. Astra's post-merge read of `f5ac6a5` (13-2 brief §9.9) is recorded. ✔ `cfb3c09`: accept, no blocking findings.
+4. **Astra can run the harnesses on the owner's PC.** ✔ 2026-10-25 (§9.9 and §10.1; it needs the `.git` write escalation from its worktree). If that breaks again, stop and report; no waiver is implied.
 5. Run `git fetch --all`, `git status` and `git worktree list`, and confirm that no one else holds `p13/13-3-opus` or `p13/13-3-math-gpt`.
 6. **Baseline on the base before any edit** (13-2 §9.7/§9.8, owner's PC): build 0/0; MC default **361/369** with exactly the eight approved D6 reds (`tier-ladder` 10/11, `promotion-sweep` 3/4, `promotion-stream` 0/1, `promotion-avatar` 0/1, `promotion-record` 0/1, `development-arc` 3/4, `practice-seam` 5/6, `development-equilibrium` 0/1); `--only resolver` 13/13 byte-identical to `d951efe`; every allocation line 0 B; SchemaValidator 174/174; CoreLoop 22/22; GrittyEvents 363/363. Also record the **default MC wall time** on the owner's PC: it's the baseline for CS-M §6's ≤ 120 s budget. Record any difference.
 
 ## 1. Context
 
-13-2 made both sims run the v14 roster shapes, but on an interim calendar. Every tier plays one circle-method round per day for 154 days (HS 924 games, College 1,848, Pro 2,464 a season), HS still uses the shipped 26-game Tue/Fri `HsSeasonCalendar`, and the old season guard is unreachable. 13-3 gives each tier its real season (spec §3): seeded, persisted schedules in `Schedule_Games` that both sims and the career driver read, and one `TierSeasonCalendar` for all three tiers. On those calendars it re-bands the tiers, retires the old season guard, records the new Pro guard (§11.3), and retunes development (the practice lever and the tier gradient). It's the last slice that changes the world's shape, and the arcade's G-3 calibration takes its per-tier bands from here (BUILD_PLAN). For the player ([GAME_VISION.md](../GAME_VISION.md)), it's the rhythm of the climb: 1 game a week in HS, 2 in College, 3 in Pro.
+13-2 made both sims run the v14 roster shapes, but on an interim calendar. College and Pro play one circle-method round per day for 154 days (1,848 and 2,464 games a season), HS still plays the shipped 26-game Tue/Fri `HsSeasonCalendar` (156 games), and the old season guard is unreachable. 13-3 gives each tier its real season (spec §3): seeded, persisted schedules in `Schedule_Games` that both sims and the career driver read, and one `TierSeasonCalendar` for all three tiers. On those calendars it re-bands the tiers, retires the old season guard, records the new Pro guard (§11.3), and retunes development (the practice lever and the tier gradient). It's the last slice that changes the world's shape, and the arcade's G-3 calibration takes its per-tier bands from here (BUILD_PLAN). For the player ([GAME_VISION.md](../GAME_VISION.md)), it's the rhythm of the climb: 1 game a week in HS, 2 in College, 3 in Pro.
 
 ### 1.1 Code facts this brief relies on (verified at `fdbe17e`)
 
@@ -46,11 +46,11 @@ Because day 1 is always a Monday, every rule in §3 resolves to fixed days-of-se
 
 | Tier | Opens | Last regular game | Game days | Per team | League games | Per game day | Interim games |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| HS | Fri Mar 2 (day 61) | Fri May 4 (day 124) | 10 Fridays | 10 | 60 | 6 | 924 |
+| HS | Fri Mar 2 (day 61) | Fri May 4 (day 124) | 10 Fridays | 10 | 60 | 6 | 156 (26-game calendar) |
 | College | Wed Feb 7 (day 38) | Sat May 12 (day 132) | 28 (Wed + Sat × 14) | 28 | 336 | 12 | 1,848 |
 | Pro | Tue Apr 3 (day 93) | Tue Aug 28 (day 240, D2) | 64 (Tue/Thu/Sat × 21 + week 22 Tue) | 64 | 1,024 | 16 | 2,464 |
 
-The Draft falls on Sat Jul 14 (day 195). The College postseason ends by day 174 at the latest (Jun 23), and the Pro postseason starts in September (day ≥ 244). Sundays are the days with day ≡ 0 (mod 7), and none of them is a game day. **Exposure:** one real season has **6.5% (HS), 18% (College) and 42% (Pro)** of an interim season's games. Every check that gates a rate or a count on one season has to be resized (§3.3 M1, §5.4).
+The Draft falls on Sat Jul 14 (day 195). The College postseason ends by day 174 at the latest (Jun 23), and the Pro postseason starts in September (day ≥ 244). Sundays are the days with day ≡ 0 (mod 7), and none of them is a game day. **Exposure:** one real season has **38.5% (HS, 60 of 156), 18.2% (College) and 41.6% (Pro)** of today's season's games. The first interim Pro season has 2,448, because day 1 is skipped. *(Corrected per Astra §10.1: the draft compared HS against a dense 924-game schedule HS never ran.)* Every check that gates a rate or a count on one season has to be resized (§3.3 M1, §5.4).
 
 ## 2. Hard constraints
 
@@ -135,7 +135,7 @@ The Draft falls on Sat Jul 14 (day 195). The College postseason ends by day 174 
   - This gives 13-4's standings and ranking their source, and the schedule screen real results. Forfeits (`status = 2`) are 13-5's, and `Team_Seasons` is 13-4's.
   - *Alternative:* rows stay at status 0 until 13-4.
 - **D5. Band gating and the Pro run floor.** Astra does the work (M1); the owner approves the shape.
-  - **Recommended:** keep the numeric rows. Gate **R/9**, and report **ER/GS** beside it on the same sample. Gate each tier's band on a **pooled, fixed-seed sample of real-calendar seasons**, sized per tier by Astra (HS needs many more seasons than Pro) within CS-M's ≤ 120 s default budget. CS-M's opt-in batch is the calibration evidence.
+  - **Recommended:** keep the numeric rows. Gate **R/9**, and report **ER/GS** beside it on the same sample. Gate each tier's band on a **pooled, fixed-seed sample of real-calendar seasons**, sized per tier by Astra (HS needs many more seasons than Pro) within the default runtime budget (D10). CS-M's opt-in batch is the calibration evidence.
   - If the pooled Pro R/9 still sits below 4.2, **13-3 doesn't touch the sim.** Astra brings the owner a choice between (i) restating the Pro run floor, with the R/G → R/9 denominator rationale, and (ii) re-centring runs through `BaseOutAdvancement`'s two knobs in a separately sanctioned change. The guard waits for that answer.
   - *Alternative:* gate one season per tier as today. On an HS season of 60 games, that's mostly noise.
 - **D6. The new Pro guard.**
@@ -147,6 +147,10 @@ The Draft falls on Sat Jul 14 (day 195). The College postseason ends by day 174 
   - **Recommended:** 13-3 delivers Astra's gradient targets and the practice-lever retune, fed by the D3 calendars. It also adds the checks that don't need a pipeline: practice credit per tier calendar, and one development pass on a generated world keeping mean talent HS < College < Pro. **The equilibrium check moves to 13-6's PipelineHarness** (20 seasons).
   - *Alternative:* a throwaway tier-flow stub in 13-3, which 13-6 deletes.
 - **D8. The §5.3 expected-red list.**
+- **D10. Default MC runtime budget** *(added 2026-10-25 after Astra's measurement; **pending owner**)*. CS-M §6 proposed ≤ 120 s on the owner's PC without measuring it. Astra measured today's default at **183.7 s** (§10.1), so no added sample fits.
+  - **Recommended:** replace the absolute 120 s with a relative budget. 13-3 may add **at most 30 s** to the measured baseline, with College's share ≤ 15 s as CS-M proposed. Astra's timed pilot predicts the addition before the pooled checks go in, and the handoff measures it. If the pilot predicts more, the pooled sizes come back for review, and they're never cut after seeing results.
+  - The 20-run replay (about an hour on that PC) runs once, unattended, for the guard record. Speeding up the existing suites is a separate, later task.
+  - *Alternative:* hold 120 s. That first means cutting ≥ 64 s from the existing suites, which is profiling work outside 13-3.
 - **D9. When `p13/integration` reaches `main`.** §15 says when the full MC suite is green with the new Pro guard, but the seven promotion suites stay red until 13-6.
   - **Recommended:** merge to `main` after 13-6, so `main` stays green as §15 intends. Phase G and L keep branching from `p13/integration`.
   - *Alternative:* merge after 13-3, with the seven reds owner-approved on `main`.
@@ -156,8 +160,8 @@ The Draft falls on Sat Jul 14 (day 195). The College postseason ends by day 174 
 | # | Deliverable | Owner | Acceptance |
 | :-- | :-- | :-- | :-- |
 | B1–B7 | Calendar, scheduler, schedule-driven sims and career driver, D3 blocks, D4 results, harness and skill (§4.1) | **Opus** | §5.1 green; reviewed by Astra (M5) |
-| **M1** | **Band sample design and the run-floor verdict (D5):** pooled seeds/seasons per tier, with a target standard error per band; the R/9-vs-ER/GS seam measured on the same sample; pooled measurements on Opus's build; a verdict on Pro R/9 4.16 vs the 4.2 floor | **Astra** | Recorded in the Math doc with seeds, sample, intervals and runtime; reviewed by Opus |
-| **M2** | **College re-band per CS-M:** confirm the §1 rows; acceptance for `RunCollegeRateSmoke` (2 checks); run the opt-in rates batch (16,384 seasons), or, if a timed pilot says that's infeasible, a reviewed reduced plan *before* running | **Astra** | CS-M §1/§6: pooled rates in band, clustered 95% intervals |
+| **M1** | **Band sample design and the run-floor verdict (D5):** pooled seeds/seasons per tier, with a target standard error per band; the R/9-vs-ER/GS seam measured on the same sample; pooled measurements on Opus's build; a verdict on Pro R/9 4.16 vs the 4.2 floor. Default design (§10.2): **64 HS / 16 College / 8 Pro** fixed-seed flat seasons, pooled totals, cluster SEs; R, ER, outs and GS printed together; timed by a pilot first | **Astra** | Recorded in the Math doc with seeds, sample, intervals and runtime; reviewed by Opus |
+| **M2** | **College re-band per CS-M:** confirm the §1 rows; acceptance for `RunCollegeRateSmoke` (2 checks); run the opt-in rates batch (16,384 seasons), or, if a timed pilot says that's infeasible, a reviewed reduced plan *before* running. Pilot and stop rule in §10.2 Q3: 32 training seasons; stop if the pilot reaches 60 s; no full matrix above a 30-minute forecast without Opus's review | **Astra** | CS-M §1/§6: pooled rates in band, clustered 95% intervals |
 | **M3** | **New Pro guard sanction (D6):** reproduce Opus's candidate 20/20 byte-identical on the owner's PC (timing lines normalized); sign the values | **Astra** (owner sanctions) | Values and hash recorded in §10 and the skill |
 | **M4** | **Development values (D7):** gradient targets and their tolerance; practice-lever constants (`PracticeFracPerHour`, `PracticeFracCap`, or per-tier if needed) for the §1.2/D3 hours; new goldens for `practice-seam` §10.5 | **Astra** | Values in the Math doc; Opus applies them as data edits |
 | **M5** | Independent review of Opus's sim diff | **Astra** | 13-2 §9-style record |
@@ -167,7 +171,7 @@ The Draft falls on Sat Jul 14 (day 195). The College postseason ends by day 174 
 - College: Mon/Tue/Thu/Fri × 14 weeks = 56 days = 112 h.
 - Pro: Mon/Wed/Fri over weeks 1–21, plus the Monday of week 22 = 64 days = 128 h.
 
-At today's constants that's a practice fraction of **.037 / .050 / .057**, against **.2469** for the shipped proof's 6 h a day all year. The lever is close to inert in-season. What the offseason sliders add depends on D3.
+At today's constants that's a practice fraction of **.037 / .050 / .056**, against **.2469** for the shipped proof's 6 h a day all year. The lever is close to inert in-season. What the offseason sliders add depends on D3.
 
 **Sequence.**
 1. Opus builds B1–B7 with today's constants; the guard literal is left pending.
@@ -231,7 +235,7 @@ At today's constants that's a practice fraction of **.037 / .050 / .057**, again
 | Unchanged | `-- --only innings,capacity,lineups,worldgen-v14,ui-strings` | 5/5, 6/6, 8/8, 23/23, 3/3 (world-gen is untouched: schedule rows are written outside `LeagueGenerator`) |
 | CoreLoop, Gritty | their harnesses | 22/22 (+ calendar checks if added), 363/363 |
 | Replay | default MC × 20 on the owner's PC | Byte-identical apart from timing lines (CS-M §6) |
-| Runtime | default MC | Wall time reported against §0's baseline and the ≤ 120 s budget |
+| Runtime | default MC | Wall time against §0's baseline (183.7 s, §10.1) and the D10 budget. Astra's timed pilot (4 HS + 4 College + 2 Pro seasons) predicts the pooled addition before those checks are installed (§10.2) |
 | Opt-in | `-- --college-analysis rates` | Runs **only** that batch (M2), never the default suite |
 | Godot boot | headless fresh v14 boot, scratch APPDATA | Current- and next-season rows for every tier (60 / 336 / 1,024 each); no errors |
 | Isolation | `git diff --stat origin/p13/integration...HEAD` | §2 paths only |
@@ -250,12 +254,12 @@ The resolver guard. 13-2's rest and selection behavior on the same day sequence 
 
 Checks whose expected values come from the 154-day season are restated from `TierSeasonCalendar`:
 - `AssertSeason`'s game counts;
-- career-wiring's "avatar PA 450–800" (a 64-game Pro season gives about a third of the PA), as a per-tier band Astra signs;
+- career-wiring's "avatar PA 450–800", as a per-tier band Astra signs after measuring the real fixture. Pilot envelopes, scaled from the 153-game fixture: HS 22–41, College 82–147, Pro 188–335 (§10.3 Q7);
 - the 3-generation season counts;
 - HS `GamesPerSeason` in `promotion-avatar`;
 - the `starters` and `innings` day loops.
 
-Each is listed in the handoff as old → new → reason. Same-seed delta checks (rivalry, person-effects ΔR/G ≤ .05) see smaller samples. If one fails, it's reported with Astra's view, never widened silently. Retire by name with the replacement (13-1 rule).
+Each is listed in the handoff as old → new → reason. Same-seed delta checks (rivalry, person-effects ΔR/G ≤ .05) keep their ER/GS unit and .05 limit, on common-seed pools with at least the old exposure (16 HS / 6 College / 3 Pro seasons, or 3 HS seasons where the old fixture used sparse HS; §10.3). If one fails, it's reported with Astra's view, never widened silently. Retire by name with the replacement (13-1 rule).
 
 ## 6. Definition of done
 
@@ -360,6 +364,32 @@ D3-A leaves **297/268/216 free-slider days** before 13-4 postseason overrides. A
 For person-effects/rivalry paired ΔR/G ≤.05, keep the original **ER/GS estimand and .05 limit** unless separately sanctioned; D5's R/9 choice for tier bands does not silently change a paired regression's unit. Start with common-seed pools retaining at least old exposure (full-season 154 games/team: **16 HS / 6 College / 3 Pro seasons**); if a given old fixture used sparse HS instead, its exposure match is **3 HS seasons** for 26→10. Replay both arms with identical schedule tuples and retain exact rowless/neutral identity assertions. Use season-paired difference uncertainty; if precision is insufficient, propose more fixed samples rather than relaxing .05 or cherry-picking seeds. Structural starter/innings fixtures must preserve their intended gap/boundary cases while production calendar-loop counts change. Exact 23-starter tests plus the three requested regressions are not replaced by statistical bands.
 
 **Handoff / open decisions:** Opus reconciles the factual HS baseline and the sample/runtime plan before relying on them. D1–D9 remain approved. No owner choice is requested now on the Pro floor: M1's new-calendar paired evidence is still owed. If measured optimized runtime cannot meet 120 s, or pooled Pro R/9 stays below 4.2, return the specific evidence and alternatives to the owner; neither limit changed here. All M1–M5 completion, development constants/goldens, the new Pro hash and owner sanction remain pending. CS-M's rest-3, retired-guard and pooled R/9 supersession was folded into its body, with a one-line pointer replacing the banner. **Recommended next: Claude Opus reviews this Math check and reconciles the brief, then builds B1–B7 after its integration merge; GPT measures the briefed Math deliverables and independently reviews the sim diff.**
+
+### 10.4 Opus review of the Math check and reconciliation (Claude Opus 5.5, 2026-10-25)
+
+**Accepted.** Re-derived and confirmed:
+- Exposure: HS 60/156 = 38.46% (the base routes HS through `HsSeasonCalendar` at `LeagueSimulator.cs:509`; the draft's 924 was my error); 2,448 games in the first interim Pro season.
+- Practice: .056465 → .056.
+- Pooled design: 64/16/8 seasons = 17,408 games; run SEs .0514 / .0338 / .0273 R/9 under SD 3.5.
+- Candidate practice fractions .068463 / .090274 / .100176; offseason days 297/268/216.
+- PA envelopes 22–41 / 82–147 / 188–335; exposure-matched pools 16/6/3.
+- Throughput bounds: 3.33 s and about 1,052 s.
+
+**Reconciled here:**
+- §1, the §1.2 table and the exposure line; spec §11.2.
+- the §3.3 M4 arithmetic; the M1 and M2 rows (default design, pilot and stop rule).
+- the §5.1 runtime row; §5.4 (PA envelopes, paired checks keep ER/GS and .05).
+- §0 and the status line.
+
+**Adopted as the build's measurement plan, still provisional where Astra says so:**
+- the 64/16/8 design and the cluster-SE method, with R, ER, outs and GS printed together;
+- the 32-season M2 pilot and its stop rule;
+- the Q4 hash specification: phase-0 rows of both seasons, explicit keys and encodings, plus a seed manifest;
+- Q5's shared `.001` candidate, to be *tested* against 0 and `.0005`, not signed;
+- the Q6 raw-batter-sum, spread-25, single-pass check with no tolerance;
+- the Q7 old → new ledger.
+
+**One finding goes to the owner:** today's default MC is already 183.7 s against CS-M's unmeasured 120 s budget, so D10 was added. No D1–D9 change. The Pro floor stays open until M1's pooled measurement, as D5 says.
 
 ---
 
