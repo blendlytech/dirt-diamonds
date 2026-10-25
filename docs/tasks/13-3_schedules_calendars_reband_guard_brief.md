@@ -393,6 +393,18 @@ For person-effects/rivalry paired ΔR/G ≤.05, keep the original **ER/GS estima
 
 ---
 
+### 10.5 Math check — reconciled brief (GPT, 2026-10-25)
+
+**Reviewed `origin/p13/13-3-brief-opus` at `84736d4`; Math sections only. No blocking Math-design finding for starting B1–B7.** This is a brief review, not new calibration evidence or guard sanction.
+
+- **Bands / CS-M:** retain HS R/9 6.4–8.0, College 5.8–7.1, Pro 4.2–4.8 and the existing rate rows. College's 28 games mean 336 league games, not doubled rate targets. Pool numerators/denominators; report R, ER, outs and GS together. The provisional 64/16/8 default samples require timing and measured cluster uncertainty; M2's reviewed opt-in plan supplies College calibration evidence. A failing Pro floor returns to the owner under D5 before the guard is frozen.
+- **Runtime clarification:** approved D10 supersedes the residual absolute 120 s instructions in §0.6, §9 Q1, §10.2–10.3 and CS-M §6. Use the measured base default plus at most 30 s (about 213.7 s on the recorded 183.7 s baseline), with College's addition ≤15 s. This is a supersession clarification, not a new budget or permission to shrink samples after inspecting acceptance results.
+- **Pro guard:** D6 / §10.2 Q4 correctly separate unchanged resolver bytes from retired PA 48384 / H 10969 / ER 5237. Freeze first-season Pro totals plus the canonically encoded two-season phase-0 ledger hash only after D5 settles and all non-exempt gates pass; Astra reproduces 20/20, Opus reviews Math, and the owner sanctions. Scheduler checks remain separate from the ledger hash.
+- **Development:** use the spread-25 raw-batter-sum single-pass target HS < College < Pro, with no negative tolerance. The shared .001 practice slope is a candidate, not a signed constant; measure annual/offseason exposure and goldens under M4. The 20-season equilibrium and its predeclared drift tolerance belong to 13-6, not this single-pass proof.
+- **Split:** Opus owns engine/harness implementation and applying reviewed values; Astra owns M1–M4 evidence and M5 independent sim review; Opus reviews Astra's Math record. Neither this check nor Math's signature replaces owner guard sanction.
+
+Validation: documentation cross-check against league spec §11.2–11.3 and CS-M §1/§6; no build or simulation run for this brief-only addition. D1–D10 are already recorded as owner-approved at the reviewed head. **Recommended next: 13-3 build by Claude Opus under those approvals, with Astra's Math measurements and independent review to follow.**
+
 ### Spec issues found while drafting — **resolved 2026-10-25** (owner: "resolve these problems")
 
 After the owner approved D1–D9, Opus applied each decision to its spec home on `p13/13-3-brief-opus`:
