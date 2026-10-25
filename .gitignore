@@ -44,3 +44,6 @@ Desktop.ini
 # Environment Variables
 .env
 
+# Git Worktrees
+.worktrees/
+
