@@ -1,0 +1,3381 @@
+{
+  "//": "Venue catalog for all 68 teams across High School (101\u2013112), College (201\u2013224), and Pro (301\u2013332). Spec: gameplay_core.md \u00a73.1. Generalizes the schools.json pattern with interactive venue hotspots, field dimensions (LF/LCF/CF/RCF/RF, wall heights), surfaces, capacities, colors, and announcer booth metadata for Phase 14.",
+  "venues": [
+    {
+      "team_id": 101,
+      "abbreviation": "CRW",
+      "team_name": "Crestwood Cardinals",
+      "mascot": "Cardinals",
+      "tier": "HS",
+      "conference": "North",
+      "division": null,
+      "park_name": "Crestwood High Field",
+      "city": "Crestwood",
+      "state": "Ridgeview County",
+      "capacity": 1200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 315,
+        "left_center": 360,
+        "center_field": 385,
+        "right_center": 360,
+        "right_field": 315,
+        "wall_height": 6
+      },
+      "signature_features": "Manicured infield dirt, brick dugout facades, and towering maple trees framing the outfield perimeter.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/CRW_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/CRW_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/CRW_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/CRW_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/CRW_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Cardinal Red",
+          "hex": "#9B1B30"
+        },
+        "secondary": {
+          "name": "White",
+          "hex": "#F5F5F5"
+        },
+        "accent": {
+          "name": "Black",
+          "hex": "#111318"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Revered long-time faculty announcer with crisp, traditional diction and deep local pride.",
+        "signature_call": "Driven deep toward the red oaks... and that ball has left the yard!"
+      }
+    },
+    {
+      "team_id": 102,
+      "abbreviation": "LKS",
+      "team_name": "Lakeside Longhorns",
+      "mascot": "Longhorns",
+      "tier": "HS",
+      "conference": "North",
+      "division": null,
+      "park_name": "Lakeside High Field",
+      "city": "Lakeside",
+      "state": "Morrow County",
+      "capacity": 1800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 365,
+        "center_field": 390,
+        "right_center": 365,
+        "right_field": 320,
+        "wall_height": 6
+      },
+      "signature_features": "Overlooks the county reservoir; stiff afternoon crosswinds carry fly balls out toward the bluffs.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/LKS_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/LKS_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/LKS_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/LKS_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/LKS_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Burnt Orange",
+          "hex": "#BF5700"
+        },
+        "secondary": {
+          "name": "Cream",
+          "hex": "#F3EAD3"
+        },
+        "accent": {
+          "name": "Chocolate Brown",
+          "hex": "#4A2C12"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Enthusiastic rancher and booster president with gravelly baritone and Friday-night flair.",
+        "signature_call": "Hook 'em high and let it ride! Way back into the water reservoir!"
+      }
+    },
+    {
+      "team_id": 103,
+      "abbreviation": "FRV",
+      "team_name": "Fairview Falcons",
+      "mascot": "Falcons",
+      "tier": "HS",
+      "conference": "North",
+      "division": null,
+      "park_name": "Fairview High Field",
+      "city": "Fairview",
+      "state": "Summit County",
+      "capacity": 1000,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 310,
+        "left_center": 355,
+        "center_field": 380,
+        "right_center": 355,
+        "right_field": 310,
+        "wall_height": 8
+      },
+      "signature_features": "Sleek aluminum bleachers, perfectly flat limestone crushed warning track, immaculate electronic scoreboard.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/FRV_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/FRV_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/FRV_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/FRV_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/FRV_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Navy Blue",
+          "hex": "#1F2A44"
+        },
+        "secondary": {
+          "name": "Brushed Silver",
+          "hex": "#B7BCC4"
+        },
+        "accent": {
+          "name": "Sky Blue",
+          "hex": "#5A8FC0"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Methodical, analytical science instructor delivering disciplined, precise strike and pitch counts.",
+        "signature_call": "High launch angle, deep center... and that is calculated for a home run!"
+      }
+    },
+    {
+      "team_id": 104,
+      "abbreviation": "OKR",
+      "team_name": "Oak Ridge Owls",
+      "mascot": "Owls",
+      "tier": "HS",
+      "conference": "North",
+      "division": null,
+      "park_name": "Oak Ridge High Field",
+      "city": "Oak Ridge",
+      "state": "Pine County",
+      "capacity": 950,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 305,
+        "left_center": 350,
+        "center_field": 375,
+        "right_center": 350,
+        "right_field": 305,
+        "wall_height": 7
+      },
+      "signature_features": "Tucked into a dense dark pine hollow; buzzing halogen floodlights illuminate swirling evening mist.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/OKR_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/OKR_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/OKR_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/OKR_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/OKR_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Forest Green",
+          "hex": "#1E4D2B"
+        },
+        "secondary": {
+          "name": "Old Gold",
+          "hex": "#C5A253"
+        },
+        "accent": {
+          "name": "Bark Brown",
+          "hex": "#3E2E1E"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Local radio mechanic and nocturnal voice of the Ridge, speaking with low, dry woodland wit.",
+        "signature_call": "Lost into the night timber! The Owls take flight!"
+      }
+    },
+    {
+      "team_id": 105,
+      "abbreviation": "BRK",
+      "team_name": "Brookhaven Bulldogs",
+      "mascot": "Bulldogs",
+      "tier": "HS",
+      "conference": "North",
+      "division": null,
+      "park_name": "Brookhaven High Field",
+      "city": "Brookhaven",
+      "state": "Mercer County",
+      "capacity": 1400,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 360,
+        "center_field": 385,
+        "right_center": 360,
+        "right_field": 315,
+        "wall_height": 6
+      },
+      "signature_features": "Booster-funded double batting cages, high chain-link fences, and aggressive sideline noise from packed student stands.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/BRK_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/BRK_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/BRK_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/BRK_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/BRK_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Athletic Gold",
+          "hex": "#F2A900"
+        },
+        "secondary": {
+          "name": "Charcoal Gray",
+          "hex": "#2B2D42"
+        },
+        "accent": {
+          "name": "White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Fiery former linebacker turned athletic department broadcaster, booming with raw suburban intensity.",
+        "signature_call": "Hammered! He unleashed the dog on that one, way over the center barrier!"
+      }
+    },
+    {
+      "team_id": 106,
+      "abbreviation": "CDG",
+      "team_name": "Cedar Grove Comets",
+      "mascot": "Comets",
+      "tier": "HS",
+      "conference": "North",
+      "division": null,
+      "park_name": "Cedar Grove High Field",
+      "city": "Cedar Grove",
+      "state": "Plains County",
+      "capacity": 850,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 310,
+        "left_center": 350,
+        "center_field": 370,
+        "right_center": 350,
+        "right_field": 310,
+        "wall_height": 5
+      },
+      "signature_features": "Wooden outfield fence painted purple, bordered by grain silos and flat prairie winds that whip in from center field.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/CDG_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/CDG_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/CDG_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/CDG_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/CDG_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Royal Purple",
+          "hex": "#5A2D82"
+        },
+        "secondary": {
+          "name": "Silver Mist",
+          "hex": "#C4C8D0"
+        },
+        "accent": {
+          "name": "Electric Indigo",
+          "hex": "#311B92"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Soft-spoken rural postmaster who turns electric on contact, delivering heartfelt town hall broadcasts.",
+        "signature_call": "There goes a Comet rocket! Burning through the sky and into the soybean fields!"
+      }
+    },
+    {
+      "team_id": 107,
+      "abbreviation": "PNH",
+      "team_name": "Pinehurst Panthers",
+      "mascot": "Panthers",
+      "tier": "HS",
+      "conference": "South",
+      "division": null,
+      "park_name": "Pinehurst High Field",
+      "city": "Pinehurst",
+      "state": "Crestview County",
+      "capacity": 2200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 370,
+        "center_field": 395,
+        "right_center": 370,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "State-of-the-art synthetic clay pitching mounds, luxury alumni box seating, and towering palm/pine landscaping.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/PNH_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/PNH_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/PNH_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/PNH_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/PNH_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Matte Black",
+          "hex": "#14151A"
+        },
+        "secondary": {
+          "name": "Royal Purple",
+          "hex": "#5B2A86"
+        },
+        "accent": {
+          "name": "Silver",
+          "hex": "#C0C3C9"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Polished, smug prep school alumnus with smooth FM cadence and cutting assessments of visiting teams.",
+        "signature_call": "Majestic, effortless, and entirely out of reach. That's Panther baseball."
+      }
+    },
+    {
+      "team_id": 108,
+      "abbreviation": "WSF",
+      "team_name": "Westfield Warhawks",
+      "mascot": "Warhawks",
+      "tier": "HS",
+      "conference": "South",
+      "division": null,
+      "park_name": "Westfield High Field",
+      "city": "Westfield",
+      "state": "Foundry County",
+      "capacity": 1500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 315,
+        "left_center": 355,
+        "center_field": 380,
+        "right_center": 355,
+        "right_field": 315,
+        "wall_height": 6
+      },
+      "signature_features": "Located directly across from active railroad spurs; passing freight horns punctuate high-tension counts.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/WSF_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/WSF_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/WSF_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/WSF_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/WSF_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Maroon",
+          "hex": "#6E1423"
+        },
+        "secondary": {
+          "name": "Steel Gray",
+          "hex": "#6B7280"
+        },
+        "accent": {
+          "name": "Antique White",
+          "hex": "#E8E2D6"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Retired machinists union rep with raspy, defiant pipes and zero tolerance for soft play.",
+        "signature_call": "He drilled that rivet straight out of town! Clear onto the freight car tracks!"
+      }
+    },
+    {
+      "team_id": 109,
+      "abbreviation": "SMT",
+      "team_name": "Summit Spartans",
+      "mascot": "Spartans",
+      "tier": "HS",
+      "conference": "South",
+      "division": null,
+      "park_name": "Summit High Field",
+      "city": "Summit",
+      "state": "Foothill County",
+      "capacity": 1100,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 375,
+        "center_field": 400,
+        "right_center": 375,
+        "right_field": 330,
+        "wall_height": 10
+      },
+      "signature_features": "Highest elevation field in the circuit; thin alpine air produces mammoth home runs over terraced rock cuts.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/SMT_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/SMT_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/SMT_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/SMT_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/SMT_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Slate Blue",
+          "hex": "#38618C"
+        },
+        "secondary": {
+          "name": "Burnished Bronze",
+          "hex": "#B08D57"
+        },
+        "accent": {
+          "name": "Charcoal",
+          "hex": "#2B2F36"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Energetic physical ed director shouting over howling mountain winds with booming optimism.",
+        "signature_call": "Hit into orbit! In the thin air of Summit, that ball may never come down!"
+      }
+    },
+    {
+      "team_id": 110,
+      "abbreviation": "RVT",
+      "team_name": "Riverton Rams",
+      "mascot": "Rams",
+      "tier": "HS",
+      "conference": "South",
+      "division": null,
+      "park_name": "Riverton High Field",
+      "city": "Riverton",
+      "state": "Lowland County",
+      "capacity": 1300,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 310,
+        "left_center": 350,
+        "center_field": 375,
+        "right_center": 350,
+        "right_field": 310,
+        "wall_height": 6
+      },
+      "signature_features": "Situated on a damp river bend prone to muddy clay bases, heavy outfield turf, and raucous levee tailgaters.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/RVT_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/RVT_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/RVT_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/RVT_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/RVT_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "River Teal",
+          "hex": "#0E7C7B"
+        },
+        "secondary": {
+          "name": "Vegas Gold",
+          "hex": "#C5B358"
+        },
+        "accent": {
+          "name": "Deep Navy",
+          "hex": "#132B3A"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Local bait shop proprietor and longtime PA announcer with drawling river cadence and folksy banter.",
+        "signature_call": "Splash down! That ball is swimming in the mud flats of the river channel!"
+      }
+    },
+    {
+      "team_id": 111,
+      "abbreviation": "GRF",
+      "team_name": "Granite Falls Gators",
+      "mascot": "Gators",
+      "tier": "HS",
+      "conference": "South",
+      "division": null,
+      "park_name": "Granite Falls High Field",
+      "city": "Granite Falls",
+      "state": "Quarry County",
+      "capacity": 1050,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 312,
+        "left_center": 358,
+        "center_field": 382,
+        "right_center": 358,
+        "right_field": 312,
+        "wall_height": 8
+      },
+      "signature_features": "Rough-hewn stone backstop extracted from the adjacent quarry; foul balls ricochet with fierce ceramic clatter.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/GRF_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/GRF_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/GRF_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/GRF_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/GRF_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Kelly Green",
+          "hex": "#008344"
+        },
+        "secondary": {
+          "name": "Granite Gray",
+          "hex": "#4B5563"
+        },
+        "accent": {
+          "name": "Bone White",
+          "hex": "#F4F1EA"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Hard-bitten quarry foreman with unvarnished, no-nonsense play-by-play.",
+        "signature_call": "Crushed solid like granite! Over the rock pit wall and gone!"
+      }
+    },
+    {
+      "team_id": 112,
+      "abbreviation": "HLC",
+      "team_name": "Hillcrest Hurricanes",
+      "mascot": "Hurricanes",
+      "tier": "HS",
+      "conference": "South",
+      "division": null,
+      "park_name": "Hillcrest High Field",
+      "city": "Hillcrest",
+      "state": "Ridgeview County",
+      "capacity": 1250,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 318,
+        "left_center": 362,
+        "center_field": 388,
+        "right_center": 362,
+        "right_field": 318,
+        "wall_height": 6
+      },
+      "signature_features": "Wind-tunnel diamond carved into an exposed ridge; sudden gusts create unpredictable knuckleballs and skying popups.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/HS/HLC_campus.png",
+        "field": "res://Assets/Graphics/Venues/HS/HLC_field.png",
+        "dugout_locker": "res://Assets/Graphics/Venues/HS/HLC_locker.png",
+        "gym": "res://Assets/Graphics/Venues/HS/HLC_gym.png",
+        "parking_lot": "res://Assets/Graphics/Venues/HS/HLC_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Cobalt Blue",
+          "hex": "#0047AB"
+        },
+        "secondary": {
+          "name": "Storm White",
+          "hex": "#F0F4F8"
+        },
+        "accent": {
+          "name": "Crimson Red",
+          "hex": "#C62828"
+        }
+      },
+      "booth": {
+        "announcer_persona": "High-octane local sports journalist broadcasting with rapid-fire, breathless excitement.",
+        "signature_call": "Category five blast into the gale! Goodbye home run, Hillcrest!"
+      }
+    },
+    {
+      "team_id": 201,
+      "abbreviation": "ASH",
+      "team_name": "Ashford State Admirals",
+      "tier": "College",
+      "conference": "East",
+      "division": "Coastal",
+      "park_name": "Ashford State Stadium",
+      "city": "Ashford",
+      "state": "MA",
+      "capacity": 4500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 375,
+        "center_field": 400,
+        "right_center": 375,
+        "right_field": 330,
+        "wall_height": 10
+      },
+      "signature_features": "Colonial brick facade, towering granite rotunda behind home plate, and coastal fog lingering at twilight.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/ASH_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/ASH_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/ASH_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/ASH_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/ASH_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/ASH_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/ASH_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/ASH_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Navy",
+          "hex": "#0C2340"
+        },
+        "secondary": {
+          "name": "Maritime Gold",
+          "hex": "#D4AF37"
+        },
+        "accent": {
+          "name": "Salt White",
+          "hex": "#F8FAFC"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Stately maritime academy voice with resonant collegiate timbre and crisp maritime metaphors.",
+        "signature_call": "Torpedo shot to deep left! Clear the harbor decks, it's out of here!"
+      }
+    },
+    {
+      "team_id": 202,
+      "abbreviation": "BLV",
+      "team_name": "Blue Valley Bison",
+      "tier": "College",
+      "conference": "East",
+      "division": "Coastal",
+      "park_name": "Blue Valley Field",
+      "city": "Blue Valley",
+      "state": "VA",
+      "capacity": 3800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 328,
+        "left_center": 370,
+        "center_field": 395,
+        "right_center": 370,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Set into scenic mountain foothills with tiered lawn seating beyond right field known as the 'Bison Pasture'.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/BLV_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/BLV_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/BLV_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/BLV_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/BLV_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/BLV_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/BLV_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/BLV_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Valley Blue",
+          "hex": "#1E3A8A"
+        },
+        "secondary": {
+          "name": "Dusty Ochre",
+          "hex": "#D97706"
+        },
+        "accent": {
+          "name": "Off-White",
+          "hex": "#F3F4F6"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Southern collegiate veteran with warm, rhythmic storytelling and thunderous home run crescendos.",
+        "signature_call": "Stampede time in the Valley! That ball is roaming into the pines!"
+      }
+    },
+    {
+      "team_id": 203,
+      "abbreviation": "GLH",
+      "team_name": "Glenhaven Gulls",
+      "tier": "College",
+      "conference": "East",
+      "division": "Coastal",
+      "park_name": "Glenhaven Campus Park",
+      "city": "Glenhaven",
+      "state": "ME",
+      "capacity": 3200,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 365,
+        "center_field": 390,
+        "right_center": 365,
+        "right_field": 320,
+        "wall_height": 9
+      },
+      "signature_features": "Cold-weather FieldTurf diamond directly beside the rocky coastline; chilly Atlantic brine dampens balls in early spring.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/GLH_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/GLH_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/GLH_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/GLH_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/GLH_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/GLH_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/GLH_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/GLH_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Atlantic Slate",
+          "hex": "#334155"
+        },
+        "secondary": {
+          "name": "Safety Orange",
+          "hex": "#EA580C"
+        },
+        "accent": {
+          "name": "Seafoam White",
+          "hex": "#E2E8F0"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Dry, sardonic Maine broadcaster who relishes rough nor'easters and gritty defense.",
+        "signature_call": "Carried away on the coastal gale! The Gulls take flight over the Atlantic fence!"
+      }
+    },
+    {
+      "team_id": 204,
+      "abbreviation": "SMS",
+      "team_name": "Saltmarsh State Stingrays",
+      "tier": "College",
+      "conference": "East",
+      "division": "Coastal",
+      "park_name": "Saltmarsh State Stadium",
+      "city": "Saltmarsh",
+      "state": "GA",
+      "capacity": 4100,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 332,
+        "left_center": 372,
+        "center_field": 402,
+        "right_center": 372,
+        "right_field": 328,
+        "wall_height": 8
+      },
+      "signature_features": "Surrounded by Spanish moss cypress trees and tidal saltmarshes; heavy humid air keeps line drives low and fast.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/SMS_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/SMS_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/SMS_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/SMS_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/SMS_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/SMS_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/SMS_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/SMS_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Marsh Green",
+          "hex": "#14532D"
+        },
+        "secondary": {
+          "name": "Sandy Bronze",
+          "hex": "#92400E"
+        },
+        "accent": {
+          "name": "Phosphor Lime",
+          "hex": "#84CC16"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Drawling Lowcountry play-by-play voice with a sharp, lethal sting whenever big runs cross the plate.",
+        "signature_call": "He stung it right into the marsh grass! Say goodbye to that baseball!"
+      }
+    },
+    {
+      "team_id": 205,
+      "abbreviation": "CVT",
+      "team_name": "Carverton Tech Chargers",
+      "tier": "College",
+      "conference": "East",
+      "division": "Capital",
+      "park_name": "Carverton Tech Field",
+      "city": "Carverton",
+      "state": "MD",
+      "capacity": 3600,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 360,
+        "center_field": 390,
+        "right_center": 360,
+        "right_field": 320,
+        "wall_height": 10
+      },
+      "signature_features": "Urban collegiate facility with angular high-tech lighting rigs and a multi-level concrete observation deck.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/CVT_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/CVT_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/CVT_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/CVT_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/CVT_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/CVT_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/CVT_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/CVT_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Circuit Blue",
+          "hex": "#0284C7"
+        },
+        "secondary": {
+          "name": "Industrial Charcoal",
+          "hex": "#1E293B"
+        },
+        "accent": {
+          "name": "Bolt Yellow",
+          "hex": "#FACC15"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Fast-paced metro sports anchor with high energy and sharp tactical breakdowns of bullpen moves.",
+        "signature_call": "High-voltage contact! The Chargers light up the scoreboard with a bomb!"
+      }
+    },
+    {
+      "team_id": 206,
+      "abbreviation": "DNM",
+      "team_name": "Dunmore Dukes",
+      "tier": "College",
+      "conference": "East",
+      "division": "Capital",
+      "park_name": "Dunmore Varsity Stadium",
+      "city": "Dunmore",
+      "state": "PA",
+      "capacity": 4200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 335,
+        "left_center": 378,
+        "center_field": 405,
+        "right_center": 378,
+        "right_field": 335,
+        "wall_height": 8
+      },
+      "signature_features": "Traditional limestone archways and ivy-draped iron fencing; one of the oldest collegiate stadiums in the region.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/DNM_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/DNM_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/DNM_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/DNM_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/DNM_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/DNM_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/DNM_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/DNM_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Royal Crimson",
+          "hex": "#881337"
+        },
+        "secondary": {
+          "name": "Antique Brass",
+          "hex": "#B45309"
+        },
+        "accent": {
+          "name": "Cream",
+          "hex": "#FEF3C7"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Distinguished professor of rhetoric with classical flair and theatrical delivery.",
+        "signature_call": "A majestic stroke worthy of the crown! Into the ivy it disappears!"
+      }
+    },
+    {
+      "team_id": 207,
+      "abbreviation": "MRB",
+      "team_name": "Marbury Miners",
+      "tier": "College",
+      "conference": "East",
+      "division": "Capital",
+      "park_name": "Marbury College Grounds",
+      "city": "Marbury",
+      "state": "WV",
+      "capacity": 2900,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 318,
+        "left_center": 358,
+        "center_field": 388,
+        "right_center": 358,
+        "right_field": 318,
+        "wall_height": 11
+      },
+      "signature_features": "Sunken bowl stadium flanked by exposed coal-seam hillsides; loud wooden bleachers that shake during rallies.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/MRB_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/MRB_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/MRB_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/MRB_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/MRB_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/MRB_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/MRB_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/MRB_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Anthracite Black",
+          "hex": "#18181B"
+        },
+        "secondary": {
+          "name": "Canary Gold",
+          "hex": "#EAB308"
+        },
+        "accent": {
+          "name": "Foundry Rust",
+          "hex": "#7C2D12"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Grit-infused mountain radio veteran who calls every ground ball like a fistfight.",
+        "signature_call": "He struck gold deep in the seam! That ball is gone into the timber!"
+      }
+    },
+    {
+      "team_id": 208,
+      "abbreviation": "WXF",
+      "team_name": "Wexford Wildcats",
+      "tier": "College",
+      "conference": "East",
+      "division": "Capital",
+      "park_name": "Wexford Campus Stadium",
+      "city": "Wexford",
+      "state": "PA",
+      "capacity": 3700,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 368,
+        "center_field": 395,
+        "right_center": 368,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Rolling hillside campus setting with a covered grandstand and steep right-field slope known for wicked caroms.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/WXF_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/WXF_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/WXF_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/WXF_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/WXF_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/WXF_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/WXF_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/WXF_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Pine Green",
+          "hex": "#064E3B"
+        },
+        "secondary": {
+          "name": "Athletic Gold",
+          "hex": "#F59E0B"
+        },
+        "accent": {
+          "name": "Clean White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Energetic, snappy campus broadcaster with razor-sharp cadence and relentless enthusiasm.",
+        "signature_call": "Pounced on and punished! The Wildcats roar as it clears the pine ridge!"
+      }
+    },
+    {
+      "team_id": 209,
+      "abbreviation": "LRV",
+      "team_name": "Lorain Valley Lancers",
+      "tier": "College",
+      "conference": "East",
+      "division": "Valley",
+      "park_name": "Lorain Valley Park",
+      "city": "Lorain Valley",
+      "state": "OH",
+      "capacity": 3400,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 322,
+        "left_center": 362,
+        "center_field": 392,
+        "right_center": 362,
+        "right_field": 320,
+        "wall_height": 9
+      },
+      "signature_features": "Lake Erie chill rolls across the metal bleachers; high-grade modern turf allows early season March games in snow flurries.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/LRV_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/LRV_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/LRV_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/LRV_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/LRV_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/LRV_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/LRV_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/LRV_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Burgundy",
+          "hex": "#4C0519"
+        },
+        "secondary": {
+          "name": "Steel Gray",
+          "hex": "#475569"
+        },
+        "accent": {
+          "name": "Silver",
+          "hex": "#CBD5E1"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Grumpy Midwest sports reporter who respects tough at-bats, line drives, and flawless double plays.",
+        "signature_call": "Pierced straight through the teeth of the gale! A Lancer round-tripper!"
+      }
+    },
+    {
+      "team_id": 210,
+      "abbreviation": "NGT",
+      "team_name": "Northgate Nighthawks",
+      "tier": "College",
+      "conference": "East",
+      "division": "Valley",
+      "park_name": "Northgate Stadium",
+      "city": "Northgate",
+      "state": "NY",
+      "capacity": 3100,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 315,
+        "left_center": 355,
+        "center_field": 385,
+        "right_center": 355,
+        "right_field": 315,
+        "wall_height": 12
+      },
+      "signature_features": "Tall timber wall in right field with manually operated scoreboard; cold river breeze sweeps down the valley.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/NGT_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/NGT_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/NGT_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/NGT_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/NGT_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/NGT_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/NGT_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/NGT_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Midnight Blue",
+          "hex": "#0F172A"
+        },
+        "secondary": {
+          "name": "Gunmetal",
+          "hex": "#334155"
+        },
+        "accent": {
+          "name": "Neon Cyan",
+          "hex": "#06B6D4"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Nocturnal campus radio icon with deep, velvety baritone and sudden piercing strike calls.",
+        "signature_call": "Swooping into the dark! Over the wall and into the northern night!"
+      }
+    },
+    {
+      "team_id": 211,
+      "abbreviation": "UNM",
+      "team_name": "Union Mills Millers",
+      "tier": "College",
+      "conference": "East",
+      "division": "Valley",
+      "park_name": "Union Mills Field",
+      "city": "Union Mills",
+      "state": "IN",
+      "capacity": 3500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 370,
+        "center_field": 395,
+        "right_center": 370,
+        "right_field": 325,
+        "wall_height": 7
+      },
+      "signature_features": "Historic red-brick grain elevator overlooks left field; pristine dark loam infield cared for by agricultural students.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/UNM_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/UNM_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/UNM_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/UNM_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/UNM_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/UNM_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/UNM_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/UNM_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Wheat Tan",
+          "hex": "#D97706"
+        },
+        "secondary": {
+          "name": "Millstone Gray",
+          "hex": "#52525B"
+        },
+        "accent": {
+          "name": "Cardinal Red",
+          "hex": "#991B1B"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Wholesome, earnest Midwestern play-by-play caller celebrating clean execution and teamwork.",
+        "signature_call": "That ball got ground up and shipped out! A grand slam for the Millers!"
+      }
+    },
+    {
+      "team_id": 212,
+      "abbreviation": "VNC",
+      "team_name": "Vance County Vipers",
+      "tier": "College",
+      "conference": "East",
+      "division": "Valley",
+      "park_name": "Vance County Stadium",
+      "city": "Vance County",
+      "state": "NC",
+      "capacity": 3900,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 328,
+        "left_center": 368,
+        "center_field": 398,
+        "right_center": 368,
+        "right_field": 322,
+        "wall_height": 8
+      },
+      "signature_features": "Red clay warning tracks, sweltering early summer humidity, and thick pine groves behind the outfield fencing.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/VNC_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/VNC_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/VNC_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/VNC_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/VNC_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/VNC_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/VNC_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/VNC_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Olive Drab",
+          "hex": "#365314"
+        },
+        "secondary": {
+          "name": "Copperheads Rust",
+          "hex": "#C2410C"
+        },
+        "accent": {
+          "name": "Sand",
+          "hex": "#E5E5E5"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Drawling southern broadcaster who delights in lethal breaking balls and vicious line drives.",
+        "signature_call": "He coiled back and struck hard! Right into the pine trees!"
+      }
+    },
+    {
+      "team_id": 213,
+      "abbreviation": "ELU",
+      "team_name": "Eastlake Eagles",
+      "tier": "College",
+      "conference": "West",
+      "division": "Lakes",
+      "park_name": "Eastlake Varsity Field",
+      "city": "Eastlake",
+      "state": "MI",
+      "capacity": 4300,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 372,
+        "center_field": 400,
+        "right_center": 372,
+        "right_field": 328,
+        "wall_height": 8
+      },
+      "signature_features": "Lake breeze sweeps in from right field; distinctive blue bleachers with heated dugout benches.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/ELU_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/ELU_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/ELU_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/ELU_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/ELU_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/ELU_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/ELU_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/ELU_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Ice Blue",
+          "hex": "#38BDF8"
+        },
+        "secondary": {
+          "name": "Deep Navy",
+          "hex": "#0369A1"
+        },
+        "accent": {
+          "name": "Crisp White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Veteran Great Lakes announcer with crisp cadence and deep institutional knowledge.",
+        "signature_call": "Soaring high over the lakefront fence! The Eagles take the lead!"
+      }
+    },
+    {
+      "team_id": 214,
+      "abbreviation": "MAM",
+      "team_name": "Midland Mavericks",
+      "tier": "College",
+      "conference": "West",
+      "division": "Lakes",
+      "park_name": "Midland Athletic Field",
+      "city": "Midland",
+      "state": "MI",
+      "capacity": 3700,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 365,
+        "center_field": 395,
+        "right_center": 365,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Symmetrical suburban ballpark with sunken bullpens and manicured Kentucky bluegrass.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/MAM_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/MAM_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/MAM_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/MAM_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/MAM_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/MAM_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/MAM_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/MAM_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Maroon",
+          "hex": "#831843"
+        },
+        "secondary": {
+          "name": "Tan Leather",
+          "hex": "#B45309"
+        },
+        "accent": {
+          "name": "Cream",
+          "hex": "#FEF3C7"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Lively, upbeat student radio ace with modern metrics and energetic rally cries.",
+        "signature_call": "Untamed and unleashed! That ball is out of the yard, Mavericks style!"
+      }
+    },
+    {
+      "team_id": 215,
+      "abbreviation": "KSS",
+      "team_name": "Kessler State Kodiaks",
+      "tier": "College",
+      "conference": "West",
+      "division": "Lakes",
+      "park_name": "Kessler State Field",
+      "city": "Kessler State",
+      "state": "MN",
+      "capacity": 3100,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 360,
+        "center_field": 390,
+        "right_center": 360,
+        "right_field": 320,
+        "wall_height": 10
+      },
+      "signature_features": "Northwoods setting surrounded by white birch trees; all-weather turf withstands freezing northern springs.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/KSS_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/KSS_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/KSS_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/KSS_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/KSS_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/KSS_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/KSS_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/KSS_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Grizzly Brown",
+          "hex": "#451A03"
+        },
+        "secondary": {
+          "name": "Nordic Gold",
+          "hex": "#CA8A04"
+        },
+        "accent": {
+          "name": "Ice White",
+          "hex": "#F1F5F9"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Gruff, hearty Northwoods broadcaster who loves hard slides and snow-dusted doubleheaders.",
+        "signature_call": "Mauled deep into the birch woods! Kodiaks power on full display!"
+      }
+    },
+    {
+      "team_id": 216,
+      "abbreviation": "YKP",
+      "team_name": "York Plains Pioneers",
+      "tier": "College",
+      "conference": "West",
+      "division": "Lakes",
+      "park_name": "York Plains Stadium",
+      "city": "York Plains",
+      "state": "NE",
+      "capacity": 3600,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 335,
+        "left_center": 375,
+        "center_field": 405,
+        "right_center": 375,
+        "right_field": 335,
+        "wall_height": 8
+      },
+      "signature_features": "Vast prairie outfield dimensions; blustery southerly winds turn routine fly balls into epic adventures.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/YKP_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/YKP_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/YKP_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/YKP_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/YKP_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/YKP_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/YKP_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/YKP_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Prairie Gold",
+          "hex": "#EAB308"
+        },
+        "secondary": {
+          "name": "Barn Red",
+          "hex": "#991B1B"
+        },
+        "accent": {
+          "name": "Denim Indigo",
+          "hex": "#1E3A8A"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Plain-spoken prairie radio host with timeless delivery and reverence for fundamental baseball.",
+        "signature_call": "Driven all the way to the prairie horizon! Goodbye!"
+      }
+    },
+    {
+      "team_id": 217,
+      "abbreviation": "FTG",
+      "team_name": "Fort Garland Grizzlies",
+      "tier": "College",
+      "conference": "West",
+      "division": "Frontier",
+      "park_name": "Fort Garland Field",
+      "city": "Fort Garland",
+      "state": "CO",
+      "capacity": 3500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 340,
+        "left_center": 380,
+        "center_field": 410,
+        "right_center": 380,
+        "right_field": 335,
+        "wall_height": 10
+      },
+      "signature_features": "High-altitude valley diamond backed by the Sangre de Cristo mountain range; thin air makes every fly ball carry.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/FTG_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/FTG_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/FTG_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/FTG_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/FTG_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/FTG_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/FTG_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/FTG_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Mountain Charcoal",
+          "hex": "#1F2937"
+        },
+        "secondary": {
+          "name": "Evergreen",
+          "hex": "#15803D"
+        },
+        "accent": {
+          "name": "Hunter Orange",
+          "hex": "#EA580C"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Booming frontier broadcaster who treats every mountain home run like an artillery blast.",
+        "signature_call": "Fired high into the Rocky Mountain sky! The Grizzlies conquer the peaks!"
+      }
+    },
+    {
+      "team_id": 218,
+      "abbreviation": "HOL",
+      "team_name": "Hollis Hawks",
+      "tier": "College",
+      "conference": "West",
+      "division": "Frontier",
+      "park_name": "Hollis Varsity Park",
+      "city": "Hollis",
+      "state": "KS",
+      "capacity": 3200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 328,
+        "left_center": 368,
+        "center_field": 398,
+        "right_center": 368,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Dusty red clay infield bordered by weathered wooden bleachers and endless open prairie skies.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/HOL_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/HOL_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/HOL_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/HOL_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/HOL_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/HOL_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/HOL_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/HOL_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Crimson",
+          "hex": "#9F1239"
+        },
+        "secondary": {
+          "name": "Prairie Dust Tan",
+          "hex": "#A16207"
+        },
+        "accent": {
+          "name": "Bone White",
+          "hex": "#FAFAF9"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Rambling, charismatic plains narrator with sharp timing and wry dugout observations.",
+        "signature_call": "Swooping high over the prairie fence! The Hawks strike again!"
+      }
+    },
+    {
+      "team_id": 219,
+      "abbreviation": "OXB",
+      "team_name": "Oxbow A&M Otters",
+      "tier": "College",
+      "conference": "West",
+      "division": "Frontier",
+      "park_name": "Oxbow A&M Stadium",
+      "city": "Oxbow",
+      "state": "ND",
+      "capacity": 3400,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 365,
+        "center_field": 395,
+        "right_center": 365,
+        "right_field": 320,
+        "wall_height": 9
+      },
+      "signature_features": "Constructed along a river oxbow bend; early spring thaw brings cold, sluggish winds off the water.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/OXB_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/OXB_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/OXB_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/OXB_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/OXB_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/OXB_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/OXB_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/OXB_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "River Brown",
+          "hex": "#573A1B"
+        },
+        "secondary": {
+          "name": "Riverbed Aqua",
+          "hex": "#0D9488"
+        },
+        "accent": {
+          "name": "Golden Maize",
+          "hex": "#FBBF24"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Warm agricultural college broadcaster who delivers cheerful, spirited, fast-talking play-by-play.",
+        "signature_call": "Splashing down beyond the river dyke! An Otter round-tripper!"
+      }
+    },
+    {
+      "team_id": 220,
+      "abbreviation": "RST",
+      "team_name": "Redstone Tech Rockets",
+      "tier": "College",
+      "conference": "West",
+      "division": "Frontier",
+      "park_name": "Redstone Tech Field",
+      "city": "Redstone",
+      "state": "UT",
+      "capacity": 3900,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 360,
+        "center_field": 390,
+        "right_center": 360,
+        "right_field": 320,
+        "wall_height": 14
+      },
+      "signature_features": "High red rock mesa behind the diamond; modern aerospace research park visible in the distant desert haze.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/RST_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/RST_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/RST_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/RST_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/RST_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/RST_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/RST_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/RST_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Aerospace Titanium",
+          "hex": "#334155"
+        },
+        "secondary": {
+          "name": "Crimson Rocket",
+          "hex": "#BE123C"
+        },
+        "accent": {
+          "name": "Solar Gold",
+          "hex": "#F59E0B"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Crisp, technical flight-director delivery with explosive liftoff countdowns on big blasts.",
+        "signature_call": "Ignition and liftoff! That rocket is out of the canyon atmosphere!"
+      }
+    },
+    {
+      "team_id": 221,
+      "abbreviation": "PLC",
+      "team_name": "Pell City Pilots",
+      "tier": "College",
+      "conference": "West",
+      "division": "Canyon",
+      "park_name": "Pell City College Park",
+      "city": "Pell City",
+      "state": "NM",
+      "capacity": 3600,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 370,
+        "center_field": 400,
+        "right_center": 370,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Desert aviation basin with vintage hangar architecture adjacent to the outfield concourse.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/PLC_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/PLC_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/PLC_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/PLC_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/PLC_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/PLC_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/PLC_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/PLC_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Sand Dune",
+          "hex": "#D97706"
+        },
+        "secondary": {
+          "name": "Horizon Blue",
+          "hex": "#0284C7"
+        },
+        "accent": {
+          "name": "Carbon",
+          "hex": "#111827"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Former flight instructor with steady hands and clear, calm, high-altitude play-by-play.",
+        "signature_call": "Cleared for departure! Flying high over the desert airfield!"
+      }
+    },
+    {
+      "team_id": 222,
+      "abbreviation": "QRH",
+      "team_name": "Quarry Hill Quarrymen",
+      "tier": "College",
+      "conference": "West",
+      "division": "Canyon",
+      "park_name": "Quarry Hill Stadium",
+      "city": "Quarry Hill",
+      "state": "AZ",
+      "capacity": 3300,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 362,
+        "center_field": 392,
+        "right_center": 362,
+        "right_field": 320,
+        "wall_height": 12
+      },
+      "signature_features": "Carved into an ancient sandstone quarry; steep cliff face in right-center forms a unique natural backdrop.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/QRH_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/QRH_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/QRH_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/QRH_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/QRH_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/QRH_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/QRH_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/QRH_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Sandstone Ochre",
+          "hex": "#C2410C"
+        },
+        "secondary": {
+          "name": "Slate Basalt",
+          "hex": "#334155"
+        },
+        "accent": {
+          "name": "Bone",
+          "hex": "#F5F5F4"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Deep-voiced, rugged desert broadcaster with dry Southwestern grit.",
+        "signature_call": "Chiseled deep into the quarry sandstone! That ball is hammered out!"
+      }
+    },
+    {
+      "team_id": 223,
+      "abbreviation": "TOL",
+      "team_name": "Tolland Timberwolves",
+      "tier": "College",
+      "conference": "West",
+      "division": "Canyon",
+      "park_name": "Tolland Athletic Field",
+      "city": "Tolland",
+      "state": "CO",
+      "capacity": 3800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 335,
+        "left_center": 375,
+        "center_field": 405,
+        "right_center": 375,
+        "right_field": 330,
+        "wall_height": 8
+      },
+      "signature_features": "High-timber canyon ballpark bordered by heavy spruce and aspen trees; crisp mountain breeze.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/TOL_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/TOL_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/TOL_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/TOL_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/TOL_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/TOL_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/TOL_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/TOL_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Timber Green",
+          "hex": "#166534"
+        },
+        "secondary": {
+          "name": "Wolf Gray",
+          "hex": "#64748B"
+        },
+        "accent": {
+          "name": "Arctic Silver",
+          "hex": "#E2E8F0"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Passionate alpine play-by-play caller who belts out howling celebratory chants on clutch hits.",
+        "signature_call": "Listen to the pack howl! Gone into the tall timber of Tolland!"
+      }
+    },
+    {
+      "team_id": 224,
+      "abbreviation": "ZNR",
+      "team_name": "Zion Ridge Zephyrs",
+      "tier": "College",
+      "conference": "West",
+      "division": "Canyon",
+      "park_name": "Zion Ridge Campus Park",
+      "city": "Zion Ridge",
+      "state": "UT",
+      "capacity": 4400,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 372,
+        "center_field": 402,
+        "right_center": 372,
+        "right_field": 325,
+        "wall_height": 9
+      },
+      "signature_features": "Panoramic views of monumental red rock cliffs beyond the outfield walls; swirling canyon updrafts.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/College/ZNR_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/College/ZNR_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/College/ZNR_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/College/ZNR_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/College/ZNR_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/College/ZNR_office.png",
+        "training_room": "res://Assets/Graphics/Venues/College/ZNR_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/College/ZNR_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Canyon Terra Cotta",
+          "hex": "#9A3412"
+        },
+        "secondary": {
+          "name": "Mesa Gold",
+          "hex": "#D97706"
+        },
+        "accent": {
+          "name": "Sky Indigo",
+          "hex": "#312E81"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Lyrical Southwestern voice weaving vivid landscape poetry into intense diamond action.",
+        "signature_call": "Carried on the canyon zephyr! Way up into the red rock ridges!"
+      }
+    },
+    {
+      "team_id": 301,
+      "abbreviation": "BAY",
+      "team_name": "Bayport Barons",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Northeast",
+      "park_name": "Bayport Harbor Yards",
+      "city": "Bayport",
+      "state": "Atlantic Coast",
+      "capacity": 38500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 318,
+        "left_center": 372,
+        "center_field": 405,
+        "right_center": 368,
+        "right_field": 310,
+        "wall_height": 14
+      },
+      "signature_features": "Short right porch over tidal waters; working dry dock gantry cranes towering beyond the bleachers.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/BAY_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/BAY_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/BAY_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/BAY_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/BAY_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/BAY_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/BAY_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/BAY_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Navy",
+          "hex": "#0A192F"
+        },
+        "secondary": {
+          "name": "Antique Brass",
+          "hex": "#C5A059"
+        },
+        "accent": {
+          "name": "Crisp White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Veteran baritone broadcaster with maritime cadence, unflappable delivery, and dry Atlantic wit.",
+        "signature_call": "Say goodbye! It's out into the harbor brine!"
+      }
+    },
+    {
+      "team_id": 302,
+      "abbreviation": "KBR",
+      "team_name": "Kingsbridge Krakens",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Northeast",
+      "park_name": "Kingsbridge Marina Park",
+      "city": "Kingsbridge",
+      "state": "Atlantic Metro",
+      "capacity": 41200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 375,
+        "center_field": 400,
+        "right_center": 375,
+        "right_field": 325,
+        "wall_height": 9
+      },
+      "signature_features": "Suspension bridge steel arches loom over left field; heavy coastal fog sweeps across the upper deck.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/KBR_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/KBR_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/KBR_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/KBR_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/KBR_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/KBR_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/KBR_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/KBR_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Abyssal Teal",
+          "hex": "#0F4C5C"
+        },
+        "secondary": {
+          "name": "Tentacle Crimson",
+          "hex": "#9A031E"
+        },
+        "accent": {
+          "name": "Fog Gray",
+          "hex": "#E5E5E5"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Intense, dramatic city broadcaster with brooding tension and explosive home run declarations.",
+        "signature_call": "Release the Kraken! Driven deep into the marina waters!"
+      }
+    },
+    {
+      "team_id": 303,
+      "abbreviation": "HBV",
+      "team_name": "Harborview Herons",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Northeast",
+      "park_name": "Harborview Point Ballpark",
+      "city": "Harborview",
+      "state": "Atlantic Coast",
+      "capacity": 36500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 378,
+        "center_field": 402,
+        "right_center": 370,
+        "right_field": 322,
+        "wall_height": 8
+      },
+      "signature_features": "Historic seaside stadium with open concourses catching salt breezes; working lighthouse in center field.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/HBV_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/HBV_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/HBV_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/HBV_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/HBV_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/HBV_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/HBV_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/HBV_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Atlantic Steel",
+          "hex": "#475569"
+        },
+        "secondary": {
+          "name": "Harbor Seafoam",
+          "hex": "#2DD4BF"
+        },
+        "accent": {
+          "name": "Midnight",
+          "hex": "#0F172A"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Smooth, golden-throated veteran with effortless rhythm and quiet, commanding confidence.",
+        "signature_call": "Speared high into the twilight! Way out past the Point!"
+      }
+    },
+    {
+      "team_id": 304,
+      "abbreviation": "SCR",
+      "team_name": "Scranton Steamers",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Northeast",
+      "park_name": "Scranton Iron Works Yard",
+      "city": "Scranton",
+      "state": "PA",
+      "capacity": 34800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 322,
+        "left_center": 368,
+        "center_field": 412,
+        "right_center": 368,
+        "right_field": 322,
+        "wall_height": 12
+      },
+      "signature_features": "Exposed steel trestles, steam whistles that blast on home runs, and a 412-foot cavern in dead center field.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/SCR_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/SCR_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/SCR_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/SCR_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/SCR_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/SCR_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/SCR_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/SCR_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Locomotive Black",
+          "hex": "#18181B"
+        },
+        "secondary": {
+          "name": "Steam Whistle Brass",
+          "hex": "#D97706"
+        },
+        "accent": {
+          "name": "Steel Gray",
+          "hex": "#71717A"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Hard-boiled industrial town voice with booming growl and blue-collar punch.",
+        "signature_call": "Blow the whistle! Clear the tracks, that ball is steamrolled!"
+      }
+    },
+    {
+      "team_id": 305,
+      "abbreviation": "CLT",
+      "team_name": "Charlotte Crowns",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Atlantic",
+      "park_name": "Charlotte Crown Grounds",
+      "city": "Charlotte",
+      "state": "NC",
+      "capacity": 42500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 375,
+        "center_field": 400,
+        "right_center": 375,
+        "right_field": 330,
+        "wall_height": 8
+      },
+      "signature_features": "Sleek uptown skyline backdrop, luxurious open-air club level, and perfectly symmetrical diamond proportions.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/CLT_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/CLT_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/CLT_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/CLT_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/CLT_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/CLT_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/CLT_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/CLT_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Royal Emerald",
+          "hex": "#065F46"
+        },
+        "secondary": {
+          "name": "Sovereign Gold",
+          "hex": "#EAB308"
+        },
+        "accent": {
+          "name": "Obsidian",
+          "hex": "#022C22"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Refined southern gentleman broadcaster with elegant pacing and regal celebration.",
+        "signature_call": "Crown that man! A majestic blast into the uptown Charlotte sky!"
+      }
+    },
+    {
+      "team_id": 306,
+      "abbreviation": "DRM",
+      "team_name": "Durham Drakes",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Atlantic",
+      "park_name": "Durham Basin Yards",
+      "city": "Durham",
+      "state": "NC",
+      "capacity": 37800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 322,
+        "left_center": 365,
+        "center_field": 398,
+        "right_center": 365,
+        "right_field": 320,
+        "wall_height": 10
+      },
+      "signature_features": "Repurposed brick tobacco warehouse exterior, intimate foul territory, and enthusiastic Piedmont crowd chatter.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/DRM_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/DRM_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/DRM_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/DRM_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/DRM_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/DRM_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/DRM_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/DRM_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Hunter Green",
+          "hex": "#14532D"
+        },
+        "secondary": {
+          "name": "Mallard Gold",
+          "hex": "#CA8A04"
+        },
+        "accent": {
+          "name": "Burnt Orange",
+          "hex": "#C2410C"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Folksy, sharp-witted southern broadcaster with rhythmic porch-story cadence.",
+        "signature_call": "Duck for cover! The Drake has cleared the warehouse brick!"
+      }
+    },
+    {
+      "team_id": 307,
+      "abbreviation": "RNK",
+      "team_name": "Roanoke Ridgerunners",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Atlantic",
+      "park_name": "Roanoke Mountain Ballpark",
+      "city": "Roanoke",
+      "state": "VA",
+      "capacity": 33200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 332,
+        "left_center": 376,
+        "center_field": 404,
+        "right_center": 372,
+        "right_field": 326,
+        "wall_height": 9
+      },
+      "signature_features": "Blue Ridge mountain backdrop with illuminated ridge star visible from home plate; crisp mountain valley nights.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/RNK_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/RNK_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/RNK_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/RNK_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/RNK_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/RNK_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/RNK_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/RNK_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Blue Ridge Charcoal",
+          "hex": "#1E293B"
+        },
+        "secondary": {
+          "name": "Mountain Fog",
+          "hex": "#94A3B8"
+        },
+        "accent": {
+          "name": "Copper Moon",
+          "hex": "#D97706"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Gritty Appalachian voice with rapid, hill-country tempo and deep affection for stolen bases.",
+        "signature_call": "Running wild into the mountain mist! Gone, Ridgerunner style!"
+      }
+    },
+    {
+      "team_id": 308,
+      "abbreviation": "PLM",
+      "team_name": "Palmetto Pelicans",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Atlantic",
+      "park_name": "Palmetto Marsh Park",
+      "city": "Palmetto",
+      "state": "SC",
+      "capacity": 35600,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 326,
+        "left_center": 368,
+        "center_field": 396,
+        "right_center": 368,
+        "right_field": 322,
+        "wall_height": 8
+      },
+      "signature_features": "Boardwalk concourses built above coastal tidal creeks; sea breezes blow directly across left-to-right.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/PLM_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/PLM_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/PLM_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/PLM_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/PLM_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/PLM_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/PLM_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/PLM_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Deep Carolina Navy",
+          "hex": "#1E3A8A"
+        },
+        "secondary": {
+          "name": "Marsh Bronze",
+          "hex": "#92400E"
+        },
+        "accent": {
+          "name": "Gulf Sky",
+          "hex": "#38BDF8"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Laid-back, sun-baked Lowcountry legend who sounds like he calls games from a beachside hammock.",
+        "signature_call": "Catch that wave! Over the palmettos and into the marsh waters!"
+      }
+    },
+    {
+      "team_id": 309,
+      "abbreviation": "IRV",
+      "team_name": "Ironvale Foxes",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Great Lakes",
+      "park_name": "Ironvale Foundry Yard",
+      "city": "Ironvale",
+      "state": "Rust Belt",
+      "capacity": 39800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 365,
+        "center_field": 402,
+        "right_center": 365,
+        "right_field": 315,
+        "wall_height": 13
+      },
+      "signature_features": "Decommissioned blast furnace towers over right field; industrial steel siding clatters when hit by line drives.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/IRV_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/IRV_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/IRV_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/IRV_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/IRV_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/IRV_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/IRV_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/IRV_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Foundry Orange",
+          "hex": "#C2410C"
+        },
+        "secondary": {
+          "name": "Slag Iron",
+          "hex": "#27272A"
+        },
+        "accent": {
+          "name": "Ash White",
+          "hex": "#E4E4E7"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Fierce, gravel-voiced Rust Belt icon who champions tough bunts, brushback pitches, and clutch defense.",
+        "signature_call": "Hammered molten hot! Clear out of the foundry yard!"
+      }
+    },
+    {
+      "team_id": 310,
+      "abbreviation": "TLD",
+      "team_name": "Toledo Titans",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Great Lakes",
+      "park_name": "Toledo Great Lakes Yard",
+      "city": "Toledo",
+      "state": "OH",
+      "capacity": 36200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 328,
+        "left_center": 372,
+        "center_field": 400,
+        "right_center": 372,
+        "right_field": 325,
+        "wall_height": 9
+      },
+      "signature_features": "Architectural industrial glass atrium in the concourse; Lake Erie winds make left field a deep test.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/TLD_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/TLD_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/TLD_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/TLD_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/TLD_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/TLD_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/TLD_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/TLD_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Cobalt Blue",
+          "hex": "#1D4ED8"
+        },
+        "secondary": {
+          "name": "Industrial Bronze",
+          "hex": "#B45309"
+        },
+        "accent": {
+          "name": "Machine Silver",
+          "hex": "#94A3B8"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Deep, authoritative Great Lakes radio legend with a classic midwestern cadence.",
+        "signature_call": "Titanic blast to the glass pavilion! Goodbye!"
+      }
+    },
+    {
+      "team_id": 311,
+      "abbreviation": "GLN",
+      "team_name": "Galena Gliders",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Great Lakes",
+      "park_name": "Galena Riverfront Park",
+      "city": "Galena",
+      "state": "IL",
+      "capacity": 33900,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 315,
+        "left_center": 362,
+        "center_field": 395,
+        "right_center": 362,
+        "right_field": 315,
+        "wall_height": 11
+      },
+      "signature_features": "Mississippi bluff stone terraces; paddlewheel riverboats pass beyond the centerfield concourse.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/GLN_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/GLN_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/GLN_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/GLN_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/GLN_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/GLN_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/GLN_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/GLN_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Galena Lead Gray",
+          "hex": "#334155"
+        },
+        "secondary": {
+          "name": "Sky Streamer Teal",
+          "hex": "#0D9488"
+        },
+        "accent": {
+          "name": "Sun Gold",
+          "hex": "#F59E0B"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Gentleman river town voice with poetic phrasing and sudden bursts of pure midwestern excitement.",
+        "signature_call": "Gliding on the river wind! Clear out of Illinois and into the river!"
+      }
+    },
+    {
+      "team_id": 312,
+      "abbreviation": "NRW",
+      "team_name": "Norwood Nailers",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Great Lakes",
+      "park_name": "Norwood Forge Ballpark",
+      "city": "Norwood",
+      "state": "OH",
+      "capacity": 35100,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 368,
+        "center_field": 400,
+        "right_center": 368,
+        "right_field": 320,
+        "wall_height": 10
+      },
+      "signature_features": "Heavy structural steel columns support an intimate multi-tiered grandstand; loud, enclosed acoustics.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/NRW_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/NRW_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/NRW_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/NRW_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/NRW_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/NRW_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/NRW_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/NRW_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Hardened Steel",
+          "hex": "#475569"
+        },
+        "secondary": {
+          "name": "Hammer Maroon",
+          "hex": "#881337"
+        },
+        "accent": {
+          "name": "Spark Yellow",
+          "hex": "#FDE047"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Punchy, fast-talking Ohio Valley broadcaster who calls pitches like hammer blows.",
+        "signature_call": "Nailed it! Dead square on the barrel and out of the park!"
+      }
+    },
+    {
+      "team_id": 313,
+      "abbreviation": "HTB",
+      "team_name": "Hattiesburg Hornets",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Gulf",
+      "park_name": "Pine Belt Ballpark",
+      "city": "Hattiesburg",
+      "state": "MS",
+      "capacity": 31500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 324,
+        "left_center": 365,
+        "center_field": 395,
+        "right_center": 365,
+        "right_field": 320,
+        "wall_height": 8
+      },
+      "signature_features": "Surrounded by towering loblolly pines; thick southern twilight air and buzzing insect sounds during August games.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/HTB_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/HTB_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/HTB_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/HTB_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/HTB_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/HTB_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/HTB_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/HTB_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Stinger Yellow",
+          "hex": "#EAB308"
+        },
+        "secondary": {
+          "name": "Pitch Black",
+          "hex": "#09090B"
+        },
+        "accent": {
+          "name": "Hive Amber",
+          "hex": "#B45309"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Down-home Mississippi delta voice with sharp, buzzing delivery and infectious excitement.",
+        "signature_call": "Stung deep into the pine trees! The Hornets swarm home!"
+      }
+    },
+    {
+      "team_id": 314,
+      "abbreviation": "CHT",
+      "team_name": "Chattahoochee Catfish",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Gulf",
+      "park_name": "Chattahoochee River Stadium",
+      "city": "Chattahoochee",
+      "state": "GA/FL",
+      "capacity": 34500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 370,
+        "center_field": 402,
+        "right_center": 370,
+        "right_field": 325,
+        "wall_height": 9
+      },
+      "signature_features": "Built along the muddy river bluffs; southern open-air BBQ pavilions behind right field.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/CHT_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/CHT_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/CHT_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/CHT_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/CHT_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/CHT_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/CHT_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/CHT_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Muddy River Brown",
+          "hex": "#451A03"
+        },
+        "secondary": {
+          "name": "Catfish Whisker Gold",
+          "hex": "#D97706"
+        },
+        "accent": {
+          "name": "Moss Khaki",
+          "hex": "#3F6212"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Slow-talking river raconteur with deep Southern gravel and explosive clutch-moment hollers.",
+        "signature_call": "Hooked and landed! Into the muddy Chattahoochee river water!"
+      }
+    },
+    {
+      "team_id": 315,
+      "abbreviation": "KNP",
+      "team_name": "Kannapolis Knights",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Gulf",
+      "park_name": "Piedmont Diamond Yard",
+      "city": "Kannapolis",
+      "state": "NC",
+      "capacity": 35800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 368,
+        "center_field": 398,
+        "right_center": 368,
+        "right_field": 320,
+        "wall_height": 10
+      },
+      "signature_features": "Polished steel decorative heraldry and brick concourses; fast infield clay known for lightning grounders.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/KNP_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/KNP_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/KNP_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/KNP_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/KNP_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/KNP_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/KNP_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/KNP_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Armor Silver",
+          "hex": "#94A3B8"
+        },
+        "secondary": {
+          "name": "Royal Navy",
+          "hex": "#1E3A8A"
+        },
+        "accent": {
+          "name": "Crimson Plume",
+          "hex": "#991B1B"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Resonant, dignified Southern sports voice with sharp chivalric battle metaphors.",
+        "signature_call": "A jousting strike over the battlements! The Knights reign supreme!"
+      }
+    },
+    {
+      "team_id": 316,
+      "abbreviation": "LRD",
+      "team_name": "Laredo Lobos",
+      "tier": "Pro",
+      "conference": "East",
+      "division": "Gulf",
+      "park_name": "Laredo Borderland Grounds",
+      "city": "Laredo",
+      "state": "TX",
+      "capacity": 32800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 332,
+        "left_center": 372,
+        "center_field": 402,
+        "right_center": 372,
+        "right_field": 328,
+        "wall_height": 8
+      },
+      "signature_features": "Adobe style stadium architecture right on the Rio Grande; scorching sun gives way to breezy border nights.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/LRD_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/LRD_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/LRD_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/LRD_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/LRD_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/LRD_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/LRD_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/LRD_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Desert Sand",
+          "hex": "#D97706"
+        },
+        "secondary": {
+          "name": "Border Night Charcoal",
+          "hex": "#1C1917"
+        },
+        "accent": {
+          "name": "Blood Orange",
+          "hex": "#EA580C"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Bilingual, energetic Texas borderland broadcaster with electrifying Spanish-English home run calls.",
+        "signature_call": "\u00a1Se va, se va, y se fue! The Lobos howl into the desert night!"
+      }
+    },
+    {
+      "team_id": 317,
+      "abbreviation": "OMA",
+      "team_name": "Omaha Outlaws",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Plains",
+      "park_name": "Omaha Prairie Yards",
+      "city": "Omaha",
+      "state": "NE",
+      "capacity": 38900,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 335,
+        "left_center": 375,
+        "center_field": 405,
+        "right_center": 375,
+        "right_field": 335,
+        "wall_height": 8
+      },
+      "signature_features": "Expansive gaps, cattle-brand wrought iron accents, and famous Missouri River tailgates.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/OMA_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/OMA_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/OMA_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/OMA_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/OMA_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/OMA_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/OMA_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/OMA_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Bandit Black",
+          "hex": "#18181B"
+        },
+        "secondary": {
+          "name": "Prairie Rust",
+          "hex": "#9A3412"
+        },
+        "accent": {
+          "name": "Bone White",
+          "hex": "#F5F5F4"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Rugged, gravel-toned Great Plains narrator with a dark outlaw chuckle and dry frontier wit.",
+        "signature_call": "He robbed that pitcher blind! Gone into the Nebraska prairie!"
+      }
+    },
+    {
+      "team_id": 318,
+      "abbreviation": "CDR",
+      "team_name": "Cedar Rapids Colts",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Plains",
+      "park_name": "Cedar Rapids Meadow Park",
+      "city": "Cedar Rapids",
+      "state": "IA",
+      "capacity": 33400,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 328,
+        "left_center": 368,
+        "center_field": 398,
+        "right_center": 368,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Cedar River breeze cools the field; classic brick dugouts and manicured emerald turf.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/CDR_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/CDR_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/CDR_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/CDR_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/CDR_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/CDR_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/CDR_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/CDR_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Prairie Navy",
+          "hex": "#1E3A8A"
+        },
+        "secondary": {
+          "name": "Chestnut Brown",
+          "hex": "#78350F"
+        },
+        "accent": {
+          "name": "Wheat Cream",
+          "hex": "#FEF3C7"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Warm, genial Iowa baseball veteran with encyclopedic pitch sequencing knowledge.",
+        "signature_call": "Galloping way out of here! The Colts break loose!"
+      }
+    },
+    {
+      "team_id": 319,
+      "abbreviation": "SXB",
+      "team_name": "Sioux Bend Storm",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Plains",
+      "park_name": "Sioux Bend River Stadium",
+      "city": "Sioux Bend",
+      "state": "SD/IA",
+      "capacity": 32500,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 360,
+        "center_field": 392,
+        "right_center": 360,
+        "right_field": 320,
+        "wall_height": 10
+      },
+      "signature_features": "Weather-hardened artificial turf stadium built to resist sudden midwestern spring squalls and river moisture.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/SXB_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/SXB_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/SXB_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/SXB_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/SXB_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/SXB_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/SXB_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/SXB_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Stormcloud Slate",
+          "hex": "#334155"
+        },
+        "secondary": {
+          "name": "Lightning Cyan",
+          "hex": "#06B6D4"
+        },
+        "accent": {
+          "name": "Hail White",
+          "hex": "#F8FAFC"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Thunderous, dynamic play-by-play caller who tracks weather radar while calling strikes.",
+        "signature_call": "A lightning bolt to the bleachers! The Storm rolls in!"
+      }
+    },
+    {
+      "team_id": 320,
+      "abbreviation": "TWF",
+      "team_name": "Twin Forks Trout",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Plains",
+      "park_name": "Twin Forks Rapids Park",
+      "city": "Twin Forks",
+      "state": "ID/MT",
+      "capacity": 31000,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 365,
+        "center_field": 395,
+        "right_center": 365,
+        "right_field": 320,
+        "wall_height": 8
+      },
+      "signature_features": "Situated at the confluence of two rushing mountain rivers; pine-clad canyon cliffs enclose the outfield.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/TWF_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/TWF_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/TWF_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/TWF_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/TWF_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/TWF_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/TWF_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/TWF_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Riverbed Olive",
+          "hex": "#3F6212"
+        },
+        "secondary": {
+          "name": "Rainbow Trout Copper",
+          "hex": "#C2410C"
+        },
+        "accent": {
+          "name": "Glacier Blue",
+          "hex": "#38BDF8"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Avid mountain angler and broadcaster who delivers crisp, sparkling river-country commentary.",
+        "signature_call": "That one got reeled in and launched out! Splashing into the rapids!"
+      }
+    },
+    {
+      "team_id": 321,
+      "abbreviation": "BZM",
+      "team_name": "Bozeman Bighorns",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Mountain",
+      "park_name": "Bozeman Valley Grounds",
+      "city": "Bozeman",
+      "state": "MT",
+      "capacity": 33800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 335,
+        "left_center": 378,
+        "center_field": 410,
+        "right_center": 378,
+        "right_field": 335,
+        "wall_height": 9
+      },
+      "signature_features": "Rocky Mountain highland setting with cedar log accents; long summer twilight extends games past 9 PM without lights.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/BZM_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/BZM_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/BZM_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/BZM_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/BZM_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/BZM_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/BZM_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/BZM_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Granite Peak",
+          "hex": "#334155"
+        },
+        "secondary": {
+          "name": "Horn Gold",
+          "hex": "#CA8A04"
+        },
+        "accent": {
+          "name": "Snow White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Hardy Montana voice with quiet stoicism punctuated by booming alpine calls on deep drives.",
+        "signature_call": "Butted all the way into the Bridger range! Goodbye!"
+      }
+    },
+    {
+      "team_id": 322,
+      "abbreviation": "PRV",
+      "team_name": "Provo Prospectors",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Mountain",
+      "park_name": "Provo Canyon Ballpark",
+      "city": "Provo",
+      "state": "UT",
+      "capacity": 34200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 375,
+        "center_field": 405,
+        "right_center": 375,
+        "right_field": 328,
+        "wall_height": 8
+      },
+      "signature_features": "Wasatch mountain peaks tower directly behind center field; thin mountain air makes routine balls carry deep.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/PRV_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/PRV_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/PRV_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/PRV_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/PRV_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/PRV_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/PRV_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/PRV_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Wasatch Navy",
+          "hex": "#0F172A"
+        },
+        "secondary": {
+          "name": "Gold Nugget",
+          "hex": "#EAB308"
+        },
+        "accent": {
+          "name": "Copper Ore",
+          "hex": "#B45309"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Earnest mountain broadcaster with crisp rhythm and exuberant gold-strike metaphors.",
+        "signature_call": "Strike it rich! High into the Wasatch peaks, gone!"
+      }
+    },
+    {
+      "team_id": 323,
+      "abbreviation": "ABQ",
+      "team_name": "Albuquerque Aviators",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Mountain",
+      "park_name": "Sandia Vista Ballpark",
+      "city": "Albuquerque",
+      "state": "NM",
+      "capacity": 36800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 340,
+        "left_center": 382,
+        "center_field": 412,
+        "right_center": 382,
+        "right_field": 335,
+        "wall_height": 8
+      },
+      "signature_features": "Stunning sunset views of the Sandia Mountains glowing watermelon pink; mile-high altitude ball flight.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/ABQ_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/ABQ_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/ABQ_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/ABQ_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/ABQ_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/ABQ_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/ABQ_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/ABQ_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Turquoise",
+          "hex": "#0D9488"
+        },
+        "secondary": {
+          "name": "Desert Sun Copper",
+          "hex": "#C2410C"
+        },
+        "accent": {
+          "name": "Sky Ivory",
+          "hex": "#F5F5F4"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Smooth, desert-seasoned veteran broadcaster with cool swagger and soaring aeronautic descriptions.",
+        "signature_call": "Altitude climbing, climbing... and that bird has left the airfield!"
+      }
+    },
+    {
+      "team_id": 324,
+      "abbreviation": "DST",
+      "team_name": "Dustfield Drifters",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Mountain",
+      "park_name": "Dustfield Basin Park",
+      "city": "Dustfield",
+      "state": "Panhandle",
+      "capacity": 30500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 365,
+        "center_field": 395,
+        "right_center": 365,
+        "right_field": 325,
+        "wall_height": 10
+      },
+      "signature_features": "Windblown high desert stadium flanked by nodding oil pumpjacks and dry caliche dust in the air.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/DST_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/DST_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/DST_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/DST_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/DST_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/DST_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/DST_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/DST_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Dust Ochre",
+          "hex": "#A16207"
+        },
+        "secondary": {
+          "name": "Oil Slick Black",
+          "hex": "#18181B"
+        },
+        "accent": {
+          "name": "Sage Green",
+          "hex": "#4D7C0F"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Weary, cynical desert radio veteran who has seen every bad hop and wild pitch in the territory.",
+        "signature_call": "Drifting, drifting... and that tumbleweed of a baseball is gone!"
+      }
+    },
+    {
+      "team_id": 325,
+      "abbreviation": "MRJ",
+      "team_name": "Mesa Roja Rattlers",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Southwest",
+      "park_name": "Mesa Roja Sun Stadium",
+      "city": "Mesa Roja",
+      "state": "AZ",
+      "capacity": 43500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 332,
+        "left_center": 374,
+        "center_field": 405,
+        "right_center": 374,
+        "right_field": 330,
+        "wall_height": 8
+      },
+      "signature_features": "Retractable shade canopies over the grandstands; giant desert swimming pool area behind the right-center fence.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/MRJ_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/MRJ_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/MRJ_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/MRJ_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/MRJ_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/MRJ_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/MRJ_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/MRJ_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Terracotta Red",
+          "hex": "#991B1B"
+        },
+        "secondary": {
+          "name": "Copper Sand",
+          "hex": "#D97706"
+        },
+        "accent": {
+          "name": "Rattlesnake Charcoal",
+          "hex": "#262626"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Fast-paced Sonoran desert voice with electric rattle-buzz cadence on home run drives.",
+        "signature_call": "He struck with venom! Deep into the Mesa Roja desert sunset!"
+      }
+    },
+    {
+      "team_id": 326,
+      "abbreviation": "SBW",
+      "team_name": "Sablewood Stallions",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Southwest",
+      "park_name": "Sablewood Basin Grounds",
+      "city": "Sablewood",
+      "state": "CA",
+      "capacity": 37500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 370,
+        "center_field": 400,
+        "right_center": 370,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Mission-style tile roofs, manicured vineyard terraces visible past the outfield, and warm valley breezes.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/SBW_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/SBW_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/SBW_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/SBW_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/SBW_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/SBW_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/SBW_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/SBW_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Midnight Black",
+          "hex": "#0A0A0A"
+        },
+        "secondary": {
+          "name": "Saddle Gold",
+          "hex": "#CA8A04"
+        },
+        "accent": {
+          "name": "Wine Burgundy",
+          "hex": "#4C0519"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Suave, smooth California broadcaster with relaxed charm and sudden thunderous calls.",
+        "signature_call": "Unbridled power! That ball galloped clear over the vineyard wall!"
+      }
+    },
+    {
+      "team_id": 327,
+      "abbreviation": "FRS",
+      "team_name": "Fresno Firebirds",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Southwest",
+      "park_name": "Central Valley Ballpark",
+      "city": "Fresno",
+      "state": "CA",
+      "capacity": 35200,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 365,
+        "center_field": 398,
+        "right_center": 365,
+        "right_field": 322,
+        "wall_height": 9
+      },
+      "signature_features": "Central Valley summer heat waves; open outfield concourses with towering citrus tree planter boxes.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/FRS_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/FRS_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/FRS_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/FRS_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/FRS_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/FRS_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/FRS_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/FRS_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Inferno Crimson",
+          "hex": "#B91C1C"
+        },
+        "secondary": {
+          "name": "Flare Orange",
+          "hex": "#EA580C"
+        },
+        "accent": {
+          "name": "Ash Charcoal",
+          "hex": "#1F2937"
+        }
+      },
+      "booth": {
+        "announcer_persona": "High-octane Valley sports caller who dials the heat up to maximum on every big swing.",
+        "signature_call": "Blazing hot into the night! The Firebird scorches the centerfield wall!"
+      }
+    },
+    {
+      "team_id": 328,
+      "abbreviation": "MDS",
+      "team_name": "Modesto Mustangs",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Southwest",
+      "park_name": "Modesto Orchard Yards",
+      "city": "Modesto",
+      "state": "CA",
+      "capacity": 34100,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 320,
+        "left_center": 362,
+        "center_field": 392,
+        "right_center": 362,
+        "right_field": 318,
+        "wall_height": 10
+      },
+      "signature_features": "Flanked by almond orchards; breezy Delta delta winds blow straight in toward home plate in evening innings.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/MDS_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/MDS_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/MDS_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/MDS_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/MDS_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/MDS_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/MDS_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/MDS_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Royal Blue",
+          "hex": "#1D4ED8"
+        },
+        "secondary": {
+          "name": "Golden Straw",
+          "hex": "#EAB308"
+        },
+        "accent": {
+          "name": "White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Down-to-earth San Joaquin valley narrator with easy warmth and energetic rally hollers.",
+        "signature_call": "Stampeding over the fence and into the orchards! Mustangs win!"
+      }
+    },
+    {
+      "team_id": 329,
+      "abbreviation": "SLK",
+      "team_name": "Silverlake Sharks",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Pacific",
+      "park_name": "Silverlake Pier Park",
+      "city": "Silverlake",
+      "state": "CA",
+      "capacity": 44800,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 330,
+        "left_center": 375,
+        "center_field": 402,
+        "right_center": 372,
+        "right_field": 325,
+        "wall_height": 8
+      },
+      "signature_features": "Glamorous urban stadium overlooking the city basin; sleek glass luxury suites and electric coastal buzz.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/SLK_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/SLK_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/SLK_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/SLK_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/SLK_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/SLK_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/SLK_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/SLK_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Chrome Silver",
+          "hex": "#94A3B8"
+        },
+        "secondary": {
+          "name": "Ocean Deep Navy",
+          "hex": "#0F172A"
+        },
+        "accent": {
+          "name": "Pacific Teal",
+          "hex": "#14B8A6"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Polished, razor-sharp West Coast voice with quick predatory wit and cool delivery.",
+        "signature_call": "Feeding frenzy at the plate! That baseball got devoured into the bleachers!"
+      }
+    },
+    {
+      "team_id": 330,
+      "abbreviation": "CAS",
+      "team_name": "Cascadia Wolves",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Pacific",
+      "park_name": "Cascadia Evergreen Yards",
+      "city": "Cascadia",
+      "state": "Pacific NW",
+      "capacity": 41500,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 315,
+        "left_center": 370,
+        "center_field": 405,
+        "right_center": 370,
+        "right_field": 320,
+        "wall_height": 22
+      },
+      "signature_features": "Enormous Douglas fir wood-clad wall in left field dubbed 'The Evergreen Timber'; misty Pacific rains.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/CAS_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/CAS_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/CAS_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/CAS_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/CAS_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/CAS_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/CAS_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/CAS_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Pacific Moss",
+          "hex": "#166534"
+        },
+        "secondary": {
+          "name": "Rain Slate",
+          "hex": "#475569"
+        },
+        "accent": {
+          "name": "Mountain Fog",
+          "hex": "#E2E8F0"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Atmospheric, gravelly Pacific Northwest broadcaster who weaves timber lore and rain rhythm into each call.",
+        "signature_call": "Howling over the Evergreen Timber! The Wolves strike in the misty night!"
+      }
+    },
+    {
+      "team_id": 331,
+      "abbreviation": "TAC",
+      "team_name": "Tacoma Thunder",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Pacific",
+      "park_name": "Tacoma Sound Stadium",
+      "city": "Tacoma",
+      "state": "WA",
+      "capacity": 38200,
+      "surface": "Artificial Turf",
+      "dimensions": {
+        "left_field": 325,
+        "left_center": 368,
+        "center_field": 398,
+        "right_center": 368,
+        "right_field": 322,
+        "wall_height": 10
+      },
+      "signature_features": "Overlooks Puget Sound maritime docks with Mount Rainier looming in the distant centerfield skyline.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/TAC_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/TAC_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/TAC_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/TAC_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/TAC_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/TAC_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/TAC_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/TAC_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Puget Navy",
+          "hex": "#0C4A6E"
+        },
+        "secondary": {
+          "name": "Lightning Gold",
+          "hex": "#FACC15"
+        },
+        "accent": {
+          "name": "Harbor Mist",
+          "hex": "#CBD5E1"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Rumbling, booming Puget Sound broadcaster whose home run calls echo like thunder across the water.",
+        "signature_call": "Thunderclap to deep center! Sound the horns in the harbor!"
+      }
+    },
+    {
+      "team_id": 332,
+      "abbreviation": "YBC",
+      "team_name": "Yuba City Yellowjackets",
+      "tier": "Pro",
+      "conference": "West",
+      "division": "Pacific",
+      "park_name": "Yuba Basin Yards",
+      "city": "Yuba City",
+      "state": "CA",
+      "capacity": 33100,
+      "surface": "Natural Grass",
+      "dimensions": {
+        "left_field": 322,
+        "left_center": 364,
+        "center_field": 394,
+        "right_center": 364,
+        "right_field": 318,
+        "wall_height": 9
+      },
+      "signature_features": "Northern Sacramento Valley basin field framed by the Sutter Buttes; breezy hot summer afternoons.",
+      "hotspots": {
+        "exterior": "res://Assets/Graphics/Venues/Pro/YBC_exterior.png",
+        "concourse": "res://Assets/Graphics/Venues/Pro/YBC_concourse.png",
+        "field_day": "res://Assets/Graphics/Venues/Pro/YBC_field_day.png",
+        "field_night": "res://Assets/Graphics/Venues/Pro/YBC_field_night.png",
+        "clubhouse": "res://Assets/Graphics/Venues/Pro/YBC_clubhouse.png",
+        "manager_office": "res://Assets/Graphics/Venues/Pro/YBC_office.png",
+        "training_room": "res://Assets/Graphics/Venues/Pro/YBC_training.png",
+        "players_lot": "res://Assets/Graphics/Venues/Pro/YBC_lot.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Stinger Yellow",
+          "hex": "#FACC15"
+        },
+        "secondary": {
+          "name": "Charcoal Black",
+          "hex": "#18181B"
+        },
+        "accent": {
+          "name": "Amber Honey",
+          "hex": "#D97706"
+        }
+      },
+      "booth": {
+        "announcer_persona": "Spicy, energetic agricultural valley broadcaster who stings the opposition with sharp humor.",
+        "signature_call": "Stung deep and gone! The Yellowjackets swarm the diamond!"
+      }
+    }
+  ]
+}

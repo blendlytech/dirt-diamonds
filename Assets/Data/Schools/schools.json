@@ -1,5 +1,5 @@
 {
-  "//": "High school branding for the 8 HS-tier teams (LeagueGenerator.TierTeamSeeds[HS]). Content, not schema: team_id keys a join to Teams(team_id) 101-108 but is NOT an FK — this is display flavor (like Teams.league, 'display flavor, not logic'), so it lives here beside items.json rather than in SchemaDefinitions.sql, and any loader validates each row against the live HS roster loudly at load. Entry contract: team_id (matches Teams.team_id), abbreviation (cross-check against Teams.abbreviation), school_name (player-facing copy lives here, not C#), mascot (mirrors Teams.name — the school and its baseball team share one mascot), colors.primary/secondary/accent (each name + hex for UI theming; primary is the dominant uniform/crest color), palette_description (one-line copy for scouting/UI), flavor (program identity for menus and rival chatter). Colors are chosen to be mutually distinguishable across all 8 schools. All copy/hex is first-pass tunable content.",
+  "//": "High school branding for the 12 HS-tier teams (LeagueStructure.Teams ids 101\u2013112, Appendix A order: North 101\u2013106, South 107\u2013112). Content, not schema: team_id keys a join to Teams(team_id) 101\u2013112 but is NOT an FK \u2014 this is display flavor (like Teams.league, 'display flavor, not logic'), so it lives here beside items.json rather than in SchemaDefinitions.sql, and any loader validates each row against the live HS roster loudly at load. Entry contract: team_id (matches Teams.team_id), abbreviation (cross-check against Teams.abbreviation), school_name (player-facing copy lives here, not C#), mascot (mirrors Teams.name \u2014 the school and its baseball team share one mascot), colors.primary/secondary/accent (each name + hex for UI theming; primary is the dominant uniform/crest color), palette_description (one-line copy for scouting/UI), flavor (program identity for menus and rival chatter). Colors are chosen to be mutually distinguishable across all 12 schools. All copy/hex is first-pass tunable content.",
   "schools": [
     {
       "team_id": 101,
@@ -12,11 +12,20 @@
         "field": "res://Assets/Graphics/HighSchools/CRW_field.png"
       },
       "colors": {
-        "primary": { "name": "Cardinal Red", "hex": "#9B1B30" },
-        "secondary": { "name": "White", "hex": "#F5F5F5" },
-        "accent": { "name": "Black", "hex": "#111318" }
+        "primary": {
+          "name": "Cardinal Red",
+          "hex": "#9B1B30"
+        },
+        "secondary": {
+          "name": "White",
+          "hex": "#F5F5F5"
+        },
+        "accent": {
+          "name": "Black",
+          "hex": "#111318"
+        }
       },
-      "palette_description": "Deep cardinal red over clean white with black trim — the reddest, most classic look in the league.",
+      "palette_description": "Deep cardinal red over clean white with black trim \u2014 the reddest, most classic look in the league.",
       "flavor": "Old-money East-side program: manicured infield, a trophy case that predates everyone, and the pressure that comes with tradition."
     },
     {
@@ -30,11 +39,20 @@
         "field": "res://Assets/Graphics/HighSchools/LKS_field.png"
       },
       "colors": {
-        "primary": { "name": "Burnt Orange", "hex": "#BF5700" },
-        "secondary": { "name": "Cream", "hex": "#F3EAD3" },
-        "accent": { "name": "Chocolate Brown", "hex": "#4A2C12" }
+        "primary": {
+          "name": "Burnt Orange",
+          "hex": "#BF5700"
+        },
+        "secondary": {
+          "name": "Cream",
+          "hex": "#F3EAD3"
+        },
+        "accent": {
+          "name": "Chocolate Brown",
+          "hex": "#4A2C12"
+        }
       },
-      "palette_description": "Burnt orange over cream with a saddle-brown trim — warm, dusty, Friday-night-lights ranch colors.",
+      "palette_description": "Burnt orange over cream with a saddle-brown trim \u2014 warm, dusty, Friday-night-lights ranch colors.",
       "flavor": "Sits above the reservoir; the biggest, rowdiest home crowd in the East and a wind that carries fly balls."
     },
     {
@@ -48,11 +66,20 @@
         "field": "res://Assets/Graphics/HighSchools/FRV_field.png"
       },
       "colors": {
-        "primary": { "name": "Navy Blue", "hex": "#1F2A44" },
-        "secondary": { "name": "Brushed Silver", "hex": "#B7BCC4" },
-        "accent": { "name": "Sky Blue", "hex": "#5A8FC0" }
+        "primary": {
+          "name": "Navy Blue",
+          "hex": "#1F2A44"
+        },
+        "secondary": {
+          "name": "Brushed Silver",
+          "hex": "#B7BCC4"
+        },
+        "accent": {
+          "name": "Sky Blue",
+          "hex": "#5A8FC0"
+        }
       },
-      "palette_description": "Navy blue and brushed silver — sleek and cool, the steel-gray plumage of a diving raptor.",
+      "palette_description": "Navy blue and brushed silver \u2014 sleek and cool, the steel-gray plumage of a diving raptor.",
       "flavor": "The academic power school: quiet, disciplined, and quietly consistent every single spring."
     },
     {
@@ -66,15 +93,78 @@
         "field": "res://Assets/Graphics/HighSchools/OKR_field.png"
       },
       "colors": {
-        "primary": { "name": "Forest Green", "hex": "#1E4D2B" },
-        "secondary": { "name": "Old Gold", "hex": "#C5A253" },
-        "accent": { "name": "Bark Brown", "hex": "#3E2E1E" }
+        "primary": {
+          "name": "Forest Green",
+          "hex": "#1E4D2B"
+        },
+        "secondary": {
+          "name": "Old Gold",
+          "hex": "#C5A253"
+        },
+        "accent": {
+          "name": "Bark Brown",
+          "hex": "#3E2E1E"
+        }
       },
-      "palette_description": "Forest green and old gold — woodsy and nocturnal, the colors of the ridge at dusk.",
+      "palette_description": "Forest green and old gold \u2014 woodsy and nocturnal, the colors of the ridge at dusk.",
       "flavor": "Small wooded campus on the edge of town; perennial scrappy underdogs who play their best under the lights."
     },
     {
       "team_id": 105,
+      "abbreviation": "BRK",
+      "school_name": "Brookhaven High School",
+      "mascot": "Bulldogs",
+      "images": {
+        "logo": "res://Assets/Graphics/HighSchools/BRK_logo.png",
+        "school": "res://Assets/Graphics/HighSchools/BRK_school.png",
+        "field": "res://Assets/Graphics/HighSchools/BRK_field.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Athletic Gold",
+          "hex": "#F2A900"
+        },
+        "secondary": {
+          "name": "Charcoal Gray",
+          "hex": "#2B2D42"
+        },
+        "accent": {
+          "name": "White",
+          "hex": "#FFFFFF"
+        }
+      },
+      "palette_description": "Vibrant athletic gold against charcoal gray and crisp white \u2014 bold, high-contrast, and unmistakable across the diamond.",
+      "flavor": "Suburban powerhouse with brand-new batting cages, booster-funded travel squads, and a roster bred on year-round club ball."
+    },
+    {
+      "team_id": 106,
+      "abbreviation": "CDG",
+      "school_name": "Cedar Grove High School",
+      "mascot": "Comets",
+      "images": {
+        "logo": "res://Assets/Graphics/HighSchools/CDG_logo.png",
+        "school": "res://Assets/Graphics/HighSchools/CDG_school.png",
+        "field": "res://Assets/Graphics/HighSchools/CDG_field.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Royal Purple",
+          "hex": "#5A2D82"
+        },
+        "secondary": {
+          "name": "Silver Mist",
+          "hex": "#C4C8D0"
+        },
+        "accent": {
+          "name": "Electric Indigo",
+          "hex": "#311B92"
+        }
+      },
+      "palette_description": "Rich royal purple trimmed in silver mist and electric indigo \u2014 sharp, nocturnal, and striking under the evening sky.",
+      "flavor": "Rural county school carved out of cedar pine barrens; proud, tight-knit, and known for gritty small-ball and relentless base running."
+    },
+    {
+      "team_id": 107,
       "abbreviation": "PNH",
       "school_name": "Pinehurst High School",
       "mascot": "Panthers",
@@ -84,15 +174,24 @@
         "field": "res://Assets/Graphics/HighSchools/PNH_field.png"
       },
       "colors": {
-        "primary": { "name": "Matte Black", "hex": "#14151A" },
-        "secondary": { "name": "Royal Purple", "hex": "#5B2A86" },
-        "accent": { "name": "Silver", "hex": "#C0C3C9" }
+        "primary": {
+          "name": "Matte Black",
+          "hex": "#14151A"
+        },
+        "secondary": {
+          "name": "Royal Purple",
+          "hex": "#5B2A86"
+        },
+        "accent": {
+          "name": "Silver",
+          "hex": "#C0C3C9"
+        }
       },
-      "palette_description": "Matte black and royal purple with silver trim — the darkest, most intimidating kit in the West.",
-      "flavor": "The moneyed West-side program with the best facilities in the ladder — and the swagger to match."
+      "palette_description": "Matte black and royal purple with silver trim \u2014 the darkest, most intimidating kit in the West.",
+      "flavor": "The moneyed West-side program with the best facilities in the ladder \u2014 and the swagger to match."
     },
     {
-      "team_id": 106,
+      "team_id": 108,
       "abbreviation": "WSF",
       "school_name": "Westfield High School",
       "mascot": "Warhawks",
@@ -102,15 +201,24 @@
         "field": "res://Assets/Graphics/HighSchools/WSF_field.png"
       },
       "colors": {
-        "primary": { "name": "Maroon", "hex": "#6E1423" },
-        "secondary": { "name": "Steel Gray", "hex": "#6B7280" },
-        "accent": { "name": "Antique White", "hex": "#E8E2D6" }
+        "primary": {
+          "name": "Maroon",
+          "hex": "#6E1423"
+        },
+        "secondary": {
+          "name": "Steel Gray",
+          "hex": "#6B7280"
+        },
+        "accent": {
+          "name": "Antique White",
+          "hex": "#E8E2D6"
+        }
       },
-      "palette_description": "Deep maroon and gunmetal steel gray — hard-edged, with a military bearing.",
+      "palette_description": "Deep maroon and gunmetal steel gray \u2014 hard-edged, with a military bearing.",
       "flavor": "Blue-collar mill town; grinders who out-hustle rather than out-talent, and take it personally."
     },
     {
-      "team_id": 107,
+      "team_id": 109,
       "abbreviation": "SMT",
       "school_name": "Summit High School",
       "mascot": "Spartans",
@@ -120,15 +228,24 @@
         "field": "res://Assets/Graphics/HighSchools/SMT_field.png"
       },
       "colors": {
-        "primary": { "name": "Slate Blue", "hex": "#38618C" },
-        "secondary": { "name": "Burnished Bronze", "hex": "#B08D57" },
-        "accent": { "name": "Charcoal", "hex": "#2B2F36" }
+        "primary": {
+          "name": "Slate Blue",
+          "hex": "#38618C"
+        },
+        "secondary": {
+          "name": "Burnished Bronze",
+          "hex": "#B08D57"
+        },
+        "accent": {
+          "name": "Charcoal",
+          "hex": "#2B2F36"
+        }
       },
-      "palette_description": "Slate blue and burnished bronze — cool mountain sky over a Spartan's helmet.",
+      "palette_description": "Slate blue and burnished bronze \u2014 cool mountain sky over a Spartan's helmet.",
       "flavor": "The highest-elevation school on the ladder; thin-air home games and a fortress reputation up the hill."
     },
     {
-      "team_id": 108,
+      "team_id": 110,
       "abbreviation": "RVT",
       "school_name": "Riverton High School",
       "mascot": "Rams",
@@ -138,12 +255,75 @@
         "field": "res://Assets/Graphics/HighSchools/RVT_field.png"
       },
       "colors": {
-        "primary": { "name": "River Teal", "hex": "#0E7C7B" },
-        "secondary": { "name": "Vegas Gold", "hex": "#C5B358" },
-        "accent": { "name": "Deep Navy", "hex": "#132B3A" }
+        "primary": {
+          "name": "River Teal",
+          "hex": "#0E7C7B"
+        },
+        "secondary": {
+          "name": "Vegas Gold",
+          "hex": "#C5B358"
+        },
+        "accent": {
+          "name": "Deep Navy",
+          "hex": "#132B3A"
+        }
       },
-      "palette_description": "River teal and vegas gold — bright and coastal, the easiest colors to pick out from the bleachers.",
+      "palette_description": "River teal and vegas gold \u2014 bright and coastal, the easiest colors to pick out from the bleachers.",
       "flavor": "Loose, streaky river-town program; capable of beating anyone or nobody on a given Friday."
+    },
+    {
+      "team_id": 111,
+      "abbreviation": "GRF",
+      "school_name": "Granite Falls High School",
+      "mascot": "Gators",
+      "images": {
+        "logo": "res://Assets/Graphics/HighSchools/GRF_logo.png",
+        "school": "res://Assets/Graphics/HighSchools/GRF_school.png",
+        "field": "res://Assets/Graphics/HighSchools/GRF_field.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Kelly Green",
+          "hex": "#008344"
+        },
+        "secondary": {
+          "name": "Granite Gray",
+          "hex": "#4B5563"
+        },
+        "accent": {
+          "name": "Bone White",
+          "hex": "#F4F1EA"
+        }
+      },
+      "palette_description": "Vivid kelly green over granite gray with bone-white accents \u2014 earthy, reptilian, and rugged like the quarry edge.",
+      "flavor": "Industrial quarry town program; hard-nosed squad that practices in raw March mud and thrives on physical, contact-heavy baseball."
+    },
+    {
+      "team_id": 112,
+      "abbreviation": "HLC",
+      "school_name": "Hillcrest High School",
+      "mascot": "Hurricanes",
+      "images": {
+        "logo": "res://Assets/Graphics/HighSchools/HLC_logo.png",
+        "school": "res://Assets/Graphics/HighSchools/HLC_school.png",
+        "field": "res://Assets/Graphics/HighSchools/HLC_field.png"
+      },
+      "colors": {
+        "primary": {
+          "name": "Cobalt Blue",
+          "hex": "#0047AB"
+        },
+        "secondary": {
+          "name": "Storm White",
+          "hex": "#F0F4F8"
+        },
+        "accent": {
+          "name": "Crimson Red",
+          "hex": "#C62828"
+        }
+      },
+      "palette_description": "Vivid cobalt blue and storm white with sharp crimson trim \u2014 crisp, electric, and storm-swept.",
+      "flavor": "Exurban school set upon windy ridge slopes; plays high-velocity baseball with aggressive pitching and power hitters tuned to their wind-tunnel field."
     }
   ]
 }
