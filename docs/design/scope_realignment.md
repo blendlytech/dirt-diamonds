@@ -2,6 +2,8 @@
 
 **Status:** active spec, 2026-10-25. Source: [architectural_refactoring_scope_alignment_directive.md](../architectural_refactoring_scope_alignment_directive.md) (the owner's directive; read it for the *why*). **Pivots 2.1-2.4 are accepted by the owner (2026-10-25) and recorded in [GAME_VISION](../GAME_VISION.md) v3.0.** Everything marked **PROPOSED** below (gate order, features, resolutions of conflicts) needs the owner's yes, listed in §9.
 
+**Current staffing (owner, 2026-10-25):** all outstanding authors, reviewers and merge gates use the GPT-only roster in [TEAM.md](../TEAM.md) section 1a: **GPT 6.1 Sol** core/integration, **GPT 6 Astra** math/sim/review, **GPT 6 Sol** UI/presentation/content. This replaces the original Opus/Sonnet/Flash assignments without changing scope, pauses or owner gates.
+
 **Core constraint (directive §0):** the C# backend stays as it is: zero-GC loops, pooled SQLite statements, assembly isolation, Monte Carlo harnesses. Cuts land on the front end, on micromanagement and on risky asset pipelines. No change here touches `AtBatResolver` or the resolver guard.
 
 **Corrections to the directive:** the engine is **Godot 4 + C#**, not Unity (4.3's "recompiling Unity assets" means "recompiling the game"). v14 is a clean break, not a migration.
@@ -219,18 +221,18 @@ After Gate 4: resume Phase 13's remainder, Phase L runtime, Phase 14 (6 voices),
 
 | # | Files | Change | Model | Reviewer |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 | `Assets/Simulation/Life/{LifestyleStance,StanceScheduleBuilder,WeeklyUpkeep,WeekInterrupt}.cs`, `LifeSimManager.cs` (+`TickWeek`), `Assets/Data/Life/lifestyle_stances.json`, `Tools/NeedsDecayHarness` (+stance cases) | SR-2a engine (§3.2) | Claude Opus | GPT 6 Astra Pro (Math on values) |
-| 2 | `Assets/Core/GameManager.cs` | `SubmitWeeklyStance`, `AdvanceWeek`, `WeekSummaryDto`, stance flag writer, `Game_State.avatar_stance` | Claude Opus | GPT |
-| 3 | `GrittyEventModel.cs`, `GrittyEventJson.cs`, `EventConsequenceApplier.cs`, `Tools/GrittyEventsHarness`, event-graph checker | `outcomes[]` (§3.3), SR-1a | Claude Opus | GPT |
-| 4 | `dirt_underworld_events.json` + `contacts.json` | Fencing/Robbery arcs, SR-1b (scripts Opus, JSON Flash) | Opus -> Flash | Opus (quality) |
-| 5 | `Assets/Data/...` demo content + `hs_onboarding_events.json` | One scripted week-2 Burner Phone temptation with >= 3 choices, hidden-probability branches, reactive texts | Claude Opus -> Flash | Opus |
-| 6 | `Assets/UI/BaseballDashboard.cs/.tscn` | Stance selector, weekly summary card, interrupt list, standings | Claude Sonnet | GPT |
-| 7 | `Assets/UI/TimeControlBar.*` | Week-advance bar | Claude Sonnet | GPT |
-| 8 | `Assets/UI/BurnerPhone.cs/.tscn` | Remove Fencing/Robbery buttons; keep threads, events feed, Narcotics + Hold'em hooks; restyle | Claude Sonnet | GPT |
-| 9 | `Assets/UI/AtBatView.cs/.tscn` | Restyle as the broadcast view; reserve the Clutch overlay slot | Claude Sonnet | GPT |
-| 10 | `Assets/UI/NewGameScreen.cs`, `Main.cs`, `TutorialOverlay.cs` | A fixed "HS demo career" entry and a 15-minute tutorial; backstory as captions + first texts (the prologue cutscene is paused) | Claude Sonnet | GPT |
-| 11 | `Assets/UI/ScheduleScreen.*` | Remove from navigation (retire) | Claude Sonnet | GPT |
-| 12 | `Assets/UI/Theme/*` (15b) | Design system scoped to the screens above | Claude Sonnet | GPT |
+| 1 | `Assets/Simulation/Life/{LifestyleStance,StanceScheduleBuilder,WeeklyUpkeep,WeekInterrupt}.cs`, `LifeSimManager.cs` (+`TickWeek`), `Assets/Data/Life/lifestyle_stances.json`, `Tools/NeedsDecayHarness` (+stance cases) | SR-2a engine (§3.2) | GPT 6.1 Sol | GPT 6 Astra (Math on values) |
+| 2 | `Assets/Core/GameManager.cs` | `SubmitWeeklyStance`, `AdvanceWeek`, `WeekSummaryDto`, stance flag writer, `Game_State.avatar_stance` | GPT 6.1 Sol | GPT 6 Astra |
+| 3 | `GrittyEventModel.cs`, `GrittyEventJson.cs`, `EventConsequenceApplier.cs`, `Tools/GrittyEventsHarness`, event-graph checker | `outcomes[]` (§3.3), SR-1a | GPT 6.1 Sol | GPT 6 Astra |
+| 4 | `dirt_underworld_events.json` + `contacts.json` | Fencing/Robbery arcs, SR-1b (scripts GPT 6.1 Sol, JSON GPT 6 Sol) | GPT 6 Astra | GPT 6.1 Sol (quality) |
+| 5 | `Assets/Data/...` demo content + `hs_onboarding_events.json` | One scripted week-2 Burner Phone temptation with >= 3 choices, hidden-probability branches, reactive texts | GPT 6.1 Sol -> GPT 6 Sol | GPT 6.1 Sol |
+| 6 | `Assets/UI/BaseballDashboard.cs/.tscn` | Stance selector, weekly summary card, interrupt list, standings | GPT 6 Sol | GPT 6 Astra |
+| 7 | `Assets/UI/TimeControlBar.*` | Week-advance bar | GPT 6 Sol | GPT 6 Astra |
+| 8 | `Assets/UI/BurnerPhone.cs/.tscn` | Remove Fencing/Robbery buttons; keep threads, events feed, Narcotics + Hold'em hooks; restyle | GPT 6 Sol | GPT 6 Astra |
+| 9 | `Assets/UI/AtBatView.cs/.tscn` | Restyle as the broadcast view; reserve the Clutch overlay slot | GPT 6 Sol | GPT 6 Astra |
+| 10 | `Assets/UI/NewGameScreen.cs`, `Main.cs`, `TutorialOverlay.cs` | A fixed "HS demo career" entry and a 15-minute tutorial; backstory as captions + first texts (the prologue cutscene is paused) | GPT 6 Sol | GPT 6 Astra |
+| 11 | `Assets/UI/ScheduleScreen.*` | Remove from navigation (retire) | GPT 6 Sol | GPT 6 Astra |
+| 12 | `Assets/UI/Theme/*` (15b) | Design system scoped to the screens above | GPT 6 Sol | GPT 6 Astra |
 
 Gate 2 needs **15a** first, and that is the owner's call (art direction A/B/C, see [review/visual_direction_3d_proposal.md](../review/visual_direction_3d_proposal.md) and the G-0c brief). It is the long pole.
 
@@ -246,7 +248,7 @@ Gate 2 needs **15a** first, and that is the owner's call (art direction A/B/C, s
 | **4.2 Rap Sheet exporter** | Retirement/succession screen -> `SubViewport` -> `Image.SavePng` to `user://exports/`, with a one-click copy path. Lines: career stats, titles, peak `WealthTier`, illicit earnings, children **already revealed** (e.g. "2 heirs"). | Presentation-only, never writes the DB. A hidden child not yet found is not counted (reveal always precedes succession, but the *search* may still be open). |
 | **4.3 `mods/` loader** | Folder next to the exe (and Steam's Workshop folder via Facepunch UGC). `mods/<id>/mod.json` = `{ id, name, version, game_version, content: [...], overrides: [...] }`. Each file runs through the **same** loaders and validators as shipped content at boot. | A failing mod is rejected whole with a visible log line, never a crash. Events are additive only; replacing `schools.json` or rosters is explicit (`overrides`) and applies to **new careers only** (a save records the mod-set hash). Mod worlds sit outside the calibrated bands, so achievements are disabled while a mod is active. No code in mods. The event-graph checks must be liftable into a library (`EventGraphValidator`) so the boot-time loader runs the same checks as the harness. Workshop **upload** is the owner's Steamworks action. |
 
-Order: 4.1 interim and 4.2 are Sonnet slices after Gate 4; 4.3 follows once the content schema has stopped moving (after Gate 4), as does the Workshop wiring.
+Order: 4.1 interim and 4.2 are GPT 6 Sol slices after Gate 4; 4.3 follows once the content schema has stopped moving (after Gate 4), as does the Workshop wiring.
 
 ---
 
@@ -255,18 +257,18 @@ Order: 4.1 interim and 4.2 are Sonnet slices after Gate 4; 4.3 follows once the 
 | Slice | What | Author | Reviewer | Owner gate |
 | :-- | :-- | :-- | :-- | :-- |
 | **SR-0** | This doc, GAME_VISION v3.0, GEMINI §11, BUILD_PLAN, TEAM | Claude (this session) | owner | **Read GAME_VISION v3.0** |
-| **SR-1a** | `outcomes[]` in the event framework | Claude Opus | GPT 6 Astra Pro | — |
-| **SR-1b** | Fencing + Robbery arcs; mine hustle numbers | Opus -> Flash | Opus | Story sign-off |
-| **SR-1c** | Retire the two screens and the two phone buttons; delete after parity | Claude Sonnet | GPT | **Delete approval** |
-| **SR-2a/b** | Stance engine; `GameManager` + stance UI | Opus / Sonnet | GPT (+ Math values) | Stance table sign-off |
-| **SR-3a** | `ClutchResolver` + `BatterIntentKind.Clutch` + tilt (Math) | GPT 6 Astra Pro | Claude Opus | **Clutch feels right** |
-| **SR-3b** | Clutch overlay + batting practice scene | Claude Sonnet | GPT | Playtest |
-| **SR-4** | Gate 2 screens (rows 6-12 of §5) | Claude Sonnet | GPT | Screenshot review |
-| **SR-5** | Golden vertical slice (Gate 3) | Owner + AI art tools; Flash integration | Opus | **Taste** |
-| **SR-6** | `mods/` loader | Claude Sonnet | GPT | — |
-| **SR-7** | Tabloid feed | Sonnet + Flash | Opus | — |
-| **SR-8** | Rap Sheet exporter | Claude Sonnet | GPT | — |
-| **SR-9** | Six booths: persona framework, trigger catalog, script sheets | Opus -> Flash | Opus | **Approve taglines** |
+| **SR-1a** | `outcomes[]` in the event framework | GPT 6.1 Sol | GPT 6 Astra | — |
+| **SR-1b** | Fencing + Robbery arcs; mine hustle numbers | GPT 6.1 Sol -> GPT 6 Sol | GPT 6 Astra | Story sign-off |
+| **SR-1c** | Retire the two screens and the two phone buttons; delete after parity | GPT 6 Sol | GPT 6 Astra | **Delete approval** |
+| **SR-2a/b** | Stance engine; `GameManager` + stance UI | GPT 6.1 Sol / GPT 6 Sol | GPT 6 Astra (+ Math values) | Stance table sign-off |
+| **SR-3a** | `ClutchResolver` + `BatterIntentKind.Clutch` + tilt (Math) | GPT 6 Astra | GPT 6.1 Sol | **Clutch feels right** |
+| **SR-3b** | Clutch overlay + batting practice scene | GPT 6 Sol | GPT 6 Astra | Playtest |
+| **SR-4** | Gate 2 screens (rows 6-12 of §5) | GPT 6 Sol | GPT 6 Astra | Screenshot review |
+| **SR-5** | Golden vertical slice (Gate 3) | Owner + AI art tools; GPT 6 Sol integration | GPT 6.1 Sol | **Taste** |
+| **SR-6** | `mods/` loader | GPT 6 Sol | GPT 6 Astra | — |
+| **SR-7** | Tabloid feed | GPT 6 Sol (runtime + content) | GPT 6.1 Sol | — |
+| **SR-8** | Rap Sheet exporter | GPT 6 Sol | GPT 6 Astra | — |
+| **SR-9** | Six booths: persona framework, trigger catalog, script sheets | GPT 6.1 Sol -> GPT 6 Sol | GPT 6 Astra | **Approve taglines** |
 
 Superseded by this spec (read through it): [GAME_VISION v2.x §3 pillar 2, §5, §10](../GAME_VISION.md) (already rewritten), GEMINI.md §11 (rewritten), [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §9 and §12, [gameplay_core.md](gameplay_core.md) venue/arcade slices, [voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) booth counts, TEAM.md rows G-2…G-9 and 14c/14f.
 

@@ -1,8 +1,8 @@
 # Dirt & Diamonds — Phased Build Plan
 
-**What we're building:** [GAME_VISION.md](GAME_VISION.md) (v3.0, canonical). **Who does what:** [TEAM.md](TEAM.md) (owner-confirmed; Claude Opus 5.5 is integration lead). **Where we are:** [progress.md](progress.md). **Docs map:** [README.md](README.md).
+**What we're building:** [GAME_VISION.md](GAME_VISION.md) (v3.0, canonical). **Who does what:** [TEAM.md](TEAM.md) (owner-confirmed; GPT 6.1 Sol is integration lead). **Where we are:** [progress.md](progress.md). **Docs map:** [README.md](README.md).
 
-**Roles (2026-10-13):** Gemini 3.1 Pro and Pro Math are unavailable; wherever this plan names them, read [TEAM.md](TEAM.md) §1a. No phase merges until its exit criteria pass. Slices run in parallel where the dependency map allows. **Phases 0–12 and the post-12 arcs are complete. The road to launch is Phases 13–17, plus Phase G (optional Clutch Moment) and Phase L (lineage, temptation and vice).**
+**Roles (owner, 2026-10-25): GPT-only availability.** [TEAM.md](TEAM.md) section 1a remaps every outstanding assignment: Opus to **GPT 6.1 Sol**, Sonnet/Flash to **GPT 6 Sol**, calibration/math and existing Astra work to **GPT 6 Astra**. Separate author/reviewer sessions remain required. No phase merges before its gates pass; scope-realignment pauses and owner gates are unchanged.
 
 > **Historical author names.** Shipped specs in `reference/` and `archive/` name an earlier model roster as their authors ("Fable 5", "Opus 4.8", "Sonnet 5"). Those are past authors, not current roles, and they're unrelated to **Claude Fable 5.1**, which joined in 2026-10 and authored the G-2 pitching design (the R-1 review is now GPT 6 Astra Pro's: [tasks/R-1_full_review_brief.md](tasks/R-1_full_review_brief.md)). Current roles live only in [TEAM.md](TEAM.md).
 
@@ -42,7 +42,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 **Slices:** 13-0 prerequisites (sqlite MCP, MC flake) → *(CS-0 College format docs, 2026-10-18; CS-M College Math plan before 13-2/13-3/13-4 build College)* → 13-1 schema + world-gen → 13-2 roster capacities + innings + starter selection → 13-3 schedules + calendars + re-band → 13-4 playoffs + ranking → 13-5 roster lock + forfeits → 13-6 pipeline + draft → 13-7 ripple (achievements, presence, docs, cards). Owners and gates are in spec §15.
 
 - **Lineage hooks (Phase L depends on these):** `PipelineManager` publishes `ProContractSignedEvent` on **every** first Pro contract (drafted *or* signed from free agency); the playoffs publish `ChampionshipWonEvent` (also used by Phase 16b), which **carries the tier**: only a **Pro** World Championship can fire the reveal; a College title (the Red Dirt Series) or an HS State title feeds achievements and cutscenes only. See [design/temptation_and_lineage.md](design/temptation_and_lineage.md) §4.2/§4.4.
-- **Downstream content (logged by CS-0):** the six College division booths need a small Red Dirt Series beat set (game 1, series lead, elimination game, clinch, champion): a 14c content item for Gemini 3.8 Flash, unsized. The 13-4 bracket UI (Claude Sonnet) shows College series status (game 1 / 2 / 3, clinch, elimination). Spec: [design/league_restructure.md](design/league_restructure.md) §8.2.
+- **Downstream content (logged by CS-0):** the six College division booths need a small Red Dirt Series beat set (game 1, series lead, elimination game, clinch, champion): a 14c content item for GPT 6 Sol, unsized. The 13-4 bracket UI (GPT 6 Sol) shows College series status (game 1 / 2 / 3, clinch, elimination). Spec: [design/league_restructure.md](design/league_restructure.md) §8.2.
 
 **Exit criteria:** a generated player goes HS → College → drafted → Pro across simulated seasons; all three leagues schedule, play and crown champions; per-tier bands green; the new Pro guard recorded; PipelineHarness population conservation within ±5% over 20 seasons.
 
@@ -60,9 +60,9 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 | :-- | :-- |
 | G-0 / G-1 | Retain the prototype timing core and completed attribute audit; reuse batter-side mapping for clutch. |
 | **G-2 / G-3 / G-6** | **Cancelled:** full arcade physics/rules, arcade AI calibration, team takeover and real-time baserunning. |
-| **G-4 → SR-3a** | Shrink to `ClutchRequest` from `EffectiveRatings`, `ClutchResolver`, `BatterIntentKind.Clutch` and Math constants; **GPT 6 Astra Pro**, Claude Opus reviews. |
-| **G-5 + G-9 → SR-3b** | Merge into clutch overlay, batting practice and clutch-only assists; **Claude Sonnet**, GPT reviews. No general difficulty framework. |
-| **G-7 / G-8** | **Paused beyond HS:** venue catalog/screens and art; Sonnet + Flash / owner + art tools, with Opus review. |
+| **G-4 → SR-3a** | Shrink to `ClutchRequest` from `EffectiveRatings`, `ClutchResolver`, `BatterIntentKind.Clutch` and Math constants; **GPT 6 Astra**, GPT 6.1 Sol reviews. |
+| **G-5 + G-9 → SR-3b** | Merge into clutch overlay, batting practice and clutch-only assists; **GPT 6 Sol**, GPT 6 Astra reviews. No general difficulty framework. |
+| **G-7 / G-8** | **Paused beyond HS:** venue catalog/screens and art; GPT 6 Sol / owner + art tools, with GPT 6.1 Sol review. |
 
 **Exit criteria:** `MicroGame` remains authoritative; the optional clutch tilt is capped and centered; `Tools/ArcadeHarness` validates the timing core and Monte Carlo validates integration with the neutral resolver guard byte-exact. Shared rating changes run both. Owner playtests the clutch feel; no AI-vs-AI full arcade bands are required.
 
@@ -231,19 +231,19 @@ The owner accepted every recommendation in [Q01–Q17](review/r1/06_owner_questi
 
 **Execution overlay (2026-10-25):** the revised gates above govern sequencing; this table retains accepted repair scope and ownership, not authorization to bypass the freeze or resume paused production.
 
-13-0 is done (2026-10-10). Next: **13-1 (Opus, on `p13/integration`)**, then **R1-SAVE-1 (Opus)** on `main` (the v13 game still boots there; SAVE-1 is merged forward into `p13/integration`), while **R1-MATH (Math)** progresses independently. *(2026-10-13: G-8a is retired by the arcade decision; R1-MATH keeps its fatigue and life-modifier contracts.)* SAVE-1 and 13-1 both touch `GameManager`/`LeagueSimulator`, so one model (Opus) sequences them. Save recovery is a release gate, not optional polish. Keep one end-to-end saved career ahead of content volume.
+13-0 is done (2026-10-10). Next: **13-1 (GPT 6.1 Sol, on `p13/integration`)**, then **R1-SAVE-1 (GPT 6.1 Sol)** on `main` (the v13 game still boots there; SAVE-1 is merged forward into `p13/integration`), while **R1-MATH (Math)** progresses independently. *(2026-10-13: G-8a is retired by the arcade decision; R1-MATH keeps its fatigue and life-modifier contracts.)* SAVE-1 and 13-1 both touch `GameManager`/`LeagueSimulator`, so one model (GPT 6.1 Sol) sequences them. Save recovery is a release gate, not optional polish. Keep one end-to-end saved career ahead of content volume.
 
 | Brief | Owner | Exit/dependency |
 | --- | --- | --- |
-| [R1-SAVE-1](tasks/R1-SAVE-1_save_boundary.md) | Opus; GPT 6 Astra Pro review | Quiescent saves, all-league flush, dirty retry and database ownership |
-| [R1-SAVE-2](tasks/R1-SAVE-2_recovery_and_rng.md) | Opus; GPT 6 Astra Pro review | After SAVE-1: durable day/choice/resolution recovery and independent RNG continuation |
-| [R1-FAMILY](tasks/R1-FAMILY_partner_invariants.md) | Opus; GPT 6 Astra Pro review | Partner invariant repair; after L-1, civilian/kin eligibility must precede L-4 |
-| [R1-MATH](tasks/R1-MATH_gameplay_contracts.md) | GPT 6 Astra Pro (Math); Opus review | Fatigue, O1 (now the arcade difficulty target) and life-modifier contracts. Its pitching-centering/waste part is retired (2026-10-13) |
-| [R1-EFFECTS](tasks/R1-EFFECTS_life_projections.md) | GPT projection; Opus development | After Math: capped needs/stress, actual-practice work_ethic |
-| [R1-LEARN](tasks/R1-LEARN_practice_and_modifiers.md) | GPT seam; Sonnet UI | Stable arcade DTOs: isolated practice on the arcade engine, pitch explanation, effective-rating breakdown |
-| [R1-REVEAL](tasks/R1-REVEAL_durable_story_handoff.md) | Opus Core; Sonnet presentation | L-3/16b + SAVE-2: durable revelation before succession, playback never gates it |
-| [R1-STEAM](tasks/R1-STEAM_offline_eligibility.md) | Opus durability; Sonnet 17a | SAVE-2: unavailable-Steam eligibility and idempotent reconciliation |
+| [R1-SAVE-1](tasks/R1-SAVE-1_save_boundary.md) | GPT 6.1 Sol; GPT 6 Astra review | Quiescent saves, all-league flush, dirty retry and database ownership |
+| [R1-SAVE-2](tasks/R1-SAVE-2_recovery_and_rng.md) | GPT 6.1 Sol; GPT 6 Astra review | After SAVE-1: durable day/choice/resolution recovery and independent RNG continuation |
+| [R1-FAMILY](tasks/R1-FAMILY_partner_invariants.md) | GPT 6.1 Sol; GPT 6 Astra review | Partner invariant repair; after L-1, civilian/kin eligibility must precede L-4 |
+| [R1-MATH](tasks/R1-MATH_gameplay_contracts.md) | GPT 6 Astra (Math); GPT 6.1 Sol review | Fatigue, O1 (now the arcade difficulty target) and life-modifier contracts. Its pitching-centering/waste part is retired (2026-10-13) |
+| [R1-EFFECTS](tasks/R1-EFFECTS_life_projections.md) | GPT 6 Astra projection; GPT 6.1 Sol development | After Math: capped needs/stress, actual-practice work_ethic |
+| [R1-LEARN](tasks/R1-LEARN_practice_and_modifiers.md) | GPT 6 Astra seam; GPT 6 Sol UI | Stable arcade DTOs: isolated practice on the arcade engine, pitch explanation, effective-rating breakdown |
+| [R1-REVEAL](tasks/R1-REVEAL_durable_story_handoff.md) | GPT 6.1 Sol Core; GPT 6 Sol presentation | L-3/16b + SAVE-2: durable revelation before succession, playback never gates it |
+| [R1-STEAM](tasks/R1-STEAM_offline_eligibility.md) | GPT 6.1 Sol durability; GPT 6 Sol 17a | SAVE-2: unavailable-Steam eligibility and idempotent reconciliation |
 
-14b follows its updated brief (Opus review, per-clip crash recovery); no new generation spend. 15 uses reusable team-dressed kits; approve representative art before volume. Park factors are outside 1.0. *(Manual fielding was too, until the 2026-10-13 arcade decision put assisted fielding in launch scope.)* Full 13/L/G career, interrupted-save parity, Godot input/UX and exported Windows/Linux checks precede release.
+14b follows its updated brief (GPT 6.1 Sol review, per-clip crash recovery); no new generation spend. 15 uses reusable team-dressed kits; approve representative art before volume. Park factors are outside 1.0. *(Manual fielding was too, until the 2026-10-13 arcade decision put assisted fielding in launch scope.)* Full 13/L/G career, interrupted-save parity, Godot input/UX and exported Windows/Linux checks precede release.
 
 Still required as concrete inputs: owner art/identity/legend/name selections; ChooseFatherFallback and DiscoveryChance intent; commercial/Steam prerequisites. Auto-committer policy prohibits main/shared targets; actual external configuration must be verified separately. These are not reopened yes/no votes on accepted R-1 scope.
