@@ -4,9 +4,9 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ---
 
-## Current status (2026-10-13): arcade physics adopted; PC and GitHub histories merged
+## Current status (2026-10-25): GAME_VISION v3.0; scope realignment adopted
 
-**2026-10-13:** the owner chose **true arcade physics** for attended games (GAME_VISION v2.1). The G-0 feel prototype is under way: its physics core (G-0a) is built and awaiting review, and the playable scene (G-0b, Claude Sonnet) is next. The Oct-10 dice-table pitching mode and Read v2 batting re-band are retired to `archive/`. Owner decision **O1** (the skill band) is now the arcade's default difficulty target.
+**2026-10-25:** the four owner-accepted pivots are canonical in **GAME_VISION v3.0** and [design/scope_realignment.md](design/scope_realignment.md): authoritative attended `MicroGame` with optional offense-only Clutch Moment; Weekly Lifestyle Stance instead of manual daily needs/scheduling; Narcotics and Texas Hold'em interactive, Fencing/Robbery as Burner Phone branches; six conference announcer personas (two per tier). **SR-0 documentation alignment is complete; implementation is pending.** Revised gate refinements/commercial features remain proposed where the spec marks them so. Next: **13-1 by Claude Opus on `p13/integration`**, GPT review, and Gate 2 preparation per scope_realignment §5.
 
 **Also current (2026-10-10):** all R-1 recommendations are accepted. Canonical specs and [BUILD_PLAN execution order](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) include eight repair briefs; runtime fixes are pending their owners and Math gates. 13-0 is merged; Phase 13 continues with 13-1 on `p13/integration`.
 
@@ -15,16 +15,16 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 | Phase | Spec | State | Very next action (owner) |
 | :-- | :-- | :-- | :-- |
 | **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | **13-0 done** (merged 2026-10-10) | **13-1** schema v14 + world-gen (Claude Opus) on **`p13/integration`**. 13-1…13-3 merge there after GPT 6 Astra Pro review; `main` stays green on v13 until 13-3 records the new Pro guard (spec §15). |
-| **G Gameplay Core** (**high priority**) | [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) (attended game) + [design/gameplay_core.md](design/gameplay_core.md) (attributes, venues) | **Arcade physics adopted 2026-10-13**; G-0a physics core **built** (`pG/G-0a-opus`); the old pitching mode and Read v2 re-band are retired to `archive/` | G-0a reviewed (Opus stand-in) and its foul-pole bug fixed (`c916426`, ArcadeHarness 51/51). **G-0b** playable prototype scene (Claude Sonnet), then the owner's "hitting is fun" gate. GPT 6 Astra Pro does the independent G-0a re-review in parallel. Engine slices G-2…G-4 go to GPT 6 Astra Pro. |
+| **G Gameplay Core** | [design/scope_realignment.md](design/scope_realignment.md) §3.1 | Optional clutch/timing core; `MicroGame` authoritative. G-2/G-3/G-6 cancelled; G-5/G-9 merged into SR-3b; G-7/G-8 paused beyond HS. | **SR-3a** `ClutchResolver` + Math: GPT 6 Astra Pro, Opus reviews; **SR-3b** overlay/practice: Sonnet, GPT reviews. Optional; does not block Gate 2. |
 | **L Lineage, Temptation & Vice** | [design/temptation_and_lineage.md](design/temptation_and_lineage.md), [design/substances_and_addiction.md](design/substances_and_addiction.md) | Design complete; **L-0 done** | **L-1** after 13-1 (schema v15 + identity + legends + poverty). |
-| **14 Voice & Broadcast Audio** | [design/voice_and_broadcast_audio.md](design/voice_and_broadcast_audio.md) | Design complete (broadcasters only) | 14a buses + `VoiceDirector` (Claude Sonnet, from Gemini Pro 2026-10-13; [brief](tasks/14a_buses_voicedirector_brief.md)); 14b `Tools/VoiceGen` pilot (GPT Astra Pro; needs the owner's commercial ElevenLabs plan). Can run alongside 13. |
-| **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md) | Design complete | 15a style frames for both worlds. **The owner picks the art direction.** |
-| **16 Cutscenes** | [design/cutscenes_motion_comic.md](design/cutscenes_motion_comic.md) | Design complete | Blocked on 14a/14b + 15a/15b. |
+| **14 Voice & Broadcast Audio** | [design/scope_realignment.md](design/scope_realignment.md) §3.4 | Six conference personas, ~900 lines each; no per-team generation | **Paused for Gate 2**, resumes after Gate 4; SR-9 Opus → Flash, owner tagline approval. |
+| **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md), scope_realignment §5 | Gate 2 limited to Burner Phone, dashboard/standings, broadcast at-bat view and stance UI | **15a** owner art-direction pick → 15b/15c + **SR-4** (Sonnet, GPT review); **SR-5** golden art at Gate 3 before batch production. |
+| **16 Cutscenes** | [design/cutscenes_motion_comic.md](design/cutscenes_motion_comic.md) | Production paused for Gate 2 | Resume after Gate 4; captions/text supply the demo backstory. |
 | **17 Steam Commercial Release** | [design/steam_commercial_release.md](design/steam_commercial_release.md) | Design complete | Early owner actions: Steamworks app, trademark screen, Coming Soon timing. |
 
-**Owner decisions (canonical record: GAME_VISION v2; detail: temptation §0 D1–D21):**
+**Owner decisions (canonical record: GAME_VISION v3.0; detail: temptation §0 D1–D21):**
 
-- **2026-10-09:** 56 unique announcers plus 3 HS radio voices; in-engine motion-comic cutscenes; schema v14 is a clean break for old saves; a complete visual redesign is allowed.
+- **2026-10-09 (historical; voice count superseded by v3.0):** 56 unique announcers plus 3 HS radio voices; in-engine motion-comic cutscenes; schema v14 is a clean break for old saves; a complete visual redesign is allowed.
 - **2026-10-10:**
   - Voice is **broadcasters only**.
   - **Skill band (O1):** player skill is worth about the 40-vs-70 rating gap (±.100 OPS around ratings), capped, with a blind or average player at the ratings line, for pitching **and** batting. Batting gets re-tuned (G-8, GPT 6 Astra Pro).
@@ -73,10 +73,10 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Very next steps
 
-1. **Claude Sonnet 5.5: G-0c 3D look test** ([brief](tasks/G-0c_3d_look_test_brief.md)): the G-0 prototype re-rendered in Godot 3D (RBI-style broadcast camera, lit field, CC0 placeholder players, marker-synced swing/pitch), for the owner's **art-direction decision**: stay 16-bit or go stylized 3D ([proposal](review/visual_direction_3d_proposal.md), PROPOSED). Must run on the owner's PC (Godot + .NET; FPS measured on the UHD 605 laptop). Reviewer: GPT 6 Astra Pro. **Then the owner gate:** look direction A/B/C, camera preset, and "hitting is fun" (the G-0 feel gate; keyboard is fine). Until that verdict, nothing that builds on the feel or the look starts (G-2 onward).
-2. **Claude Opus: 13-1** on `p13/integration`, the critical path (13-0 done). 13-1 now also carries `Player_Fielding` (arcade §8.1). Reviewer: GPT 6 Astra Pro.
-3. **GPT 6 Astra Pro (Math): R1-MATH**, the fatigue and life-modifier constants that feed `EffectiveRatings`. Reviewer: Claude Opus. Also open for Astra: **cross-platform determinism** — the ArcadeHarness 2,000-pitch replay hash differs between Linux (.NET 8.0.131) and Windows (.NET 8.0.422), before and after the G-0 repairs; each machine is self-consistent. Scope it before G-2 (see brief §12).
-4. **Claude Sonnet 5.5: 14a** buses + `VoiceDirector` (brief reassigned from Gemini Pro; branch `p14/14a-sonnet`). Reviewer: Claude Opus.
+1. **Claude Opus: Slice 13-1 on `p13/integration`**, schema v14 + world-gen + `Player_Fielding`; reviewer **GPT 6 Astra Pro**. Follow its existing brief/preconditions and 13-2/13-3 before the revised Gate 1 v15-DDL-only freeze. Pre-1.0 saves remain disposable.
+2. **Prepare Gate 2** from [scope_realignment §5](design/scope_realignment.md#5-gate-2-file-by-file-roadmap): Opus owns SR-1a/2a, Opus → Flash SR-1b, Sonnet SR-1c/2b/4, GPT reviews as TEAM §2 specifies. No implementation is claimed by SR-0.
+3. **Owner: read GAME_VISION v3.0 and choose 15a art direction**; unresolved scope_realignment §9 decisions remain open. Gate 2 targets the 15-minute HS loop, then SR-5 golden art at Gate 3 and the external HS playtest at Gate 4. No full arcade or mass venue/art production resumes.
+4. **GPT 6 Astra Pro: SR-3a** clutch resolver/Math when briefed, Opus review; **Sonnet: SR-3b** overlay/practice, GPT review. Preserve neutral macro/micro byte identity; scope the recorded cross-platform arcade replay-hash mismatch before claiming cross-platform determinism. Phases 14/16 production stay paused until after Gate 4.
 
 ---
 
@@ -162,3 +162,5 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 - **2026-10-25 — Team Asset Generation: High School & Franchise Catalog in progress:** Generated and integrated full Brookhaven Bulldogs (`BRK`) package (`BRK_logo.png`, `BRK_school.png`, `BRK_field.png`) and Cedar Grove Comets (`CDG`) package (`CDG_logo.png`, `CDG_school.png`) into `Assets/Graphics/HighSchools/`. Image generation paused due to API quota window (resets ~00:40 UTC). Full prompt & color palette catalog compiled across all tiers: Step 1 (remaining HS: CDG field, GRF, HLC, + 6 standalone logos), Step 2 (24 College varsity logos from `venues.json`), and Step 3 (32 Pro franchise crests).
 
+
+- **2026-10-25 — SR-0 documentation alignment complete (GPT, owner-assigned continuation of Claude Opus; `pSR/SR-0-gpt`; this completion commit):** preserved Opus's scope spec and directive in `ccd0880`; completed GAME_VISION v3.0 wording, GEMINI §5/§9/§11, BUILD_PLAN Phase G/14 and Gates 0-4, TEAM SR-0–SR-9 assignments and current progress. Accepted pivots supersede the prior full-arcade, daily-schedule, four-hustle and per-team-voice plans. Preserved secrecy (`LineageQueries` only), async bus/SQLite isolation, zero-GC and neutral byte-identity contracts. Gates: documentation scope/link/consistency checks and `git diff --check`; no build or sim harness required (documentation only). Open: owner vision read and spec §9 decisions; runtime changes belong to subsequent slices. **Recommended next: Slice 13-1 by Claude Opus on `p13/integration` (GPT 6 Astra Pro reviews), with Gate 2 preparation per scope_realignment §5.**

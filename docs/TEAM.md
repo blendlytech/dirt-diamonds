@@ -2,7 +2,7 @@
 
 **Status:** **confirmed by the owner 2026-10-10; roster updated 2026-10-13** (Gemini 3.1 Pro and Pro Math unavailable, §1a) (proposed the same day by Claude Opus 5.5 at the owner's request). It replaced the single-lead "Model Delegation Doctrine" that used to sit in BUILD_PLAN (removed 2026-10-10). The owner can reassign any role. Roles are assigned by **kind of work**, not by brand. If a model turns out stronger or weaker at something, move the work and update this file.
 
-**Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building, v2), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17 and Phase L), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Older docs name past authors ("Fable 5", "Opus 4.8", "Sonnet 5"); those are not roles. **This file is the only source of current roles.**
+**Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building, v3.0), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17 and Phase L), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Older docs name past authors ("Fable 5", "Opus 4.8", "Sonnet 5"); those are not roles. **This file is the only source of current roles.**
 
 ---
 
@@ -14,10 +14,10 @@
 | **Claude Opus 5.5** | **Integration lead and chief architect** | The Phase 13 critical path in the calibrated core (roster capacities, schedules, pipeline/draft, re-band); final merge gate for every slice; writing task briefs for other models; reviewing GPT's work (sim, math and tools) and Sonnet's runtime work; narrative quality (story cutscene scripts, store copy); release-candidate test plan | Merging its own sim changes without an independent review; owner-only actions |
 | ~~**Gemini 3.1 Pro**~~ | **Unavailable from 2026-10-13** (owner) | Its roles moved: independent sim-diff review → GPT 6 Astra Pro; presentation runtime (14a, 14d, 16a/b, 17a, L-7, S-4) → Claude Sonnet; sim-side league rules (13-4, 13-5) → Claude Opus. See §1a | — |
 | ~~**Gemini 3.1 Pro Math**~~ | **Unavailable from 2026-10-13** (owner) | Calibration and math moved to **GPT 6 Astra Pro** (see §1a) | — |
-| **Gemini 3.8 Flash** | **Content at volume** | Announcer personas and ~5,600 script lines (14c); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
+| **Gemini 3.8 Flash** | **Content at volume** | Six conference announcer personas and ~5,600 script lines (~900 each; SR-9 / 14c); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
 | **Claude Sonnet 5.5** | **UI and feature engineer** | Phase 15 design system and screen rebuilds (15b, 15c, 15e); **from 2026-10-13 also the presentation runtime** (14a buses + `VoiceDirector`, 14d `BroadcastBooth`, 16a/b `CutscenePlayer`/`CutsceneDirector`, 17a achievements/presence, L-7 press runtime, S-4); the Phase 13 league UI (bracket, draft board, recruiting, roster status, standings); 13-7 ripple fixes; the Around the League card | Calibrated-core changes |
 | **Claude Fable 5.1** | **Inactive** (joined 2026-10; prepaid API credit exhausted 2026-10-10) | Authored the G-2 pitching-mode design ([pitching_mode.md](archive/pitching_mode.md) rev 1). Its R-1 review role moved to GPT 6 Astra Pro (owner, 2026-10-10). Re-engage only through a new brief with fresh credit | Merging its own changes; changing GAME_VISION without the owner's yes; touching `Assets/Simulation/` outside a briefed slice |
-| **GPT 6 Astra Pro** | **Senior engineer: gameplay models + standalone tools; calibration and math owner; independent sim-diff reviewer** (owner 2026-10-10, expanded 2026-10-13 when Gemini 3.1 Pro became unavailable) | **Arcade engine** G-1 mapping, G-2, G-3, G-4 (arcade §12); **calibration** (per-tier bands, the new Pro guard, physics constants, difficulty targets, R1-MATH, S-2 and every former "Math" item); **independent review** of Claude Opus's and Claude Sonnet's sim diffs; R-1 (done 2026-10-10); self-contained tools with their own test suites: `Tools/VoiceGen`, `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`, notices generator; 17b drafts | Merging its own sim changes without Gemini Pro's independent review and the Opus merge gate; game code under `Assets/` outside a briefed slice; real API runs; anything involving the live key |
+| **GPT 6 Astra Pro** | **Senior engineer: gameplay models + standalone tools; calibration and math owner; independent sim-diff reviewer** (owner 2026-10-10, expanded 2026-10-13 when Gemini 3.1 Pro became unavailable) | **Clutch timing core** SR-3a (`ClutchResolver`, `BatterIntentKind.Clutch`, Math constants; reduced G-4) and retained G-1 batter mapping; **calibration** (per-tier bands, the new Pro guard, physics constants, difficulty targets, R1-MATH, S-2 and every former "Math" item); **independent review** of Claude Opus's and Claude Sonnet's sim diffs; R-1 (done 2026-10-10); self-contained tools with their own test suites: `Tools/VoiceGen`, `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`, notices generator; 17b drafts | Merging its own sim changes without Claude Opus's review and merge gate; game code under `Assets/` outside a briefed slice; real API runs; anything involving the live key |
 
 
 ### 1a. Role succession (owner, 2026-10-13): Gemini 3.1 Pro and Pro Math are unavailable
@@ -52,7 +52,7 @@ Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **re
 | **13-7** ripple | Sonnet | GPT 6 Astra Pro | — |
 | **14a** buses + VoiceDirector | Claude Sonnet | Claude Opus | Ear check |
 | **14b** VoiceGen + AudioManifestHarness | GPT Astra Pro | Claude Opus | Pilot run (your key) |
-| **14c** 56 personas + scripts | Flash | Claude Opus (voice/quality) | **Approve taglines** |
+| **14c / SR-9** 6 conference personas + ~900 lines each | Flash | Claude Opus (voice/quality) | **Approve taglines** |
 | **14d** BroadcastBooth + highlights | Claude Sonnet | Claude Opus | Playtest |
 | ~~**14e** voice notes~~ | **Cut 2026-10-10** (broadcasters only) | — | — |
 | **14f** full generation + QA | Flash (retake sheets) | — | **Listening QA** |
@@ -65,15 +65,15 @@ Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **re
 | **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
 | **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Claude Sonnet (wiring) | **Story sign-off** |
 | **G-0** arcade feel prototype (batter vs pitcher, placeholder art) | **G-0a physics: Claude Opus (built 2026-10-13, `pG/G-0a-opus`)** · G-0b scene: Claude Sonnet | Claude Opus (stand-in review done 2026-10-13; same family, not independent) → **independent re-review: GPT 6 Astra Pro** | **"Hitting is fun"** |
-| **G-1** attribute audit (**done inside R-1**, GPT 6 Astra Pro) → ratings-to-physics mapping (gameplay_core §1, arcade §4) | GPT 6 Astra Pro (mapping + Math) | Claude Opus | ~~Default difficulty target~~ (decided: O1 skill band) |
-| **G-2** arcade physics core + rules engine + `ArcadeHarness` | GPT 6 Astra Pro (owner 2026-10-10: senior engineer for gameplay models) | Claude Opus (sim diff + merge gate) | — |
-| **G-3** arcade AI + calibration to Phase 13 bands | GPT 6 Astra Pro (engine + Math) | Claude Opus | — |
-| **G-4** integration (`EffectiveRatings`, `Player_Fielding`, flush, autopilot, booth beats, R1-EFFECTS projections) | GPT 6 Astra Pro | Claude Opus | — |
-| **G-5** arcade presentation + controls + watch & skip | Claude Sonnet | GPT 6 Astra Pro | Playtest |
-| ~~**G-6** take over the team + baserunning~~ | **Deferred past 1.0** (owner, 2026-10-16) | — | — |
-| **G-7** venue catalog (68) + venue screens (reusable kits + team dressing, R-1 Q13) | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
-| **G-8** art: 16-bit sprites, field kits, venue art | Owner + artist/AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste; art source** |
-| **G-9** tuning + difficulty presets (O1 skill band as the default target) | GPT 6 Astra Pro (Math) + Claude Sonnet (data) | Claude Opus | **Sign-off; Classic's fate** |
+| **G-1** attribute audit (done inside R-1) → retained batter-side clutch mapping | GPT 6 Astra Pro (mapping + Math) | Claude Opus | Clutch scope per SR-3a |
+| ~~**G-2** full arcade physics + rules~~ | **Cancelled 2026-10-25** (scope_realignment §2.1) | — | — |
+| ~~**G-3** arcade AI + full-game calibration~~ | **Cancelled 2026-10-25** | — | — |
+| **G-4 → SR-3a** reduced integration: `ClutchRequest` from `EffectiveRatings` | GPT 6 Astra Pro | Claude Opus | See SR-3a |
+| **G-5 → SR-3b** clutch overlay + batting practice (merged with G-9) | Claude Sonnet | GPT 6 Astra Pro | Playtest |
+| ~~**G-6** team takeover + real-time baserunning~~ | **Cancelled 2026-10-25** | — | — |
+| **G-7** venue catalog + screens | Claude Sonnet (+ Flash: data); **paused beyond the HS slice** | Claude Opus | Golden slice before mass generation |
+| **G-8** field/venue art | Owner + art tools (Flash: integration); **paused beyond the HS slice** | Claude Opus | **Taste; Gate 3** |
+| **G-9 → SR-3b** clutch-only tuning/assists | Claude Sonnet (GPT Math constants in SR-3a) | GPT 6 Astra Pro | Playtest; no general difficulty framework |
 | ~~old G-2 pitching mode / old G-8 Read v2~~ | **Retired 2026-10-13** by the arcade decision; docs in `archive/` | — | — |
 | **L-0** docs + no-abortion content fix | Claude Opus | Gemini Pro (done) | **DONE 2026-10-10** |
 | **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus (+ Sonnet: New Career UI) | GPT 6 Astra Pro | — |
@@ -95,7 +95,27 @@ Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **re
 | **17d** release-candidate QA | Claude Opus (plan + gates) | GPT 6 Astra Pro | **Full playthrough** |
 | **17e** submission + launch | Owner | — | Owner |
 
-**Parallel tracks from day one:** Claude Opus runs Phase 13 (the critical path). Claude Sonnet takes 14a (from Gemini Pro, 2026-10-13). GPT Astra Pro builds VoiceGen. Flash drafts announcer personas. Claude Opus writes the 15a art-direction briefs alongside 13-0/13-1.
+### Scope realignment assignments (SR-0 through SR-9)
+
+[scope_realignment.md](design/scope_realignment.md) §7 supplies the ownership and owner gates below. The owner assigned GPT to complete Opus's SR-0 draft in this task; other ownership is unchanged. The accepted pivots apply now; proposed commercial features and unresolved decisions remain subject to §9. [BUILD_PLAN.md](BUILD_PLAN.md#revised-milestone-gate-sequence-scope-realignment-4) gives the execution gates.
+
+| Slice | Author | Reviewer | Owner gate |
+| :-- | :-- | :-- | :-- |
+| **SR-0** scope spec, GAME_VISION v3.0, GEMINI, BUILD_PLAN, TEAM, progress | Claude Opus (draft) → GPT (owner-assigned completion) | Owner | **Read GAME_VISION v3.0** |
+| **SR-1a** event-framework `outcomes[]` | Claude Opus | GPT 6 Astra Pro | — |
+| **SR-1b** Fencing + Robbery narrative arcs; mine hustle numbers | Claude Opus → Flash | Claude Opus | Story sign-off |
+| **SR-1c** retire two screens + phone buttons; delete after parity | Claude Sonnet | GPT 6 Astra Pro | **Delete approval** |
+| **SR-2a/b** stance engine / `GameManager` + stance UI | Claude Opus / Claude Sonnet | GPT 6 Astra Pro (+ Math values) | Stance table sign-off |
+| **SR-3a** `ClutchResolver` + `BatterIntentKind.Clutch` + tilt/Math constants | **GPT 6 Astra Pro** | Claude Opus | **Clutch feels right** |
+| **SR-3b** clutch overlay + batting practice | Claude Sonnet | GPT 6 Astra Pro | Playtest |
+| **SR-4** Gate 2 screens (scope_realignment §5 rows 6-12) | Claude Sonnet | GPT 6 Astra Pro | Screenshot review |
+| **SR-5** Golden vertical slice (Gate 3) | Owner + AI art tools; Flash integration | Claude Opus | **Taste** |
+| **SR-6** `mods/` loader | Claude Sonnet | GPT 6 Astra Pro | — |
+| **SR-7** Tabloid feed | Claude Sonnet + Flash | Claude Opus | — |
+| **SR-8** Rap Sheet exporter | Claude Sonnet | GPT 6 Astra Pro | — |
+| **SR-9** six booths: persona framework, trigger catalog, scripts | Claude Opus → Flash | Claude Opus | **Approve taglines** |
+
+**Execution priority:** Claude Opus continues **13-1 on `p13/integration`**, reviewed by GPT 6 Astra Pro, then 13-2/13-3 and the v15-DDL-only freeze gate. Prepare Gate 2 from scope_realignment §5: SR-1, SR-2 and SR-4 with 15a/15b/15c; the owner chooses art direction. Phases 14 and 16 production pause until after Gate 4; SR-9 informs the six-persona scope when audio resumes. SR-3a/b clutch work must not block the neutral `MicroGame` demo. SR-5 is Gate 3; SR-6–SR-8 follow Gate 4. No model starts the next slice without its brief and assignment.
 
 ---
 

@@ -1,4 +1,4 @@
-# Dirt & Diamonds — Game Vision (v2)
+# Dirt & Diamonds — Game Vision (v3.0)
 
 **Status:** canonical. **v3.0, 2026-10-25**, owner-directed scope realignment ([design/scope_realignment.md](design/scope_realignment.md)): (1) the Markov `MicroGame` is the authoritative attended game and the arcade engine shrinks to an optional Clutch Moment; (2) daily needs and the hourly schedule become a **Weekly Lifestyle Stance**; (3) interactive hustles drop to **Narcotics and Texas Hold'em**, with Fencing and Robbery as Burner Phone events; (4) **6 announcer voices**, not 59. Where v2.x text below disagrees with this paragraph, this paragraph wins. v2.2 (2026-10-16) narrowed control, recorded in §3 and §5: **you play only your own player**, and taking over the team is deferred past 1.0 (owner, 2026-10-16). v2.1 (2026-10-13) made **attended games true arcade physics**. Otherwise it's v2 (2026-10-10), which replaced v1 (2026-10-09). This is the single source of truth for *what the game is*. If any other doc disagrees with it, this one wins, and the other doc is wrong and gets fixed. A change of direction is made **here first**, then flows to the specs.
 
@@ -35,8 +35,8 @@ When your career ends, a willing child can pick up the bat, and the family carri
 ## 3. Design pillars
 
 1. **The Pipeline.** Progression is strictly High School → College → the Draft → Pro. No minor leagues. Every rung is a real league with real rules, standings and playoffs.
-2. **Play it for real (v3.0, owner 2026-10-25).** Your team's games are played as a **broadcast at-bat sim**: the Markov `MicroGame` resolves every plate appearance from ratings, your approach and your read, pitch by pitch. In high-leverage at-bats an **optional Clutch Moment** (a short real-time timing duel on the arcade physics core, offense only) sets contact quality and feeds back into the same at-bat. There is no real-time fielding or baserunning. (Superseded v2.1 text follows for reference: real-time arcade physics for everything, 16-bit, owner 2026-10-13.) Bat contact, pitch and ball flight, fielding and baserunning are decided by physics, not by dice tables: your hands for your player's moments, AI hands on the same physics for everyone else. **Ratings shape the physics:** they set what your player *can* do (bat speed, pitch speed and break, reach, arm, foot speed), and your timing and aim decide what *does* happen. **You control only your own player** (owner, 2026-10-16): his at-bats, every pitch while he's on the mound if he's a pitcher, and his fielding chances. Baserunning is automatic for now. You can follow the entire game pitch by pitch, including family members playing in the same game, and skip ahead by pitch, at-bat, half-inning, inning, "my next moment" or to the final. (Taking over the whole team is deferred past 1.0.) Every team has its own ballpark or campus, and its real dimensions shape how it plays. Spec: [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md), under the Phase G umbrella [design/gameplay_core.md](design/gameplay_core.md). This is a **high priority**.
-3. **The Dirt.** Life pushes back. Needs decay, rent comes due, and the easy money is illegal. Crime and vice are real systems with real teeth: arrest, injury, suspension, permanent bans, death.
+2. **Play it for real (v3.0, owner 2026-10-25).** Your team's games use the broadcast at-bat sim: the Markov `MicroGame` resolves every plate appearance from ratings and intent. You control only your own player; team takeover remains outside 1.0. In high-leverage avatar at-bats an optional, offense-only **Clutch Moment** timing check supplies a capped, centered contact-quality tilt to the same chain. Real-time fielding, baserunning and full-game arcade physics are cancelled. Follow the game pitch by pitch or skip ahead; only revealed family relationships appear. Background games retain the calibrated macro sim. Governing spec: [design/scope_realignment.md](design/scope_realignment.md) §3.1; attribute contracts: [design/gameplay_core.md](design/gameplay_core.md) §1.
+3. **The Dirt.** Life pushes back. Your weekly stance handles biological needs automatically; stress rises, upkeep comes due, and the easy money is illegal. Crime and vice are real systems with real teeth: arrest, injury, suspension, permanent bans, death.
 4. **Every edge has a price.** Affairs, steroids and painkillers really do make you better, dramatically and immediately. Every one of them also has a cost that's real, that escalates, and that's different for each vice.
 5. **The Secret.** Lineage is a mystery you live inside: your hidden father, and the hidden children you may leave behind. The truth surfaces through play, not menus.
 6. **The Broadcast.** Baseball should *sound* like baseball. **Six deep announcer personas**, two per tier (HS, College, Pro), one booth per conference, with taglines and a large catalog of situational calls that react to recklessness, rivalry, scandal, streaks and dynasty.
@@ -170,11 +170,11 @@ Full design: [design/temptation_and_lineage.md](design/temptation_and_lineage.md
 - **Adults-only rewards.** Temptation and substance boosts require 18+ and College or above.
 - **Nothing sexual is explicit at any age.** It's always off-screen and implied.
 - **Never abortion.** Every pregnancy ends in a birth, and adoption is always offered.
-- **Secrecy.** Nothing in the UI hints at the father or a hidden child before the reveal. Dating pools silently exclude blood relatives.
+- **Secrecy.** Only `LineageQueries` reads `Biological_Parentage`. Nothing in the UI, phone, press or Tabloid Rumor Mill reveals or hints at the biological father or a hidden heir before their narrative unlock. Dating pools silently exclude blood relatives.
 - **Pre-1.0 saves are disposable.** Schema v14 is a clean break. From 1.0 on, every schema change ships a migration.
 - **English only at launch**, with all player-facing text in strings tables so localization stays possible.
 
-## 13. Built vs next (as of 2026-10-10)
+## 13. Built vs next (as of 2026-10-25)
 
 - **Built (Phases 0–12 and the post-12 arcs):**
   - database core, event bus, macro and micro baseball sims;
