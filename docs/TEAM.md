@@ -1,6 +1,6 @@
 # Dirt & Diamonds — Team Roster & Operating Model
 
-**Status:** owner-directed GPT-only availability, **2026-10-25**, until the owner changes it. All active assignments use **GPT 6 Astra**, **GPT 6 Sol** or **GPT 6.1 Sol**. Claude and Gemini models are unavailable because their token budgets are exhausted. Completed authorship and review history stays historical.
+**Status:** owner-directed GPT-primary staffing with limited Gemini Argon availability, **2026-10-25**, until the owner changes it. Default active assignments use **GPT 6 Astra**, **GPT 6 Sol** or **GPT 6.1 Sol**. Claude and previously assigned Gemini models remain unavailable. **Gemini Argon is available with a tight token budget**, reserved for optional, narrowly scoped review. Completed authorship and review history stays historical.
 
 **Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building, v3.0), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17 and Phase L), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Older docs name past authors ("Fable 5", "Opus 4.8", "Sonnet 5"); those are not roles. **This file is the only source of current roles.**
 
@@ -14,10 +14,12 @@
 | **GPT 6.1 Sol** | Integration lead, systems architect and core engineer | Former Opus assignments: Phase 13 core, schema/persistence, Phase L/S core, task briefs, integration gate, narrative direction, release QA; review of Astra-authored math/engine/tools | Approve its own implementation; owner-only actions |
 | **GPT 6 Astra** | Simulation, calibration and math owner; primary technical reviewer | Existing Astra assignments including SR-3a, R1-MATH, S-2, shared rating contracts and standalone tools; review of 6.1 Sol core and 6 Sol UI/content | Approve its own math or implementation; owner-only actions |
 | **GPT 6 Sol** | UI, presentation, feature and content engineer | Former Sonnet and Flash assignments: screens/theme, presentation runtime, narrative JSON, announcer scripts, seed data, art integration, mods and exporters | Unbriefed calibrated-core changes; approve its own content; owner-only actions |
+| **Gemini Argon** | Limited-budget review reserve | Optional architecture, schema/secrecy-boundary or disputed simulation/math reviews from a focused GPT-prepared packet | Routine implementation, content volume, broad repository exploration, required critical-path ownership or self-review |
+
 
 ### 1a. Current role succession (owner, 2026-10-25)
 
-**Apply this mapping to every outstanding assignment, reviewer, merge gate and next-step recommendation in older specs, task briefs, rules and skills.** It supersedes earlier model-availability tables and cross-family review requirements. Historical completed work, branch names and commit attribution are not renamed. The owner's GPT-only instruction does not resume paused slices or waive scope, test or owner gates.
+**Apply this mapping to every outstanding assignment, reviewer, merge gate and next-step recommendation in older specs, task briefs, rules and skills.** It supersedes earlier model-availability tables and cross-family review requirements. Historical completed work, branch names and commit attribution are not renamed. The owner's staffing updates do not resume paused slices or waive scope, test or owner gates.
 
 | Earlier assignment | Current assignee |
 | :-- | :-- |
@@ -31,7 +33,10 @@
 | Former Gemini Pro reviewer | **GPT 6 Astra**, or **GPT 6.1 Sol** for Astra-authored work |
 | Any other unavailable-model assignment not explicitly listed | **GPT 6.1 Sol** assigns it to one of these three models in the brief before work starts |
 
-**Review independence during GPT-only availability:** a separate session reviews the exact diff; no model approves its own authored part. 6.1 Sol implementation goes to Astra; Astra implementation/math goes to 6.1 Sol; 6 Sol UI/content goes to Astra or 6.1 Sol as listed below. For joint slices, each reviews only the other's part; if their changes cannot be reviewed separately, the remaining uninvolved model reviews the combined diff. This is same-family review under the owner's current availability constraint, not cross-family validation. 6.1 Sol performs the integration gate after review; its own code requires the assigned review first. Owner gates remain unchanged.
+**Review independence with GPT-primary staffing:** a separate session reviews the exact diff; no model approves its own authored part. 6.1 Sol implementation goes to Astra; Astra implementation/math goes to 6.1 Sol; 6 Sol UI/content goes to Astra or 6.1 Sol as listed below. For joint slices, each reviews only the other's part; if their changes cannot be reviewed separately, the remaining uninvolved model reviews the combined diff. Default GPT review is same-family review. An optional Argon review is cross-family only for the exact scope it examines; it does not validate unrelated work. 6.1 Sol performs the integration gate after review; its own code requires the assigned review first. Owner gates remain unchanged.
+
+
+**Argon token discipline:** GPT prepares a compact packet with the decision/question, constraints, exact diff or file ranges, and existing gate results. Give Argon one bounded question and request findings plus a verdict. Use it when an outside-model check is useful for an architectural boundary, schema freeze, secrecy invariant or unresolved math dispute. Routine reviews stay with the assigned GPT reviewer; Argon is supplemental and never a mandatory gate. If its budget is exhausted, the GPT assignments continue. No automatic repository-wide review, repeated debate or implementation work is assigned to Argon.
 
 ---
 
@@ -94,7 +99,7 @@
 
 ### Scope realignment assignments (SR-0 through SR-9)
 
-[scope_realignment.md](design/scope_realignment.md) supplies slice scope and owner gates; this roster supplies current authors and reviewers. SR-0 and other completed rows retain historical attribution. All outstanding work uses the GPT-only roster in section 1a. Paused/cancelled status and unresolved scope decisions are unchanged.
+[scope_realignment.md](design/scope_realignment.md) supplies slice scope and owner gates; this roster supplies current authors and reviewers. SR-0 and other completed rows retain historical attribution. All outstanding work uses the GPT-primary roster in section 1a. Paused/cancelled status and unresolved scope decisions are unchanged.
 
 | Slice | Author | Reviewer | Owner gate |
 | :-- | :-- | :-- | :-- |
@@ -143,7 +148,7 @@
 
 ## 5. Open decisions for the owner
 
-1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed the original roster. **Current lead: GPT 6.1 Sol** under the 2026-10-25 GPT-only directive.
+1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed the original roster. **Current lead: GPT 6.1 Sol** under the 2026-10-25 GPT-primary staffing directive.
 2. **Auto-committer policy (R-1 accepted):** no automatic commits/pushes to main or shared/integration branches. Disable it for those targets; any retained automation is restricted to an explicitly chosen personal scratch branch. Reviewed human-directed integration only. This records policy, not a claim that an external service has been disabled.
 3. ~~**Repo visibility.**~~ **Resolved 2026-10-10:** the repo is private.
 

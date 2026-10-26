@@ -2,7 +2,7 @@
 
 **Status:** active spec, 2026-10-25. Source: [architectural_refactoring_scope_alignment_directive.md](../architectural_refactoring_scope_alignment_directive.md) (the owner's directive; read it for the *why*). **Pivots 2.1-2.4 are accepted by the owner (2026-10-25) and recorded in [GAME_VISION](../GAME_VISION.md) v3.0.** Everything marked **PROPOSED** below (gate order, features, resolutions of conflicts) needs the owner's yes, listed in §9.
 
-**Current staffing (owner, 2026-10-25):** all outstanding authors, reviewers and merge gates use the GPT-only roster in [TEAM.md](../TEAM.md) section 1a: **GPT 6.1 Sol** core/integration, **GPT 6 Astra** math/sim/review, **GPT 6 Sol** UI/presentation/content. This replaces the original Opus/Sonnet/Flash assignments without changing scope, pauses or owner gates.
+**Current staffing (owner, 2026-10-25):** default outstanding authors, reviewers and merge gates use the GPT-primary roster in [TEAM.md](../TEAM.md) section 1a: **GPT 6.1 Sol** core/integration, **GPT 6 Astra** math/sim/review, **GPT 6 Sol** UI/presentation/content. Gemini Argon is an optional, limited-budget reviewer for focused packets, with no mandatory gate or implementation slice. This replaces the original Opus/Sonnet/Flash assignments without changing scope, pauses or owner gates.
 
 **Core constraint (directive §0):** the C# backend stays as it is: zero-GC loops, pooled SQLite statements, assembly isolation, Monte Carlo harnesses. Cuts land on the front end, on micromanagement and on risky asset pipelines. No change here touches `AtBatResolver` or the resolver guard.
 

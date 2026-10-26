@@ -2,7 +2,7 @@
 
 **What we're building:** [GAME_VISION.md](GAME_VISION.md) (v3.0, canonical). **Who does what:** [TEAM.md](TEAM.md) (owner-confirmed; GPT 6.1 Sol is integration lead). **Where we are:** [progress.md](progress.md). **Docs map:** [README.md](README.md).
 
-**Roles (owner, 2026-10-25): GPT-only availability.** [TEAM.md](TEAM.md) section 1a remaps every outstanding assignment: Opus to **GPT 6.1 Sol**, Sonnet/Flash to **GPT 6 Sol**, calibration/math and existing Astra work to **GPT 6 Astra**. Separate author/reviewer sessions remain required. No phase merges before its gates pass; scope-realignment pauses and owner gates are unchanged.
+**Roles (owner, 2026-10-25): GPT-primary staffing; limited Gemini Argon review reserve.** [TEAM.md](TEAM.md) section 1a remaps every outstanding assignment: Opus to **GPT 6.1 Sol**, Sonnet/Flash to **GPT 6 Sol**, calibration/math and existing Astra work to **GPT 6 Astra**. Gemini Argon is optional for bounded architecture/schema/secrecy/math review packets, not routine implementation or a required gate. Separate author/reviewer sessions remain required. No phase merges before its gates pass; scope-realignment pauses and owner gates are unchanged.
 
 > **Historical author names.** Shipped specs in `reference/` and `archive/` name an earlier model roster as their authors ("Fable 5", "Opus 4.8", "Sonnet 5"). Those are past authors, not current roles, and they're unrelated to **Claude Fable 5.1**, which joined in 2026-10 and authored the G-2 pitching design (the R-1 review is now GPT 6 Astra Pro's: [tasks/R-1_full_review_brief.md](tasks/R-1_full_review_brief.md)). Current roles live only in [TEAM.md](TEAM.md).
 
