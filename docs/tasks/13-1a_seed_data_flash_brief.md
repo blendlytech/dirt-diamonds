@@ -15,6 +15,7 @@
 2. **A home park name for every team** (`Teams.home_park`, used by announcer intros and the UI). G-7's venue catalog replaces these later.
 
 **Team ids follow Appendix A table order:** top to bottom, and left to right within a cell.
+
 - HS: North 101–106 (Crestwood, Lakeside, Fairview, Oak Ridge, Brookhaven, Cedar Grove), South 107–112 (Pinehurst, Westfield, Summit, Riverton, Granite Falls, Hillcrest).
 - College: 201–224 (Coastal 201–204 … Canyon 221–224).
 - Pro: 301–332 (Northeast 301–304 … Pacific 329–332).
@@ -49,6 +50,7 @@
 ## 5. Tests and gates (data only: no build needed)
 
 Write a one-off check script in your scratch area, not the repo, run it, and paste its output into the handoff. It must confirm:
+
 - Both files parse as JSON.
 - `schools.json` has 12 entries with ids exactly 101–112, unique abbreviations matching Appendix A for each id, and every required loader field present.
 - The 8 shipped entries are identical to `main`'s apart from `team_id`.
