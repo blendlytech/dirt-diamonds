@@ -19,3 +19,7 @@ Stress & Emotion Overlay
 High stress/toxicity from gritty events (e.g., police raids, blackmail) alters the Utility weights.
 
 High stress can override queued actions, forcing the entity to autonomously seek stress-relief actions (alcohol, arguments) regardless of temporal cost.
+
+## **Weekly Lifestyle Stance (GEMINI §1)**
+
+Utility-based AI with non-linear need decay remains internal. The player chooses a Weekly Lifestyle Stance (`CleanLiving`, `GrindMode`, `PartyLifestyle`, `LowProfile`); school, practice, work and upkeep resolve automatically. Player-filled `DaySchedule` and daily biological chore-clicking are retired. Week advance stops for stress spikes, depleted funds, gritty events or game days.
