@@ -123,4 +123,4 @@ The reviewing AI model must design technical specifications to integrate the fol
 >
 > 1. Audit the current repository structure against **Section 2 (Mandatory Architectural Pivots)** and list every C# service, UI controller, SQLite table, and tool script that needs to be modified, frozen, or deprecated.
 > 2. Write the concrete **Technical Implementation Plan** for converting the daily `LifeSim`/`DaySchedule` into the **Weekly Lifestyle Stance** system and folding **Fencing/Robbery** into `GrittyEventJson` Burner Phone narratives.
-> 3. Detail the exact file-by-file roadmap to deliver **Gate 2 (The 15-Minute Steam Next Fest Loop)** and **Section 4 (Commercial Features)** with minimal regression risk to existing unit and Monte Carlo tests.
+> 3. Detail the exact file-by-file roadmap to deliver **Gate 2 (The 15-Minute Steam Next Fest Loop)** and **Section 4 (Commercial Features)** with minimal regression risk to existing unit and Monte Carlo tests.code
