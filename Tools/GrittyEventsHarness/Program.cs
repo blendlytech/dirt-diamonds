@@ -4495,20 +4495,20 @@ internal static class Program
             ThrowsAny(() => catalog.ValidateAgainstRoster(orphan)));
 
         // Loader rejections — each malformed doc is loud and team-labelled. Every
-        // fixture is otherwise valid (image_path included) so the assertion
+        // fixture is otherwise valid (images object included) so the assertion
         // isolates the one intended defect.
         Check("loader rejects a bad hex", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#GG0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "Red", "hex": "#GG0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("loader rejects a missing colors object", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("loader rejects a missing school_name", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
-        Check("loader rejects a missing image_path", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("loader rejects a missing images.field", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png" }, "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("loader rejects a non-integer team_id", SchoolParseThrows(
-            """{ "schools": [ { "team_id": "one", "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": "one", "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("catalog ctor rejects duplicate team_ids", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A", "mascot": "A", "image_path": "res://a.png", "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" }, { "team_id": 1, "abbreviation": "BBB", "school_name": "B", "mascot": "B", "image_path": "res://b.png", "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A", "mascot": "A", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" }, { "team_id": 1, "abbreviation": "BBB", "school_name": "B", "mascot": "B", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
     }
 
     private static TeamRow HsTeam(int teamId, string abbreviation) => new()
