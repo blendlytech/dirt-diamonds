@@ -6,6 +6,11 @@ description: Tests the baseball simulation engine's statistical accuracy in isol
 
 **Purpose:** Tests the baseball simulation engine's statistical accuracy in isolation. Mandatory after **every** change under `Assets/Simulation/`: `AtBatResolver.cs`, PED/tier weights, rosters, schedules, innings (GEMINI.md §9).
 
+> **Arcade / Clutch & Shared Stack Rules (GEMINI.md §9 / §11):**
+> - Any change under `Assets/Simulation/Arcade/` also runs `dotnet run --project Tools/ArcadeHarness -c Release`.
+> - Clutch integration also runs `run_monte_carlo_batch` and must keep neutral macro/micro output byte-identical.
+> - A change to the shared `EffectiveRatings` stack runs both `MonteCarloHarness` and `ArcadeHarness`.
+
 > **Phase 13 changes (league restructure, `docs/design/league_restructure.md` §11 / §15), applied as the slices land:**
 >
 > - Tiers collapse to **HS / College / Pro**. Per-tier band checks reuse the shipped HS, College and MLB rows; **runs are banded per 9 innings** (HS plays 7).
