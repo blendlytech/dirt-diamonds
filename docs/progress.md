@@ -4,9 +4,9 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ---
 
-## Current status (2026-10-25): GAME_VISION v3.0; GPT-primary staffing; limited Argon review
+## Current status (2026-11-19): GAME_VISION v3.0; Claude/Gemini roster; branches reconciled on `p13/integration`
 
-**2026-10-25:** the four owner-accepted pivots are canonical in **GAME_VISION v3.0** and [design/scope_realignment.md](design/scope_realignment.md): authoritative attended `MicroGame` with optional offense-only Clutch Moment; Weekly Lifestyle Stance instead of manual daily needs/scheduling; Narcotics and Texas Hold'em interactive, Fencing/Robbery as Burner Phone branches; six conference announcer personas (two per tier). **SR-0 documentation alignment is complete; implementation is pending.** Revised gate refinements/commercial features remain proposed where the spec marks them so. Next: **13-1 by GPT 6.1 Sol on `p13/integration`**, GPT 6 Astra review, and Gate 2 preparation per scope_realignment §5.
+**2026-10-25:** the four owner-accepted pivots are canonical in **GAME_VISION v3.0** and [design/scope_realignment.md](design/scope_realignment.md): authoritative attended `MicroGame` with optional offense-only Clutch Moment; Weekly Lifestyle Stance instead of manual daily needs/scheduling; Narcotics and Texas Hold'em interactive, Fencing/Robbery as Burner Phone branches; six conference announcer personas (two per tier). **SR-0 documentation alignment is complete; implementation is pending.** Revised gate refinements/commercial features remain proposed where the spec marks them so. **2026-11-19:** 13-1 and 13-2 are merged on `p13/integration`; the v3.0 docs were forward-ported onto it (the [full-project scan](review/full_project_scan_opus_handoff.md) found the work split across branches). Next: Wave 1 doc/rule repair (Neon Orchestrator + Hydrogen), then finish 13-3 (Argon Math check + Opus 20× replay) and 13-4, then R1-SAVE-1/2, then Gate 2 briefs.
 
 **Also current (2026-10-10):** all R-1 recommendations are accepted. Canonical specs and [BUILD_PLAN execution order](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) include eight repair briefs; runtime fixes are pending their owners and Math gates. 13-0 is merged; Phase 13 continues with 13-1 on `p13/integration`.
 
@@ -14,11 +14,11 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 | Phase | Spec | State | Very next action (owner) |
 | :-- | :-- | :-- | :-- |
-| **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | **13-0 done** (merged 2026-10-10) | **13-1** schema v14 + world-gen (GPT 6.1 Sol) on **`p13/integration`**. 13-1…13-3 merge there after GPT 6 Astra review; `main` stays green on v13 until 13-3 records the new Pro guard (spec §15). |
-| **G Gameplay Core** | [design/scope_realignment.md](design/scope_realignment.md) §3.1 | Optional clutch/timing core; `MicroGame` authoritative. G-2/G-3/G-6 cancelled; G-5/G-9 merged into SR-3b; G-7/G-8 paused beyond HS. | **SR-3a** `ClutchResolver` + Math: GPT 6 Astra, GPT 6.1 Sol reviews; **SR-3b** overlay/practice: GPT 6 Sol, GPT 6 Astra reviews. Optional; does not block Gate 2. |
+| **13 League Restructure** (critical path) | [design/league_restructure.md](design/league_restructure.md) | **13-0, 13-1, 13-2 merged** on `p13/integration`; 13-3 built on `p13/13-3-opus` (awaiting Math M1–M5, Pro R/9 band, 20× replay, guard sanction); 13-4 core on `p13/13-4-gpt` (awaiting attended bridge, bracket UI, review) | **13-3** finish (Gemini 4 Argon Math, Claude Opus 5.5 merge) → **13-4** (Opus core + Sonnet UI). `main` stays on v13 until 13-3 records the new Pro guard (spec §15). |
+| **G Gameplay Core** | [design/scope_realignment.md](design/scope_realignment.md) §3.1 | Optional clutch/timing core; `MicroGame` authoritative. G-2/G-3/G-6 cancelled; G-5/G-9 merged into SR-3b; G-7/G-8 paused beyond HS. | **SR-3a** `ClutchResolver` + Math: Gemini 4 Argon, Claude Opus 5.5 reviews; **SR-3b** overlay/practice: Claude Sonnet 5.5, Gemini 4 Argon reviews. Optional; does not block Gate 2. |
 | **L Lineage, Temptation & Vice** | [design/temptation_and_lineage.md](design/temptation_and_lineage.md), [design/substances_and_addiction.md](design/substances_and_addiction.md) | Design complete; **L-0 done** | **L-1** after 13-1 (schema v15 + identity + legends + poverty). |
-| **14 Voice & Broadcast Audio** | [design/scope_realignment.md](design/scope_realignment.md) §3.4 | Six conference personas, ~900 lines each; no per-team generation | **Paused for Gate 2**, resumes after Gate 4; SR-9 GPT 6.1 Sol → GPT 6 Sol, owner tagline approval. |
-| **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md), scope_realignment §5 | Gate 2 limited to Burner Phone, dashboard/standings, broadcast at-bat view and stance UI | **15a** owner art-direction pick → 15b/15c + **SR-4** (GPT 6 Sol, GPT 6 Astra review); **SR-5** golden art at Gate 3 before batch production. |
+| **14 Voice & Broadcast Audio** | [design/scope_realignment.md](design/scope_realignment.md) §3.4 | Six conference personas, ~900 lines each; no per-team generation | **Paused for Gate 2**, resumes after Gate 4; SR-9 Claude Opus 5.5 → Claude Sonnet 5.5, owner tagline approval. |
+| **15 Visual Redesign** | [design/visual_redesign.md](design/visual_redesign.md), scope_realignment §5 | Gate 2 limited to Burner Phone, dashboard/standings, broadcast at-bat view and stance UI | **15a** owner art-direction pick → 15b/15c + **SR-4** (Claude Sonnet 5.5, Gemini 4 Argon review); **SR-5** golden art at Gate 3 before batch production. |
 | **16 Cutscenes** | [design/cutscenes_motion_comic.md](design/cutscenes_motion_comic.md) | Production paused for Gate 2 | Resume after Gate 4; captions/text supply the demo backstory. |
 | **17 Steam Commercial Release** | [design/steam_commercial_release.md](design/steam_commercial_release.md) | Design complete | Early owner actions: Steamworks app, trademark screen, Coming Soon timing. |
 
@@ -27,8 +27,8 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 - **2026-10-09 (historical; voice count superseded by v3.0):** 56 unique announcers plus 3 HS radio voices; in-engine motion-comic cutscenes; schema v14 is a clean break for old saves; a complete visual redesign is allowed.
 - **2026-10-10:**
   - Voice is **broadcasters only**.
-  - **Skill band (O1):** player skill is worth about the 40-vs-70 rating gap (±.100 OPS around ratings), capped, with a blind or average player at the ratings line, for pitching **and** batting. Batting gets re-tuned (G-8, GPT 6 Astra).
-  - **GPT 6 Astra** is a full senior engineer for gameplay models (plentiful subscription usage, so prefer it over metered credit for heavy work).
+  - **Skill band (O1):** player skill is worth about the 40-vs-70 rating gap (±.100 OPS around ratings), capped, with a blind or average player at the ratings line, for pitching **and** batting. Batting gets re-tuned (G-8, Gemini 4 Argon).
+  - **Gemini 4 Argon** is a full senior engineer for gameplay models (plentiful subscription usage, so prefer it over metered credit for heavy work).
   - **Never abortion**, and adoption is always offered.
   - The GOAT-father lineage, with the first text on the first Pro contract and the reveal on a World Championship or at career end.
   - Freshman start and guaranteed poverty. No mentors.
@@ -43,7 +43,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
   - Phase 13 lands 13-1…13-3 on an integration branch `p13/integration` and merges to `main` once the full MC suite is green with the new Pro guard.
 - **2026-10-13:** attended games are **true arcade physics**: real-time bat contact, ball flight and fielding decided by physics and skill. Ratings shape the physics. You control your player, with a take-over-the-team toggle. Fielding is assisted. 16-bit art. Watch the whole game, with skips. Recorded in GAME_VISION v2.1 §3/§5. Spec: [design/arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md).
 - **2026-10-16:** **you control only your own player** in attended games: his at-bats, every pitch while he's on the mound (if a pitcher) and his fielding chances; baserunning is automatic for 1.0. You can follow the whole game pitch by pitch, including known family members in the same game (never hidden kin). **Take over the team (G-6) is deferred past 1.0.**
-  - **Roster (supersedes 2026-10-13):** default work uses **GPT 6 Astra, GPT 6 Sol and GPT 6.1 Sol**; **Gemini Argon** is also available with a tight token budget for optional, focused review packets. It owns no routine implementation or mandatory gate. TEAM section 1a remaps all outstanding briefs/specs. 6.1 Sol leads core/integration; Astra owns math/sim review; 6 Sol owns UI/presentation/content. Separate-session author/reviewer checks replace the former cross-family requirement; owner gates and phase pauses stay in force.
+- **2026-11-19 roster (supersedes 2026-10-25 GPT-primary):** Claude Opus 5.5 leads core/integration; Gemini 4 Argon owns math/calibration and reviews Opus; Claude Sonnet 5.5 owns UI/presentation/content; Gemini 4 Neon reviews Sonnet UI/content; Gemini Hydrogen does mechanical waves under the Neon Orchestrator; Argon Orchestrator runs Gate 2 content waves. GPT models are no longer assigned. TEAM §1a remaps all outstanding work. Reconcile everything onto `p13/integration`.
 
 **Open for the owner:**
 
@@ -73,10 +73,10 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Very next steps
 
-1. **GPT 6.1 Sol: Slice 13-1 on `p13/integration`**, schema v14 + world-gen + `Player_Fielding`; reviewer **GPT 6 Astra**. Follow its existing brief/preconditions and 13-2/13-3 before the revised Gate 1 v15-DDL-only freeze. Pre-1.0 saves remain disposable.
-2. **Prepare Gate 2** from [scope_realignment §5](design/scope_realignment.md#5-gate-2-file-by-file-roadmap): GPT 6.1 Sol owns SR-1a/2a and directs SR-1b content, GPT 6 Sol implements SR-1b/1c/2b/4, GPT 6 Astra reviews as TEAM §2 specifies. No implementation is claimed by SR-0.
+1. **Claude Opus 5.5: Slice 13-1 on `p13/integration`**, schema v14 + world-gen + `Player_Fielding`; reviewer **Gemini 4 Argon**. Follow its existing brief/preconditions and 13-2/13-3 before the revised Gate 1 v15-DDL-only freeze. Pre-1.0 saves remain disposable.
+2. **Prepare Gate 2** from [scope_realignment §5](design/scope_realignment.md#5-gate-2-file-by-file-roadmap): Claude Opus 5.5 owns SR-1a/2a and directs SR-1b content, Claude Sonnet 5.5 implements SR-1b/1c/2b/4, Gemini 4 Argon reviews as TEAM §2 specifies. No implementation is claimed by SR-0.
 3. **Owner: read GAME_VISION v3.0 and choose 15a art direction**; unresolved scope_realignment §9 decisions remain open. Gate 2 targets the 15-minute HS loop, then SR-5 golden art at Gate 3 and the external HS playtest at Gate 4. No full arcade or mass venue/art production resumes.
-4. **GPT 6 Astra: SR-3a** clutch resolver/Math when briefed, GPT 6.1 Sol review; **GPT 6 Sol: SR-3b** overlay/practice, GPT 6 Astra review. Preserve neutral macro/micro byte identity; scope the recorded cross-platform arcade replay-hash mismatch before claiming cross-platform determinism. Phases 14/16 production stay paused until after Gate 4.
+4. **Gemini 4 Argon: SR-3a** clutch resolver/Math when briefed, Claude Opus 5.5 review; **Claude Sonnet 5.5: SR-3b** overlay/practice, Gemini 4 Argon review. Preserve neutral macro/micro byte identity; scope the recorded cross-platform arcade replay-hash mismatch before claiming cross-platform determinism. Phases 14/16 production stay paused until after Gate 4.
 
 ---
 
