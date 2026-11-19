@@ -262,5 +262,4 @@ All of the above move via pure JSON edits + a harness re-run — no sim touch, n
 ## 10. Model handoff
 
 - **Stage 2 → Sonnet 5:** build against this contract — `getting_started_events.json` (§4/§5), the one `getting_started` contact (§3.2), the two count-literal bumps + `RunTutorialArcChecks` + the merged-library integrity run (§9.1), the skill/checklist/progress.md docs, all gates (§9.2). Direct precedent: the `hs_onboarding_events.json` batch (this is a strictly smaller, engine-free version of it).
-- **Stage 3 → Fable 5:** standing review — the welcome-first day-2 ordering and the §7.2 alternation holding in the full-folder World check, that the shipped curated onboarding check (`hs_first_day@2`) stays green, that no tutorial event can reach a non-tier-0 or veteran avatar, content vs. this contract (≥3 choices, flag closure §6.2, self-contained batch §6.3); independent gate re-run incl. MC bit-identity; sign-off + memory.
-```
+- **Stage 3 → Fable 5:** standing review — the welcome-first day-2 ordering and the §7.2 alternation holding in the full-folder World check, that the shipped curated onboarding check (`hs_first_day@2`) stays green, that no tutorial event can reach a non-tier-0 or veteran avatar, content vs. this contract (≥3 choices, flag closure §6.2, self-contained batch §6.3); independent gate re-run incl. MC bit-identity; sign-off + memory.

@@ -4,7 +4,7 @@
 
 > **Planned changes (2026-10-09):** The visual identity (§3) and portrait house style (§6) are **superseded** by [visual_redesign.md](../design/visual_redesign.md) (complete redesign). **Still in force:** the messages-as-narrative architecture (§2, §4) and the scouting grade curve (§5). Messages stay text (voice notes were cut on 2026-10-10); cutscenes in [cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md).
 
-**Owner of this doc:** Opus 4.8 (design only — NO code). Phase 10 is the first phase whose
+**Owner of this doc:** Opus 5.5 (design only — NO code). Phase 10 is the first phase whose
 center of gravity is UI, so the delegation inverts the usual split: **Sonnet 5 owns the
 implementation volume**, Fable 5 owns the shell wiring + review, and Opus owns exactly the
 two decisions where getting it *wrong* is worse than getting it *slow* — the **narrative-seam
@@ -447,4 +447,3 @@ entry carries, since AdvanceDay is UI-button-only).
 - `SchemaDefinitions.sql` `Game_Logs` (the narrative-log substrate — reused, not altered).
 - `docs/reference/development_decline_curves.md` (§9d `DevelopmentManager.LastRun` — the development
   card's read surface).
-```

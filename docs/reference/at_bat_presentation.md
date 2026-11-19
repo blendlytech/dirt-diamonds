@@ -1,8 +1,26 @@
 # At-Bat Presentation — Making the Micro-Sim Read as Baseball (Phase 12d)
 
-> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** avatar-facing announcer calls use roles, never names or pronouns; the Trailblazer adds gated calls ([temptation](../design/temptation_and_lineage.md) §8.4).
+> **Reference (shipped system), superseded for attended games by Phase G.** This doc describes the Phase 12d code as built: `AtBatView`'s beat sequencer over the dice-table micro-sim, batter only. `AtBatView.cs` and `BaseballDashboard.cs` cite its §3 and §5, so the body below is kept as written. Its "Status" lines and author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md).
 
-> **Planned changes (2026-10-09):** Phase 13 makes regulation innings per tier (HS 7). Phase 14 adds `BroadcastBooth` on this beat sequencer: announcer calls, with `PaReveal` held up to 4 s for the call ([voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md) §7). Phase 16 adds big-play cutscenes as one more beat ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md)). The layout is redesigned in Phase 15.
+> **The end state ([GAME_VISION.md](../GAME_VISION.md) v2.2, §3 pillar 2 and §5).** Every game your team plays is a **real-time arcade ballgame on true physics**, 16-bit, called live by your announcer ([arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)). You control **only your own player**: you **bat** (time the swing, place the contact cursor), you **pitch** every pitch while your player is on the mound (pick, aim, release meter, aftertouch), and you **field** your player's chances (assisted). Baserunning is automatic. Everyone else is AI on the same physics, and you watch or skip the rest of the game. `AtBatView` and this doc survive only as the **Classic sim** fallback (arcade §11) and move to `archive/` when G-4 ships. Still true on both paths: avatar-facing announcer calls use roles, never names or pronouns, and the Trailblazer adds gated calls ([temptation](../design/temptation_and_lineage.md) §8.4).
+
+**What happens to each part of this doc in the arcade game:**
+
+| This doc | In the arcade game |
+| :-- | :-- |
+| §1 rule 1: the UI is read-only over sim state | **Carries over** unchanged (arcade §2). |
+| §1 rule 2: the calibrated core doesn't move | **Carries over.** The macro sim and `MicroGame` stay byte-exact; the arcade engine has its own gate, `ArcadeHarness` (arcade §9). |
+| §1 rule 3: the sim races, the UI paces | **Replaced.** Sim and UI share one clock; holds happen in dead-ball time and stop the tick (arcade §7.7). |
+| §1 non-goals: batter only, typographic, no character art | **Reversed.** You bat, pitch and field on a 16-bit sprite field (arcade §5, §10). |
+| §2 and §4: the `PitchResult` / `OnPitchResolved` seam | **Classic only.** The arcade engine emits its own beats from physics (arcade §7.6). |
+| §3: the beat model | The beat names (`PitchReveal`, `PaReveal`) **carry over** as the booth and cutscene vocabulary. The blocking `PlayerIntentBridge` handshake and queue draining don't. |
+| §3: input gating | **Carries over** as per-role input windows (arcade §7.7). |
+| §5.1 reveal table, §5.3 timing grade | **Carry over**, sourced from physics (`PitchCall`, `ContactResult` timing, exit velocity, launch angle) and **extended to pitching and fielding** (arcade §7.7). |
+| §5.2 count / bases / score tick | **Carries over** in the 15b scorebug, landing on the reveal. |
+| §5.4 PA reveal | **Carries over**, scaled by `PlayDetail` (distance, diving catch, double play, walk-off). |
+| §5.5 broadcast play-log | **Carries over** (arcade §7.4). |
+| §5.6 fast-forward | **Replaced** by play speed and the skip bar (arcade §7.1). |
+| §6–§10: slices, verification, model split | Historical: 12d shipped. |
 
 **Owner of this doc:** Opus 4.8 (presentation architecture + the sim seam — NO code). Per the standing
 Phase-12 split this is the pending Opus pass 12a/12b/12c flagged (`surface_the_sim.md` §8 names 12d

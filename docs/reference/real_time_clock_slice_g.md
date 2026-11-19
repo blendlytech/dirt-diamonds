@@ -4,7 +4,7 @@
 
 > **Planned changes (2026-10-09):** Cutscenes soft-pause the clock exactly like hustle sessions ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §3). Weekly game days follow the new tier calendars ([league_restructure.md](../design/league_restructure.md) §3).
 
-**Owner of this doc:** Opus 4.8 (architecture/design only — NO code). Per the standing roadmap
+**Owner of this doc:** Opus 5.5 (architecture/design only — NO code). Per the standing roadmap
 split, Opus owes this design *before* any build. Slice G is flagged in
 [game-improvements-roadmap] / `docs/progress.md` as **"architecturally significant: the sim is
 day-tick; must decide cosmetic intra-day clock vs. continuous simulation before any build."** This
@@ -99,7 +99,7 @@ macro sims or the gritty poller work; no SceneTree pause.
 | Need | Live seam | New surface? |
 | :--- | :-------- | :----------- |
 | Advance one day | `TimeManager.AdvanceDay()` (`TimeManager.cs:64`) | **none** — called unchanged |
-| "May I advance right now?" predicate | today it's **private** in `BaseballDashboard.RefreshDayControlsEnabled` (`:291`) — `_gameTask != null \|\| _awaitingPendingGame \|\| _refreshAfterDayTick \|\| GrittyEventChoices.HasPendingChoice \|\| Career.HasPendingSuccessionChoice` | **promote to a public `GameManager` predicate** (§4) so the driver and the dashboard share ONE definition |
+| "May I advance right now?" predicate | today it's **private** in `BaseballDashboard.RefreshDayControlsEnabled` (`:291`) — `_gameTask != null &#124;&#124; _awaitingPendingGame &#124;&#124; _refreshAfterDayTick &#124;&#124; GrittyEventChoices.HasPendingChoice &#124;&#124; Career.HasPendingSuccessionChoice` | **promote to a public `GameManager` predicate** (§4) so the driver and the dashboard share ONE definition |
 | Day/season readout | `GlobalState.CurrentDay/SeasonYear/DayOfSeason`; `GameCalendar` for weekday/date | none |
 | Human date string | `BurnerPhone.RefreshClock` (`:545`) already renders "TUE APR 14" | extended with time-of-day (§5) |
 | Frame delta | Godot `_Process(double delta)` | the driver's own `_Process` |

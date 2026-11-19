@@ -15,6 +15,7 @@
 2. **A home park name for every team** (`Teams.home_park`, used by announcer intros and the UI). G-7's venue catalog replaces these later.
 
 **Team ids follow Appendix A table order:** top to bottom, and left to right within a cell.
+
 - HS: North 101–106 (Crestwood, Lakeside, Fairview, Oak Ridge, Brookhaven, Cedar Grove), South 107–112 (Pinehurst, Westfield, Summit, Riverton, Granite Falls, Hillcrest).
 - College: 201–224 (Coastal 201–204 … Canyon 221–224).
 - Pro: 301–332 (Northeast 301–304 … Pacific 329–332).
@@ -22,7 +23,7 @@
 ## 2. Hard constraints
 
 - **Allowed paths:** `Assets/Data/Schools/schools.json`, the new `Assets/Data/League/home_parks.json`, and one line in `docs/progress.md`. Everything else is read-only. No C#, no `.tscn`, no images.
-- **Fictional names only.** No real stadium or ballpark names or close echoes (e.g. Fenway, Wrigley, Yankee, Dodger, Camden, Coors, Busch, Comerica, Petco, Oracle, Rose Bowl), no corporate or sponsor names (no "<Brand> Field"), no real people's names. City names are fine; a city + nickname pairing must not match a real pro or college team.
+- **Fictional names only.** No real stadium or ballpark names or close echoes (e.g. Fenway, Wrigley, Yankee, Dodger, Camden, Coors, Busch, Comerica, Petco, Oracle, Rose Bowl), no corporate or sponsor names (no "`<Brand>` Field"), no real people's names. City names are fine; a city + nickname pairing must not match a real pro or college team.
 - **Don't rename any team, mascot or abbreviation.** Appendix A is the source; renames are the owner's call (team-names gate).
 - **Content lines:** clean, all-ages copy. Nothing about lineage, the father, crime or vice in school flavor text.
 
@@ -42,13 +43,14 @@
    - Update the `"//"` comment: 12 HS teams, ids 101–112, North/South conferences.
 2. **`Assets/Data/League/home_parks.json`**: a `"//"` contract comment plus `"parks"`, an array of 68 objects `{ "team_id", "abbreviation", "home_park" }` in id order.
    - HS: a school field (e.g. "Crestwood High Field").
-   - College: a campus park (e.g. "<Name> Stadium", "<Name> Field").
+   - College: a campus park (e.g. "`<Name>` Stadium", "`<Name>` Field").
    - Pro: an original ballpark name.
    - Unique names, 40 characters max, plain text (no emoji).
 
 ## 5. Tests and gates (data only: no build needed)
 
 Write a one-off check script in your scratch area, not the repo, run it, and paste its output into the handoff. It must confirm:
+
 - Both files parse as JSON.
 - `schools.json` has 12 entries with ids exactly 101–112, unique abbreviations matching Appendix A for each id, and every required loader field present.
 - The 8 shipped entries are identical to `main`'s apart from `team_id`.

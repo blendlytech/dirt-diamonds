@@ -4,7 +4,7 @@
 **Status:** design complete 2026-10-09; **scope cut 2026-10-10** (below); no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §5 and §7.
 
 > **2026-10-10 owner directive: voice is for broadcasters only.** ElevenLabs voice is restricted to `BroadcastBooth` and the announcers. There are **no** phone voice notes, **no** cutscene voice-over and **no** character dialogue; those stay text (bubbles, captions, subtitles). This doc has been amended throughout: §8 is removed, slice 14e is cut, and the `Voice` bus and `Dialogue` channel are gone. Cutscenes may still use a **broadcaster call** as their audio bed (big plays, Draft Night, championships).
-**Builds on:** [ui_audio_slice_d.md](../reference/ui_audio_slice_d.md) (the shipped `UiSfx` autoload, `SFX` bus, `user://settings.cfg` volume) and [at_bat_presentation.md](../reference/at_bat_presentation.md) (the beat sequencer the announcer rides on). Feeds [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (broadcaster calls as cutscene audio beds).
+**Builds on:** [ui_audio_slice_d.md](../reference/ui_audio_slice_d.md) (the shipped `UiSfx` autoload, `SFX` bus, `user://settings.cfg` volume) and the attended game's beats: from Phase G, the arcade engine's ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §7.6–§7.7); in the Classic sim, the shipped [at_bat_presentation.md](../reference/at_bat_presentation.md) sequencer. Feeds [cutscenes_motion_comic.md](cutscenes_motion_comic.md) (broadcaster calls as cutscene audio beds).
 
 ---
 
@@ -180,7 +180,7 @@ Each pool voice records ~70 generic calls plus **24 school stingers** (12 full n
 
 ## 6. Clip categories
 
-Categories map **only to signals the at-bat sequencer actually emits**: PA outcome, pitch reveal, game start/end, inning change, score state. A category with no real signal is cut, not faked. The implementer confirms each row against the beat DTOs in slice 14d.
+Categories map **only to signals the attended game actually emits**: PA outcome, pitch reveal, game start/end, inning change, score state. A category with no real signal is cut, not faked. The implementer confirms each row against the beat DTOs in slice 14d.
 
 | Category | Trigger | Pro | College |
 | :-- | :-- | :-: | :-: |
@@ -217,13 +217,13 @@ Categories map **only to signals the at-bat sequencer actually emits**: PA outco
 
 ## 7. `BroadcastBooth` — the in-game call logic
 
-`Assets/UI/Broadcast/BroadcastBooth.cs` is a child of the at-bat view (presentation layer).
+`Assets/UI/Broadcast/BroadcastBooth.cs` is a child of the attended-game view (presentation layer): the arcade scene from G-5, `AtBatView` in the Classic sim.
 
-1. **Input:** the at-bat beat sequencer's beats (`PitchReveal`, `PaReveal`, game start, half-inning change, game end) plus a game-context DTO (score, inning, outs, runners, which side is "ours"). **Never** the sim thread directly. *From Phase G, the arcade engine emits these same beats, plus an additive `PlayDetail` (exit velocity, distance, diving catch, double play, assist, walk-off) that new call categories may use. The booth is silent during skips ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §7.6).*
+1. **Input:** the attended game's beats (`PitchReveal`, `PaReveal`, game start, half-inning change, game end) plus a game-context DTO (score, inning, outs, runners, which side is "ours"). **Never** the sim thread directly. *From Phase G, the arcade engine emits these same beats, plus an additive `PlayDetail` (exit velocity, distance, diving catch, double play, assist, walk-off) that new call categories may use. The booth is silent during skips ([arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §7.6).*
 2. **Category resolution:** the most specific category wins (`grand_slam` beats `home_run` beats `extra_base`). Context overlays (`lead_change`, `walk_off`) take priority over the base outcome when both apply.
 3. **Density:** big plays (★) always play. Routine categories play with a probability (Math-owned knobs, starting values: `routine_out` 0.25, `single` 0.7, `walk` 0.4, `color` once per 3–5 PAs when nothing else is playing). At least 1.5 s between routine calls.
 4. **Variety:** weighted pick among the category's variants, excluding the last `min(3, n−1)` played (a per-category ring buffer). The signature tagline variant gets weight 2.
-5. **Pacing:** the sequencer holds the next `AwaitingInput` until a `PaReveal` call finishes or 4 s pass, whichever comes first. **Fast-forward** mode plays big plays only. With Announcer off, the booth is silent and adds no delay.
+5. **Pacing:** the game holds the next pitch until a `PaReveal` call finishes or 4 s pass, whichever comes first. In the arcade game that's a dead-ball hold before the pitcher's next set (arcade §7.7); in Classic, the next `AwaitingInput`. **Fast-forward** mode plays big plays only. With Announcer off, the booth is silent and adds no delay.
 6. **Big plays → cutscene:** a ★ call raises `BigPlay(kind, contextDto, callClipId)` to the `CutsceneDirector` (Phase 16). The call clip becomes the cutscene's audio bed, so the voice and the animation land together.
 
 ### 7.5 Around the League highlights
