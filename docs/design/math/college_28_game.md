@@ -2,7 +2,7 @@
 
 **Author:** GPT 6 Astra Pro (Math). **Reviewer:** Claude Opus 5.5 — approved with required changes R1–R3; edited-section re-check pending. **Status:** revised author proposal, not calibrated or finally approved. Rebased 2026-10-18 onto CS-0 `c4ef17e6bc0d08047ba8dc2f998a7b59e369bea9`, on `p13/CS-M-gpt`. Review record: `808b8ed`, `docs/tasks/CS-M_college_math.md` §9 on `p13/CS-M-review-opus` (not merged into this author branch). CS-0 merge/reconciliation remains a prerequisite; no implementation or 13-3 work is included.
 
-Authority: [CS-M brief](../../tasks/CS-M_college_math.md), [league spec](../league_restructure.md) §§3, 3.1, 6, 8.2, 11.2, 16-I6–I8; [R1-MATH contract](../../tasks/R1-MATH_gameplay_contracts.md). Settled calendar, pairings, no-repeat starter rule and championship reveal safety remain unchanged. Every proposed number or statistical acceptance criterion below awaits Opus review and the named implementation harness. Analytic consequences are distinguished from measured results.
+Authority: [CS-M brief](../../archive/CS-M_college_math.md), [league spec](../league_restructure.md) §§3, 3.1, 6, 8.2, 11.2, 16-I6–I8; [R1-MATH contract](../../tasks/R1-MATH_gameplay_contracts.md). Settled calendar, pairings, no-repeat starter rule and championship reveal safety remain unchanged. Every proposed number or statistical acceptance criterion below awaits Opus review and the named implementation harness. Analytic consequences are distinguished from measured results.
 
 ## 1. Source baseline and rate targets
 

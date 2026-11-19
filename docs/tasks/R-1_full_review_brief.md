@@ -32,7 +32,7 @@
 2. [GAME_VISION.md](../GAME_VISION.md) v2.1 → [BUILD_PLAN.md](../BUILD_PLAN.md) → [TEAM.md](../TEAM.md) → [progress.md](../progress.md).
 3. `GEMINI.md` (the binding directives; `CLAUDE.md` imports it) and `.agents/rules/*.md`, `.agents/skills/*/SKILL.md`.
 4. Active specs: **[arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)** and **[gameplay_core.md](../design/gameplay_core.md)**, then [league_restructure.md](../design/league_restructure.md), [temptation_and_lineage.md](../design/temptation_and_lineage.md), [substances_and_addiction.md](../design/substances_and_addiction.md), [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md), [visual_redesign.md](../design/visual_redesign.md), [cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md), [steam_commercial_release.md](../design/steam_commercial_release.md).
-5. Briefs: [13-0_review_careermanager_ids.md](13-0_review_careermanager_ids.md), [16-1_opening_sequence_brief.md](16-1_opening_sequence_brief.md), [voicegen_task_brief.md](voicegen_task_brief.md).
+5. Briefs: [13-0_review_careermanager_ids.md](../archive/13-0_review_careermanager_ids.md), [16-1_opening_sequence_brief.md](16-1_opening_sequence_brief.md), [voicegen_task_brief.md](voicegen_task_brief.md).
 6. The code, **one subsystem at a time** (§4), each with its `reference/` spec open.
 
 **Size:** about 1.36M tokens in total (0.7M code, 0.5M docs), which is more than one context. Work subsystem by subsystem, and **write findings to disk as you go**, so a long session is resumable and nothing lives only in context.
@@ -69,7 +69,7 @@ Write these to `docs/review/r1/`, one file each:
 
 Each has been reported by the integration lead. Confirm or refute it against the code.
 
-- **13-0:** `CareerManager` mints ids with `Guid.NewGuid()`, which causes the rare Monte Carlo flake; an in-flight fix needs one change ([13-0 brief](13-0_review_careermanager_ids.md)).
+- **13-0:** `CareerManager` mints ids with `Guid.NewGuid()`, which causes the rare Monte Carlo flake; an in-flight fix needs one change ([13-0 brief](../archive/13-0_review_careermanager_ids.md)).
 - **`ped_active` has no gameplay writer**, so the steroid multiplier never fires live.
 - **`place_for_adoption`** (`hs_pregnancy_decision`) creates no child.
 - **There's no pitching interface:** the attended game uses `NeutralPitcherPolicy`. The arcade engine replaces this, so confirm what in `MicroGame`/`CareerManager` the G-4 seam (arcade §2) must preserve.

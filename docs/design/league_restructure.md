@@ -406,7 +406,7 @@ Owner accepted R-1 Q09: I1–I5 below are adopted defaults, including prior-comp
 - **I5. Lock scope.** The Sunday lock and forfeit-without-replacement are Pro rules (spec §5). College and HS have no lock, but the "can't field 9" forfeit applies everywhere, because no call-ups exist.
 - **Open: league and brand names.** The Pro league's name, conference names and the College league name all need a trademark screen before ship.
 - **Open: "The Red Dirt Series"** (owner's name for the College final, 2026-10-18) is **pending the owner's trademark screen**. Player-facing text uses a strings-table key (proposed: `league.college.final.name`), never a C# literal, so a rename is a data edit. Never use MLB's or the NCAA's championship-series names anywhere (both are trademarks); Pro keeps "World Championship".
-- **Open: College 28-game Math values** (CS-M, GPT 6 Astra Pro): ace selection (the cross-tier starter-quality scalar, 13-2), short-rest and workload values, College band restatement, National Ranking weights. Brief: [tasks/CS-M_college_math.md](../tasks/CS-M_college_math.md).
+- **Open: College 28-game Math values** (CS-M, GPT 6 Astra Pro): ace selection (the cross-tier starter-quality scalar, 13-2), short-rest and workload values, College band restatement, National Ranking weights. Brief: [archive/CS-M_college_math.md](../archive/CS-M_college_math.md).
 - **Open: HS mercy rule** (10-run rule after 5 innings). Off by default.
 - **Open: college academic eligibility** (GPA floor to play). Not in v1; the GPA system already exists if wanted.
 

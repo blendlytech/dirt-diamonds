@@ -1,10 +1,12 @@
+> **Archived 2026-11-19 (W1).** Closed brief; kept for history.
+
 # Task Brief: 13-1a — Seed data for 13-1 (HS schools + home parks)
 
 **Status:** ready to start once its base exists (below).
 **Recommended model:** Gemini 3.8 Flash (TEAM.md §2, 13-1 row: "+ Flash: team seed data")
 **Reviewer:** Claude Opus 5.5 (it consumes this data in 13-1)
 **Owner gate:** none for the build. The names stay subject to the owner's trademark screen (17b, [steam_commercial_release.md](../design/steam_commercial_release.md) §5), and this task gives no clearance.
-**Spec:** [league_restructure.md](../design/league_restructure.md) §2.2–§2.3, §12 (`Teams.home_park`), Appendix A; [13-1 brief](13-1_schema_v14_worldgen_brief.md) §3.3
+**Spec:** [league_restructure.md](../design/league_restructure.md) §2.2–§2.3, §12 (`Teams.home_park`), Appendix A; [13-1 brief](../tasks/13-1_schema_v14_worldgen_brief.md) §3.3
 **Branch / worktree:** `p13/13-1a-flash`, branched from **`p13/integration`** (it exists once the owner has merged the CS chain to `main`), in your own worktree (`git worktree add ..\dnd-flash-131a -b p13/13-1a-flash origin/p13/integration`). **Never merge to `main`:** the re-keyed `schools.json` breaks the shipped game's boot cross-check until 13-1's world-gen lands. Opus folds it into `p13/13-1-opus`.
 
 ## 1. Context
