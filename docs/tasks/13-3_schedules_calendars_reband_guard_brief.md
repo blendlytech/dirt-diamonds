@@ -651,6 +651,79 @@ The pilot keeps its 60 s rule and still judges what it played. **I did not execu
 
 The gates and the 20× replay are in §8.1a.
 
+### 10.8 M3 Pro guard reproduction (20/20), M2 reduced holdout execution, D10 re-time, and narrow M5 review of `a2bf0c4` — Gemini 4 Argon, 2026-11-20
+
+**Author / Reviewer:** Gemini 4 Argon. **Branch / worktree:** `p13/13-3-math-argon` in `.worktrees/13-3-math-argon`, fast-forwarded to `a2bf0c4`. **Full tables:** [../design/math/13-3_bands_guard_development.md §7](../design/math/13-3_bands_guard_development.md#7-m3-pro-guard-2020-reproduction-d10-re-time-and-m2-reduced-holdout-execution-a2bf0c4). **No `Assets/` or `Tools/` edits.**
+
+#### 1. Build and gates on `a2bf0c4` (§2.1)
+
+- `dotnet build DirtAndDiamonds.sln -c Debug` → **0 warnings / 0 errors** (`318.55 s`).
+- `dotnet build Tools/MonteCarloHarness/MonteCarloHarness.csproj -c Release` → **0 warnings / 0 errors** (`201.07 s`).
+- `SchemaValidator` (`-c Release`) → **174/174**.
+- `CoreLoopHarness` (`-c Release`) → **22/22**.
+- `GrittyEventsHarness` (`-c Release`): skipped after the unsandboxed prompt was denied by the user (verified `363/363` at `7693b7d` and by Opus at `a2bf0c4`; zero narrative/event files changed in `7693b7d..a2bf0c4`).
+- `MonteCarloHarness -- --only resolver`: **13/13**, LF-normalized output SHA-256 **`6d92422863f22d73c3539306a2a2442a65bcdedf505ddc5bb24611782e9eda89`** (byte-identical to baseline), `0` leaked `dnd_*` files.
+
+#### 2. M3 — New Pro guard 20/20 reproduction and signature (D6, §2.2)
+
+- Executed `dotnet run --project Tools/MonteCarloHarness -c Release --no-build` **20 times** sequentially, one log file per run (`run_01.log`–`run_20.log`).
+- **20/20 runs pass 408/415 checks** with:
+  - **Exact 7 expected promotion reds:** `promotion-sweep` `3/4`, `promotion-stream` `0/1`, `promotion-avatar` `0/1`, `promotion-record` `0/1`, `development-arc` `3/4`, `practice-seam` `10/11`, `development-equilibrium` `0/1` (all throwing `PromotionManager`'s v14 6-tier guard until 13-6).
+  - **`tier-ladder` `14/14`** (pooled Pro `R/9 = 4.164 [4.103, 4.225]` in `4.1–4.8`, `ER/GS = 4.191`).
+  - **All 8 allocation lines `0 B`** in every run.
+  - **Pro guard byte-exact in 20/20 runs:** first-season (`2026`, `1,024` games) **`PA 81433 / H 18471 / ER 8803`**, two-season phase-0 counting-ledger SHA-256 **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**.
+  - **Log byte-identity (20/20):** normalizing only `\d+(\.\d+)? ms` (exactly 3 timing lines per run: 730-day pipeline, career season, 3-generation run → `"N ms"`) and converting `CRLF → LF`, all 20 logs hash to the **identical SHA-256**:
+    `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239`
+    (matching Opus's reference prefix `7430347AA53EB5CC` byte-for-byte; with token `"<ms>"`, 20/20 hash to `8D19F016DA92E70AD5580C40DF56DF62B8A733852B7A772BA5C902CA7422C017`).
+  - **Scratch cleanup & disk:** `0` `dnd_*` files in `%TEMP%` after every run (`20/20`); `C:` free space remained `8.34–8.37 GB` (`> 2 GB`) throughout.
+- **D10 re-time (20 uncontended runs, budget `≤ 183.7 s + 30 s = 213.7 s`):**
+  - Per-run wall times (`s`): `104.30, 89.96, 55.79, 69.82, 62.06, 67.26, 99.67, 59.79, 63.45, 70.19, 56.61, 66.94, 67.76, 114.05, 120.10, 132.51, 114.16, 108.77, 135.53, 125.70`.
+  - Summary: **`min = 55.79 s`, `median = 80.08 s`, `mean = 89.22 s`, `max = 135.53 s`** — all **20/20 runs (`100%`)** finish well inside the `213.7 s` D10 budget (`78.2 s` below the ceiling at max, `103.6 s` below baseline at median).
+- **Guard signature (M3):** **SIGNED as reproduced 20/20 byte-identical by Gemini 4 Argon** (`PA 81433 / H 18471 / ER 8803`, ledger SHA-256 `932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`). Ready for the owner's sanction.
+
+#### 3. M2 — Reduced College 28-game holdout execution (`--college-analysis rates --reduced`, §2.3)
+
+Executed `dotnet run --project Tools/MonteCarloHarness -c Release --no-build -- --college-analysis rates --reduced` **exactly once** (`exit 0`, total wall time **`6.11 min` / `366.2 s`**, well under the `20 min` hard stop; `C:` free `8.33 GB`, `0` `%TEMP%` `dnd_*` files):
+
+- **Gated flat-world holdout batch (`worlds 129–160 × scheduler 1–4 × outcome 1–4 = 512 seasons`, `172,032` league games, `344,064 GS`, `spread 0`):**
+  - **Wall time:** **`279.5 s` (`4.66 min`, `546 ms/season`)**.
+  - **Counting totals:** `PA = 14,745,498`, `R = ER = 2,133,297`, `outs = 9,237,273`, `GS = 344,064`.
+  - **Reported denominators:** `ER/GS = 6.2003 [6.1871, 6.2135]` (exact ratio `6.200291`), `outs/GS = 26.8475 [26.8352, 26.8599]` (exact ratio `26.847543`).
+  - **Gated metrics (7/7 PASS):**
+
+    | Metric | College Band | Pooled Estimate | World-Clustered ($k=32, \text{df}=31$) SE & 95% CI | Tuple-Clustered ($k=512, \text{df}=511$) SE & 95% CI | Verdict |
+    | :-- | :--: | --: | :-- | :-- | :--: |
+    | **AVG** | `.284–.304` | **0.2938** | `SE 0.00013 [0.2936, 0.2941]` | `SE 0.00012 [0.2936, 0.2940]` | **PASS** |
+    | **OBP** | `.364–.384` | **0.3736** | `SE 0.00013 [0.3733, 0.3738]` | `SE 0.00012 [0.3733, 0.3738]` | **PASS** |
+    | **SLG** | `.473–.503` | **0.4876** | `SE 0.00029 [0.4870, 0.4882]` | `SE 0.00026 [0.4871, 0.4881]` | **PASS** |
+    | **K%** | `.184–.214` | **0.1985** | `SE 0.00011 [0.1983, 0.1987]` | `SE 0.00011 [0.1983, 0.1987]` | **PASS** |
+    | **BB%** | `.103–.123` | **0.1129** | `SE 0.00010 [0.1127, 0.1131]` | `SE 0.00008 [0.1128, 0.1131]` | **PASS** |
+    | **HR/PA** | `.033–.041` | **0.0368** | `SE 0.00006 [0.0367, 0.0369]` | `SE 0.00005 [0.0367, 0.0369]` | **PASS** |
+    | **R/9** | `5.80–7.10` | **6.2355** (`6.235535`) | `SE 0.00679` — CF `[6.2216, 6.2494]`, **exact-$t$ `[6.2217, 6.2494]`** (`[6.221686, 6.249383]`) | `SE 0.00657` — CF `[6.2226, 6.2484]`, **exact-$t$ `[6.2226, 6.2484]`** (`[6.222627, 6.248442]`) | **PASS** |
+
+    *(At $\text{df}=31$, exact $t_{0.975,31}=2.039513$ vs Cornish–Fisher $2.039393$ differs by $1.2\times 10^{-4}$, shifting the half-width by $8\times 10^{-7}\text{ R/9}$; at $\text{df}=511$, exact $t_{0.975,511}=1.964617$ vs CF $1.964615$ shifts the half-width by $<10^{-8}\text{ R/9}$. All 7 holdout estimates also match the exact flat-34 Markov chain `.2938 / .3736 / .4877`, `.1985 / .1129 / .0368`, $9\times\text{RE}(0,0)=6.2339$ to within `0.0001` on rates and `+0.0016` on `R/9`.)*
+
+- **Spread-25 diagnostic batch (`worlds 129–160 × scheduler 1–2 × outcome 1–2 = 128 seasons`, `43,008` league games, `86,016 GS`, `spread 25`, printed `[DIAG]`, not gated):**
+  - **Wall time:** **`86.7 s` (`1.45 min`, `678 ms/season`)**.
+  - **Counting totals:** `PA = 3,643,257`, `R = ER = 502,292`, `outs = 2,311,620`, `GS = 86,016`.
+  - **Reported denominators:** `ER/GS = 5.8395 [5.7894, 5.8896]`, `outs/GS = 26.8743 [26.8487, 26.8999]`.
+  - **Diagnostic lines (`[DIAG]`):**
+    - `AVG 0.2889` — world-clustered ($k=32$) `SE 0.00054 [0.2878, 0.2900]`, tuple-clustered ($k=128$) `SE 0.00033 [0.2883, 0.2896]` (band `0.284–0.304`)
+    - `OBP 0.3655` — world-clustered ($k=32$) `SE 0.00050 [0.3645, 0.3665]`, tuple-clustered ($k=128$) `SE 0.00032 [0.3649, 0.3661]` (band `0.364–0.384`)
+    - `SLG 0.4746` — world-clustered ($k=32$) `SE 0.00097 [0.4727, 0.4766]`, tuple-clustered ($k=128$) `SE 0.00064 [0.4734, 0.4759]` (band `0.473–0.503`)
+    - `K% 0.2082` — world-clustered ($k=32$) `SE 0.00041 [0.2073, 0.2090]`, tuple-clustered ($k=128$) `SE 0.00028 [0.2076, 0.2087]` (band `0.184–0.214`)
+    - `BB% 0.1077` — world-clustered ($k=32$) `SE 0.00029 [0.1071, 0.1083]`, tuple-clustered ($k=128$) `SE 0.00020 [0.1073, 0.1081]` (band `0.103–0.123`)
+    - `HR/PA 0.0350` — world-clustered ($k=32$) `SE 0.00014 [0.0347, 0.0353]`, tuple-clustered ($k=128$) `SE 0.00011 [0.0348, 0.0352]` (band `0.033–0.041`)
+    - `R/9 5.8668` (`5.866756`) — world-clustered ($k=32$) `SE 0.02450 [5.8169, 5.9168]` (exact-$t$ `[5.8168, 5.9167]`), tuple-clustered ($k=128$) `SE 0.01647 [5.8342, 5.8994]` (exact-$t$ $\text{df}=127$: `[5.8342, 5.8993]`) (band `5.8–7.1`)
+
+#### 4. Narrow M5 review of `a2bf0c4` (§2.4)
+
+1. **R1 (`§4` cap-asymptote probe at `20 · cap / rate = 5,000 h`):** **Signed.** At `PracticeFracPerHour = 0.001` ($\tau = \text{cap}/\text{rate} = 250\text{ h}$), a literal `10,000 h` is $40\tau$, where $\exp(-40) \approx 4.25 \times 10^{-18} < 2^{-53}$ rounds $1 - \exp(-40)$ to `1.0` in IEEE-754 `double`. Restating the finite probe to `20 * PracticeFracCap / PracticeFracPerHour = 5,000 h` preserves the exact 20-e-fold dimensionless probe that `10,000 h` tested at `.0005` and stays strictly below `0.25` ($f(5000) = 0.2499999994847116 < 0.25$).
+2. **`--reduced` implementation of §3.3 (`Slice133Suites.cs:930–1066`, `Program.cs:60,88`):** **Verified exact.** It runs the pre-registered flat lattice `worlds 129–160 × scheduler 1–4 × outcome 1–4 = 512` seasons (`Spread: 0, Gated: true`) then `worlds 129–160 × scheduler 1–2 × outcome 1–2 = 128` spread-25 seasons (`Spread: 25, Gated: false`), with world seed `LeagueSeed ^ (ulong)w`, schedule seed `s` on distinct year pairs, outcome seed `0xC5AA_0000_0000UL ^ ((ulong)w << 24) ^ ((ulong)s << 12) ^ (ulong)o`, world- ($k=32$) and tuple-clustered ($k=512/128$) intervals, a `20 * 60 s` inter-tuple cumulative hard stop returning exit `2` (`INCOMPLETE`) if tripped, and exit `0`/`1` on the 7 flat point estimates. When `--pilot` is passed (`analysisReduced && !analysisPilot`), the 32-season training lattice, `60 s` stop rule, full-matrix forecast line, and pilot judging behavior are completely unchanged.
+3. **`Assets/` isolation and guard/resolver invariance:** **Confirmed.** `Assets/Simulation/Baseball/DevelopmentManager.cs` (`PracticeFracPerHour = 0.001` + XML doc comment) is the only `Assets/` change in `a2bf0c4`. `DevelopmentManager.RunDevelopment` passes non-zero practice hours only for `avatarId` (`NPC` practice stays `0`), and neither the resolver suite nor the `season-pipeline` guard world creates an avatar or runs `DevelopmentManager`, so the resolver and Pro guard cannot move.
+4. **`practice-seam` reorder (`Program.cs:6124–6355`):** **Confirmed.** The 83-line `§10.9 scouting seam in the sweep` block was moved verbatim to the end of `RunPracticeSeamSuite` with no change to its logic, seeds, ratings, or assertions; only its position changed so the 10 non-promotion checks run first (`10/11`).
+5. **R5 (`f(1000)` typo in Math record §4.4):** Fixed `0.24542108972281642` $\to$ `0.24542109027781644` (and documented R1's `5,000 h` probe) in `docs/design/math/13-3_bands_guard_development.md` §4.4.
+
 ### Spec issues found while drafting — **resolved 2026-10-25** (owner: "resolve these problems")
 
 After the owner approved D1–D9, Opus applied each decision to its spec home on `p13/13-3-brief-opus`:

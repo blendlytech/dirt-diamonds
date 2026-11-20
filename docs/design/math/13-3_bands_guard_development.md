@@ -3,7 +3,8 @@
 **Author:** Gemini 4 Argon (Math / calibration owner and independent reviewer, per [TEAM.md](../../TEAM.md) §1a 2026-11-19 succession).  
 **Reviewer:** Claude Opus 5.5 ([TEAM.md](../../TEAM.md) §1a/§2).  
 **Implementation head measured:** `7693b7d` (`p13/13-3-math-argon`, merging Opus's 13-3 build `5ec08b4` / docs `9d8dbf3` with `e404e43`).  
-**Status (Claude Opus 5.5, 2026-11-20):** reviewed and accepted in [brief §10.7](../../tasks/13-3_schedules_calendars_reband_guard_brief.md#107-opus-review-of-argons-math-record-b9e0060-and-application-of-d5--m4--m5--claude-opus-55-2026-11-20). D5 settled by the owner as **Option (i)** (Pro R/9 4.1–4.8). M4 applied, with one added harness restatement (§10.7 R1: the §4 cap-asymptote probe moves to 20 e-folds). §3.3's reduced M2 holdout is approved and wired as `--college-analysis rates --reduced`. M3 is still pending. The body below is Argon's record as authored.
+**Status (Claude Opus 5.5, 2026-11-20):** reviewed and accepted in [brief §10.7](../../tasks/13-3_schedules_calendars_reband_guard_brief.md#107-opus-review-of-argons-math-record-b9e0060-and-application-of-d5--m4--m5--claude-opus-55-2026-11-20). D5 settled by the owner as **Option (i)** (Pro R/9 4.1–4.8). M4 applied, with one added harness restatement (§10.7 R1: the §4 cap-asymptote probe moves to 20 e-folds). §3.3's reduced M2 holdout is approved and wired as `--college-analysis rates --reduced`. M3 is still pending. The body below is Argon's record as authored.  
+**Update (Gemini 4 Argon, 2026-11-20, head `a2bf0c4`):** **M3 reproduced 20/20 byte-identical and signed** (`PA 81433 / H 18471 / ER 8803`, ledger SHA-256 `932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`, normalized log SHA-256 `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239`, D10 wall times `55.79–135.53 s ≤ 213.7 s`); **M2 reduced holdout executed once and passed 7/7** (`6.11 min`, 512 flat seasons `R/9 = 6.2355 [6.2217, 6.2494]` + 128 spread-25 diagnostic seasons `R/9 = 5.8668`); narrow M5 review of `a2bf0c4` (incl. R1 signature and R5 typo fix) recorded in §7 and [brief §10.8](../../tasks/13-3_schedules_calendars_reband_guard_brief.md#108-m3-pro-guard-reproduction-2020-m2-reduced-holdout-execution-d10-re-time-and-narrow-m5-review-of-a2bf0c4--gemini-4-argon-2026-11-20).
 
 **Authority:** [13-3 brief](../../tasks/13-3_schedules_calendars_reband_guard_brief.md) §§2, 3.2 (D5, D6, D7, D10), 3.3 (M1–M5), 5, 8.1, 10.1–10.5; [CS-M brief](../../tasks/CS-M_college_math.md) §§1, 6; [college_28_game.md](college_28_game.md) §§1, 6; [league_restructure.md](../league_restructure.md) §§11.2–11.3.
 
@@ -249,9 +250,10 @@ Evaluating `DevelopmentCurve.DevelopRating` on identical players at `bell = 0` (
 
 When Opus applies `PracticeFracPerHour = 0.001` in `DevelopmentManager.cs`, three harness updates in `RunPracticeSeamSuite` (`Tools/MonteCarloHarness/Program.cs:6119–6339`) are signed:
 
-1. **Pure `§4` conversion e-fold and first-hour slope checks (`Program.cs:6124–6135`):**
-   - With `PracticeFracPerHour = 0.001` and `PracticeFracCap = 0.25`, the e-fold (`PracticeFracCap / PracticeFracPerHour`) is **`250 h`** (where $f(250) = 0.25(1 - e^{-1}) = 0.15803013970713942$), with doubled anchors $f(500) = 0.21616617919084683$ and $f(1000) = 0.24542108972281642$ (slices `0.1580 → 0.0581 → 0.0293`).
+1. **Pure `§4` conversion e-fold, first-hour slope, and cap-asymptote checks (`Program.cs:6124–6163`):**
+   - With `PracticeFracPerHour = 0.001` and `PracticeFracCap = 0.25`, the e-fold (`PracticeFracCap / PracticeFracPerHour`) is **`250 h`** (where $f(250) = 0.25(1 - e^{-1}) = 0.15803013970713942$), with doubled anchors $f(500) = 0.21616617919084683$ and $f(1000) = 0.24542109027781644$ (slices `0.1580 → 0.0581 → 0.0293`).
    - At $h = 1$, $f(1) = 0.25(1 - e^{-0.004}) = 0.000998002664$, so $|f(1) - \text{PracticeFracPerHour}| = 1.997336 \times 10^{-6} \approx \text{slope}^2 / (2\cdot\text{cap}) = 2.0 \times 10^{-6}$. Update the first-hour check tolerance from `< 1e-6` to **`< 2.5e-6`** (or `<= DevelopmentProfile.PracticeFracPerHour * DevelopmentProfile.PracticeFracPerHour / DevelopmentProfile.PracticeFracCap`).
+   - **Cap-asymptote probe (§10.7 R1, signed 2026-11-20):** At `.001`, a literal `10,000 h` is $40$ e-folds ($\exp(-40) \approx 4.25 \times 10^{-18} < 2^{-53}$), which rounds $f(10000)$ to `0.25` in IEEE-754 `double`. Restate the finite probe to **`20 · PracticeFracCap / PracticeFracPerHour = 5,000 h`** (20 e-folds, matching the dimensionless probe at `.0005`), where $f(5000) = 0.2499999994847116 < 0.25$, while `PracticeFraction(1_000_000_000) == 0.25`.
 2. **`§10.5` End-to-End Practice World and `§4` Succession Guard Goldens (`Program.cs:6241–6338`):**
    - **`§10.5` accumulate path:** `10 days × 6 h = 60 h` accrued in `Game_State`; rollover consumes and clears `avatar_practice_credit` to `0` (`CreditAccrued == true && CreditCleared == true`).
    - **`§10.5` Practice lever (`2,190 h`, `frac = 0.249961 ≈ 0.2500`):** moves the peak-pinned 16yo-built avatar (`start 60/60/60 bat = 180, 50/50/50/50 pit/fld; ceiling 74/74/74 bat = 222, 64/64/64/64 pit/fld; gap = 14`) by **`+3` per rating** ($14 \times 0.249961 = 3.4995 \to 3$):
@@ -319,3 +321,72 @@ We measured the exact fixture seed plus a 32-seed sweep per tier (`100%` availab
     - Total pooled simulation time: **`21.77 s` ($\le 30\text{ s}$ ✓)**.
   - **Full Default `MonteCarloHarness` Wall Time (`dotnet run --project Tools/MonteCarloHarness -c Release --no-build`):**
     - **`65.24 s` end-to-end** (`402/410` checks; Opus measured `90 s` including build check). Replacing the interim 154-day daily round-robins (`1,848` College and `2,464` Pro games/season in multi-tier suites) with the real 10/28/64-game calendars reduced total default MC wall time by **`58.8 s` to `118.5 s` below baseline**, even after adding the 17,408-game pooled band suite.
+
+---
+
+## 7. M3 Pro Guard 20/20 Reproduction, D10 Re-Time, and M2 Reduced Holdout Execution (`a2bf0c4`)
+
+### 7.1 M3 — 20/20 Default `MonteCarloHarness` Replay & Pro Guard Signature (D6, D10)
+
+On head `a2bf0c4` (after Opus applied D5 Option (i) Pro `R/9` `4.1–4.8`, M4 `PracticeFracPerHour = 0.001`, M5 Finding 1 `practice-seam` reorder, R1 `20 · cap / rate = 5,000 h` asymptote probe, and R6 `.starters.r2.unit` cleanup), we first verified `-- --only resolver` (`13/13`, LF SHA-256 `6d92422863f22d73c3539306a2a2442a65bcdedf505ddc5bb24611782e9eda89`, `0` `%TEMP%` `dnd_*` files) and then executed `dotnet run --project Tools/MonteCarloHarness -c Release --no-build` **20 times** sequentially, saving `run_01.log`–`run_20.log`:
+
+| Run | Wall Time (`s`) | Score | `tier-ladder` | 7 Expected Reds (`3/4, 0/1, 0/1, 0/1, 3/4, 10/11, 0/1`) | All 8 Alloc Lines `0 B` | Pro Guard (`PA 81433 / H 18471 / ER 8803` + Ledger `932ACE26…`) | `ms` Lines Normalized | `%TEMP%` `dnd_*` | `C:` Free (`GB`) | Normalized LF SHA-256 (`\d+(\.\d+)? ms` $\to$ `N ms`) |
+| :--: | --: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | --: | :-- |
+| **01** | `104.30` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.34` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **02** | `89.96` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.34` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **03** | `55.79` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.34` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **04** | `69.82` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.34` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **05** | `62.06` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.34` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **06** | `67.26` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.37` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **07** | `99.67` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **08** | `59.79` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **09** | `63.45` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **10** | `70.19` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **11** | `56.61` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **12** | `66.94` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **13** | `67.76` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **14** | `114.05` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.35` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **15** | `120.10` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **16** | `132.51` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **17** | `114.16` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.35` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **18** | `108.77` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.35` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **19** | `135.53` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.35` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+| **20** | `125.70` | `408/415` | `14/14` | Exact | Yes | Exact | `3` | `0` | `8.36` | `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239` |
+
+- **D10 Re-Time Summary (`≤ 183.7 s + 30 s = 213.7 s` budget):** `min = 55.79 s`, `median = 80.08 s`, `mean = 89.22 s`, `max = 135.53 s` (all 20/20 runs `≤ 213.7 s` ✓).
+- **M3 Guard Signature:** **SIGNED as reproduced 20/20 byte-identical by Gemini 4 Argon** (`PA 81433 / H 18471 / ER 8803`, ledger SHA-256 `932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`), ready for the owner's sanction.
+
+### 7.2 M2 — Approved Reduced Holdout Execution (`--college-analysis rates --reduced`)
+
+Executed once on `a2bf0c4` (`exit 0`, total wall time **`6.11 min` / `366.2 s` ≤ `20 min` hard stop**; `0` leaked `dnd_*` files; `C:` free `8.33 GB`):
+
+#### Batch 1: Gated Flat-World Holdout (`worlds 129–160 × scheduler 1–4 × outcome 1–4 = 512 seasons`, `172,032` games, `344,064 GS`, `spread 0`, `279.5 s` / `546 ms/season`)
+
+- **Counting totals:** `PA = 14,745,498`, `R = ER = 2,133,297`, `outs = 9,237,273`, `GS = 344,064`.
+- **Reported denominators:** `ER/GS = 6.2003 [6.1871, 6.2135]` (`2,133,297 / 344,064 = 6.200291`), `outs/GS = 26.8475 [26.8352, 26.8599]` (`9,237,273 / 344,064 = 26.847543`).
+
+| Metric | Target Band | Pooled Estimate | Exact Flat-34 Markov (§2.3) | World-Clustered ($k=32, \text{df}=31$) SE | World-Clustered 95% CI (CF / Exact-$t$) | Tuple-Clustered ($k=512, \text{df}=511$) SE | Tuple-Clustered 95% CI (CF / Exact-$t$) | Verdict |
+| :-- | :--: | --: | --: | --: | :-- | --: | :-- | :--: |
+| **AVG** | `.284–.304` | **0.2938** | `.2938` | `0.00013` | `[0.2936, 0.2941]` | `0.00012` | `[0.2936, 0.2940]` | **PASS** |
+| **OBP** | `.364–.384` | **0.3736** | `.3736` | `0.00013` | `[0.3733, 0.3738]` | `0.00012` | `[0.3733, 0.3738]` | **PASS** |
+| **SLG** | `.473–.503` | **0.4876** | `.4877` | `0.00029` | `[0.4870, 0.4882]` | `0.00026` | `[0.4871, 0.4881]` | **PASS** |
+| **K%** | `.184–.214` | **0.1985** | `.1985` | `0.00011` | `[0.1983, 0.1987]` | `0.00011` | `[0.1983, 0.1987]` | **PASS** |
+| **BB%** | `.103–.123` | **0.1129** | `.1129` | `0.00010` | `[0.1127, 0.1131]` | `0.00008` | `[0.1128, 0.1131]` | **PASS** |
+| **HR/PA** | `.033–.041` | **0.0368** | `.0368` | `0.00006` | `[0.0367, 0.0369]` | `0.00005` | `[0.0367, 0.0369]` | **PASS** |
+| **R/9** (gated) | `5.80–7.10` | **6.2355** (`6.235535`) | `6.2339` | `0.00679` | CF `[6.2216, 6.2494]` / **Exact-$t$ `[6.2217, 6.2494]`** (`[6.221686, 6.249383]`) | `0.00657` | CF `[6.2226, 6.2484]` / **Exact-$t$ `[6.2226, 6.2484]`** (`[6.222627, 6.248442]`) | **PASS** |
+
+#### Batch 2: Spread-25 Diagnostic (`worlds 129–160 × scheduler 1–2 × outcome 1–2 = 128 seasons`, `43,008` games, `86,016 GS`, `spread 25`, `86.7 s` / `678 ms/season`, `[DIAG]`, Not Gated)
+
+- **Counting totals:** `PA = 3,643,257`, `R = ER = 502,292`, `outs = 2,311,620`, `GS = 86,016`.
+- **Reported denominators:** `ER/GS = 5.8395 [5.7894, 5.8896]` (`502,292 / 86,016 = 5.839518`), `outs/GS = 26.8743 [26.8487, 26.8999]` (`2,311,620 / 86,016 = 26.874302`).
+
+| Metric | Reference Flat Band | Pooled Estimate | World-Clustered ($k=32, \text{df}=31$) SE | World-Clustered 95% CI | Tuple-Clustered ($k=128, \text{df}=127$) SE | Tuple-Clustered 95% CI | Mode |
+| :-- | :--: | --: | --: | :-- | --: | :-- | :--: |
+| **AVG** | `.284–.304` | **0.2889** | `0.00054` | `[0.2878, 0.2900]` | `0.00033` | `[0.2883, 0.2896]` | `[DIAG]` |
+| **OBP** | `.364–.384` | **0.3655** | `0.00050` | `[0.3645, 0.3665]` | `0.00032` | `[0.3649, 0.3661]` | `[DIAG]` |
+| **SLG** | `.473–.503` | **0.4746** | `0.00097` | `[0.4727, 0.4766]` | `0.00064` | `[0.4734, 0.4759]` | `[DIAG]` |
+| **K%** | `.184–.214` | **0.2082** | `0.00041` | `[0.2073, 0.2090]` | `0.00028` | `[0.2076, 0.2087]` | `[DIAG]` |
+| **BB%** | `.103–.123` | **0.1077** | `0.00029` | `[0.1071, 0.1083]` | `0.00020` | `[0.1073, 0.1081]` | `[DIAG]` |
+| **HR/PA** | `.033–.041` | **0.0350** | `0.00014` | `[0.0347, 0.0353]` | `0.00011` | `[0.0348, 0.0352]` | `[DIAG]` |
+| **R/9** | `5.80–7.10` | **5.8668** (`5.866756`) | `0.02450` | CF `[5.8169, 5.9168]` / Exact-$t$ `[5.8168, 5.9167]` | `0.01647` | CF `[5.8342, 5.8994]` / Exact-$t$ `[5.8342, 5.8993]` | `[DIAG]` |
+
