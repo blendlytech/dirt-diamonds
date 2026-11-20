@@ -1,6 +1,7 @@
 # Task Brief: 13-3 — Season schedules and calendars, per-tier re-band, new Pro guard, development gradient
 
-**Status:** **D1–D9 APPROVED by the owner 2026-10-25, all as recommended:** D1 a persisted schedule seed, with the current and next season ensured; D2 the construction and interpretations as written; D3-A in-season locks for every tier plus offseason sliders; D4 results written in 13-3; D5 the pooled R/9 gating, with any floor restatement returning to the owner; D6 the totals plus the ledger hash; D7 the equilibrium gradient moves to 13-6; D8 the §5.3 red list; D9 `main` after 13-6. **D10 APPROVED by the owner 2026-10-25 as recommended:** a relative runtime budget, under which 13-3 adds ≤ 30 s to the measured default MC (College's share ≤ 15 s). **Math check done** (§10.1–10.3, changes requested), and Opus reconciled the brief (§10.4). Its answers refine the M-deliverables and don't reopen D1–D9. **The build can start** once this brief reaches the build branch (§0).
+**Status:** **DONE and merged into `p13/integration` 2026-11-20 (Claude Opus 5.5).** The owner **sanctioned the new Pro guard on 2026-11-20**: first season `2026` (1,024 games, flat spread 0, league seed `20260703`, season seed `777`, schedule seed `0x133D_5EED_0000_0001`) **PA 81433 / H 18471 / ER 8803**, two-season phase-0 counting-ledger SHA-256 **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**, reproduced 20/20 byte-identical by Claude Opus 5.5 (§8.1a) and Gemini 4 Argon (M3, §10.8). It is byte-exact from now on; moving it needs a new owner sanction. Merge gates: §8.1b.
+**History:** **D1–D9 APPROVED by the owner 2026-10-25, all as recommended:** D1 a persisted schedule seed, with the current and next season ensured; D2 the construction and interpretations as written; D3-A in-season locks for every tier plus offseason sliders; D4 results written in 13-3; D5 the pooled R/9 gating, with any floor restatement returning to the owner; D6 the totals plus the ledger hash; D7 the equilibrium gradient moves to 13-6; D8 the §5.3 red list; D9 `main` after 13-6. **D10 APPROVED by the owner 2026-10-25 as recommended:** a relative runtime budget, under which 13-3 adds ≤ 30 s to the measured default MC (College's share ≤ 15 s). **Math check done** (§10.1–10.3, changes requested), and Opus reconciled the brief (§10.4). Its answers refine the M-deliverables and don't reopen D1–D9. **The build can start** once this brief reaches the build branch (§0).
 **Recommended model:** Claude Opus 5.5 (engine + harness) **and** GPT 6 Astra Pro (Math) — TEAM.md §2, 13-3 row
 **Reviewer:** each reviews the other's part (TEAM.md §1a): GPT 6 Astra Pro independently reviews Opus's sim diff; Claude Opus reviews Astra's Math record. Opus stays the merge gate. The owner's 2026-10-25 independence waiver (13-2 brief §9.8) covered the 13-2 fix round only and does **not** apply here.
 **Owner gate:** D1–D9 now; **sanction of the new Pro guard** at the end (TEAM.md §2).
@@ -263,16 +264,18 @@ Each is listed in the handoff as old → new → reason. Same-seed delta checks 
 
 ## 6. Definition of done
 
-- [ ] §0 recorded, including the baseline and its wall time.
-- [ ] `TierSeasonCalendar`, `SeasonScheduler`, `ScheduleQueries` and `SeasonSchedule` built per D1–D4; `HsSeasonCalendar`, `LeagueSchedule` and `RegularSeasonDays` gone.
-- [ ] Both sims and the career driver play only from persisted rows; D3 blocks; D4 results.
-- [ ] 13-2 carry-forwards done (the ledger sentence + 3 mutation-verified checks).
-- [ ] Astra's M1–M4 recorded and reviewed by Opus; M-values applied; D5 settled.
-- [ ] The old guard retired by name; the new Pro guard recorded, reproduced 20/20 by Astra (M3) and **sanctioned by the owner**.
-- [ ] §5.1 green; §5.2 unchanged; §5.3 actual list; §5.4 restatements listed.
-- [ ] M5 independent review passed.
-- [ ] Committed and pushed on both branches. Not merged.
-- [ ] Handoff + one `progress.md` line per author. **Then stop.**
+*Closed 2026-11-20 (Claude Opus 5.5). Astra's Math role passed to Gemini 4 Argon under the 2026-11-19 succession (TEAM.md §1a).*
+
+- [x] §0 recorded, including the baseline and its wall time.
+- [x] `TierSeasonCalendar`, `SeasonScheduler`, `ScheduleQueries` and `SeasonSchedule` built per D1–D4; `HsSeasonCalendar`, `LeagueSchedule` and `RegularSeasonDays` gone.
+- [x] Both sims and the career driver play only from persisted rows; D3 blocks; D4 results.
+- [x] 13-2 carry-forwards done (the ledger sentence + 3 mutation-verified checks).
+- [x] M1–M4 recorded (Argon, §10.6) and reviewed by Opus (§10.7); M-values applied; D5 settled (Option (i), Pro R/9 4.1–4.8).
+- [x] The old guard retired by name; the new Pro guard recorded, reproduced 20/20 (Opus §8.1a, Argon M3 §10.8) and **sanctioned by the owner 2026-11-20**.
+- [x] §5.1 green; §5.2 unchanged; §5.3 actual list (the 7 promotion reds); §5.4 restatements listed.
+- [x] M5 independent review passed (Argon, §10.6 and §10.8, zero open code findings).
+- [x] Committed and pushed on both branches; merged into `p13/integration` with `--no-ff` after the owner's sanction (§8.1b).
+- [x] Handoff + one `progress.md` line per author. **Then stop.**
 
 ## 7. Out of scope
 
@@ -406,6 +409,8 @@ Recommended next: Gemini 4 Argon — M3 on p13/13-3-opus @ this commit:
       (2) dotnet run --project Tools/MonteCarloHarness -c Release --no-build -- --college-analysis rates --reduced.
       Then owner sanction of the Pro guard; then Claude Opus merges into p13/integration.
 ```
+
+**Owner sanction (2026-11-20):** after Argon's M3 (§10.8: 20/20 byte-identical, normalized log SHA-256 `7430347AA53EB5CCCB1DD7B3D53C2D4B645A85628F9515B99D1F1E968CE4B239`, D10 re-timed uncontended at `55.79–135.53 s`, all inside `213.7 s`), the owner sanctioned the Pro guard **PA 81433 / H 18471 / ER 8803**, ledger SHA-256 `932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`. Its status moves from *candidate* to **sanctioned, byte-exact** in the MC skill, the harness comment and [league_restructure.md](../design/league_restructure.md) §11.3. Run 16's contended `222.3 s` wall above is superseded by Argon's quiet-machine re-time.
 
 ## 9. Questions for Astra's Math check of this brief (answer before owner approval)
 

@@ -23,11 +23,11 @@ internal static partial class Program
     private const int CollegePooledSeasons = 16;
     private const int ProPooledSeasons = 8;
 
-    // D6: the new Pro guard (league_restructure.md §11.3). CANDIDATE values,
-    // recorded by Claude Opus on 2026-10-25 from the season-pipeline world
-    // (owner's PC, 13-3 build); GPT 6 Astra Pro reproduces them 20/20 (M3) and
-    // the owner sanctions them (brief §8.1/§10). A D5 outcome that changes the
-    // sim (BaseOutAdvancement) would re-record them under its own sanction.
+    // D6: the new Pro guard (league_restructure.md §11.3). SANCTIONED by the
+    // owner on 2026-11-20, byte-exact: recorded by Claude Opus on 2026-10-25
+    // from the season-pipeline world (owner's PC, 13-3 build) and reproduced
+    // 20/20 by Claude Opus 5.5 and Gemini 4 Argon (M3, brief §8.1a/§10.8).
+    // Any change that moves these literals needs its own owner sanction.
     private const long ProGuardPa = 81433;
     private const long ProGuardH = 18471;
     private const long ProGuardEr = 8803;

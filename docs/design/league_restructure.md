@@ -296,9 +296,10 @@ The AVG/OBP/SLG/K%/BB%/HR-per-PA bands for HS, College and Pro reuse the shipped
 - **Season-pipeline guard (re-baselined once, sanctioned here):** the shipped bit-identity guard (PA 48384 / H 10969 / ER 5237) is tied to the 8-team, 154-game MLB season and **cannot** survive a 32-team, 64-game Pro league. Slice 13-3 retires it and records a **new Pro guard** (§16-I11):
   - **What:** PA, H and ER of the first season of the fixed-seed season-pipeline Pro world (flat ratings, fixed schedule seed), frozen as literals in the harness, with a SHA-256 of that run's full stat ledger recorded beside them.
   - **When:** it's recorded once the 13-3 run is green everywhere except the owner-approved 13-6 promotion reds, which don't touch the Pro season.
-  - **Sanction:** GPT 6 Astra Pro reproduces it 20/20 byte-identical, and the owner sanctions it.
+  - **Sanction:** a Math reviewer reproduces it 20/20 byte-identical, and the owner sanctions it.
+  - **Recorded and sanctioned (owner, 2026-11-20):** first season `2026` (1,024 games, flat spread 0, league seed `20260703`, season seed `777`, schedule seed `0x133D_5EED_0000_0001`): **PA 81433 / H 18471 / ER 8803**; two-season phase-0 counting-ledger SHA-256 **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**. Reproduced 20/20 byte-identical by Claude Opus 5.5 and Gemini 4 Argon ([13-3 brief](../tasks/13-3_schedules_calendars_reband_guard_brief.md) §8.1a / §10.8).
 
-  From then on, the new guard is byte-exact like the old one. It also freezes the Pro scheduler. 13-4's postseason games don't move it (it counts regular-season games only); 13-5's designations must keep it or bring their own sanction.
+  From then on, the new guard is byte-exact like the old one. It also freezes the Pro scheduler. 13-4's postseason games must not move it: the guard's ledger hashes every `Batting_Stats` / `Pitching_Stats` row in the guard world, so 13-4 must keep postseason play out of that ledger (13-4 brief D4). 13-5's designations must keep it or bring their own sanction.
 - **Development gradient:** the 9d talent-gradient check becomes HS < College < Pro (time-averaged mean talent, strictly monotone). It's split by dependency (§16-I12):
   - **13-3** retunes the practice lever for the new calendars and checks that one development pass on a generated world keeps HS < College < Pro.
   - **The time-averaged equilibrium** needs players to flow between tiers, so it's proven in **13-6**'s PipelineHarness. The shipped `PromotionManager` can't run on the 3-tier world.
