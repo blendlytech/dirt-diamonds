@@ -1,6 +1,6 @@
 # Task Brief: 13-4 — Playoffs, standings and the College National Ranking
 
-**Status:** **Math check DONE (Gemini 4 Argon, §10: APPROVE WITH CHANGES); Amendments 1–7 reconciled into §§2–5 by Claude Opus 5.5 (§10.5), 2026-11-20. Do not build yet.** Next: the owner's decisions **D0–D7** (§3). The build starts only after them, from `p13/integration` with this brief merged (§0).
+**Status:** **D0–D7 APPROVED by the owner 2026-11-20, all as recommended:** D0-B transplant (no JSON coordinator; no reseed/`GameSeed`/ID-tie code); D1-A `Team_Seasons` upserted per flush, with the forced selection-day flush; D2-A recursive group tiebreak + seeded coin; D3 fixed postseason calendar; D4-A no persisted postseason lines, isolated streams, guard proven with the postseason on; D5 pilot + sized holdout; D6-B bracket screen in 15c; D7 ≤ +15 s. **Math check DONE** (Gemini 4 Argon, §10: APPROVE WITH CHANGES); Amendments 1–7 reconciled into §§2–5 (§10.5). Spec synced: [league_restructure.md](../design/league_restructure.md) §16-I13–I15. **The 13-4a build can start** from `p13/integration` with this brief merged (§0).
 **Recommended model:** **13-4a** (engine, persistence, harness): Claude Opus 5.5, with Gemini 4 Argon (Math: ranking analysis, tie/coin and stream contracts). **13-4b** (bracket UI): Claude Sonnet 5.5, staged per D6. TEAM.md §2, 13-4 row.
 **Reviewer:** each reviews the other's part (TEAM.md §1a): Argon independently reviews Opus's sim/persistence diff; Opus reviews Argon's Math record. 13-4b goes to Gemini 4 Neon if its diff touches no `Assets/Simulation/`, schema or persistence path, otherwise to Argon. Opus is the merge gate.
 **Owner gate:** D0–D7 before the build. None at the end, **unless** D4 is decided in a way that moves the sanctioned Pro guard (then a new sanction is required; the recommended D4-A does not move it).
@@ -58,7 +58,7 @@ Worth keeping: the ranking arithmetic, the hosting helper, the per-game-seed and
 
 ## 3. Owner decisions (D0–D7)
 
-Each has a recommendation; the owner may pick another option. **D4 is the critical one.**
+**Owner, 2026-11-20: all eight approved as recommended** (D0-B, D1-A, D2-A, D3 fixed slots, D4-A, D5, D6-B, D7). The alternatives below stay for the record.
 
 ### D0. Prior art (`6993e70`)
 
