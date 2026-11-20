@@ -435,9 +435,8 @@ public sealed partial class GameManager : Node
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
         // own league, each with its own forked rng stream. All three run the
         // same day loop off the bus; the avatar's tier is resolved by
-        // CareerManager through the directory. Phase 13 integration state
-        // (13-2 brief D1-A): each sim runs its tier's own team count on the
-        // interim 154-day round-robin until 13-3's persisted schedules land.
+        // CareerManager through the directory. Each sim plays its tier's
+        // persisted Schedule_Games season (13-3).
         Leagues = new LeagueDirectory();
         var normalizer = new StatsNormalizer(_database, Baseball);
         // 13-2 (league_restructure.md §6): ONE rest ledger for every tier sim
@@ -459,6 +458,21 @@ public sealed partial class GameManager : Node
             tierSim.Equipment = Gear;
             tierSim.AttachTo(Events);
             Leagues.Register(tierSim);
+        }
+
+        // 13-3 (brief D1): the save's schedule seed is written once. Split()
+        // forks without advancing the boot stream, so no other consumer's
+        // draws move. Then each tier's current and next season are ensured
+        // (generated once, never regenerated) and loaded before the career
+        // or the calendar UI looks at them.
+        if (!GameState.TryGetInt64(SeasonScheduler.ScheduleSeedKey, out _))
+        {
+            ulong scheduleSeed = rng.Split().NextUInt64();
+            _database.RunInBatch(() => GameState.SetInt64(SeasonScheduler.ScheduleSeedKey, unchecked((long)scheduleSeed)));
+        }
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            Leagues.Get((LeagueTier)t).PrepareSeason(State.SeasonYear);
         }
 
         // Career driver (Phase 5): micro-sim + avatar wiring. On a save with
@@ -1072,25 +1086,23 @@ public sealed partial class GameManager : Node
     /// the projection both the ScheduleScreen (read-only rows) and the
     /// CalendarScreen (browsable week view) render, and the values
     /// <see cref="SubmitDaySchedule"/> enforces server-side. School follows
-    /// SchoolCalendar whenever the 9b school gate is open (HS/College);
-    /// Practice/Game are calendar-locked only in the HS tier
-    /// (HsSeasonCalendar's sparse spring season) — College/pro tiers keep the
-    /// legacy player-reserved sliders until they grow calendars of their own,
-    /// which <see cref="MandatoryBlocks.PracticeGameLocked"/> tells the UI.
+    /// SchoolCalendar whenever the 9b school gate is open (HS/College).
+    /// Practice/Game are calendar-locked inside the avatar tier's season
+    /// window (TierSeasonCalendar, every tier; league_restructure.md §3.2,
+    /// 13-3 brief D3) and free sliders outside it, so offseason training
+    /// exists — which <see cref="MandatoryBlocks.PracticeGameLocked"/> tells
+    /// the UI.
     /// </summary>
     public MandatoryBlocks GetMandatoryBlocksFor(long day)
     {
         int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
         int schoolHours = LifeSim.AvatarSchoolAvailable ? SchoolCalendar.HoursForDayOfSeason(dayOfSeason) : 0;
-        if (!_avatarTierKnown || _avatarTier != LeagueTier.HS)
+        if (!_avatarTierKnown
+            || !TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours))
         {
             return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
         }
-        return new MandatoryBlocks(
-            schoolHours,
-            HsSeasonCalendar.IsPracticeDay(dayOfSeason) ? HsSeasonCalendar.PracticeHours : 0,
-            HsSeasonCalendar.IsGameDay(dayOfSeason) ? HsSeasonCalendar.GameHours : 0,
-            practiceGameLocked: true);
+        return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
     }
 
     /// <summary>
@@ -1243,7 +1255,7 @@ public sealed partial class GameManager : Node
         int hours = _plannedPracticeHours;
         _plannedPracticeHours = 0;
 
-        // Calendar top-up: mandatory HS team practice happens whether or not
+        // Calendar top-up: mandatory team practice happens whether or not
         // the player planned the day — an unplanned (autopiloted/skipped)
         // practice day still banks the mandated hours, so multi-day skips no
         // longer zero the development lever now that Practice is
@@ -1537,9 +1549,9 @@ public sealed partial class GameManager : Node
 
 /// <summary>
 /// The calendar-mandated blocks of one day — <see cref="GameManager.GetMandatoryBlocksFor"/>'s
-/// projection. When <see cref="PracticeGameLocked"/> is false (non-HS tiers,
-/// this pass), Practice/Game stay legacy player-reserved sliders and only
-/// School is calendar-driven.
+/// projection. When <see cref="PracticeGameLocked"/> is false (outside the
+/// avatar tier's season window, 13-3 brief D3), Practice/Game are free
+/// player sliders and only School is calendar-driven.
 /// </summary>
 public readonly struct MandatoryBlocks
 {

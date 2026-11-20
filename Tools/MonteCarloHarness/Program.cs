@@ -33,7 +33,7 @@ namespace DirtAndDiamonds.Tools.MonteCarloHarness;
 /// still run (Phase 13 integration: the world-building suites are expected
 /// red until 13-2/13-3, 13-1 brief §5.3).
 /// </summary>
-internal static class Program
+internal static partial class Program
 {
     private static readonly List<(string Name, bool Pass, string Detail)> Results = new();
 
@@ -52,6 +52,12 @@ internal static class Program
         string? repoRoot = null;
         int paCount = 100_000;
         HashSet<string>? only = null;
+        // 13-3 opt-in modes (never part of the default run): the D5 timing
+        // pilot and CS-M's College rate analysis (brief §10.2 Q1/Q3).
+        bool tierPilot = args.Contains("--tier-pilot");
+        bool collegeAnalysis = args.Contains("--college-analysis");
+        bool analysisPilot = args.Contains("--pilot");
+        bool analysisReduced = args.Contains("--reduced"); // the approved M2 holdout (brief §10.7)
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--repo")
@@ -77,6 +83,25 @@ internal static class Program
         }
 
         string schemaPath = Path.Combine(repoRoot, "Assets", "Data", "Database", "SchemaDefinitions.sql");
+        if (collegeAnalysis)
+        {
+            return RunCollegeAnalysis(schemaPath, analysisPilot, analysisReduced && !analysisPilot);
+        }
+        if (tierPilot)
+        {
+            string pilotPath = Path.Combine(Path.GetTempPath(), $"dnd_tierpilot_{Guid.NewGuid():N}.db");
+            try
+            {
+                RunPooledTierBands(schemaPath, pilotPath, pilot: true);
+            }
+            finally
+            {
+                TryDelete(pilotPath);
+                TryDelete(pilotPath + "-wal");
+                TryDelete(pilotPath + "-shm");
+            }
+            return 0;
+        }
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_montecarlo_{Guid.NewGuid():N}.db");
         string microScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_microsim_{Guid.NewGuid():N}.db");
         string careerIdsScratchPath1 = Path.Combine(Path.GetTempPath(), $"dnd_careerids1_{Guid.NewGuid():N}.db");
@@ -105,6 +130,7 @@ internal static class Program
         string personFxScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_personfx_{Guid.NewGuid():N}.db");
         string worldGenScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_worldgen_{Guid.NewGuid():N}.db");
         string slice132ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_132_{Guid.NewGuid():N}.db");
+        string slice133ScratchPath = Path.Combine(Path.GetTempPath(), $"dnd_133_{Guid.NewGuid():N}.db");
 
         // The suite registry, in run order. "resolver" is the per-PA guard
         // (§5 fixtures + §8 batch) that must stay byte-exact through Phase 13.
@@ -113,6 +139,8 @@ internal static class Program
             ("resolver", RunResolverFixtures),
             ("resolver", () => RunMonteCarloBatch(paCount)),
             ("ui-strings", () => RunUiStringsSuite(repoRoot)),
+            ("calendar", RunCalendarSuite),
+            ("schedule", () => RunScheduleSuite(schemaPath, slice133ScratchPath + ".schedule")),
             ("starters", () => RunStartersSuite(schemaPath, slice132ScratchPath + ".starters")),
             ("innings", () => RunInningsSuite(schemaPath, slice132ScratchPath + ".innings")),
             ("capacity", () => RunCapacitySuite(schemaPath, slice132ScratchPath + ".capacity")),
@@ -147,6 +175,7 @@ internal static class Program
             ("development-stream", () => RunDevelopmentStreamSuite(schemaPath, devStreamScratchPath)),
             ("practice-seam", () => RunPracticeSeamSuite(schemaPath, practiceScratchPath)),
             ("development-equilibrium", () => RunDevelopmentEquilibriumSuite(schemaPath, devEquilibriumScratchPath)),
+            ("development-tiers", () => RunDevelopmentTiersSuite(schemaPath, slice133ScratchPath + ".devtiers")),
             ("scouting-grade", RunScoutingGradeSuite),
             ("portrait-tile", RunPortraitTileSuite),
         };
@@ -188,6 +217,13 @@ internal static class Program
                 {
                     worldGenScratchPath, worldGenScratchPath + ".b", worldGenScratchPath + ".c", worldGenScratchPath + ".tx",
                     slice132ScratchPath + ".starters.reload", slice132ScratchPath + ".starters.parity",
+                    slice132ScratchPath + ".starters.cf.rp", slice132ScratchPath + ".starters.cf.up",
+                    slice132ScratchPath + ".starters.cf.tie",
+                    // 13-2's R1/R2 fixtures (added in 13-3: they leaked one set per run).
+                    slice132ScratchPath + ".starters.r1", slice132ScratchPath + ".starters.r2",
+                    slice132ScratchPath + ".starters.r2.macro", slice132ScratchPath + ".starters.r2.shared",
+                    slice132ScratchPath + ".starters.r2.unit", // 13-3 M-values session: the R2 ledger-contract fixture leaked too
+                    slice133ScratchPath + ".schedule", slice133ScratchPath + ".devtiers",
                     slice132ScratchPath + ".innings", slice132ScratchPath + ".capacity",
                     slice132ScratchPath + ".capacity.over", slice132ScratchPath + ".lineups",
                 })
@@ -229,7 +265,7 @@ internal static class Program
                 TryDelete(lineage + "-wal");
                 TryDelete(lineage + "-shm");
             }
-            foreach (string variant in new[] { tierScratchPath, tierScratchPath + ".ref" })
+            foreach (string variant in new[] { tierScratchPath, tierScratchPath + ".ref", tierScratchPath + ".pooled" })
             {
                 TryDelete(variant);
                 TryDelete(variant + "-wal");
@@ -485,19 +521,23 @@ internal static class Program
             bus.DispatchPending();
         }
         stopwatch.Stop();
-        Console.WriteLine($"  730-day run (2 × {LeagueSimulator.RegularSeasonDays}-game seasons): {stopwatch.ElapsedMilliseconds} ms");
+        int proGamesPerTeam = TierSeasonCalendar.GamesPerTeam(LeagueTier.Pro);
+        Console.WriteLine($"  730-day run (2 × {proGamesPerTeam}-game Pro seasons): {stopwatch.ElapsedMilliseconds} ms");
 
         Check("no batch left open after the run", !db.IsBatchActive);
         Check("database integrity ok / no FK violations",
             db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
 
-        // A fresh save SEEDS at day 1; DayAdvancedEvent fires on advancement, so
-        // the first-ever season plays season-days 2..154 (one fewer game day).
-        // Every subsequent season gets all RegularSeasonDays. Known M1 artifact,
-        // documented in docs/progress.md.
-        int gamesPerDay = league.TeamCount / 2;
-        AssertSeason(baseball, StartYear, (LeagueSimulator.RegularSeasonDays - 1) * gamesPerDay);
-        AssertSeason(baseball, StartYear + 1, LeagueSimulator.RegularSeasonDays * gamesPerDay);
+        // 13-3: both seasons are full 64-game Pro seasons. A fresh save seeds
+        // at day 1 and the first DayAdvancedEvent is day 2, but no tier plays
+        // day 1 (Pro opens on day 93), so the old M1 "153-day first season"
+        // artifact is gone.
+        int gamesPerSeason = proGamesPerTeam * league.TeamCount / 2;
+        AssertSeason(baseball, StartYear, gamesPerSeason);
+        AssertSeason(baseball, StartYear + 1, gamesPerSeason);
+
+        // §11.3 / 13-3 brief D6: the new Pro guard on this world's first season.
+        CheckProGuard(db, baseball);
 
         // Row-level rate check on a sample batter: the normalizer's stored
         // rates must equal the definitionally recomputed ones.
@@ -518,20 +558,22 @@ internal static class Program
             $"rows={seasons.Count}");
 
         // 4. Flat GC profile: a warmed game day allocates nothing. A detached
-        // simulator (never flushes) drives the internal day loop directly.
+        // simulator (never flushes) drives the internal day loop directly over
+        // Pro's real game days (13-3: off days play nothing, so they'd prove nothing).
         var profiled = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed + 1));
         profiled.Initialize();
-        for (int day = 1; day <= 7; day++)
+        profiled.PrepareSeason(StartYear);
+        for (int k = 1; k <= 7; k++)
         {
-            profiled.SimulateGameDay(day);
+            profiled.SimulateGameDay(TierSeasonCalendar.GameDay(LeagueTier.Pro, k));
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int day = 8; day <= 27; day++)
+        for (int k = 8; k <= 27; k++)
         {
-            profiled.SimulateGameDay(day);
+            profiled.SimulateGameDay(TierSeasonCalendar.GameDay(LeagueTier.Pro, k));
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Check($"warm game day allocates zero bytes (20 days / {20 * profiled.TeamCount / 2} games)", allocated == 0, $"{allocated} B");
+        Check($"warm game day allocates zero bytes (20 Pro game days / {20 * profiled.TeamCount / 2} games)", allocated == 0, $"{allocated} B");
     }
 
     private static void AssertSeason(BaseballQueries baseball, int season, int gamesPerSeason)
@@ -551,10 +593,14 @@ internal static class Program
         double bbRate = (double)bat.Bb / bat.Pa;
         double hrRate = (double)bat.Hr / bat.Pa;
         double runsPerTeamGame = (double)pit.Er / pit.Gs; // all runs earned; one GS per team-game
+        double runsPer9 = 27.0 * pit.Er / pit.OutsRecorded;
 
+        // 13-3 (D5): R/9 is the gated unit, ER/GS is reported beside it on the
+        // same sample (CS-M §1); the run band itself is gated on tier-ladder's
+        // pooled Pro sample, not on one 1,024-game season.
         Console.WriteLine($"  Season {season}: {avg:.000}/{obp:.000}/{slg:.000}  OPS {ops:.000}  " +
-            $"K% {kRate:P1}  BB% {bbRate:P1}  HR/PA {hrRate:P1}  R/G {runsPerTeamGame:F2}  " +
-            $"({bat.Pa:N0} PA, {pit.Gs / 2:N0} games)");
+            $"K% {kRate:P1}  BB% {bbRate:P1}  HR/PA {hrRate:P1}  R/9 {runsPer9:F2}  ER/GS {runsPerTeamGame:F2}  " +
+            $"(R {pit.Er:N0}, ER {pit.Er:N0}, outs {pit.OutsRecorded:N0}, GS {pit.Gs:N0}; {bat.Pa:N0} PA, {pit.Gs / 2:N0} games)");
 
         Check($"[{season}] slash line within §8 acceptance",
             avg is >= 0.240 and <= 0.260 && obp is >= 0.308 and <= 0.325
@@ -563,8 +609,8 @@ internal static class Program
         Check($"[{season}] K/BB/HR rates within §8 acceptance",
             kRate is >= 0.20 and <= 0.25 && bbRate is >= 0.075 and <= 0.105 && hrRate is >= 0.027 and <= 0.037,
             $"K {kRate:P1} BB {bbRate:P1} HR {hrRate:P1}");
-        Check($"[{season}] run environment R/G in 4.2–4.8",
-            runsPerTeamGame is >= 4.2 and <= 4.8, $"{runsPerTeamGame:F2}");
+        // (RETIRED in 13-3: "[season] run environment R/G in 4.2–4.8" on one
+        // season. Replacement: tier-ladder's pooled Pro R/9 band, D5.)
         Check($"[{season}] {gamesPerSeason} games: GS = 2×games, W and L each = games",
             pit.Gs == 2L * gamesPerSeason && pit.W == gamesPerSeason && pit.L == gamesPerSeason,
             $"gs={pit.Gs} w={pit.W} l={pit.L}");
@@ -1324,8 +1370,11 @@ internal static class Program
             && rebooted.AvatarPlayerId == career.AvatarPlayerId && rebooted.AvatarTeamId == avatarTeam);
 
         // ---- one autopilot season through the real event loop ----
+        // 13-3: Pro plays Tue/Thu/Sat from day 93; the cadence probe sits on
+        // the 25th Pro game day (several Sunday flushes in).
+        int cadenceDay = TierSeasonCalendar.GameDay(LeagueTier.Pro, 25);
         var stopwatch = Stopwatch.StartNew();
-        for (int i = 0; i < 40; i++)
+        while (state.DayOfSeason < cadenceDay)
         {
             clock.AdvanceDay();
             bus.DispatchPending();
@@ -1334,29 +1383,29 @@ internal static class Program
         players.LoadBattingSeasons(career.AvatarPlayerId, midSeasons);
         LeagueBattingTotals midTotals = baseball.LoadLeagueBattingTotals(StartYear);
         Check("mid-season cadence: avatar stats per game, league stats per 7-day cycle",
-            midSeasons.Count == 1 && midSeasons[0].Pa > 100 && midTotals.Pa > midSeasons[0].Pa,
-            $"avatar PA {(midSeasons.Count > 0 ? midSeasons[0].Pa : 0)}, league PA {midTotals.Pa} by day 40");
+            midSeasons.Count == 1 && midSeasons[0].Pa > 50 && midTotals.Pa > midSeasons[0].Pa,
+            $"avatar PA {(midSeasons.Count > 0 ? midSeasons[0].Pa : 0)}, league PA {midTotals.Pa} by day {cadenceDay} (25 Pro games)");
 
         // Stop at day 365 (last of season 1) so the interactive phase below
         // owns the roll into season 2.
-        for (int i = 40; i < GlobalState.DaysPerSeason - 1; i++)
+        while (state.DayOfSeason < GlobalState.DaysPerSeason)
         {
             clock.AdvanceDay();
             bus.DispatchPending();
         }
         stopwatch.Stop();
-        Console.WriteLine($"  Career season (autopilot, {LeagueSimulator.RegularSeasonDays - 1} attended games): " +
+        Console.WriteLine($"  Career season (autopilot, {TierSeasonCalendar.GamesPerTeam(LeagueTier.Pro)} attended games): " +
             $"{stopwatch.ElapsedMilliseconds} ms");
 
         Check("no batch left open after the career season", !db.IsBatchActive);
         Check("career-season database integrity ok / no FK violations",
             db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
 
-        // Season 1 plays days 2..154 (the known M1 seed artifact): 153 days ×
+        // Season 1 is a full 64-game Pro season (13-3): GamesPerTeam ×
         // TeamCount/2 games — all macro but the attended one — so league
         // totals must look exactly like an unsuppressed season. Any macro/micro double-play or clobbered
         // additive flush breaks the GS or ledger identities.
-        int seasonGames = (LeagueSimulator.RegularSeasonDays - 1) * league.TeamCount / 2;
+        int seasonGames = TierSeasonCalendar.GamesPerTeam(LeagueTier.Pro) * league.TeamCount / 2;
         LeagueBattingTotals bat = baseball.LoadLeagueBattingTotals(StartYear);
         LeaguePitchingTotals pit = baseball.LoadLeaguePitchingTotals(StartYear);
         Check($"suppression accounting: {seasonGames} games once each (GS = 2×games, W = L = games)",
@@ -1373,8 +1422,14 @@ internal static class Program
 
         var avatarSeasons = new List<BattingStatsRow>();
         players.LoadBattingSeasons(career.AvatarPlayerId, avatarSeasons);
-        Check("avatar played the full attended season (PA in 450–800, rates normalized)",
-            avatarSeasons.Count == 1 && avatarSeasons[0].Pa is >= 450 and <= 800 && avatarSeasons[0].Avg > 0,
+        // 13-3 §5.4: the band scales with the 64-game Pro season (pilot envelope
+        // 188–335 from the old 450–800 over 153 games, brief §10.3 Q7). Signed
+        // as installed by Gemini 4 Argon (13-3 Math record §5): this fixture
+        // plays 294 PA; 32 career seeds (every lineup slot) span [258, 319].
+        // The signed HS 10-game band is 24–48 PA and College 28-game 90–160 PA,
+        // for whichever suite first plays an avatar season in those tiers.
+        Check("avatar played the full attended season (PA in 188–335 over 64 Pro games, rates normalized)",
+            avatarSeasons.Count == 1 && avatarSeasons[0].Pa is >= 188 and <= 335 && avatarSeasons[0].Avg > 0,
             avatarSeasons.Count == 1 ? $"{avatarSeasons[0].Pa} PA, AVG {avatarSeasons[0].Avg:.000}" : "no row");
         var displacedSeasons = new List<BattingStatsRow>();
         players.LoadBattingSeasons(displacedId, displacedSeasons);
@@ -1384,8 +1439,9 @@ internal static class Program
         career.AutopilotAttendedGames = false;
         clock.AdvanceDay(); // offseason days schedule nothing, so roll to next season's day 1 region
         bus.DispatchPending();
-        // Advance until a regular-season day hands us a pending game.
-        for (int guard = 0; !career.HasPendingGame && guard < 5; guard++)
+        // Advance until a regular-season day hands us a pending game (13-3:
+        // Pro's opening day, day 93).
+        for (int guard = 0; !career.HasPendingGame && guard < GlobalState.DaysPerSeason; guard++)
         {
             clock.AdvanceDay();
             bus.DispatchPending();
@@ -1563,9 +1619,17 @@ internal static class Program
             humanBranchCoherent, $"{pitchResults.Count} pitches checked");
 
         // ---- cancel path: the game aborts unflushed and stays pending ----
-        clock.AdvanceDay();
-        bus.DispatchPending();
-        Check("next day parks a fresh pending game", career.HasPendingGame);
+        // 13-3: the next Pro game day (Tue → Thu) parks the next game.
+        int offDays = -1;
+        do
+        {
+            clock.AdvanceDay();
+            bus.DispatchPending();
+            offDays++;
+        }
+        while (!career.HasPendingGame && offDays < GameCalendar.DaysPerWeek);
+        Check("the next game day parks a fresh pending game (off days park none)",
+            career.HasPendingGame && offDays == 1, $"{offDays} off day(s) before it");
         LeagueBattingTotals beforeCancel = baseball.LoadLeagueBattingTotals(StartYear + 1);
         var cancelBridge = new PlayerIntentBridge();
         bool cancelled = false;
@@ -2910,15 +2974,17 @@ internal static class Program
                 founderRoster.All(r => r.PlayerId != founderId));
 
             // ---- check 9: a full season under generation 3 stays inside the §8 bands ----
-            for (int i = 0; i < LeagueSimulator.RegularSeasonDays; i++)
+            // 13-3: through Pro's last regular-season game and the Sunday flush after it.
+            int seasonFlushedDay = SundayOnOrAfter(TierSeasonCalendar.RegularSeasonLastDay(LeagueTier.Pro));
+            for (int i = 0; i < seasonFlushedDay; i++)
             {
                 clock.AdvanceDay();
                 bus.DispatchPending();
             }
             stopwatch.Stop();
-            Console.WriteLine($"  3-generation run ({2 * GlobalState.DaysPerSeason + LeagueSimulator.RegularSeasonDays} days, 2 handoffs): {stopwatch.ElapsedMilliseconds} ms");
+            Console.WriteLine($"  3-generation run ({2 * GlobalState.DaysPerSeason + seasonFlushedDay} days, 2 handoffs): {stopwatch.ElapsedMilliseconds} ms");
 
-            int fullSeasonGames = LeagueSimulator.RegularSeasonDays * league.TeamCount / 2;
+            int fullSeasonGames = TierSeasonCalendar.GamesPerTeam(LeagueTier.Pro) * league.TeamCount / 2;
             LeaguePitchingTotals pit2 = baseball.LoadLeaguePitchingTotals(StartYear + 1);
             LeaguePitchingTotals pit3 = baseball.LoadLeaguePitchingTotals(StartYear + 2);
             Check("GS/W/L identities hold across both succession seasons (every game counted exactly once)",
@@ -3957,14 +4023,21 @@ internal static class Program
     // doubles as the 9a regression guard on the calibrated core.
     // league_restructure.md §11.2: the HS, College and Pro bands reuse the
     // shipped HS, College and MLB rows verbatim, with runs read per 9 innings
-    // (R/9) so 7-inning HS games compare cleanly. Indexed by (int)LeagueTier.
+    // (R/9) so 7-inning HS games compare cleanly; the one restatement is the
+    // Pro R/9 floor (below). Indexed by (int)LeagueTier.
     // College's 28-game restatement and any re-band are 13-3's (CS-M).
     private static readonly TierBand[] TierBands =
     {
         new(.296, .316, .379, .399, .493, .523, .177, .207, .109, .129, .034, .042, 6.4, 8.0), // HS
         new(.284, .304, .364, .384, .473, .503, .184, .214, .103, .123, .033, .041, 5.8, 7.1), // College
-        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.2, 4.8), // Pro (the MLB §8 row)
+        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.1, 4.8), // Pro (the MLB §8 row; R/9 floor 4.1, D5)
     };
+    // D5 Option (i), owner-approved 2026-11-20: the Pro floor reads 4.1, not
+    // the MLB row's 4.2. That row was gated on ER/GS; R/9 = ER/GS × 27/(outs/GS),
+    // and flat Pro plays 27.17 outs/GS (extras outweigh skipped home ninths), so
+    // R/9 sits 0.027 below ER/GS. The unchanged model's exact center is
+    // 9 × RE(empty, 0 out) = 4.1439; 32 holdout seasons give 4.1519 [4.1311, 4.1727]
+    // (docs/design/math/13-3_bands_guard_development.md §2.3–2.5). No sim change.
 
     private static void RunTierLadderSuite(string schemaPath, string scratchPath)
     {
@@ -4034,9 +4107,9 @@ internal static class Program
         Check("3-tier season: integrity ok, no FK violations, no open batch",
             !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
 
-        // ---- §4 per-tier bands + strictly monotone ladder ----
-        Span<double> avgByTier = stackalloc double[LeagueDirectory.TierCount];
-        Span<double> rgByTier = stackalloc double[LeagueDirectory.TierCount];
+        // ---- one bus-driven 3-tier season: reported (13-3 D5 gates the bands
+        // and the monotone ladder on the pooled sample below; one HS season is
+        // only 60 games) ----
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
             var tier = (LeagueTier)t;
@@ -4051,33 +4124,17 @@ internal static class Program
             double kRate = (double)bat.So / bat.Pa;
             double bbRate = (double)bat.Bb / bat.Pa;
             double hrRate = (double)bat.Hr / bat.Pa;
-            // §11.2: runs per 9 innings (all runs earned in the macro-sim).
-            double runsPerTeamGame = 27.0 * pit.Er / pit.OutsRecorded;
-            avgByTier[t] = avg;
-            rgByTier[t] = runsPerTeamGame;
-
+            // §11.2: runs per 9 innings (all runs earned in the macro-sim); ER/GS beside it (CS-M §1).
+            double runsPer9 = 27.0 * pit.Er / pit.OutsRecorded;
+            double runsPerGs = (double)pit.Er / pit.Gs;
             Console.WriteLine($"  {tier,-8} {avg:.000}/{obp:.000}/{slg:.000}  K% {kRate:P1}  BB% {bbRate:P1}  " +
-                $"HR/PA {hrRate:P1}  R/9 {runsPerTeamGame:F2}  ({bat.Pa:N0} PA)");
-
-            TierBand band = TierBands[t];
-            Check($"§4 [{tier}] slash line inside the tier band",
-                avg >= band.AvgLo && avg <= band.AvgHi && obp >= band.ObpLo && obp <= band.ObpHi
-                && slg >= band.SlgLo && slg <= band.SlgHi,
-                $"{avg:.000}/{obp:.000}/{slg:.000}");
-            Check($"§4 [{tier}] K/BB/HR rates and R/9 inside the tier band",
-                kRate >= band.KLo && kRate <= band.KHi && bbRate >= band.BbLo && bbRate <= band.BbHi
-                && hrRate >= band.HrLo && hrRate <= band.HrHi
-                && runsPerTeamGame >= band.RgLo && runsPerTeamGame <= band.RgHi,
-                $"K {kRate:P1} BB {bbRate:P1} HR {hrRate:P1} R/9 {runsPerTeamGame:F2}");
+                $"HR/PA {hrRate:P1}  R/9 {runsPer9:F2}  ER/GS {runsPerGs:F2}  ({bat.Pa:N0} PA, {pit.Gs / 2:N0} games; one season, reported)");
         }
-        bool monotone = true;
-        for (int t = 1; t < LeagueDirectory.TierCount; t++)
-        {
-            monotone &= avgByTier[t] < avgByTier[t - 1] && rgByTier[t] < rgByTier[t - 1];
-        }
-        int top = LeagueDirectory.TierCount - 1;
-        Check("tier ladder is strictly monotone HS→Pro on AVG and R/9 (legibility contract)", monotone,
-            $"AVG {avgByTier[0]:.000}→{avgByTier[top]:.000}  R/9 {rgByTier[0]:F2}→{rgByTier[top]:F2}");
+        // (RETIRED in 13-3: "§4 [tier] slash line inside the tier band", "§4
+        // [tier] K/BB/HR rates and R/9 inside the tier band" and "tier ladder is
+        // strictly monotone HS→Pro on AVG and R/9" on one season per tier.
+        // Replacement: the same checks on the pooled sample, RunPooledTierBands, D5.)
+        RunPooledTierBands(schemaPath, scratchPath + ".pooled", pilot: false);
 
         // ---- MLB bit-identity: the same seed in an MLB-only world ----
         using var refDb = new DatabaseManager(referencePath);
@@ -4249,10 +4306,13 @@ internal static class Program
                 && absPlayers.LoadActiveAbsences(130, inertRows) == 0);
 
             // Targets: a lineup batter on the first team, a rotation starter on
-            // the second — both suspended for days 15–21 (one full flush cycle).
-            // 13-2: the sim under test is the Pro tier; batters must be in the
-            // D3 lineup, and the flat world's top-ranked starter (id order)
-            // starts every third day under rest 3.
+            // the second — both suspended for one full flush cycle. 13-2: the
+            // sim under test is the Pro tier; batters must be in the D3 lineup,
+            // and the flat world's top-ranked starter (id order) is the ace.
+            // 13-3: the windows sit on Pro's calendar — baseline through the
+            // first Sunday flush (day 98: games 93/95/97, the ace starting
+            // Tue + Sat), suspension days 99–105 (games 100/102/104), back
+            // days 106–112 (games 107/109/111).
             List<string> firstLineup = LineupPlayerIds(absBaseball, ProTeam(1));
             string batterId = firstLineup[0];
             string teammateId = firstLineup[1];
@@ -4271,8 +4331,8 @@ internal static class Program
             absLeague.Availability = absLedger;
             absLeague.AttachTo(absBus);
 
-            // Days 2..14 (the known seed-day artifact: day 1 fires no event).
-            for (long day = absState.CurrentDay; day < 14; day = absState.CurrentDay)
+            int firstFlush = SundayOnOrAfter(TierSeasonCalendar.GameDay(LeagueTier.Pro, 1));
+            for (long day = absState.CurrentDay; day < firstFlush; day = absState.CurrentDay)
             {
                 absClock.AdvanceDay();
                 absBus.DispatchPending();
@@ -4284,10 +4344,12 @@ internal static class Program
             Check("pre-absence baseline: both targets have been playing", batterPa0 > 0 && starterG0 > 0,
                 $"batter PA {batterPa0}, starter G {starterG0}");
 
-            // Suspend both for days 15..21 (until_day 22), published on the
-            // same bus the day events ride — FIFO puts it ahead of day 15.
-            absBus.Publish(new PlayerAbsenceChangedEvent(batterId, (byte)AbsenceReason.Suspension, 22, 0, 0));
-            absBus.Publish(new PlayerAbsenceChangedEvent(starterId, (byte)AbsenceReason.Suspension, 22, 0, 0));
+            // Suspend both for the next 7 days (until_day = the next flush + 1),
+            // published on the same bus the day events ride — FIFO puts it
+            // ahead of the first suspended day.
+            long untilDay = firstFlush + GameCalendar.DaysPerWeek + 1;
+            absBus.Publish(new PlayerAbsenceChangedEvent(batterId, (byte)AbsenceReason.Suspension, untilDay, 0, 0));
+            absBus.Publish(new PlayerAbsenceChangedEvent(starterId, (byte)AbsenceReason.Suspension, untilDay, 0, 0));
             for (int i = 0; i < 7; i++)
             {
                 absClock.AdvanceDay();
@@ -4301,7 +4363,7 @@ internal static class Program
                 batterPa1 == batterPa0 && starterG1 == starterG0 && teammatePa1 > teammatePa0,
                 $"batter PA {batterPa0}→{batterPa1}, starter G {starterG0}→{starterG1}, teammate PA {teammatePa0}→{teammatePa1}");
 
-            // Days 22..28 — both are back.
+            // The next 7 days — both are back.
             for (int i = 0; i < 7; i++)
             {
                 absClock.AdvanceDay();
@@ -4355,7 +4417,8 @@ internal static class Program
             Fielding = 50,
         });
 
-        for (int i = 0; i < 5; i++)
+        // 13-3: through Pro's opening week (games 93/95/97).
+        while (carState.DayOfSeason < TierSeasonCalendar.GameDay(LeagueTier.Pro, 3))
         {
             carClock.AdvanceDay();
             carBus.DispatchPending();
@@ -4363,16 +4426,17 @@ internal static class Program
         int avatarPa0 = SeasonPa(carPlayers, carCareer.AvatarPlayerId);
         Check("avatar baseline: attended autopilot games accruing", avatarPa0 > 0, $"PA {avatarPa0}");
 
-        // Suspend the avatar for the next 3 days, then flip to interactive
-        // mode — the benched days must STILL resolve straight through the
-        // autopilot (no pending game the player isn't allowed to play).
+        // Suspend the avatar for the next 7 days (13-3: Pro games 100/102/104
+        // fall inside), then flip to interactive mode — the benched days must
+        // STILL resolve straight through the autopilot (no pending game the
+        // player isn't allowed to play).
         carBus.Publish(new PlayerAbsenceChangedEvent(
-            carCareer.AvatarPlayerId, (byte)AbsenceReason.Suspension, carState.CurrentDay + 4, 0, 0));
+            carCareer.AvatarPlayerId, (byte)AbsenceReason.Suspension, carState.CurrentDay + 8, 0, 0));
         carCareer.AutopilotAttendedGames = false;
         LeagueBattingTotals beforeBat = carBaseball.LoadLeagueBattingTotals(StartYear);
         bool neverPending = true;
         bool absentReported = true;
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 7; i++)
         {
             carClock.AdvanceDay();
             carBus.DispatchPending();
@@ -4387,15 +4451,19 @@ internal static class Program
         Check("the team's games still happened while the avatar sat (attended-game flushes kept landing)",
             duringBat.Pa > beforeBat.Pa, $"league PA {beforeBat.Pa}→{duringBat.Pa}");
 
-        carClock.AdvanceDay();
-        carBus.DispatchPending();
+        // 13-3: the next game day (off days park nothing).
+        for (int guard = 0; guard < GameCalendar.DaysPerWeek && !carCareer.HasPendingGame; guard++)
+        {
+            carClock.AdvanceDay();
+            carBus.DispatchPending();
+        }
         bool backPending = carCareer.HasPendingGame && !carCareer.IsAvatarAbsentOn(carState.CurrentDay);
         var neutral = new NeutralBatterPolicy();
         if (carCareer.HasPendingGame)
         {
             carCareer.PlayPendingGame(ref neutral);
         }
-        Check("suspension over: the next day parks a pending interactive game again and the avatar plays",
+        Check("suspension over: the next game day parks a pending interactive game again and the avatar plays",
             backPending && SeasonPa(carPlayers, carCareer.AvatarPlayerId) > avatarPa1,
             $"PA {avatarPa1}→{SeasonPa(carPlayers, carCareer.AvatarPlayerId)}");
         Check("career benching world: integrity ok, no FK violations, no open batch",
@@ -4639,18 +4707,19 @@ internal static class Program
 
             // ---- zero-alloc: a warm GEARED game day stays flat (the non-fast
             // PA path is pure struct math). Season totals were captured above;
-            // these extra in-memory days are never flushed.
-            for (int day = 1; day <= 7; day++)
+            // these extra in-memory days are never flushed. 13-3: the next
+            // season (loaded by the year roll) on Pro's real game days.
+            for (int k = 1; k <= 7; k++)
             {
-                batLeague.SimulateGameDay(day);
+                batLeague.SimulateGameDay(TierSeasonCalendar.GameDay(LeagueTier.Pro, k));
             }
             long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int day = 8; day <= 27; day++)
+            for (int k = 8; k <= 27; k++)
             {
-                batLeague.SimulateGameDay(day);
+                batLeague.SimulateGameDay(TierSeasonCalendar.GameDay(LeagueTier.Pro, k));
             }
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            Check("warm geared game day allocates zero bytes (20 days / 80 games)", allocated == 0, $"{allocated} B");
+            Check("warm geared game day allocates zero bytes (20 Pro game days / 320 games)", allocated == 0, $"{allocated} B");
             Check("geared season world: integrity ok, no FK violations, no open batch",
                 !batDb.IsBatchActive && batDb.RunIntegrityCheck() == "ok" && batDb.RunForeignKeyCheck() == 0);
         }
@@ -5253,10 +5322,10 @@ internal static class Program
         // RECOVERY, not an exact count.
         LeaguePitchingTotals hsSenior = baseball.LoadLeaguePitchingTotals(StartYear + 1, LeagueTier.HS);
         LeaguePitchingTotals hsSeason2 = baseball.LoadLeaguePitchingTotals(StartYear + 2, LeagueTier.HS);
-        // HS plays HsSeasonCalendar's sparse spring schedule: GamesPerSeason
-        // game days × TeamCount starts (2 starters × TeamCount/2 pairings).
+        // HS plays TierSeasonCalendar's 10 Fridays (13-3): GamesPerTeam game
+        // days × TeamCount starts (2 starters × TeamCount/2 pairings).
         int hsTeams = baseball.CountTeamsInTier(LeagueTier.HS);
-        int fullHsGs = HsSeasonCalendar.GamesPerSeason * hsTeams;
+        int fullHsGs = TierSeasonCalendar.GamesPerTeam(LeagueTier.HS) * hsTeams;
         Check("origin sim released: after the avatar graduates, the HS macro reclaims its old team — the post-graduation season recovers to near-full GS, versus the attended senior season that ran short (no stale attended-team claim)",
             hsSenior.Gs < fullHsGs && hsSeason2.Gs > hsSenior.Gs
             && hsSeason2.Gs >= fullHsGs - hsTeams,
@@ -6064,21 +6133,30 @@ internal static class Program
         Console.WriteLine("--- Phase 9d-2 Practice lever + scouting seam (doc §4/§6, acceptance checks 5/9) ---");
 
         // ---- pure fixtures: the §4 hours→fraction conversion ----
+        // 13-3 M4 (Argon, signed): rate .001 / cap .25 e-folds at 250 h; the
+        // first hour's second-order remainder rate²/(2·cap) = 2.0e-6, so its
+        // tolerance is 2.5e-6 (was 500 h and 1e-6 at rate .0005).
+        double f250 = DevelopmentCurve.PracticeFraction(250);
         double f500 = DevelopmentCurve.PracticeFraction(500);
         double f1000 = DevelopmentCurve.PracticeFraction(1000);
-        double f2000 = DevelopmentCurve.PracticeFraction(2000);
-        Check("§4 conversion: 0 at zero/negative hours, monotone in hours, exact at the e-fold (500h = cap·(1−1/e))",
+        Check("§4 conversion: 0 at zero/negative hours, monotone in hours, exact at the e-fold (250h = cap·(1−1/e))",
             DevelopmentCurve.PracticeFraction(0) == 0.0 && DevelopmentCurve.PracticeFraction(-25) == 0.0
-            && f1000 > f500 && f2000 > f1000
-            && Math.Abs(f500 - DevelopmentProfile.PracticeFracCap * (1.0 - Math.Exp(-1.0))) < 1e-12,
-            $"f(500)={f500:F6}");
+            && f500 > f250 && f1000 > f500
+            && Math.Abs(f250 - DevelopmentProfile.PracticeFracCap * (1.0 - Math.Exp(-1.0))) < 1e-12,
+            $"f(250)={f250:F6}");
         Check("§4 conversion: strictly diminishing returns; the first hour is worth PracticeFracPerHour",
-            f1000 - f500 < f500 && f2000 - f1000 < f1000 - f500
-            && Math.Abs(DevelopmentCurve.PracticeFraction(1) - DevelopmentProfile.PracticeFracPerHour) < 1e-6,
-            $"500h slices {f500:F4} → {f1000 - f500:F4} → {f2000 - f1000:F4}");
+            f500 - f250 < f250 && f1000 - f500 < f500 - f250
+            && Math.Abs(DevelopmentCurve.PracticeFraction(1) - DevelopmentProfile.PracticeFracPerHour) < 2.5e-6,
+            $"250h slices {f250:F4} → {f500 - f250:F4} → {f1000 - f500:F4}");
+        // The finite-grind probe sits at 20 e-folds (was a literal 10,000 h =
+        // 20 e-folds at .0005). At .001, 10,000 h is 40 e-folds: exp(−40) is
+        // below double epsilon, so f rounds to exactly the cap there. 20 e-folds
+        // (5,000 h, more than a year of 13 h days) stays strictly below.
+        long grindHours = (long)(20 * DevelopmentProfile.PracticeFracCap / DevelopmentProfile.PracticeFracPerHour);
         Check("§4 conversion: asymptotes at the seasonal cap — no grind exceeds it (you cannot grind a 40 to a 100 in one winter)",
-            DevelopmentCurve.PracticeFraction(10_000) < DevelopmentProfile.PracticeFracCap
-            && DevelopmentCurve.PracticeFraction(1_000_000_000) == DevelopmentProfile.PracticeFracCap);
+            DevelopmentCurve.PracticeFraction(grindHours) < DevelopmentProfile.PracticeFracCap
+            && DevelopmentCurve.PracticeFraction(1_000_000_000) == DevelopmentProfile.PracticeFracCap,
+            $"f({grindHours}h) = {DevelopmentCurve.PracticeFraction(grindHours):R}");
 
         // ---- pure fixtures: the §6 ProjectionBonus (check 9's core) ----
         Check("§6 projection: at-ceiling young reads 0; full headroom reads the exact old AgeBonus (the fudge WAS an implicit full-headroom assumption); half headroom reads half",
@@ -6093,89 +6171,6 @@ internal static class Program
             && PromotionScore.Scouting(162, 17, 90) > PromotionScore.Scouting(162, 17, 0)
             && PromotionScore.Scouting(162, 17, 0) == 100.0 * 162 / 150.0);
 
-        // ---- §10.9 the seam in the SWEEP's S (check 9): two HS batters with
-        // identical current ratings and age contest one College vacancy —
-        // only stored headroom separates them. The at-ceiling twin's A (104)
-        // also deliberately misses the merit-swap bar (worst incumbent 100 +
-        // margin 5), so the projection the old fudge would have handed him
-        // (+8.33 age bonus → A 106.8, over the bar) is provably no longer
-        // fakeable: he stays down BECAUSE his ceiling says he is done. ----
-        {
-            using var db = new DatabaseManager(scratchPath + ".seam");
-            db.InitializeSchema(schemaPath);
-            var players = new PlayerQueries(db);
-            var baseball = new BaseballQueries(db);
-            var genRng = new RngState(LeagueSeed + 212);
-            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-
-            var hsRoster = new List<RosterPlayerRow>();
-            baseball.LoadRosterByTier(LeagueTier.HS, hsRoster);
-            string projectable = NthOfRole(hsRoster, PitcherRole.None, 0);
-            string atCeiling = NthOfRole(hsRoster, PitcherRole.None, 1);
-            int atCeilingTeam = 0;
-            foreach (RosterPlayerRow row in hsRoster)
-            {
-                if (string.Equals(row.PlayerId, atCeiling, StringComparison.Ordinal))
-                {
-                    atCeilingTeam = row.TeamId;
-                }
-            }
-            foreach (string probe in new[] { projectable, atCeiling })
-            {
-                players.SetAge(probe, 17);
-                baseball.UpsertRatings(new PlayerRatingsRow
-                {
-                    PlayerId = probe, IsPitcher = false,
-                    BatPower = 54, BatContact = 54, BatDiscipline = 54,
-                    PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
-                });
-            }
-            baseball.UpsertPotential(new PlayerPotentialRow
-            {
-                PlayerId = projectable,
-                BatPower = 84, BatContact = 84, BatDiscipline = 84,
-                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
-            });
-            baseball.UpsertPotential(new PlayerPotentialRow
-            {
-                PlayerId = atCeiling,
-                BatPower = 54, BatContact = 54, BatDiscipline = 54,
-                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
-            });
-
-            var collegeRoster = new List<RosterPlayerRow>();
-            baseball.LoadRosterByTier(LeagueTier.College, collegeRoster);
-            string retiree = NthOfRole(collegeRoster, PitcherRole.None, 0);
-            int vacatedTeam = 0;
-            foreach (RosterPlayerRow row in collegeRoster)
-            {
-                if (string.Equals(row.PlayerId, retiree, StringComparison.Ordinal))
-                {
-                    vacatedTeam = row.TeamId;
-                }
-            }
-            players.SetAge(retiree, HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge);
-
-            var promo = new PromotionManager(
-                db, players, baseball, new GameStateQueries(db),
-                new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9D25EA11UL));
-            promo.RunOffseason(StartYear);
-
-            bool projectableRose = players.TryGetById(projectable, out PlayerRow xRow)
-                && xRow.TeamId == vacatedTeam;
-            bool ceilingHeld = players.TryGetById(atCeiling, out PlayerRow yRow)
-                && yRow.TeamId == atCeilingTeam;
-            Check("§10.9 scouting seam in the sweep: the one College vacancy goes to the HIGH-HEADROOM probe; the at-ceiling twin (identical current line and age) stays in HS",
-                promo.LastRun.Removals == 1 && promo.LastRun.Promotions == 1
-                && promo.LastRun.Relegations == 0 && promo.LastRun.Intake == 1
-                && projectableRose && ceilingHeld,
-                $"X→{xRow.TeamId} (vacated {vacatedTeam}), Y→{yRow.TeamId} (origin {atCeilingTeam})");
-            Check("§10.9 seam world: roster invariant, integrity, FK, no open batch",
-                TierLadderInvariantHolds(baseball, out string seamDetail)
-                && !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0,
-                seamDetail);
-        }
-
         // ---- §10.5 the Practice lever end to end (check 5): two peak-pinned
         // worlds — where growth, decline AND jitter are exactly zero for
         // everyone but the practicing avatar — one banking 6 Practice hours
@@ -6185,7 +6180,7 @@ internal static class Program
         var idle = RunPracticeWorld(scratchPath + ".idle", schemaPath, practiceHoursPerDay: 0);
         Check("§10.5 accumulate path: 10 days × 6h bank exactly 60h in Game_State; the rollover consumes AND clears the credit",
             practiced.CreditAccrued && practiced.CreditCleared);
-        Check("§10.5 the Practice lever: a season of 6h/day (frac 0.2469) moves the peak-pinned 16yo-built avatar +3 per rating (gap 14 to the age-16 ceiling); the idle twin moves ZERO; nobody overshoots the ceiling",
+        Check("§10.5 the Practice lever: a season of 6h/day (frac 0.2500) moves the peak-pinned 16yo-built avatar +3 per rating (gap 14 to the age-16 ceiling); the idle twin moves ZERO; nobody overshoots the ceiling",
             practiced.BatSum == 189 && idle.BatSum == 180
             && practiced.NeverOvershot && idle.NeverOvershot,
             $"practiced {practiced.BatSum} vs idle {idle.BatSum} (start 180, ceiling 222)");
@@ -6278,6 +6273,92 @@ internal static class Program
                 $"heir bat {heirRow.BatPower}/{heirRow.BatContact}/{heirRow.BatDiscipline}, cleared {keyCleared}");
             Check("§4 guard world: integrity ok, no FK violations, no open batch",
                 !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+        }
+
+        // M5 Finding 1 (Argon, 13-3): §10.9 runs LAST. PromotionManager.RunOffseason
+        // throws on v14 until 13-6, so placed first it hid every §10.5 / §4 check
+        // below (practice-seam 5/6); last, the 10 non-promotion checks all run (10/11).
+        // ---- §10.9 the seam in the SWEEP's S (check 9): two HS batters with
+        // identical current ratings and age contest one College vacancy —
+        // only stored headroom separates them. The at-ceiling twin's A (104)
+        // also deliberately misses the merit-swap bar (worst incumbent 100 +
+        // margin 5), so the projection the old fudge would have handed him
+        // (+8.33 age bonus → A 106.8, over the bar) is provably no longer
+        // fakeable: he stays down BECAUSE his ceiling says he is done. ----
+        {
+            using var db = new DatabaseManager(scratchPath + ".seam");
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed + 212);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+            var hsRoster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.HS, hsRoster);
+            string projectable = NthOfRole(hsRoster, PitcherRole.None, 0);
+            string atCeiling = NthOfRole(hsRoster, PitcherRole.None, 1);
+            int atCeilingTeam = 0;
+            foreach (RosterPlayerRow row in hsRoster)
+            {
+                if (string.Equals(row.PlayerId, atCeiling, StringComparison.Ordinal))
+                {
+                    atCeilingTeam = row.TeamId;
+                }
+            }
+            foreach (string probe in new[] { projectable, atCeiling })
+            {
+                players.SetAge(probe, 17);
+                baseball.UpsertRatings(new PlayerRatingsRow
+                {
+                    PlayerId = probe, IsPitcher = false,
+                    BatPower = 54, BatContact = 54, BatDiscipline = 54,
+                    PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+                });
+            }
+            baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = projectable,
+                BatPower = 84, BatContact = 84, BatDiscipline = 84,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+            baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = atCeiling,
+                BatPower = 54, BatContact = 54, BatDiscipline = 54,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+
+            var collegeRoster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.College, collegeRoster);
+            string retiree = NthOfRole(collegeRoster, PitcherRole.None, 0);
+            int vacatedTeam = 0;
+            foreach (RosterPlayerRow row in collegeRoster)
+            {
+                if (string.Equals(row.PlayerId, retiree, StringComparison.Ordinal))
+                {
+                    vacatedTeam = row.TeamId;
+                }
+            }
+            players.SetAge(retiree, HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge);
+
+            var promo = new PromotionManager(
+                db, players, baseball, new GameStateQueries(db),
+                new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9D25EA11UL));
+            promo.RunOffseason(StartYear);
+
+            bool projectableRose = players.TryGetById(projectable, out PlayerRow xRow)
+                && xRow.TeamId == vacatedTeam;
+            bool ceilingHeld = players.TryGetById(atCeiling, out PlayerRow yRow)
+                && yRow.TeamId == atCeilingTeam;
+            Check("§10.9 scouting seam in the sweep: the one College vacancy goes to the HIGH-HEADROOM probe; the at-ceiling twin (identical current line and age) stays in HS",
+                promo.LastRun.Removals == 1 && promo.LastRun.Promotions == 1
+                && promo.LastRun.Relegations == 0 && promo.LastRun.Intake == 1
+                && projectableRose && ceilingHeld,
+                $"X→{xRow.TeamId} (vacated {vacatedTeam}), Y→{yRow.TeamId} (origin {atCeilingTeam})");
+            Check("§10.9 seam world: roster invariant, integrity, FK, no open batch",
+                TierLadderInvariantHolds(baseball, out string seamDetail)
+                && !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0,
+                seamDetail);
         }
     }
 
@@ -7541,21 +7622,26 @@ internal static class Program
             var rng = new RngState(MicroSeed + 132);
             bool parity = true;
             var sequence = new List<string>(8);
-            Span<SchedulePairing> pairings = stackalloc SchedulePairing[RosterCapacity.MaxTeamsPerTier / 2];
-            for (int day = 1; day <= 8; day++)
+            // 13-3: the first 8 Pro game days (Tue/Thu/Sat) of the persisted season.
+            macro.PrepareSeason(StartYear);
+            for (int k = 1; k <= 8; k++)
             {
+                int day = TierSeasonCalendar.GameDay(LeagueTier.Pro, k);
                 macro.SimulateGameDay(day, day);
                 string macroStarter = teamPitchers.First(id => macro.RestLedger.TryGetLastStart(id, out long d) && d == day);
-                LeagueSchedule.TryGetPairingFor(teams.Count, day, teamIndex, out SchedulePairing pairing);
+                macro.TryGetScheduledGame(StartYear, day, teamId, out _, out int homeId, out int awayId);
                 micro.SetGameDay(day);
-                micro.PlayGame(teams[pairing.HomeTeam].TeamId, teams[pairing.AwayTeam].TeamId, MicroGame.NoHuman, ref policy, ref rng);
-                string microStarter = pairing.HomeTeam == teamIndex ? micro.LastStarters.Home : micro.LastStarters.Away;
+                micro.PlayGame(homeId, awayId, MicroGame.NoHuman, ref policy, ref rng);
+                string microStarter = homeId == teamId ? micro.LastStarters.Home : micro.LastStarters.Away;
                 parity &= macroStarter == microStarter;
                 sequence.Add(teamPitchers.IndexOf(macroStarter).ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
-            Check("one rule, two sims: macro and micro pick the same starter for the same team on the same days (8 days, rest 3)",
-                parity, "pitcher index by day: " + string.Join(",", sequence));
-            Check("daily games with rest 3 make a 3-man rotation (no short rest while 3 rested starters exist)",
+            Check("one rule, two sims: macro and micro pick the same starter for the same team on the same days (8 Pro game days, rest 3)",
+                parity, "pitcher index by game day: " + string.Join(",", sequence));
+            // (Restated in 13-3 from "daily games with rest 3 make a 3-man
+            // rotation": the interim calendar played daily; Pro's Tue/Thu/Sat
+            // gaps are 2/2/3, so rest 3 gives the section-6 2-man rotation.)
+            Check("Pro Tue/Thu/Sat with rest 3 never needs short rest (the §6 2-man rotation)",
                 macro.ShortRestStarts == 0 && micro.ShortRestStarts == 0,
                 $"macro short {macro.ShortRestStarts}, micro short {micro.ShortRestStarts}");
         }
@@ -7565,6 +7651,9 @@ internal static class Program
 
         // ---- review R2: rest rows are acknowledged only after the batch commits ----
         RunRestLedgerCommitBoundaryChecks(schemaPath, scratchPath + ".r2");
+
+        // ---- 13-3 carry-forwards (13-2 brief §9.8): reliever, increase, tie-break re-ranks ----
+        RunRefreshRankCarryForwardChecks(schemaPath, scratchPath + ".cf");
 
         // ---- D5: the workload knobs ship neutral ----
         Check("D5 neutral workload knobs: penalty 0 and risk 0, so a short-rest start's capacity factor is exactly 1 (no extra draw exists)",
@@ -7871,8 +7960,9 @@ internal static class Program
             var league = new LeagueSimulator(db, baseball, new StatsNormalizer(db, baseball), new RngState(SeasonSeed), LeagueTier.Pro);
             league.Initialize();
             league.AttachTo(bus);
-            // Play up to the day before the first cycle flush: starts recorded, nothing flushed yet.
-            while (state.DayOfSeason % LeagueSimulator.FlushCadenceDays != LeagueSimulator.FlushCadenceDays - 1)
+            // Play up to the day before the first cycle flush after Pro's opening
+            // week (13-3: Sat day 97; 3 game days × 32 starts): starts recorded, nothing flushed yet.
+            while (state.DayOfSeason < SundayOnOrAfter(TierSeasonCalendar.GameDay(LeagueTier.Pro, 1)) - 1)
             {
                 clock.AdvanceDay();
                 bus.DispatchPending();
@@ -7920,8 +8010,9 @@ internal static class Program
             league.AttachTo(bus);
             var micro = new MicroGame(db, baseball) { LoggingEnabled = false, RestLedger = shared };
             micro.Initialize();
-            // Play up to the day before the first cycle flush: starts recorded, nothing flushed yet.
-            while (state.DayOfSeason % LeagueSimulator.FlushCadenceDays != LeagueSimulator.FlushCadenceDays - 1)
+            // Play up to the day before the first cycle flush after Pro's opening
+            // week (13-3: Sat day 97; 3 game days × 32 starts): starts recorded, nothing flushed yet.
+            while (state.DayOfSeason < SundayOnOrAfter(TierSeasonCalendar.GameDay(LeagueTier.Pro, 1)) - 1)
             {
                 clock.AdvanceDay();
                 bus.DispatchPending();
@@ -8028,7 +8119,9 @@ internal static class Program
         var proSim = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed + 71), LeagueTier.Pro);
         proSim.Initialize();
         proSim.AttachTo(bus);
-        for (int i = 0; i < LeagueSimulator.RegularSeasonDays; i++)
+        // 13-3: through Pro's last regular-season game and its Sunday flush.
+        int flushedDay = SundayOnOrAfter(TierSeasonCalendar.RegularSeasonLastDay(LeagueTier.Pro));
+        while (state.DayOfSeason < flushedDay)
         {
             clock.AdvanceDay();
             bus.DispatchPending();
@@ -8071,9 +8164,10 @@ internal static class Program
                         Persons = persons,
                     };
                     sim.Initialize();
-                    for (int day = 1; day <= 7; day++)
+                    sim.PrepareSeason(StartYear);
+                    for (int k = 1; k <= WarmGameDays(tier); k++)
                     {
-                        sim.SimulateGameDay(day);
+                        sim.SimulateGameDay(TierSeasonCalendar.GameDay(tier, k));
                     }
                     sims.Add(sim);
                 }
@@ -8091,15 +8185,18 @@ internal static class Program
             foreach (LeagueSimulator sim in sims)
             {
                 long before = GC.GetAllocatedBytesForCurrentThread();
-                for (int day = 8; day <= 27; day++)
+                int measured = 0;
+                for (int k = WarmGameDays(sim.Tier) + 1; k <= Math.Min(27, TierSeasonCalendar.GamesPerTeam(sim.Tier)); k++)
                 {
-                    sim.SimulateGameDay(day);
+                    sim.SimulateGameDay(TierSeasonCalendar.GameDay(sim.Tier, k));
+                    measured++;
                 }
                 long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                zeroAlloc &= allocated == 0;
-                allocations.Add($"{sim.Tier} {allocated} B");
+                zeroAlloc &= allocated == 0 && measured > 0;
+                allocations.Add($"{sim.Tier} {allocated} B over {measured} game days");
             }
-            Check("warm macro game days allocate zero bytes in every tier (20 days each)", zeroAlloc, string.Join(", ", allocations));
+            // 13-3: real game days only (HS has 10: 3 warm + 7 measured; College/Pro 7 + 20).
+            Check("warm macro game days allocate zero bytes in every tier", zeroAlloc, string.Join(", ", allocations));
 
             var micro = new MicroGame(db, baseball) { LoggingEnabled = false, Persons = persons };
             string microError = "";

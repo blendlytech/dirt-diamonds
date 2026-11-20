@@ -103,6 +103,16 @@ public sealed class MicroGame
     private long _gameDay;
     private bool _gameDaySet;
     private long _autoGameDay = 1;
+
+    // 13-3 (brief D4): the Schedule_Games row the next game is, set by the
+    // career driver per attended game; FlushGame marks it final in the
+    // game's own batch. Headless callers that never set one write no result.
+    private readonly ScheduleQueries _scheduleQueries;
+    private long _scheduledGameId;
+    private long _flushGameId;
+    private int _flushHomeScore;
+    private int _flushAwayScore;
+
     private string? _featuredPlayerId;
 
     /// <summary>
@@ -256,6 +266,7 @@ public sealed class MicroGame
     {
         _db = db;
         _queries = queries;
+        _scheduleQueries = new ScheduleQueries(db);
     }
 
     private struct BattingLine
@@ -523,6 +534,9 @@ public sealed class MicroGame
         _gameDay = day;
         _gameDaySet = true;
     }
+
+    /// <summary>The Schedule_Games row the next <see cref="PlayGame{TBatter, TPitcher}"/> is (13-3); its result is written by <see cref="FlushGame"/>.</summary>
+    public void SetScheduledGame(long gameId) => _scheduledGameId = gameId;
 
     private long ConsumeGameDay()
     {
@@ -1000,6 +1014,8 @@ public sealed class MicroGame
         _pendingLogs.Clear();
         _flushHomeTeamId = homeTeamId;
         _flushAwayTeamId = awayTeamId;
+        _flushGameId = _scheduledGameId;
+        _scheduledGameId = 0;
 
         // 13-2 (brief D3): the human always starts. A position-player human
         // the legal-defense pick benched becomes the featured player (the DH
@@ -1120,6 +1136,8 @@ public sealed class MicroGame
             _pendingLogs.Add(new PendingLog(null, "final", _payloadBuilder.ToString()));
         }
 
+        _flushHomeScore = homeScore;
+        _flushAwayScore = awayScore;
         _gamePendingFlush = true;
         return new MicroGameResult(
             homeTeamId, awayTeamId, homeScore, awayScore, inning,
@@ -1480,6 +1498,11 @@ public sealed class MicroGame
             }
             // 13-2 (brief D4): the attended game's starts ride its own batch.
             RestLedger.FlushDirty(_queries);
+            // 13-3 (brief D4): and so does its schedule row's final score.
+            if (_flushGameId != 0)
+            {
+                _scheduleQueries.RecordFinal(_flushGameId, _flushHomeScore, _flushAwayScore);
+            }
             _db.CommitBatch();
         }
         catch

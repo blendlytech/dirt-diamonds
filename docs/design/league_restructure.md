@@ -1,7 +1,7 @@
 # League Restructure — HS → College → Draft → Pro (Phase 13)
 
 **Owner:** per-slice authors and reviewers are in [TEAM.md](../TEAM.md) §2 (owner-confirmed 2026-10-10), which **overrides the "Owner" column in §15 below**. Summary: Claude Opus 5.5 (13-0…13-3, 13-6 engine) · Gemini 3.1 Pro (13-4, 13-5; reviews Opus's slices) · Gemini 3.1 Pro Math (calibration) · Gemini 3.8 Flash (team seed data) · Claude Sonnet 5.5 (league UI, 13-7)
-**Status:** design complete 2026-10-09; **College format updated 2026-10-18** (owner decision, slice CS-0: 28 games Wed + Sat, best-of-3 final "The Red Dirt Series"; §3, §6, §8.2, §16-I6…I8; College `MinRestDays` = 3, owner); no code yet. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 and the user-authored source spec in [BUILD_PLAN.md](../BUILD_PLAN.md) ("Phase 13 Source Spec"). Where this doc *interprets* the source spec, §16 says so explicitly.
+**Status:** design complete 2026-10-09; **College format updated 2026-10-18** (owner decision, slice CS-0: 28 games Wed + Sat, best-of-3 final "The Red Dirt Series"; §3, §6, §8.2, §16-I6…I8; College `MinRestDays` = 3, owner); **13-3 decisions applied 2026-10-25** (owner approved the 13-3 brief's D1–D9: §3, §3.1, §3.2, §11.2, §11.3, §12, §15, §16-I9…I12); 13-1/13-2 built on `p13/integration`. **Authority:** [GAME_VISION.md](../GAME_VISION.md) §3 and the user-authored source spec in [BUILD_PLAN.md](../BUILD_PLAN.md) ("Phase 13 Source Spec"). Where this doc *interprets* the source spec, §16 says so explicitly.
 **Supersedes:** [tier_league_environments.md](../archive/tier_league_environments.md) (6-tier ladder), [promotion_advancement_gates.md](../archive/promotion_advancement_gates.md) (tier-ladder promotion), and the league portions of [phase_8_9_interleave_plan.md](../archive/phase_8_9_interleave_plan.md).
 
 ---
@@ -63,27 +63,36 @@ Day-of-season 1 = January 1 (`GameCalendar`). All three tiers share the calendar
 | :-- | :-- | :-- | :-- | :-- |
 | HS | **Friday** | 10 weeks from the first Friday of March | 3 weeks (bracket of 6) | Mon–Thu after school |
 | College | **Wednesday + Saturday** | 14 weeks, 28 games: opens on the Wednesday before the second Saturday of February, ends on the 14th Saturday | Play-in week + conference tournaments (Saturdays) + **The Red Dirt Series** (best-of-3, Thu–Fri–Sat) (≤ 6 weeks) | Mon, Tue, Thu, Fri |
-| Pro | **Tue / Thu / Sat** | 22 weeks from the first Tuesday of April (weeks 1–21: 3 games; week 22: 1 game = 64) | Bo3 rounds + Bo5 Championship (Sept–Oct) | Mon, Wed, Fri; **Sunday night = roster lock** |
+| Pro | **Tue / Thu / Sat** | 22 weeks from the first Tuesday of April (weeks 1–21: 3 games; week 22: 1 game, on the Tuesday = 64) | Bo3 rounds + Bo5 Championship (Sept–Oct) | Mon, Wed, Fri; **Sunday night = roster lock** |
 
 ### 3.1 Schedule construction (deterministic, generated once per season)
 
-`SeasonScheduler.Generate(tier, seasonYear, rng)` runs at season rollover and writes `Schedule_Games` rows (§12). The schedule moves from "pure function of the day" to **persisted rows**, because conference/division formats and playoffs are not a simple circle method. Generation is seeded, so the same save seed produces the same schedule.
+`SeasonScheduler.Generate(tier, seasonYear, rng)` writes `Schedule_Games` rows (§12). The schedule moves from "pure function of the day" to **persisted rows**, because conference/division formats and playoffs are not a simple circle method. Generation is seeded, so the same save seed produces the same schedule (§16-I9):
 
-- **HS (10 games):** double round-robin inside each 6-team conference (5 opponents × 2). Home/away alternates.
+- **Seed:** a world `schedule_seed` is written once to `Game_State` at world-gen. Each (season year, tier) schedule draws from its own stream derived from that seed, never from a sim's stream.
+- **When:** generation is an idempotent *ensure*. At boot, and whenever a new season year begins, the **current and the next** season exist. Rows are never regenerated once written, so a reload never changes a schedule, the calendar can look across New Year, and generation doesn't depend on the rollover handlers' order.
+- **Fixed dates:** the sim year is 365 days and day 1 is always a Monday (`GameCalendar`), so every season's game days are the same days-of-season. HS plays days 61–124, College 38–132, Pro 93–240, and the Draft is on day 195. Only the pairing order changes from season to season.
+
+- **HS (10 games):** double round-robin inside each 6-team conference (5 opponents × 2). The two meetings of each pairing are at opposite venues (5 home / 5 away per team). Week-to-week alternation isn't guaranteed: a 6-team round-robin can't give every team one.
 - **College (28 games, owner 2026-10-18; shape per §16-I6):** the original pairings played twice. Division opponents × 4 (3 × 4 = 12: 2 home, 2 away each) plus the 8 other teams in the conference × 2 (16: 1 home, 1 away each). Home/away balanced at 14/14. No cross-conference regular-season games; the Red Dirt Series is the only cross-conference matchup. Each conference's 28 games split into 28 game days of 6 pairings (checked by construction on 2026-10-18: the three K4 division rounds × 4, plus an 8-round factorization of the cross-division games × 2), so the one-game-per-game-day constraint is always satisfiable. The order in which those rounds are interleaved is 13-3's seeded scheduler's choice.
-- **Pro (64 games):** division opponents × 8 (3 × 8 = 24), other conference teams × 2 (12 × 2 = 24), other conference's teams × 1 (16). Home/away balanced at 32/32.
+- **Pro (64 games):** division opponents × 8 (3 × 8 = 24), other conference teams × 2 (12 × 2 = 24), other conference's teams × 1 (16; 8 home / 8 away). Home/away balanced at 32/32. Feasible by construction: K4 division rounds × 8 with alternating venues; 12 cross-division rounds (a division-pair matching × a Latin shift) played twice with the second copy reversed; 16 interconference rounds (East *i* vs West (*i* + *s*) mod 16, East hosting when *s* < 8). A seeded permutation then places the rounds on game days (16 interconference days, 48 intra-conference days).
 
 Every team plays at most one game per game day. The scheduler's constraint is "each team plays exactly once per game day". For Pro, `PairingsPerGameDay = 16`; for College, 12.
 
 ### 3.2 What happens to the shipped HS calendar
 
-The shipped `HsSeasonCalendar` (26 games, Tue/Fri, Mar 1–May 31) is **replaced** by `TierSeasonCalendar`, which covers all three tiers per the table above. The source spec's "1 game per week" wins. School days, practice blocks and the planner's forced blocks keep their shipped mechanics, keyed off the new calendar. Consequence: HS players get roughly 2.5× fewer games and more practice days. The parked "practice-lever retune" follow-up (progress.md) is folded into slice 13-3's development re-check.
+The shipped `HsSeasonCalendar` (26 games, Tue/Fri, Mar 1–May 31) is **replaced** by `TierSeasonCalendar`, which covers all three tiers per the table above. The source spec's "1 game per week" wins. School days keep their shipped mechanics. **Planner blocks (owner, 2026-10-25, §16-I10):**
+- **In-season:** every tier's team Practice and Game blocks are locked from `TierSeasonCalendar` inside its season window, from the Monday of week 1 to the last regular-season game day.
+- **Outside the window:** every tier gets the free sliders back, so offseason training (§9.3) exists. This changes shipped HS, which had locked practice all year.
+- Hours are data values, defaulting to HS's 2 h practice and 3 h game for every tier. Postseason blocks for teams still alive come with 13-4.
+
+Consequence: HS players get roughly 2.5× fewer games. In-season team practice is HS 80 h, College 112 h and Pro 128 h a season. The parked "practice-lever retune" follow-up (progress.md) is folded into slice 13-3 (§11.3).
 
 ---
 
 ## 4. Game rules
 
-- **Regulation innings:** `TierRules.RegulationInnings(tier)`: HS 7, College 9, Pro 9. `MicroGame` and the macro game loop take it as a parameter in place of the hard-coded `9` (`LeagueSimulator.cs` ~L518–530 and `MicroGame` game-flow rules). The home half is skipped when the home team leads after the top of the final regulation inning; extra innings work as shipped.
+- **Regulation innings:** `TierRules.RegulationInnings(tier)`: HS 7, College 9, Pro 9. `MicroGame` and the macro game loop take it as a parameter in place of the hard-coded `9` (built in 13-2, `TierRules.cs`). The home half is skipped when the home team leads after the top of the final regulation inning; extra innings work as shipped.
 - **No ties, no mercy rule.** (A mercy rule for HS is a §16 option, off by default.)
 - **Forfeits** are recorded as a 7–0 (HS) or 9–0 (College/Pro) final with **no player stats credited**, status `forfeit` (§7).
 - The 25 base-out states and the per-PA model are unchanged at every tier.
@@ -275,11 +284,25 @@ The tier-delta mechanism ([tier_league_environments.md](../archive/tier_league_e
 
 The AVG/OBP/SLG/K%/BB%/HR-per-PA bands for HS, College and Pro reuse the shipped HS, College and MLB rows verbatim. **Runs are expressed per 9 innings (R/9)** so 7-inning HS games compare cleanly. HS R/9 band 6.4–8.0 (equivalent to about 5.0–6.2 runs per 7-inning game). **College at 28 games (CS-M):** per-game rate bands hold as written; any season-total target is restated for 28 games, and the twice-a-week rest and workload values are re-proven. Each one is a Math value (CS-M), proven when 13-2…13-4 build the 28-game schedule.
 
+**How the bands are gated (owner, 2026-10-25, §16-I11):**
+- **The denominator changes.** The shipped MLB run band was gated per game (ER / GS), not per 9 innings. 13-3 gates **R/9 = 27 × runs / outs** and reports ER/GS beside it on the same sample, so the denominator change stays visible.
+- **The numeric rows stay as written, except the Pro run floor.** If the pooled measurement put Pro R/9 below 4.2, the owner would choose between restating the Pro run floor (with the R/G → R/9 rationale) and re-centring runs through `BaseOutAdvancement` in a separately sanctioned change. 13-3 changes no sim value for it.
+- **Pro R/9 band: 4.1–4.8 (owner, 2026-11-20, D5 Option (i)).** Gemini 4 Argon's M1 measured pooled Pro R/9 4.164 [4.103, 4.225] on the 8-season default sample. The unchanged model's exact center is 9 × RE(empty, 0 out) = 4.144, and 32 holdout seasons give 4.152 [4.131, 4.173], so no larger sample can reach 4.2. The MLB row's 4.2 was an ER/GS floor: flat Pro plays 27.17 outs per team-game (extras outweigh skipped home ninths), which puts R/9 0.027 below ER/GS. `BaseOutAdvancement`, `AtBatResolver`, `MicroGame`, RE24 and the Pro guard candidate are untouched. Evidence: [13-3 Math record](math/13-3_bands_guard_development.md) §2.3–2.5. HS (6.4–8.0) and College (5.8–7.1) are unchanged.
+- **Pooled samples.** One real season is a small sample (HS 60 games, College 336, Pro 1,024, against 156 on HS's shipped 26-game calendar and 1,848 / 2,464 on the interim round-robin). So every band is gated on a pooled, fixed-seed sample of real-calendar seasons, sized per tier by GPT 6 Astra Pro within the default MC runtime budget (13-3 brief D10). CS-M's opt-in batch is the calibration evidence.
+
 ### 11.3 The regression guards
 
 - **Resolver guard (unchanged, must stay byte-exact):** the per-PA §8 batch and §5 fixtures. `AtBatResolver` isn't touched, so these must not move.
-- **Season-pipeline guard (re-baselined once, sanctioned here):** the shipped bit-identity guard (PA 48384 / H 10969 / ER 5237) is tied to the 8-team, 154-game MLB season and **cannot** survive a 32-team, 64-game Pro league. Slice 13-3 retires it and records a **new Pro guard** (the same three totals for a fixed-seed Pro season) on the first fully green run. From then on, the new guard is byte-exact like the old one.
-- **Development gradient:** the 9d talent-gradient check becomes HS < College < Pro (time-averaged mean talent, strictly monotone), retuned per slice 13-3.
+- **Season-pipeline guard (re-baselined once, sanctioned here):** the shipped bit-identity guard (PA 48384 / H 10969 / ER 5237) is tied to the 8-team, 154-game MLB season and **cannot** survive a 32-team, 64-game Pro league. Slice 13-3 retires it and records a **new Pro guard** (§16-I11):
+  - **What:** PA, H and ER of the first season of the fixed-seed season-pipeline Pro world (flat ratings, fixed schedule seed), frozen as literals in the harness, with a SHA-256 of that run's full stat ledger recorded beside them.
+  - **When:** it's recorded once the 13-3 run is green everywhere except the owner-approved 13-6 promotion reds, which don't touch the Pro season.
+  - **Sanction:** a Math reviewer reproduces it 20/20 byte-identical, and the owner sanctions it.
+  - **Recorded and sanctioned (owner, 2026-11-20):** first season `2026` (1,024 games, flat spread 0, league seed `20260703`, season seed `777`, schedule seed `0x133D_5EED_0000_0001`): **PA 81433 / H 18471 / ER 8803**; two-season phase-0 counting-ledger SHA-256 **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**. Reproduced 20/20 byte-identical by Claude Opus 5.5 and Gemini 4 Argon ([13-3 brief](../tasks/13-3_schedules_calendars_reband_guard_brief.md) §8.1a / §10.8).
+
+  From then on, the new guard is byte-exact like the old one. It also freezes the Pro scheduler. 13-4's postseason games must not move it: the guard's ledger hashes every `Batting_Stats` / `Pitching_Stats` row in the guard world, so 13-4 must keep postseason play out of that ledger (13-4 brief D4). 13-5's designations must keep it or bring their own sanction.
+- **Development gradient:** the 9d talent-gradient check becomes HS < College < Pro (time-averaged mean talent, strictly monotone). It's split by dependency (§16-I12):
+  - **13-3** retunes the practice lever for the new calendars and checks that one development pass on a generated world keeps HS < College < Pro.
+  - **The time-averaged equilibrium** needs players to flow between tiers, so it's proven in **13-6**'s PipelineHarness. The shipped `PromotionManager` can't run on the 3-tier world.
 
 ---
 
@@ -377,17 +400,17 @@ The game hasn't released. On boot, a save with `user_version < 14` gets a dialog
 
 ## 15. Build slices (each one gated; owners per BUILD_PLAN)
 
-**Integration branch (owner decision, 2026-10-10).** Slices 13-1, 13-2 and 13-3 change the world's shape: 68 teams, 3 tiers, per-tier rosters and schedules. The shipped sim hard-codes 8 teams × 17 players per tier until 13-2 and 13-3 land, so no one of these slices can pass the full MC gate alone. Each one is reviewed (TEAM.md §2) and merged into **`p13/integration`**, not `main`. Expected red MC checks on that branch are listed in each slice's handoff. `p13/integration` merges to `main` only when the **full MC suite is green with the new Pro guard recorded** (13-3, sanctioned in §11.3). `main` stays green on v13 until then. Claude Opus keeps the branch synced with `main` (Phase G work). **L-1 (schema v15) branches from `p13/integration`, not `main`.**
+**Integration branch (owner decision, 2026-10-10).** Slices 13-1, 13-2 and 13-3 change the world's shape: 68 teams, 3 tiers, per-tier rosters and schedules. The shipped sim hard-codes 8 teams × 17 players per tier until 13-2 and 13-3 land, so no one of these slices can pass the full MC gate alone. Each one is reviewed (TEAM.md §2) and merged into **`p13/integration`**, not `main`. Expected red MC checks on that branch are listed in each slice's handoff. `p13/integration` merges to `main` only when the **full MC suite is green with the new Pro guard recorded** (13-3, sanctioned in §11.3). The promotion suites stay red until `PipelineManager` replaces `PromotionManager`, so that's **after 13-6** (owner, 2026-10-25, §16-I12). `main` stays green on v13 until then, and Phase G and L work that needs v14 branches from `p13/integration`. Claude Opus keeps the branch synced with `main` (Phase G work). **L-1 (schema v15) branches from `p13/integration`, not `main`.**
 
 | Slice | Content | Owner | Gate |
 | :-- | :-- | :-- | :-- |
 | **13-0** | Prerequisites: sqlite MCP repaired; the 344/345 MC flake identified and seeded (failed-check recap on the harness tail) | Pro | MC green 20/20 runs |
 | **13-1** | Schema v14 + clean-break boot + `LeagueTier` collapse + Appendix A world-gen (68 teams, conferences/divisions, per-tier rosters) | Pro (Flash: seed tables) | SchemaValidator; world-gen round-trip; FK integrity |
 | **13-2** | `RosterCapacity` refactor + regulation innings + starter selection (§6), incl. the Red Dirt Series no-repeat-starter rule; **College `MinRestDays` = 3 (owner) with the §6 rest fixtures; ace selection per CS-M** | Pro | **MC full suite**; zero-alloc checks; resolver guard byte-exact; a College fixture where no starter starts two games of one series |
-| **13-3** | `SeasonScheduler` + `TierSeasonCalendar` + schedule-driven sims (**College 28 games, Wed + Sat, §3.1/§16-I6**); per-tier bands (**College re-banded per CS-M**); **new Pro guard recorded**; development gradient retune | Pro + Math | MC per-tier bands; new guard; CoreLoop; College: 28 games per team, 14/14 home/away, each pairing count per §3.1, one game per team per game day, no Sunday games |
+| **13-3** | `SeasonScheduler` + `TierSeasonCalendar` + schedule-driven sims (**College 28 games, Wed + Sat, §3.1/§16-I6**); per-tier bands (**College re-banded per CS-M**); **new Pro guard recorded**; practice-lever retune + single-pass gradient (§11.3); results written to `Schedule_Games`; planner blocks for every tier (§3.2) | Pro + Math | MC per-tier bands on pooled samples (§11.2); new guard; CoreLoop; every tier's game counts, home/away and pairing counts per §3.1, one game per team per game day, no Sunday games. Brief: [tasks/13-3_schedules_calendars_reband_guard_brief.md](../tasks/13-3_schedules_calendars_reband_guard_brief.md) |
 | **13-4** | `PlayoffManager` + `RankingCalculator` (weights: Math value, CS-M) + bracket UI with College series status; the Red Dirt Series Bo3 (Thu–Fri–Sat); tier-carrying `ChampionshipWonEvent` (§8.2a) | Pro (Sonnet: bracket UI, per TEAM.md) | Playoff checks (every tier crowns exactly one champion; series lengths legal; seeding/tiebreaks); the College final is a Bo3 on Thu–Fri–Sat that ends at 2 wins and never plays game 3 after a 2–0; `ChampionshipWonEvent.tier` set on every publish; an HS or College title never fires the reveal |
 | **13-5** | `RosterManager`: Sunday lock, attrition, forfeits; call-up retirement | Pro | Availability suite rewritten; forfeit fixtures |
-| **13-6** | `PipelineManager`: graduation, recruiting, draft, releases; Recruiting/Draft UI; avatar decisions | Pro + Math (Flash: UI) | **PipelineHarness**: 20-season run, population conservation ±5%, a generated player goes HS → College → drafted → Pro |
+| **13-6** | `PipelineManager`: graduation, recruiting, draft, releases; Recruiting/Draft UI; avatar decisions | Pro + Math (Flash: UI) | **PipelineHarness**: 20-season run, population conservation ±5%, a generated player goes HS → College → drafted → Pro; **the time-averaged HS < College < Pro talent gradient** (§11.3); the promotion suites retired or replaced, so `p13/integration` can merge to `main` |
 | **13-7** | Ripple: achievements/rich presence, content tier docs, Steam README tokens, dashboard/standings/leaders cards | Flash → Pro review | GrittyEvents, full suite, live boot |
 
 ---
@@ -407,6 +430,10 @@ Owner accepted R-1 Q09: I1–I5 below are adopted defaults, including prior-comp
 - **Open: league and brand names.** The Pro league's name, conference names and the College league name all need a trademark screen before ship.
 - **Open: "The Red Dirt Series"** (owner's name for the College final, 2026-10-18) is **pending the owner's trademark screen**. Player-facing text uses a strings-table key (proposed: `league.college.final.name`), never a C# literal, so a rename is a data edit. Never use MLB's or the NCAA's championship-series names anywhere (both are trademarks); Pro keeps "World Championship".
 - **Open: College 28-game Math values** (CS-M, GPT 6 Astra Pro): ace selection (the cross-tier starter-quality scalar, 13-2), short-rest and workload values, College band restatement, National Ranking weights. Brief: [archive/CS-M_college_math.md](../archive/CS-M_college_math.md).
+- **I9. Schedules (owner, 2026-10-25; 13-3 brief D1, D2, D4).** A persisted `schedule_seed`; current + next season ensured, never regenerated; constructions as in §3.1; HS meetings at opposite venues; Pro week 22 plays Tuesday. 13-3 writes each played game's final score into `Schedule_Games` (`status = 1`), acknowledged after commit. Forfeits (`status = 2`) are 13-5's; `Team_Seasons` is 13-4's.
+- **I10. Planner blocks (owner, 2026-10-25; D3).** Locked in-season for every tier, free sliders offseason for every tier (§3.2).
+- **I11. Band gating and the new Pro guard (owner, 2026-10-25; D5, D6).** R/9 gated and ER/GS reported, on pooled samples (§11.2). The guard is totals + ledger hash, recorded after the gating settles (§11.3). **D5 settled (owner, 2026-11-20): Option (i), the Pro R/9 band is 4.1–4.8**, with no sim change (§11.2). **Guard sanctioned (owner, 2026-11-20): PA 81433 / H 18471 / ER 8803, ledger SHA-256 `932ACE26…8B84`**, byte-exact (§11.3).
+- **I12. Sequencing (owner, 2026-10-25; D7, D9).** The equilibrium gradient goes to 13-6. `p13/integration` reaches `main` after 13-6.
 - **Open: HS mercy rule** (10-run rule after 5 innings). Off by default.
 - **Open: college academic eligibility** (GPA floor to play). Not in v1; the GPA system already exists if wanted.
 
