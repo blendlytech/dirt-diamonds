@@ -57,6 +57,7 @@ internal static partial class Program
         bool tierPilot = args.Contains("--tier-pilot");
         bool collegeAnalysis = args.Contains("--college-analysis");
         bool analysisPilot = args.Contains("--pilot");
+        bool analysisReduced = args.Contains("--reduced"); // the approved M2 holdout (brief §10.7)
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--repo")
@@ -84,7 +85,7 @@ internal static partial class Program
         string schemaPath = Path.Combine(repoRoot, "Assets", "Data", "Database", "SchemaDefinitions.sql");
         if (collegeAnalysis)
         {
-            return RunCollegeAnalysis(schemaPath, analysisPilot);
+            return RunCollegeAnalysis(schemaPath, analysisPilot, analysisReduced && !analysisPilot);
         }
         if (tierPilot)
         {
@@ -221,6 +222,7 @@ internal static partial class Program
                     // 13-2's R1/R2 fixtures (added in 13-3: they leaked one set per run).
                     slice132ScratchPath + ".starters.r1", slice132ScratchPath + ".starters.r2",
                     slice132ScratchPath + ".starters.r2.macro", slice132ScratchPath + ".starters.r2.shared",
+                    slice132ScratchPath + ".starters.r2.unit", // 13-3 M-values session: the R2 ledger-contract fixture leaked too
                     slice133ScratchPath + ".schedule", slice133ScratchPath + ".devtiers",
                     slice132ScratchPath + ".innings", slice132ScratchPath + ".capacity",
                     slice132ScratchPath + ".capacity.over", slice132ScratchPath + ".lineups",
@@ -1421,8 +1423,11 @@ internal static partial class Program
         var avatarSeasons = new List<BattingStatsRow>();
         players.LoadBattingSeasons(career.AvatarPlayerId, avatarSeasons);
         // 13-3 §5.4: the band scales with the 64-game Pro season (pilot envelope
-        // 188–335 from the old 450–800 over 153 games, brief §10.3 Q7; Astra
-        // signs the final band after measuring this fixture).
+        // 188–335 from the old 450–800 over 153 games, brief §10.3 Q7). Signed
+        // as installed by Gemini 4 Argon (13-3 Math record §5): this fixture
+        // plays 294 PA; 32 career seeds (every lineup slot) span [258, 319].
+        // The signed HS 10-game band is 24–48 PA and College 28-game 90–160 PA,
+        // for whichever suite first plays an avatar season in those tiers.
         Check("avatar played the full attended season (PA in 188–335 over 64 Pro games, rates normalized)",
             avatarSeasons.Count == 1 && avatarSeasons[0].Pa is >= 188 and <= 335 && avatarSeasons[0].Avg > 0,
             avatarSeasons.Count == 1 ? $"{avatarSeasons[0].Pa} PA, AVG {avatarSeasons[0].Avg:.000}" : "no row");
@@ -4018,14 +4023,21 @@ internal static partial class Program
     // doubles as the 9a regression guard on the calibrated core.
     // league_restructure.md §11.2: the HS, College and Pro bands reuse the
     // shipped HS, College and MLB rows verbatim, with runs read per 9 innings
-    // (R/9) so 7-inning HS games compare cleanly. Indexed by (int)LeagueTier.
+    // (R/9) so 7-inning HS games compare cleanly; the one restatement is the
+    // Pro R/9 floor (below). Indexed by (int)LeagueTier.
     // College's 28-game restatement and any re-band are 13-3's (CS-M).
     private static readonly TierBand[] TierBands =
     {
         new(.296, .316, .379, .399, .493, .523, .177, .207, .109, .129, .034, .042, 6.4, 8.0), // HS
         new(.284, .304, .364, .384, .473, .503, .184, .214, .103, .123, .033, .041, 5.8, 7.1), // College
-        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.2, 4.8), // Pro (the MLB §8 row)
+        new(.240, .260, .308, .325, .395, .430, .200, .250, .075, .105, .027, .037, 4.1, 4.8), // Pro (the MLB §8 row; R/9 floor 4.1, D5)
     };
+    // D5 Option (i), owner-approved 2026-11-20: the Pro floor reads 4.1, not
+    // the MLB row's 4.2. That row was gated on ER/GS; R/9 = ER/GS × 27/(outs/GS),
+    // and flat Pro plays 27.17 outs/GS (extras outweigh skipped home ninths), so
+    // R/9 sits 0.027 below ER/GS. The unchanged model's exact center is
+    // 9 × RE(empty, 0 out) = 4.1439; 32 holdout seasons give 4.1519 [4.1311, 4.1727]
+    // (docs/design/math/13-3_bands_guard_development.md §2.3–2.5). No sim change.
 
     private static void RunTierLadderSuite(string schemaPath, string scratchPath)
     {
@@ -6121,21 +6133,30 @@ internal static partial class Program
         Console.WriteLine("--- Phase 9d-2 Practice lever + scouting seam (doc §4/§6, acceptance checks 5/9) ---");
 
         // ---- pure fixtures: the §4 hours→fraction conversion ----
+        // 13-3 M4 (Argon, signed): rate .001 / cap .25 e-folds at 250 h; the
+        // first hour's second-order remainder rate²/(2·cap) = 2.0e-6, so its
+        // tolerance is 2.5e-6 (was 500 h and 1e-6 at rate .0005).
+        double f250 = DevelopmentCurve.PracticeFraction(250);
         double f500 = DevelopmentCurve.PracticeFraction(500);
         double f1000 = DevelopmentCurve.PracticeFraction(1000);
-        double f2000 = DevelopmentCurve.PracticeFraction(2000);
-        Check("§4 conversion: 0 at zero/negative hours, monotone in hours, exact at the e-fold (500h = cap·(1−1/e))",
+        Check("§4 conversion: 0 at zero/negative hours, monotone in hours, exact at the e-fold (250h = cap·(1−1/e))",
             DevelopmentCurve.PracticeFraction(0) == 0.0 && DevelopmentCurve.PracticeFraction(-25) == 0.0
-            && f1000 > f500 && f2000 > f1000
-            && Math.Abs(f500 - DevelopmentProfile.PracticeFracCap * (1.0 - Math.Exp(-1.0))) < 1e-12,
-            $"f(500)={f500:F6}");
+            && f500 > f250 && f1000 > f500
+            && Math.Abs(f250 - DevelopmentProfile.PracticeFracCap * (1.0 - Math.Exp(-1.0))) < 1e-12,
+            $"f(250)={f250:F6}");
         Check("§4 conversion: strictly diminishing returns; the first hour is worth PracticeFracPerHour",
-            f1000 - f500 < f500 && f2000 - f1000 < f1000 - f500
-            && Math.Abs(DevelopmentCurve.PracticeFraction(1) - DevelopmentProfile.PracticeFracPerHour) < 1e-6,
-            $"500h slices {f500:F4} → {f1000 - f500:F4} → {f2000 - f1000:F4}");
+            f500 - f250 < f250 && f1000 - f500 < f500 - f250
+            && Math.Abs(DevelopmentCurve.PracticeFraction(1) - DevelopmentProfile.PracticeFracPerHour) < 2.5e-6,
+            $"250h slices {f250:F4} → {f500 - f250:F4} → {f1000 - f500:F4}");
+        // The finite-grind probe sits at 20 e-folds (was a literal 10,000 h =
+        // 20 e-folds at .0005). At .001, 10,000 h is 40 e-folds: exp(−40) is
+        // below double epsilon, so f rounds to exactly the cap there. 20 e-folds
+        // (5,000 h, more than a year of 13 h days) stays strictly below.
+        long grindHours = (long)(20 * DevelopmentProfile.PracticeFracCap / DevelopmentProfile.PracticeFracPerHour);
         Check("§4 conversion: asymptotes at the seasonal cap — no grind exceeds it (you cannot grind a 40 to a 100 in one winter)",
-            DevelopmentCurve.PracticeFraction(10_000) < DevelopmentProfile.PracticeFracCap
-            && DevelopmentCurve.PracticeFraction(1_000_000_000) == DevelopmentProfile.PracticeFracCap);
+            DevelopmentCurve.PracticeFraction(grindHours) < DevelopmentProfile.PracticeFracCap
+            && DevelopmentCurve.PracticeFraction(1_000_000_000) == DevelopmentProfile.PracticeFracCap,
+            $"f({grindHours}h) = {DevelopmentCurve.PracticeFraction(grindHours):R}");
 
         // ---- pure fixtures: the §6 ProjectionBonus (check 9's core) ----
         Check("§6 projection: at-ceiling young reads 0; full headroom reads the exact old AgeBonus (the fudge WAS an implicit full-headroom assumption); half headroom reads half",
@@ -6150,89 +6171,6 @@ internal static partial class Program
             && PromotionScore.Scouting(162, 17, 90) > PromotionScore.Scouting(162, 17, 0)
             && PromotionScore.Scouting(162, 17, 0) == 100.0 * 162 / 150.0);
 
-        // ---- §10.9 the seam in the SWEEP's S (check 9): two HS batters with
-        // identical current ratings and age contest one College vacancy —
-        // only stored headroom separates them. The at-ceiling twin's A (104)
-        // also deliberately misses the merit-swap bar (worst incumbent 100 +
-        // margin 5), so the projection the old fudge would have handed him
-        // (+8.33 age bonus → A 106.8, over the bar) is provably no longer
-        // fakeable: he stays down BECAUSE his ceiling says he is done. ----
-        {
-            using var db = new DatabaseManager(scratchPath + ".seam");
-            db.InitializeSchema(schemaPath);
-            var players = new PlayerQueries(db);
-            var baseball = new BaseballQueries(db);
-            var genRng = new RngState(LeagueSeed + 212);
-            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
-
-            var hsRoster = new List<RosterPlayerRow>();
-            baseball.LoadRosterByTier(LeagueTier.HS, hsRoster);
-            string projectable = NthOfRole(hsRoster, PitcherRole.None, 0);
-            string atCeiling = NthOfRole(hsRoster, PitcherRole.None, 1);
-            int atCeilingTeam = 0;
-            foreach (RosterPlayerRow row in hsRoster)
-            {
-                if (string.Equals(row.PlayerId, atCeiling, StringComparison.Ordinal))
-                {
-                    atCeilingTeam = row.TeamId;
-                }
-            }
-            foreach (string probe in new[] { projectable, atCeiling })
-            {
-                players.SetAge(probe, 17);
-                baseball.UpsertRatings(new PlayerRatingsRow
-                {
-                    PlayerId = probe, IsPitcher = false,
-                    BatPower = 54, BatContact = 54, BatDiscipline = 54,
-                    PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
-                });
-            }
-            baseball.UpsertPotential(new PlayerPotentialRow
-            {
-                PlayerId = projectable,
-                BatPower = 84, BatContact = 84, BatDiscipline = 84,
-                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
-            });
-            baseball.UpsertPotential(new PlayerPotentialRow
-            {
-                PlayerId = atCeiling,
-                BatPower = 54, BatContact = 54, BatDiscipline = 54,
-                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
-            });
-
-            var collegeRoster = new List<RosterPlayerRow>();
-            baseball.LoadRosterByTier(LeagueTier.College, collegeRoster);
-            string retiree = NthOfRole(collegeRoster, PitcherRole.None, 0);
-            int vacatedTeam = 0;
-            foreach (RosterPlayerRow row in collegeRoster)
-            {
-                if (string.Equals(row.PlayerId, retiree, StringComparison.Ordinal))
-                {
-                    vacatedTeam = row.TeamId;
-                }
-            }
-            players.SetAge(retiree, HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge);
-
-            var promo = new PromotionManager(
-                db, players, baseball, new GameStateQueries(db),
-                new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9D25EA11UL));
-            promo.RunOffseason(StartYear);
-
-            bool projectableRose = players.TryGetById(projectable, out PlayerRow xRow)
-                && xRow.TeamId == vacatedTeam;
-            bool ceilingHeld = players.TryGetById(atCeiling, out PlayerRow yRow)
-                && yRow.TeamId == atCeilingTeam;
-            Check("§10.9 scouting seam in the sweep: the one College vacancy goes to the HIGH-HEADROOM probe; the at-ceiling twin (identical current line and age) stays in HS",
-                promo.LastRun.Removals == 1 && promo.LastRun.Promotions == 1
-                && promo.LastRun.Relegations == 0 && promo.LastRun.Intake == 1
-                && projectableRose && ceilingHeld,
-                $"X→{xRow.TeamId} (vacated {vacatedTeam}), Y→{yRow.TeamId} (origin {atCeilingTeam})");
-            Check("§10.9 seam world: roster invariant, integrity, FK, no open batch",
-                TierLadderInvariantHolds(baseball, out string seamDetail)
-                && !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0,
-                seamDetail);
-        }
-
         // ---- §10.5 the Practice lever end to end (check 5): two peak-pinned
         // worlds — where growth, decline AND jitter are exactly zero for
         // everyone but the practicing avatar — one banking 6 Practice hours
@@ -6242,7 +6180,7 @@ internal static partial class Program
         var idle = RunPracticeWorld(scratchPath + ".idle", schemaPath, practiceHoursPerDay: 0);
         Check("§10.5 accumulate path: 10 days × 6h bank exactly 60h in Game_State; the rollover consumes AND clears the credit",
             practiced.CreditAccrued && practiced.CreditCleared);
-        Check("§10.5 the Practice lever: a season of 6h/day (frac 0.2469) moves the peak-pinned 16yo-built avatar +3 per rating (gap 14 to the age-16 ceiling); the idle twin moves ZERO; nobody overshoots the ceiling",
+        Check("§10.5 the Practice lever: a season of 6h/day (frac 0.2500) moves the peak-pinned 16yo-built avatar +3 per rating (gap 14 to the age-16 ceiling); the idle twin moves ZERO; nobody overshoots the ceiling",
             practiced.BatSum == 189 && idle.BatSum == 180
             && practiced.NeverOvershot && idle.NeverOvershot,
             $"practiced {practiced.BatSum} vs idle {idle.BatSum} (start 180, ceiling 222)");
@@ -6335,6 +6273,92 @@ internal static partial class Program
                 $"heir bat {heirRow.BatPower}/{heirRow.BatContact}/{heirRow.BatDiscipline}, cleared {keyCleared}");
             Check("§4 guard world: integrity ok, no FK violations, no open batch",
                 !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0);
+        }
+
+        // M5 Finding 1 (Argon, 13-3): §10.9 runs LAST. PromotionManager.RunOffseason
+        // throws on v14 until 13-6, so placed first it hid every §10.5 / §4 check
+        // below (practice-seam 5/6); last, the 10 non-promotion checks all run (10/11).
+        // ---- §10.9 the seam in the SWEEP's S (check 9): two HS batters with
+        // identical current ratings and age contest one College vacancy —
+        // only stored headroom separates them. The at-ceiling twin's A (104)
+        // also deliberately misses the merit-swap bar (worst incumbent 100 +
+        // margin 5), so the projection the old fudge would have handed him
+        // (+8.33 age bonus → A 106.8, over the bar) is provably no longer
+        // fakeable: he stays down BECAUSE his ceiling says he is done. ----
+        {
+            using var db = new DatabaseManager(scratchPath + ".seam");
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(LeagueSeed + 212);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+
+            var hsRoster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.HS, hsRoster);
+            string projectable = NthOfRole(hsRoster, PitcherRole.None, 0);
+            string atCeiling = NthOfRole(hsRoster, PitcherRole.None, 1);
+            int atCeilingTeam = 0;
+            foreach (RosterPlayerRow row in hsRoster)
+            {
+                if (string.Equals(row.PlayerId, atCeiling, StringComparison.Ordinal))
+                {
+                    atCeilingTeam = row.TeamId;
+                }
+            }
+            foreach (string probe in new[] { projectable, atCeiling })
+            {
+                players.SetAge(probe, 17);
+                baseball.UpsertRatings(new PlayerRatingsRow
+                {
+                    PlayerId = probe, IsPitcher = false,
+                    BatPower = 54, BatContact = 54, BatDiscipline = 54,
+                    PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+                });
+            }
+            baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = projectable,
+                BatPower = 84, BatContact = 84, BatDiscipline = 84,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+            baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = atCeiling,
+                BatPower = 54, BatContact = 54, BatDiscipline = 54,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+
+            var collegeRoster = new List<RosterPlayerRow>();
+            baseball.LoadRosterByTier(LeagueTier.College, collegeRoster);
+            string retiree = NthOfRole(collegeRoster, PitcherRole.None, 0);
+            int vacatedTeam = 0;
+            foreach (RosterPlayerRow row in collegeRoster)
+            {
+                if (string.Equals(row.PlayerId, retiree, StringComparison.Ordinal))
+                {
+                    vacatedTeam = row.TeamId;
+                }
+            }
+            players.SetAge(retiree, HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge);
+
+            var promo = new PromotionManager(
+                db, players, baseball, new GameStateQueries(db),
+                new LeagueDirectory(), new MicroGame(db, baseball), new RngState(0x9D25EA11UL));
+            promo.RunOffseason(StartYear);
+
+            bool projectableRose = players.TryGetById(projectable, out PlayerRow xRow)
+                && xRow.TeamId == vacatedTeam;
+            bool ceilingHeld = players.TryGetById(atCeiling, out PlayerRow yRow)
+                && yRow.TeamId == atCeilingTeam;
+            Check("§10.9 scouting seam in the sweep: the one College vacancy goes to the HIGH-HEADROOM probe; the at-ceiling twin (identical current line and age) stays in HS",
+                promo.LastRun.Removals == 1 && promo.LastRun.Promotions == 1
+                && promo.LastRun.Relegations == 0 && promo.LastRun.Intake == 1
+                && projectableRose && ceilingHeld,
+                $"X→{xRow.TeamId} (vacated {vacatedTeam}), Y→{yRow.TeamId} (origin {atCeilingTeam})");
+            Check("§10.9 seam world: roster invariant, integrity, FK, no open batch",
+                TierLadderInvariantHolds(baseball, out string seamDetail)
+                && !db.IsBatchActive && db.RunIntegrityCheck() == "ok" && db.RunForeignKeyCheck() == 0,
+                seamDetail);
         }
     }
 

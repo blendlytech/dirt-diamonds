@@ -11,7 +11,7 @@ namespace DirtAndDiamonds.Tools.MonteCarloHarness;
 // results in the schedule (D4), pooled per-tier bands (D5), the new Pro guard
 // (D6), the 13-3 development checks (D7) and the 13-2 carry-forwards.
 // `--only calendar`, `--only schedule`, `--only development-tiers`;
-// `--tier-pilot` and `--college-analysis rates [--pilot]` are opt-in modes.
+// `--tier-pilot` and `--college-analysis rates [--pilot | --reduced]` are opt-in modes.
 // ----------------------------------------------------------------------
 internal static partial class Program
 {
@@ -911,23 +911,72 @@ internal static partial class Program
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// <c>--college-analysis rates [--pilot]</c>: flat College seasons over
-    /// (world, scheduler, outcome) tuples, a fresh scratch world per world
-    /// seed, every tuple's season appended to that world under its own year.
-    /// The pilot is CS-M/brief §10.2 Q3's 32-season training set (worlds 1–8 ×
-    /// scheduler 1/2 × outcome 1/2) with a 60 s stop rule; the full run is
-    /// validation worlds 129–256 × scheduler 1–8 × outcome 1–16. Pooled rates
-    /// with world-clustered 95% intervals; prints a per-tuple manifest.
+    /// <c>--college-analysis rates [--pilot | --reduced]</c>: flat College
+    /// seasons over (world, scheduler, outcome) tuples, a fresh scratch world
+    /// per world seed, every tuple's season appended to that world under its
+    /// own year. The pilot is CS-M/brief §10.2 Q3's 32-season training set
+    /// (worlds 1–8 × scheduler 1/2 × outcome 1/2) with a 60 s stop rule. The
+    /// full matrix is validation worlds 129–256 × scheduler 1–8 × outcome 1–16
+    /// (forecast 175 min, over the 30 min stop rule). <c>--reduced</c> is the
+    /// approved M2 holdout (Math record §3.3, reviewed in brief §10.7): the
+    /// pre-registered sub-lattice worlds 129–160 × scheduler 1–4 × outcome 1–4
+    /// = 512 flat seasons, gated, then 128 spread-25 diagnostic seasons
+    /// (worlds 129–160 × scheduler 1/2 × outcome 1/2), reported only, with a
+    /// 20 min hard stop between tuples (a stopped run is incomplete, exit 2).
+    /// Pooled rates with world-clustered and tuple-clustered 95% intervals;
+    /// prints a per-tuple manifest. Exit 0 only when every gated metric's
+    /// point estimate is inside the College band.
     /// </summary>
-    private static int RunCollegeAnalysis(string schemaPath, bool pilot)
+    private static int RunCollegeAnalysis(string schemaPath, bool pilot, bool reduced)
     {
-        (int firstWorld, int worlds, int schedulers, int outcomes) = pilot ? (1, 8, 2, 2) : (129, 128, 8, 16);
-        Console.WriteLine($"--- CS-M College rate analysis ({(pilot ? "PILOT" : "FULL")}): worlds {firstWorld}–{firstWorld + worlds - 1} × " +
-            $"scheduler 1–{schedulers} × outcome 1–{outcomes} = {worlds * schedulers * outcomes:N0} seasons ---");
+        var batches = pilot
+            ? new[] { new CollegeBatch("PILOT", 1, 8, 2, 2, Spread: 0, Gated: true) }
+            : reduced
+                ? new[]
+                {
+                    new CollegeBatch("REDUCED HOLDOUT (flat, gated)", 129, 32, 4, 4, Spread: 0, Gated: true),
+                    new CollegeBatch("SPREAD-25 DIAGNOSTIC (reported, not gated)", 129, 32, 2, 2,
+                        Spread: LeagueGenerator.DefaultRatingSpread, Gated: false),
+                }
+                : new[] { new CollegeBatch("FULL", 129, 128, 8, 16, Spread: 0, Gated: true) };
+        double stopSeconds = pilot ? 60 : reduced ? 20 * 60 : double.PositiveInfinity;
+        var total = Stopwatch.StartNew();
+        bool pass = true;
+        foreach (CollegeBatch batch in batches)
+        {
+            (bool stopped, bool inBand) = RunCollegeBatch(schemaPath, batch, total, stopSeconds, forecastFullMatrix: pilot);
+            pass &= !batch.Gated || inBand;
+            if (stopped && !pilot)
+            {
+                // The pilot's 60 s rule judges what it played (CS-M); the holdout's 20 min kill leaves no verdict.
+                Console.WriteLine($"  INCOMPLETE: the {stopSeconds / 60:F0} min stop rule ended the run at {total.Elapsed.TotalMinutes:F1} min; no verdict.");
+                return 2;
+            }
+            if (stopped)
+            {
+                break;
+            }
+        }
+        Console.WriteLine($"  college analysis total {total.Elapsed.TotalMinutes:F2} min; gated verdict {(pass ? "PASS" : "FAIL")}");
+        return pass ? 0 : 1;
+    }
+
+    private readonly record struct CollegeBatch(
+        string Label, int FirstWorld, int Worlds, int Schedulers, int Outcomes, int Spread, bool Gated);
+
+    /// <summary>One batch of <see cref="RunCollegeAnalysis"/>: whether the time rule stopped it, and whether every point estimate is in band.</summary>
+    private static (bool Stopped, bool InBand) RunCollegeBatch(
+        string schemaPath, CollegeBatch batch, Stopwatch total, double stopSeconds, bool forecastFullMatrix)
+    {
+        (string label, int firstWorld, int worlds, int schedulers, int outcomes, int spread, bool gated) = batch;
+        Console.WriteLine($"--- CS-M College rate analysis ({label}): worlds {firstWorld}–{firstWorld + worlds - 1} × " +
+            $"scheduler 1–{schedulers} × outcome 1–{outcomes} = {worlds * schedulers * outcomes:N0} seasons, spread {spread} ---");
         var stopwatch = Stopwatch.StartNew();
         var perWorld = new List<SeasonTotals>(worlds);
+        var perTuple = new List<SeasonTotals>(worlds * schedulers * outcomes);
         int seasons = 0;
-        for (int w = firstWorld; w < firstWorld + worlds; w++)
+        bool stopped = false;
+        for (int w = firstWorld; w < firstWorld + worlds && !stopped; w++)
         {
             string path = Path.Combine(Path.GetTempPath(), $"dnd_college_analysis_{w}_{Guid.NewGuid():N}.db");
             try
@@ -937,12 +986,12 @@ internal static partial class Program
                 var players = new PlayerQueries(db);
                 var baseball = new BaseballQueries(db);
                 var genRng = new RngState(LeagueSeed ^ (ulong)w);
-                LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+                LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: spread, ref genRng);
                 var normalizer = new StatsNormalizer(db, baseball);
                 var gameState = new GameStateQueries(db);
                 var sum = new SeasonTotals();
                 int year = PooledBaseYear;
-                for (int s = 1; s <= schedulers; s++)
+                for (int s = 1; s <= schedulers && !stopped; s++)
                 {
                     db.RunInBatch(() => gameState.SetInt64(SeasonScheduler.ScheduleSeedKey, s));
                     for (int o = 1; o <= outcomes; o++, year += 2)
@@ -960,15 +1009,18 @@ internal static partial class Program
                         SeasonTotals t = LoadSeasonTotals(baseball, year, LeagueTier.College);
                         sum = new SeasonTotals(sum.Pa + t.Pa, sum.Ab + t.Ab, sum.H + t.H, sum.Tb + t.Tb, sum.Bb + t.Bb,
                             sum.So + t.So, sum.Hr + t.Hr, sum.Er + t.Er, sum.Outs + t.Outs, sum.Gs + t.Gs);
+                        perTuple.Add(t);
                         seasons++;
                         Console.WriteLine($"  tuple (world {w}, scheduler {s}, outcome {o}) year {year}: {t.Gs / 2} games, R/9 {27.0 * t.Er / t.Outs:F3}");
-                        if (pilot && stopwatch.Elapsed.TotalSeconds >= 60)
+                        if (total.Elapsed.TotalSeconds >= stopSeconds)
                         {
-                            Console.WriteLine($"  STOP RULE: pilot reached 60 s after {seasons} seasons.");
-                            return Report();
+                            Console.WriteLine($"  STOP RULE: {stopSeconds:F0} s reached after {seasons} seasons of this batch.");
+                            stopped = true;
+                            break;
                         }
                     }
                 }
+                // A world cut short by the stop rule is still one cluster of what it played.
                 perWorld.Add(sum);
             }
             finally
@@ -978,41 +1030,39 @@ internal static partial class Program
                 TryDelete(path + "-shm");
             }
         }
-        return Report();
 
-        int Report()
+        stopwatch.Stop();
+        double perSeason = stopwatch.Elapsed.TotalMilliseconds / Math.Max(1, seasons);
+        Console.WriteLine($"  {seasons} seasons in {stopwatch.Elapsed.TotalSeconds:F1} s ({perSeason:F0} ms/season)" +
+            (forecastFullMatrix ? $"; full-matrix forecast 16,384 × {perSeason:F0} ms × 1.25 = {16_384 * perSeason * 1.25 / 60_000:F1} min" : ""));
+        if (perWorld.Count == 0)
         {
-            stopwatch.Stop();
-            double perSeason = stopwatch.Elapsed.TotalMilliseconds / Math.Max(1, seasons);
-            Console.WriteLine($"  {seasons} seasons in {stopwatch.Elapsed.TotalSeconds:F1} s ({perSeason:F0} ms/season); " +
-                $"full-matrix forecast 16,384 × {perSeason:F0} ms × 1.25 = {16_384 * perSeason * 1.25 / 60_000:F1} min");
-            if (perWorld.Count == 0)
-            {
-                return 1;
-            }
-            TierBand band = TierBands[(int)LeagueTier.College];
-            var a = PooledRatio(perWorld, x => x.H, x => x.Ab);
-            var o = PooledRatio(perWorld, x => x.H + x.Bb, x => x.Pa);
-            var g = PooledRatio(perWorld, x => x.Tb, x => x.Ab);
-            var k = PooledRatio(perWorld, x => x.So, x => x.Pa);
-            var b = PooledRatio(perWorld, x => x.Bb, x => x.Pa);
-            var h = PooledRatio(perWorld, x => x.Hr, x => x.Pa);
-            var r = PooledRatio(perWorld, x => x.Er, x => x.Outs, 27.0);
-            var rg = PooledRatio(perWorld, x => x.Er, x => x.Gs);
-            bool In((double Estimate, double Se, double Lo, double Hi) v, double lo, double hi) => v.Estimate >= lo && v.Estimate <= hi;
-            void Line(string name, (double Estimate, double Se, double Lo, double Hi) v, double lo, double hi) =>
-                Console.WriteLine($"  [{(In(v, lo, hi) ? "PASS" : "FAIL")}] {name} {v.Estimate:F4} [{v.Lo:F4}, {v.Hi:F4}] band {lo}–{hi}");
-            Line("AVG", a, band.AvgLo, band.AvgHi);
-            Line("OBP", o, band.ObpLo, band.ObpHi);
-            Line("SLG", g, band.SlgLo, band.SlgHi);
-            Line("K%", k, band.KLo, band.KHi);
-            Line("BB%", b, band.BbLo, band.BbHi);
-            Line("HR/PA", h, band.HrLo, band.HrHi);
-            Line("R/9", r, band.RgLo, band.RgHi);
-            Console.WriteLine($"  ER/GS {rg.Estimate:F4} [{rg.Lo:F4}, {rg.Hi:F4}] (reported, not gated)");
-            bool pass = In(a, band.AvgLo, band.AvgHi) && In(o, band.ObpLo, band.ObpHi) && In(g, band.SlgLo, band.SlgHi)
-                && In(k, band.KLo, band.KHi) && In(b, band.BbLo, band.BbHi) && In(h, band.HrLo, band.HrHi) && In(r, band.RgLo, band.RgHi);
-            return pass ? 0 : 1;
+            return (stopped, false);
         }
+        TierBand band = TierBands[(int)LeagueTier.College];
+        bool In((double Estimate, double Se, double Lo, double Hi) v, double lo, double hi) => v.Estimate >= lo && v.Estimate <= hi;
+        bool all = true;
+        void Line(string name, Func<SeasonTotals, double> x, Func<SeasonTotals, double> d, double lo, double hi, double scale = 1.0)
+        {
+            var byWorld = PooledRatio(perWorld, x, d, scale);
+            var byTuple = PooledRatio(perTuple, x, d, scale);
+            bool inBand = In(byWorld, lo, hi);
+            all &= inBand;
+            Console.WriteLine($"  [{(gated ? (inBand ? "PASS" : "FAIL") : "DIAG")}] {name} {byWorld.Estimate:F4}  " +
+                $"world-clustered (k {perWorld.Count}) SE {byWorld.Se:F5} [{byWorld.Lo:F4}, {byWorld.Hi:F4}]  " +
+                $"tuple-clustered (k {perTuple.Count}) SE {byTuple.Se:F5} [{byTuple.Lo:F4}, {byTuple.Hi:F4}]  band {lo}–{hi}");
+        }
+        Line("AVG", x => x.H, x => x.Ab, band.AvgLo, band.AvgHi);
+        Line("OBP", x => x.H + x.Bb, x => x.Pa, band.ObpLo, band.ObpHi);
+        Line("SLG", x => x.Tb, x => x.Ab, band.SlgLo, band.SlgHi);
+        Line("K%", x => x.So, x => x.Pa, band.KLo, band.KHi);
+        Line("BB%", x => x.Bb, x => x.Pa, band.BbLo, band.BbHi);
+        Line("HR/PA", x => x.Hr, x => x.Pa, band.HrLo, band.HrHi);
+        Line("R/9", x => x.Er, x => x.Outs, band.RgLo, band.RgHi, 27.0);
+        var rg = PooledRatio(perWorld, x => x.Er, x => x.Gs);
+        var og = PooledRatio(perWorld, x => x.Outs, x => x.Gs);
+        Console.WriteLine($"  ER/GS {rg.Estimate:F4} [{rg.Lo:F4}, {rg.Hi:F4}], outs/GS {og.Estimate:F4} [{og.Lo:F4}, {og.Hi:F4}] (reported, not gated); " +
+            $"totals PA {perTuple.Sum(t => t.Pa):N0}, R = ER {perTuple.Sum(t => t.Er):N0}, outs {perTuple.Sum(t => t.Outs):N0}, GS {perTuple.Sum(t => t.Gs):N0}");
+        return (stopped, all);
     }
 }

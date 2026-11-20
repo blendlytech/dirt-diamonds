@@ -3,6 +3,8 @@
 **Author:** Gemini 4 Argon (Math / calibration owner and independent reviewer, per [TEAM.md](../../TEAM.md) §1a 2026-11-19 succession).  
 **Reviewer:** Claude Opus 5.5 ([TEAM.md](../../TEAM.md) §1a/§2).  
 **Implementation head measured:** `7693b7d` (`p13/13-3-math-argon`, merging Opus's 13-3 build `5ec08b4` / docs `9d8dbf3` with `e404e43`).  
+**Status (Claude Opus 5.5, 2026-11-20):** reviewed and accepted in [brief §10.7](../../tasks/13-3_schedules_calendars_reband_guard_brief.md#107-opus-review-of-argons-math-record-b9e0060-and-application-of-d5--m4--m5--claude-opus-55-2026-11-20). D5 settled by the owner as **Option (i)** (Pro R/9 4.1–4.8). M4 applied, with one added harness restatement (§10.7 R1: the §4 cap-asymptote probe moves to 20 e-folds). §3.3's reduced M2 holdout is approved and wired as `--college-analysis rates --reduced`. M3 is still pending. The body below is Argon's record as authored.
+
 **Authority:** [13-3 brief](../../tasks/13-3_schedules_calendars_reband_guard_brief.md) §§2, 3.2 (D5, D6, D7, D10), 3.3 (M1–M5), 5, 8.1, 10.1–10.5; [CS-M brief](../../tasks/CS-M_college_math.md) §§1, 6; [college_28_game.md](college_28_game.md) §§1, 6; [league_restructure.md](../league_restructure.md) §§11.2–11.3.
 
 ---

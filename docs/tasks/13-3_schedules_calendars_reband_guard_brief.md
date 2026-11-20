@@ -369,6 +369,44 @@ Recommended next: owner frees disk space (≥ 5 GB suggested); then GPT 6 Astra 
       the M-values; owner sanctions the guard; then the merge into p13/integration.
 ```
 
+### 8.1a Handoff — D5 / M4 / M5 application and the 20× replay (Claude Opus 5.5, 2026-11-20)
+
+```text
+Done: reviewed Argon's Math record b9e0060 (brief §10.7: accepted; R1 harness amendment; M2 reduced plan approved);
+      D5 Option (i) per the owner: TierBands[Pro] R/9 4.1–4.8, spec §11.2 / §16-I11;
+      M4: PracticeFracPerHour .0005 → .001 (cap .25 unchanged; doc comment: e-fold 250 h);
+      M5 Finding 1: practice-seam §10.9 moved last; §4 e-fold 250 h, slices 250/500/1000 h, first-hour tolerance
+      2.5e-6; §10.5 label (frac 0.2500); R1: §4 cap-asymptote probe 10,000 h → 20 e-folds (5,000 h at .001;
+      10,000 h saturates to exactly the cap in double);
+      --college-analysis rates --reduced (M2 holdout 512 flat gated + 128 spread-25 reported, 20 min hard stop,
+      world- and tuple-clustered intervals); avatar PA bands noted in code + skill; R6: .starters.r2.unit leak fixed.
+      · Base: b9e0060 (fast-forward of p13/13-3-opus) · Commit: this one
+Gates (owner's PC): build 0/0; Schema 174/174; CoreLoop 22/22; Gritty 363/363;
+      MC default 408/415: tier-ladder 14/14 (pooled Pro R/9 4.164 [4.103, 4.225] in 4.1–4.8), practice-seam 10/11,
+      development-tiers 2/2 (in-season fractions .068463/.090274/.100176), career-wiring 20/20 (avatar 294 PA);
+      red = exactly the 7 approved promotion suites (promotion-sweep 3/4, promotion-stream 0/1, promotion-avatar
+      0/1, promotion-record 0/1, development-arc 3/4, practice-seam 10/11, development-equilibrium 0/1; 13-6);
+      resolver 13/13, `--only resolver` output LF SHA-256 6d92422863f22d73c3539306a2a2442a65bcdedf505ddc5bb24611782e9eda89
+      (byte-identical); Pro guard candidate PA 81433 / H 18471 / ER 8803, ledger
+      932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84, byte-exact (development does not reach
+      the guard world: NPC practice is 0); every allocation line 0 B; College pilot (rewired code) 7/7, identical
+      to the Math record.
+REPLAY 20× (default, --no-build): 20/20 byte-identical after normalizing the 3 "N ms" timing lines (730-day run,
+      career season, 3-generation run); identical to the gate run too; every run 408/415; 0 leaked scratch files
+      after each run; C: free 8.89 GB → 8.07 GB (min 5.81 GB mid-run, from other processes; never < 2 GB).
+Runtime (D10, ≤ 183.7 s baseline + 30 s): gate runs 77.7 s / 92.6 s. Replay walls 89–222 s, median 108.8 s, under
+      concurrent load on the PC (free disk swung by 3 GB with no leak of ours). Run 16 (222.3 s) is the one wall
+      over 213.7 s; the uncontended measurements sit far inside the budget. Argon may re-time D10 on a quiet machine.
+Not run by me: `--college-analysis rates --reduced` (frozen holdout; left unpeeked for Argon).
+Open: M3 (Argon: 20/20 guard reproduction + the M2 reduced holdout run); the owner's guard sanction; then Opus
+      rebases onto p13/integration and merges. 13-6 inherits §10.7 R3 (College ≈ HS after one pass) and R4 (HS /
+      College avatar-season fixtures).
+Recommended next: Gemini 4 Argon — M3 on p13/13-3-opus @ this commit:
+      (1) dotnet run --project Tools/MonteCarloHarness -c Release --no-build  ×20, normalize "\d+ ms", 20/20;
+      (2) dotnet run --project Tools/MonteCarloHarness -c Release --no-build -- --college-analysis rates --reduced.
+      Then owner sanction of the Pro guard; then Claude Opus merges into p13/integration.
+```
+
 ## 9. Questions for Astra's Math check of this brief (answer before owner approval)
 
 1. **Sample sizes (D5/M1).** What pooled sample per tier gives a usable standard error inside ≤ 120 s? One HS season has 120 team-games. If the per-team-game run SD is about 3.5 (an assumption, not a measurement), one HS season's R/9 SE is about 0.32 against a 1.6-wide band.
@@ -557,6 +595,61 @@ Validation: documentation cross-check against league spec §11.2–11.3 and CS-M
    - `PlayGame` copies `_flushGameId = _scheduledGameId; _scheduledGameId = 0;`, and `FlushGame` writes `RecordFinal` when `_flushGameId != 0`. Preserving `_flushGameId` across a failed `CommitBatch` correctly supports D4 retry; clearing `_flushGameId = 0` after `_gamePendingFlush = false` at the end of `FlushGame` is optional defense-in-depth (since `FlushGame` already guards on `if (!_gamePendingFlush) return;`).
 
 **Recommended next:** owner D5 choice on the Pro run floor; then Claude Opus 5.5 reviews the Math record, applies the M4 values, re-runs the 20× replay, prepares the guard for Argon's M3 reproduction and the owner's sanction, rebases onto `p13/integration` and merges.
+
+### 10.7 Opus review of Argon's Math record (`b9e0060`) and application of D5 / M4 / M5 — Claude Opus 5.5, 2026-11-20
+
+**Verdict: accepted, with one harness amendment to M4 (R1) and the M2 reduced plan approved as written.** The owner settled D5 as **Option (i)** (Pro R/9 band 4.1–4.8, no sim change). Branch `p13/13-3-opus`, fast-forwarded to `b9e0060`. Verification used a scratch probe outside the repo, compiled from the same engine sources as `MonteCarloHarness`. It was never committed.
+
+#### Independently verified
+
+| Item | How | Result |
+| :-- | :-- | :-- |
+| M1 point estimates, all 3 tiers | recomputed from the counting-totals table; default MC re-run | all 21 slash/K/BB/HR/R/9/ER/GS values and outs/GS match to the printed digits; AB = PA − BB in every tier |
+| Markov 9 × RE(0,0) | (a) engine `BaseOutMatrices.RunExpectancy` over `AtBatResolver` probabilities; (b) my own value iteration over (bases, outs) written from `BaseOutAdvancement`'s rules, with no engine matrices | both give HS 6.9050 / College 6.2339 / **Pro 4.1439** (RE 0.460438); the Option (ii) grid (0.64/0.49 … 0.72/0.57) matches for all three tiers |
+| Pro holdout | same stream formula, replicate IDs 129–160 on the `LeagueSeed` flat world (17 s) | default 8: 4.1644; holdout 129–136: 4.1736 (SE .0176); **129–160: 4.1519 (SE .0102), ER/GS 4.1745, outs/GS 27.1468**, PA 2,598,304: identical to the record; t = −4.71 |
+| D5 denominator seam | 27 / 27.1729 = 0.993639 | shift −0.02666 R/9; 4.10 floor clears the default pool by 2.49 SE |
+| M4 fractions | closed form | .036964/.050171/.056465 (old), **.068463/.090274/.100176**; +2 h/d .233131/.231282/.223385; +6 h/d .249854/.249743/.249160; f(2190) .249961; offseason days 297/268/216 |
+| M4 goldens | default MC after applying `.001` | §4 e-fold f(250) = 0.158030, slices 0.1580 → 0.0581 → 0.0293, f(1) remainder 1.9973e-6 ≤ 2.5e-6; §10.5 189 / 180 / 1 / +21 / NPC fingerprint identical; §4 guard heir 30/30/30, key cleared |
+| Gradient, default fixture | default MC | pre 122.02 < 131.27 < 147.51, post 132.70 < 135.81 < 147.23, 1,199 changed: identical |
+| Gradient, 64 worlds | **different world seeds from Argon's** (gen `(LeagueSeed+133) ^ (w << 32)`, dev `(LeagueSeed+134) ^ (w << 32)`): an out-of-sample replication | training post Col−HS +2.95 [+2.36, +3.54], Pro−Col +9.30 [+8.96, +9.64], strict 30/32; holdout +2.49 [+2.03, +2.95] / +9.25 [+8.93, +9.57], strict 32/32. Agrees with Argon's within SE, including the same 2/32 training non-strict rate |
+| Avatar PA bands | career-wiring construction per tier, fixture seed + 32 different career seeds | Pro fixture **294** (identical); alternates mean 280.1, SD 15.2, [257, 316] ⊂ 188–335. HS [30, 44] ⊂ 24–48; College [112, 148] ⊂ 90–160 |
+| M2 pilot | `--college-analysis rates --pilot` on the rewired code | 32 seasons, 14.9 s; R/9 6.2762, world SE .03249, tuple SE .02865, PA 923,964, ER 134,292: identical to the record |
+
+#### Findings
+
+- **R1 [Medium: M4 harness list incomplete; amended].** Signed §4.4 updated the e-fold and first-hour checks, not the third §4 check ("asymptotes at the seasonal cap"). That check required `PracticeFraction(10_000) < cap`. At `.001`, 10,000 h is 40 e-folds; exp(−40) ≈ 4e-18 is below double epsilon, so f rounds to exactly the cap and the check fails. Once §10.9 moved to the end, the suite read **9/11, not 10/11**. Restated old → new → reason: the probe moves from a literal 10,000 h to **20 e-folds, computed from the profile constants** (`20 · cap / rate` = 5,000 h; it was 20 e-folds at `.0005`). It stays strict: f(5000) = 0.2499999994847116 < 0.25. The 1e9 h saturation half is unchanged. A future rate change can no longer silently break it.
+- **R2 [Info: the §10.5 golden is safe, and why].** 14 × f(2190) = 3.49945 sits 0.00055 below the `RoundAwayFromZero` .5 boundary. The margin is structural, not luck: f < cap strictly until 1 − e^(−x) rounds to 1 (x > 36.7 e-folds, about 9,180 h at `.001`). So +3 holds for every finite grind below that, and the golden cannot reach +4 from a slope increase alone.
+- **R3 [Info: hand to 13-6].** After one pass, College − HS shrinks from about +8.5 to about +2.5, and **2 of 32 training worlds are non-strict** under both Argon's seeds and mine (min −0.45). The zero-tolerance gate is a pinned fixture and passes, but the ordering after one pass is not universal. 13-6's predeclared equilibrium window should treat College ≈ HS convergence as the expected risk.
+- **R4 [Info].** No harness suite defines HS or College avatar-season fixtures yet. My construction (team base + 3, league seed 777 in that tier) gives fixture 37 / 135 PA against Argon's 38 / 129. The signed bands hold on both. The suite that first installs them (13-6) defines the fixture and re-measures its value.
+- **R5 [Nit].** Math record §4.4: f(1000) = 0.24542109027781644, not …08972281642 (9th significant digit; no check pins it).
+- **R6 [Pre-existing, fixed].** 13-2's R2 ledger-contract fixture `.starters.r2.unit` leaked one 1.3 MB file per default run. My `9d8dbf3` cleanup fix missed it; it is now on the cleanup list.
+
+#### M2 reduced holdout plan (Math record §3.3): approved as written
+
+- **Pre-registered, not chosen by outcome.** It is the first-32-worlds × first-4-schedulers × first-4-outcomes sub-lattice of the full matrix registered in §10.2 Q3, cut for runtime only.
+- **No College-rate outcome has been seen on these tuples.** IDs 129–160 were used for the Pro holdout, on a different world and estimand, and for the gradient, a different measure.
+- **Precision.** The pilot's per-season σ(R/9) is 0.162 (tuple) to 0.184 (world), so SE at 512 seasons is 0.0072–0.0081, matching the forecast .008.
+- **Runtime.** Today's pilot ran at 464 ms/season, so the flat batch should take about 4–5 min.
+
+Wired as `dotnet run --project Tools/MonteCarloHarness -c Release --no-build -- --college-analysis rates --reduced`:
+
+- **Gated flat batch:** worlds 129–160 × scheduler 1–4 × outcome 1–4 = 512 seasons, spread 0.
+- **Spread-25 diagnostic:** worlds 129–160 × scheduler 1/2 × outcome 1/2 = 128 seasons, printed `[DIAG]`, never gated.
+- **Intervals:** world-clustered (k = 32, gated on the point estimate) and tuple-clustered (k = 512), with ER/GS and outs/GS reported.
+- **Hard stop:** 20 min, checked between tuples. A stopped run prints INCOMPLETE and exits 2, with no verdict and no partial-sample pass.
+- **Exit 0** only when all 7 flat point estimates are inside CS-M §1's College band.
+
+The pilot keeps its 60 s rule and still judges what it played. **I did not execute `--reduced`**, so the holdout stays unpeeked for Argon's acceptance run.
+
+#### Applied on `p13/13-3-opus`
+
+- **D5:** `TierBands[Pro]` R/9 floor 4.2 → 4.1, with the rationale in a comment; spec §11.2 / §16-I11 restated.
+- **M4:** `PracticeFracPerHour = 0.001`, with the doc comment updated (e-fold 250 h, 0.04 rating points on a 40-point gap).
+- **M5 Finding 1:** §10.9 moved to the end of `practice-seam`; the §4 e-fold, slice and tolerance checks updated; the §10.5 label reads `(frac 0.2500)`; plus R1.
+- **Avatar PA bands:** signed values recorded at `Program.cs` career-wiring and in the skill.
+- **`--reduced` mode** added; R6 fixed.
+
+The gates and the 20× replay are in §8.1a.
 
 ### Spec issues found while drafting — **resolved 2026-10-25** (owner: "resolve these problems")
 
