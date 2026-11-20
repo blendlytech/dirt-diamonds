@@ -1,6 +1,6 @@
 # Scope Realignment (SR): Pruning Manifest, Refactor Specs, Gate Sequence
 
-**Status:** active spec, 2026-10-25. Source: [architectural_refactoring_scope_alignment_directive.md](../architectural_refactoring_scope_alignment_directive.md) (the owner's directive; read it for the *why*). **Pivots 2.1-2.4 are accepted by the owner (2026-10-25) and recorded in [GAME_VISION](../GAME_VISION.md) v3.0.** Everything marked **PROPOSED** below (gate order, features, resolutions of conflicts) needs the owner's yes, listed in §9.
+**Status:** active spec, 2026-10-25. Source: [ARCHITECTURAL_DIRECTIVE_V1.md](../ARCHITECTURAL_DIRECTIVE_V1.md) (the owner's directive; read it for the *why*). **Pivots 2.1-2.4 are accepted by the owner (2026-10-25) and recorded in [GAME_VISION](../GAME_VISION.md) v3.0.** Everything marked **PROPOSED** below (gate order, features, resolutions of conflicts) needs the owner's yes, listed in §9.
 
 **Current staffing (owner, 2026-10-25):** default outstanding authors, reviewers and merge gates use the GPT-primary roster in [TEAM.md](../TEAM.md) section 1a: **GPT 6.1 Sol** core/integration, **GPT 6 Astra** math/sim/review, **GPT 6 Sol** UI/presentation/content. Gemini Argon is an optional, limited-budget reviewer for focused packets, with no mandatory gate or implementation slice. This replaces the original Opus/Sonnet/Flash assignments without changing scope, pauses or owner gates.
 
@@ -234,7 +234,7 @@ After Gate 4: resume Phase 13's remainder, Phase L runtime, Phase 14 (6 voices),
 | 11 | `Assets/UI/ScheduleScreen.*` | Remove from navigation (retire) | GPT 6 Sol | GPT 6 Astra |
 | 12 | `Assets/UI/Theme/*` (15b) | Design system scoped to the screens above | GPT 6 Sol | GPT 6 Astra |
 
-Gate 2 needs **15a** first, and that is the owner's call (art direction A/B/C, see [review/visual_direction_3d_proposal.md](../review/visual_direction_3d_proposal.md) and the G-0c brief). It is the long pole.
+Gate 2 needs **15a** first, and that is the owner's call (art direction A/B/C, see [archive/visual_direction_3d_proposal.md](../archive/visual_direction_3d_proposal.md) and the G-0c brief). It is the long pole.
 
 **Regression envelope:** a Gate 2 diff may touch `Assets/Simulation/Life/` additively, `Assets/Narrative/` additively, and `Assets/UI/`. It must leave `Assets/Simulation/Baseball/` alone. Required green at every merge: Build 0/0, MonteCarlo 354/354 20-run byte-identical, GrittyEvents 363/363 (+new), NeedsDecay 117/117, CoreLoop 22/22, Hustle 95/95, SchemaValidator.
 
@@ -270,7 +270,7 @@ Order: 4.1 interim and 4.2 are GPT 6 Sol slices after Gate 4; 4.3 follows once t
 | **SR-8** | Rap Sheet exporter | GPT 6 Sol | GPT 6 Astra | — |
 | **SR-9** | Six booths: persona framework, trigger catalog, script sheets | GPT 6.1 Sol -> GPT 6 Sol | GPT 6 Astra | **Approve taglines** |
 
-Superseded by this spec (read through it): [GAME_VISION v2.x §3 pillar 2, §5, §10](../GAME_VISION.md) (already rewritten), GEMINI.md §11 (rewritten), [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §9 and §12, [gameplay_core.md](gameplay_core.md) venue/arcade slices, [voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) booth counts, TEAM.md rows G-2…G-9 and 14c/14f.
+Superseded by this spec (read through it): [GAME_VISION v2.x §3 pillar 2, §5, §10](../GAME_VISION.md) (already rewritten), GEMINI.md §11 (rewritten), [arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) §9 and §12, [gameplay_core.md](../archive/gameplay_core.md) venue/arcade slices, [voice_and_broadcast_audio.md](voice_and_broadcast_audio.md) booth counts, TEAM.md rows G-2…G-9 and 14c/14f.
 
 ---
 

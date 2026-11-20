@@ -1,6 +1,6 @@
 # Task Brief: R1-LEARN — Practice mode and effective-rating explanations
 
-> **2026-10-13 update (arcade decision, GAME_VISION v2.1):** attended games become true arcade physics ([arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)). Practice, the batting cage and the pitch explanation now run on the **arcade engine** (`Assets/Simulation/Arcade/`) in an isolated session, not the G-2/G-8 policies. Inputs/reveal DTOs come from the arcade slices (G-2/G-5). The no-manual-fielding line is overridden: fielding is assisted and in launch scope.
+> **2026-10-13 update (arcade decision, GAME_VISION v2.1):** attended games become true arcade physics ([arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md)). Practice, the batting cage and the pitch explanation now run on the **arcade engine** (`Assets/Simulation/Arcade/`) in an isolated session, not the G-2/G-8 policies. Inputs/reveal DTOs come from the arcade slices (G-2/G-5). The no-manual-fielding line is overridden: fielding is assisted and in launch scope.
 
 **Status:** authorized by owner acceptance of all R-1 recommendations (2026-10-10); implementation pending.
 **Recommended model:** GPT 6 Astra Pro (engine DTO/session seam), then Claude Sonnet (UI)

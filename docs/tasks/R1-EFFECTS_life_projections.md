@@ -1,6 +1,6 @@
 # Task Brief: R1-EFFECTS — Accepted needs/stress and work-ethic projections
 
-> **2026-10-13 update (arcade decision, GAME_VISION v2.1):** attended games become true arcade physics ([arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)). Projections land in the shared `EffectiveRatings` stack (arcade §4.2), so attended (arcade) and background avatar games see the same effect. Park factors stay deferred; **manual fielding is no longer deferred** (assisted fielding is in launch scope).
+> **2026-10-13 update (arcade decision, GAME_VISION v2.1):** attended games become true arcade physics ([arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md)). Projections land in the shared `EffectiveRatings` stack (arcade §4.2), so attended (arcade) and background avatar games see the same effect. Park factors stay deferred; **manual fielding is no longer deferred** (assisted fielding is in launch scope).
 
 **Status:** owner authorized through R-1 Q04/Q05; implementation waits for R1-MATH.
 **Recommended model:** GPT 6 Astra Pro (game-start projection); Claude Opus 5.5 (practice development).
@@ -9,7 +9,7 @@
 
 ## Inputs and scope
 
-Read [R1-MATH](R1-MATH_gameplay_contracts.md), [gameplay_core](../design/gameplay_core.md) and [accepted decisions](../review/r1/06_owner_questions.md). Use only the signed constants/order/caps; no invented values.
+Read [R1-MATH](R1-MATH_gameplay_contracts.md), [gameplay_core](../reference/attribute_contracts.md) and [accepted decisions](../review/r1/06_owner_questions.md). Use only the signed constants/order/caps; no invented values.
 
 Allowed paths: Assets/Core/ event/DTO seams, Assets/Data/ projection persistence, Assets/Simulation/Life/ producer, Assets/Simulation/Baseball/ modifier/development consumers, relevant harnesses and references. Life and Baseball communicate through sanctioned events/data, never direct active-loop references.
 

@@ -4,7 +4,7 @@
 **Recommended model:** Claude Opus 5.5 (TEAM.md §2)
 **Reviewer:** GPT 6 Astra Pro (sim diff + Math, TEAM.md §2)
 **Owner gate:** this brief's decisions D1–D6 and the §5.3 expected-red list.
-**Spec:** [league_restructure.md](../design/league_restructure.md) §4, §5.1, §5.2, §6, §13 (`LeagueSimulator`, `MicroGame`, `TierEffects` rows), §15 (13-2 row), §16-I1/I6/I7; [math/college_28_game.md](../design/math/college_28_game.md) (CS-M) §2, §2.1, §6; [arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) §8.1 (legal-defense lineups)
+**Spec:** [league_restructure.md](../design/league_restructure.md) §4, §5.1, §5.2, §6, §13 (`LeagueSimulator`, `MicroGame`, `TierEffects` rows), §15 (13-2 row), §16-I1/I6/I7; [math/college_28_game.md](../design/math/college_28_game.md) (CS-M) §2, §2.1, §6; [arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) §8.1 (legal-defense lineups)
 **Branch / worktree:** `p13/13-2-opus` from **`p13/integration`** (at or after `d951efe`), in your own worktree. Merges into `p13/integration`, never `main`. A stale local `p13/13-2-opus` from 2026-10-11 (`50301f3`, built on the superseded first 13-1) exists: rename it to `p13/13-2-opus-oct11` first, never delete it. Its `RosterCapacity`/`TierRules`/`StarterSelection`/`PitcherRestLedger` shape is reference only; its rest values predate the owner's College decision.
 
 ## 0. Preconditions (check first; stop and report if any fails)

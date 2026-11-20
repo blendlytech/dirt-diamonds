@@ -4,7 +4,7 @@
 **Recommended model:** Claude Opus 5.5 (TEAM.md §2), with Gemini 3.8 Flash for the seed data in §3.3
 **Reviewer:** GPT 6 Astra Pro (independent review of Claude's sim diffs, TEAM.md §1a)
 **Owner gate:** team names (TEAM.md §2), still open. The Appendix A names are placeholders that a later data edit can rename, so they don't block the build. The §5.3 expected-red list was approved on 2026-10-18.
-**Spec:** [league_restructure.md](../design/league_restructure.md) §1, §2, §5.1, §5.3, §12, §13, §14, §15 (13-1 row), §16-I1, Appendix A; [arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) §8.1 (`Player_Fielding`)
+**Spec:** [league_restructure.md](../design/league_restructure.md) §1, §2, §5.1, §5.3, §12, §13, §14, §15 (13-1 row), §16-I1, Appendix A; [arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) §8.1 (`Player_Fielding`)
 **Branch / worktree:** `p13/13-1-opus`, branched from **`p13/integration`**, in your own worktree (`git worktree add ..\dnd-opus-131 -b p13/13-1-opus origin/p13/integration`). Merges into `p13/integration`, **never `main`** (§15).
 
 ## 0. Preconditions (check first; stop and report if any fails)

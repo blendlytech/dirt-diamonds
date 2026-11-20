@@ -23,15 +23,15 @@ Generation will resume immediately once this capacity window clears.
 
 ## 2. Completed & Integrated Engine Assets
 
-All generated assets are converted to PNG and saved directly to [`Assets/Graphics/HighSchools/`](file:///c:/Users/DELL/dirt_and_diamonds/Assets/Graphics/HighSchools):
+All generated assets are converted to PNG and saved directly to [`Assets/Graphics/HighSchools/`](../../Assets/Graphics/HighSchools):
 
 | Team | Asset | Target Path | Resolution / Style | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **Brookhaven Bulldogs (`BRK`, 105)** | Logo | [`Assets/Graphics/HighSchools/BRK_logo.png`](file:///c:/Users/DELL/dirt_and_diamonds/Assets/Graphics/HighSchools/BRK_logo.png) | 1:1 Vector Emblem | **Integrated** |
-| | School | [`Assets/Graphics/HighSchools/BRK_school.png`](file:///c:/Users/DELL/dirt_and_diamonds/Assets/Graphics/HighSchools/BRK_school.png) | 16:9 Graphic Novel | **Integrated** |
-| | Field | [`Assets/Graphics/HighSchools/BRK_field.png`](file:///c:/Users/DELL/dirt_and_diamonds/Assets/Graphics/HighSchools/BRK_field.png) | 16:9 Friday-Night Lights | **Integrated** |
-| **Cedar Grove Comets (`CDG`, 106)** | Logo | [`Assets/Graphics/HighSchools/CDG_logo.png`](file:///c:/Users/DELL/dirt_and_diamonds/Assets/Graphics/HighSchools/CDG_logo.png) | 1:1 Vector Crest | **Integrated** |
-| | School | [`Assets/Graphics/HighSchools/CDG_school.png`](file:///c:/Users/DELL/dirt_and_diamonds/Assets/Graphics/HighSchools/CDG_school.png) | 16:9 Graphic Novel | **Integrated** |
+| **Brookhaven Bulldogs (`BRK`, 105)** | Logo | [`Assets/Graphics/HighSchools/BRK_logo.png`](../../Assets/Graphics/HighSchools/BRK_logo.png) | 1:1 Vector Emblem | **Integrated** |
+| | School | [`Assets/Graphics/HighSchools/BRK_school.png`](../../Assets/Graphics/HighSchools/BRK_school.png) | 16:9 Graphic Novel | **Integrated** |
+| | Field | [`Assets/Graphics/HighSchools/BRK_field.png`](../../Assets/Graphics/HighSchools/BRK_field.png) | 16:9 Friday-Night Lights | **Integrated** |
+| **Cedar Grove Comets (`CDG`, 106)** | Logo | [`Assets/Graphics/HighSchools/CDG_logo.png`](../../Assets/Graphics/HighSchools/CDG_logo.png) | 1:1 Vector Crest | **Integrated** |
+| | School | [`Assets/Graphics/HighSchools/CDG_school.png`](../../Assets/Graphics/HighSchools/CDG_school.png) | 16:9 Graphic Novel | **Integrated** |
 | | Field | `Assets/Graphics/HighSchools/CDG_field.png` | 16:9 Twilight Diamond | *Pending Quota* |
 
 ---

@@ -24,14 +24,14 @@
 - **Disagree freely.** The vision, the plan, the specs and the code are all open to challenge, including the owner's decisions, if you think the game is better another way. Make the case. The owner decides.
 - **Propose; don't impose.** Don't edit GAME_VISION, the active specs, TEAM.md or any code. Put every change in your proposals (§5).
 - **Exception: plain factual fixes.** A broken link, a wrong path, or a doc number that contradicts the code you can fix directly on your branch. List each one in `01_conflicts.md`.
-- **Gameplay comes first** (owner priority). Do [design/arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) and [design/gameplay_core.md](../design/gameplay_core.md) before anything else, including the G-1 attribute audit. **The owner chose true arcade physics on 2026-10-13**, so attended games become a real-time physics game. Review that design; don't re-litigate the dice-table pitching mode, which was dropped.
+- **Gameplay comes first** (owner priority). Do [design/arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) and [design/gameplay_core.md](../archive/gameplay_core.md) before anything else, including the G-1 attribute audit. **The owner chose true arcade physics on 2026-10-13**, so attended games become a real-time physics game. Review that design; don't re-litigate the dice-table pitching mode, which was dropped.
 
 ## 3. Read in this order
 
 1. [README.md](../README.md): which doc is authoritative (`design/` = active, `reference/` = shipped systems, `archive/` = history; skip `archive/` unless you're resolving history).
 2. [GAME_VISION.md](../GAME_VISION.md) v2.1 → [BUILD_PLAN.md](../BUILD_PLAN.md) → [TEAM.md](../TEAM.md) → [progress.md](../progress.md).
 3. `GEMINI.md` (the binding directives; `CLAUDE.md` imports it) and `.agents/rules/*.md`, `.agents/skills/*/SKILL.md`.
-4. Active specs: **[arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)** and **[gameplay_core.md](../design/gameplay_core.md)**, then [league_restructure.md](../design/league_restructure.md), [temptation_and_lineage.md](../design/temptation_and_lineage.md), [substances_and_addiction.md](../design/substances_and_addiction.md), [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md), [visual_redesign.md](../design/visual_redesign.md), [cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md), [steam_commercial_release.md](../design/steam_commercial_release.md).
+4. Active specs: **[arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md)** and **[gameplay_core.md](../archive/gameplay_core.md)**, then [league_restructure.md](../design/league_restructure.md), [temptation_and_lineage.md](../design/temptation_and_lineage.md), [substances_and_addiction.md](../design/substances_and_addiction.md), [voice_and_broadcast_audio.md](../design/voice_and_broadcast_audio.md), [visual_redesign.md](../design/visual_redesign.md), [cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md), [steam_commercial_release.md](../design/steam_commercial_release.md).
 5. Briefs: [13-0_review_careermanager_ids.md](../archive/13-0_review_careermanager_ids.md), [16-1_opening_sequence_brief.md](16-1_opening_sequence_brief.md), [voicegen_task_brief.md](voicegen_task_brief.md).
 6. The code, **one subsystem at a time** (§4), each with its `reference/` spec open.
 

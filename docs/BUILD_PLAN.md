@@ -48,7 +48,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 
 ## Phase G — Gameplay Core — Milestone MG "Play Ball" (scope realigned 2026-10-25)
 
-**Governing spec:** [design/scope_realignment.md](design/scope_realignment.md) §2.1/§3.1. Older [arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) full-game plans are superseded; [gameplay_core.md](design/gameplay_core.md) §1 retains the attribute contracts.
+**Governing spec:** [design/scope_realignment.md](design/scope_realignment.md) §2.1/§3.1. Older [arcade_baseball_overhaul.md](archive/arcade_baseball_overhaul.md) full-game plans are superseded; [gameplay_core.md](reference/attribute_contracts.md) §1 retains the attribute contracts.
 
 - **Authoritative attended game:** the Markov `MicroGame`. The pure-C# `ClutchResolver` uses the existing arcade timing core for optional, offense-only avatar moments and returns contact quality, feeding a capped, centered tilt into `MicroGame`. Unscored batting practice writes nothing. Real-time fielding, baserunning and full 9-inning arcade physics are cancelled.
 - **Shared ratings and neutral paths:** `EffectiveRatings` is the single modifier stack for macro, micro and clutch inputs. Skipped clutch moments, autopilot and background games apply no tilt and remain byte-identical to the calibrated sim. Retain `Player_Fielding` in schema v14.
