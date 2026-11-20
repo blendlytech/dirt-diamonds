@@ -93,4 +93,4 @@ End with: commit SHA(s) on `docs/W1-repair-neon`; each gate's result with its ou
 
 ## 9. Review verdict (Neon fills in)
 
-Pending.
+**Verdict: APPROVE** — Gemini 4 Neon (separate review session `2f13a59e-2685-4f3a-b36d-e2b28f89dd50`, 2026-11-19), reviewing combined `p13/integration...docs/W1-repair-neon` at `0520195` (38 files). **Findings:** none. Verified H1 verbatim restores/extract vs `2da33f9^`, H3 archive moves and inbound links, H2 retargets (`GEMINI.md` §11, `asset_generation_status.md` `file:///` links, `attribute_contracts.md` vs `archive/gameplay_core.md` splits), H4/H5 `.agents/` v3.0 syncs (0 stale hits), N1 six un-blinded `SchoolParseThrows` fixtures against `SchoolCatalogJson.cs`, and Gates 1–5 (`TOTAL 0`, `.agents/` grep `0`, Debug build `0 Warning(s) / 0 Error(s)`, GrittyEventsHarness `363/363`, N1 6/6 defect-removed probes `369/369`).
