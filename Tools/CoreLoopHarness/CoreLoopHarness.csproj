@@ -20,5 +20,15 @@
     -->
     <Compile Include="..\..\Assets\Data\Database\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
+    <!--
+      13-4: the postseason clock fixtures (the clock stops on the avatar's
+      postseason game day; a reload mid-series resumes the same fixture; an
+      eliminated avatar gets free sliders) drive the real career driver and
+      PlayoffManager, so the headless Baseball sim compiles in here too, the
+      same way MonteCarloHarness compiles it.
+    -->
+    <Compile Include="..\..\Assets\Data\League\*.cs" Link="Data\League\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Data\Schools\*.cs" Link="Data\Schools\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

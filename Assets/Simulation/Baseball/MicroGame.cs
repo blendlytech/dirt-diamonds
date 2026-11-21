@@ -538,6 +538,67 @@ public sealed class MicroGame
     /// <summary>The Schedule_Games row the next <see cref="PlayGame{TBatter, TPitcher}"/> is (13-3); its result is written by <see cref="FlushGame"/>.</summary>
     public void SetScheduledGame(long gameId) => _scheduledGameId = gameId;
 
+    // 13-4: the next game is a postseason game (brief §4.4). Selection then
+    // applies the series no-repeat filter (The Red Dirt Series only:
+    // _seriesFirstDay = its game-1 absolute day, else NoSeriesFilter) and
+    // counts into the postseason diagnostics, never the regular-season ones
+    // (Math record §10.1 Q7 channel 10). Consumed by the next PlayGame.
+    private bool _postseasonNext;
+    private bool _postseasonGame;
+    private long _seriesFirstDay = PostseasonCalendar.NoSeriesFilter;
+
+    /// <summary>Postseason short-rest starts (Q7 channel 10).</summary>
+    internal int PostseasonShortRestStarts { get; private set; }
+
+    /// <summary>Postseason bullpen games (Q7 channel 10).</summary>
+    internal int PostseasonBullpenGames { get; private set; }
+
+    /// <summary>
+    /// Marks the next <see cref="PlayGame{TBatter, TPitcher}"/> as a
+    /// postseason game (13-4): <paramref name="seriesFirstDay"/> is The Red
+    /// Dirt Series' game-1 absolute day (its no-repeat window), else
+    /// <see cref="PostseasonCalendar.NoSeriesFilter"/>.
+    /// </summary>
+    public void SetPostseasonGame(long seriesFirstDay)
+    {
+        _postseasonNext = true;
+        _seriesFirstDay = seriesFirstDay;
+    }
+
+    /// <summary>
+    /// True when the team has a legal pitcher for a postseason game on the
+    /// day: a starter or reliever who is available and, inside a series
+    /// window, hasn't started or opened in it (the narrow forfeit's test,
+    /// brief D3). Pure: reads the rest ledger, records nothing.
+    /// </summary>
+    public bool HasLegalPostseasonPitcher(int teamId, long day, long seriesFirstDay)
+    {
+        int team = TeamIndexOf(teamId);
+        int starterBase = team * RosterCapacity.MaxStarters;
+        for (int k = 0; k < _starterCount[team]; k++)
+        {
+            if (IsLegalInSeries(_starterSlots[starterBase + k], seriesFirstDay, day))
+            {
+                return true;
+            }
+        }
+        int relieverBase = team * RosterCapacity.MaxRelievers;
+        for (int k = 0; k < _relieverCount[team]; k++)
+        {
+            if (IsLegalInSeries(_relieverSlots[relieverBase + k], seriesFirstDay, day))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private bool IsLegalInSeries(int slot, long seriesFirstDay, long day)
+    {
+        long last = RestLedger.TryGetLastStart(_roster[slot].PlayerId, out long l) ? l : StarterSelection.NeverStarted;
+        return !IsShadowed(slot) && !StarterSelection.StartedInSeries(last, seriesFirstDay, day);
+    }
+
     private long ConsumeGameDay()
     {
         if (_gameDaySet)
@@ -607,14 +668,19 @@ public sealed class MicroGame
         int starterBase = team * RosterCapacity.MaxStarters;
         Span<long> lastStart = stackalloc long[RosterCapacity.MaxStarters];
         Span<bool> available = stackalloc bool[RosterCapacity.MaxStarters];
-        // No series context yet; 13-4 supplies the Red Dirt Series filter.
+        // 13-4: The Red Dirt Series' no-repeat filter (all false outside it).
         Span<bool> usedInSeries = stackalloc bool[RosterCapacity.MaxStarters];
+        usedInSeries.Clear();
         for (int k = 0; k < starterCount; k++)
         {
             int slot = _starterSlots[starterBase + k];
             lastStart[k] = RestLedger.TryGetLastStart(_roster[slot].PlayerId, out long last)
                 ? last : StarterSelection.NeverStarted;
             available[k] = !IsShadowed(slot);
+            if (_postseasonGame)
+            {
+                usedInSeries[k] = StarterSelection.StartedInSeries(lastStart[k], _seriesFirstDay, day);
+            }
         }
 
         bullpenUsed = 0;
@@ -628,7 +694,14 @@ public sealed class MicroGame
             // PitcherFatigue is R1-MATH's (PitcherFatigue.cs is outside 13-2).
             if (shortRest)
             {
-                ShortRestStarts++;
+                if (_postseasonGame)
+                {
+                    PostseasonShortRestStarts++;
+                }
+                else
+                {
+                    ShortRestStarts++;
+                }
             }
             int starter = _starterSlots[starterBase + pick];
             RestLedger.RecordStart(_roster[starter].PlayerId, day);
@@ -638,12 +711,29 @@ public sealed class MicroGame
         int relieverCount = _relieverCount[team];
         int relieverBase = team * RosterCapacity.MaxRelievers;
         Span<bool> relieverAvailable = stackalloc bool[RosterCapacity.MaxRelievers];
+        Span<bool> relieverUsed = stackalloc bool[RosterCapacity.MaxRelievers];
+        relieverUsed.Clear();
         for (int k = 0; k < relieverCount; k++)
         {
-            relieverAvailable[k] = !IsShadowed(_relieverSlots[relieverBase + k]);
+            int slot = _relieverSlots[relieverBase + k];
+            relieverAvailable[k] = !IsShadowed(slot);
+            if (_postseasonGame)
+            {
+                long last = RestLedger.TryGetLastStart(_roster[slot].PlayerId, out long l) ? l : StarterSelection.NeverStarted;
+                relieverUsed[k] = StarterSelection.StartedInSeries(last, _seriesFirstDay, day);
+            }
         }
-        int opener = StarterSelection.SelectOpener(relieverAvailable[..relieverCount]);
-        BullpenGames++;
+        int opener = _postseasonGame
+            ? StarterSelection.SelectOpener(relieverAvailable[..relieverCount], relieverUsed[..relieverCount])
+            : StarterSelection.SelectOpener(relieverAvailable[..relieverCount]);
+        if (_postseasonGame)
+        {
+            PostseasonBullpenGames++;
+        }
+        else
+        {
+            BullpenGames++;
+        }
         if (opener >= 0)
         {
             bullpenUsed = opener + 1;
@@ -1016,6 +1106,13 @@ public sealed class MicroGame
         _flushAwayTeamId = awayTeamId;
         _flushGameId = _scheduledGameId;
         _scheduledGameId = 0;
+        // 13-4: postseason context is per game, like the scheduled row.
+        _postseasonGame = _postseasonNext;
+        _postseasonNext = false;
+        if (!_postseasonGame)
+        {
+            _seriesFirstDay = PostseasonCalendar.NoSeriesFilter;
+        }
 
         // 13-2 (brief D3): the human always starts. A position-player human
         // the legal-defense pick benched becomes the featured player (the DH
@@ -1453,12 +1550,23 @@ public sealed class MicroGame
     /// costs (shared LeagueSimulator.Ped* constants), and the buffered
     /// play-by-play — in one transaction, then clears the pending state.
     /// </summary>
-    public void FlushGame(int seasonYear, int gameDay)
+    public void FlushGame(int seasonYear, int gameDay) => FlushGame(seasonYear, gameDay, null);
+
+    /// <summary>
+    /// The flush with a 13-4 postseason hook. A postseason game (marked by
+    /// <see cref="SetPostseasonGame"/>) writes NO Batting_Stats /
+    /// Pitching_Stats rows (brief D4-A, Amendment 1) yet still commits its
+    /// PED costs, Game_Logs, rest and schedule result; <paramref name="inBatch"/>
+    /// then runs inside the same transaction (the series update), so the
+    /// result and its series effects commit together or not at all.
+    /// </summary>
+    public void FlushGame(int seasonYear, int gameDay, Action<int, int>? inBatch)
     {
         if (!_gamePendingFlush)
         {
             throw new InvalidOperationException("No played game pending flush.");
         }
+        bool writeStats = !_postseasonGame;
 
         _db.BeginBatch();
         try
@@ -1466,7 +1574,7 @@ public sealed class MicroGame
             for (int i = 0; i < _roster.Length; i++)
             {
                 ref readonly BattingLine bat = ref _batting[i];
-                if (bat.Pa > 0)
+                if (writeStats && bat.Pa > 0)
                 {
                     _queries.AddBattingGameCounts(
                         _roster[i].PlayerId, seasonYear,
@@ -1474,7 +1582,7 @@ public sealed class MicroGame
                 }
 
                 ref readonly PitchingLine pit = ref _pitching[i];
-                if (pit.G > 0)
+                if (writeStats && pit.G > 0)
                 {
                     _queries.AddPitchingGameCounts(
                         _roster[i].PlayerId, seasonYear,
@@ -1503,6 +1611,7 @@ public sealed class MicroGame
             {
                 _scheduleQueries.RecordFinal(_flushGameId, _flushHomeScore, _flushAwayScore);
             }
+            inBatch?.Invoke(_flushHomeScore, _flushAwayScore);
             _db.CommitBatch();
         }
         catch

@@ -83,6 +83,11 @@ internal static partial class Program
         }
 
         string schemaPath = Path.Combine(repoRoot, "Assets", "Data", "Database", "SchemaDefinitions.sql");
+        if (collegeAnalysis && args.Contains("ranking"))
+        {
+            // 13-4 D5: the CS-M §3 National Ranking analysis (pilot → frozen ladder → holdout once).
+            return RunRankingAnalysis(schemaPath, pilotOnly: analysisPilot, smoke: args.Contains("--smoke"));
+        }
         if (collegeAnalysis)
         {
             return RunCollegeAnalysis(schemaPath, analysisPilot, analysisReduced && !analysisPilot);
@@ -178,6 +183,16 @@ internal static partial class Program
             ("development-tiers", () => RunDevelopmentTiersSuite(schemaPath, slice133ScratchPath + ".devtiers")),
             ("scouting-grade", RunScoutingGradeSuite),
             ("portrait-tile", RunPortraitTileSuite),
+            // 13-4: standings, ranking, brackets, series, events, attended postseason
+            // (the guard-world postseason rides season-pipeline above).
+            ("standings", () => RunStandingsSuite(schemaPath)),
+            ("hs-playoffs", () => RunHsPlayoffsSuite(schemaPath)),
+            ("college-ranking", () => RunCollegeRankingSuite(schemaPath)),
+            ("college-bracket", () => RunCollegeBracketSuite(schemaPath)),
+            ("college-series", () => RunCollegeSeriesSuite(schemaPath)),
+            ("pro-playoffs", () => RunProPlayoffsSuite(schemaPath)),
+            ("championship-event", () => RunChampionshipEventSuite(schemaPath)),
+            ("attended-postseason", () => RunAttendedPostseasonSuite(schemaPath)),
         };
 
         try
@@ -213,6 +228,7 @@ internal static partial class Program
         }
         finally
         {
+            CleanupSlice134();
             foreach (string variant in new[]
                 {
                     worldGenScratchPath, worldGenScratchPath + ".b", worldGenScratchPath + ".c", worldGenScratchPath + ".tx",
@@ -513,12 +529,21 @@ internal static partial class Program
         var league = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed));
         league.Initialize();
         league.AttachTo(bus);
+        // 13-4 (brief D4-A): the guard world runs WITH the postseason wired,
+        // as in production (the tier sim first, then the playoffs), and the
+        // sanctioned guard below must stay byte-exact.
+        var guardLeagues = new LeagueDirectory();
+        guardLeagues.Register(league);
+        var guardPlayoffs = new PlayoffManager(db, baseball, guardLeagues);
+        guardPlayoffs.AttachTo(bus);
+        var guardProbe = new GuardWorldProbe(db, league, guardPlayoffs, bus);
 
         var stopwatch = Stopwatch.StartNew();
         for (int i = 0; i < 2 * GlobalState.DaysPerSeason; i++)
         {
             clock.AdvanceDay();
             bus.DispatchPending();
+            guardProbe.AfterDay(state);
         }
         stopwatch.Stop();
         int proGamesPerTeam = TierSeasonCalendar.GamesPerTeam(LeagueTier.Pro);
@@ -538,6 +563,8 @@ internal static partial class Program
 
         // §11.3 / 13-3 brief D6: the new Pro guard on this world's first season.
         CheckProGuard(db, baseball);
+        // 13-4: the guard world's postseasons completed, plus the Q7 channels.
+        CheckGuardWorldPostseason(db, baseball, league, guardPlayoffs, guardProbe);
 
         // Row-level rate check on a sample batter: the normalizer's stored
         // rates must equal the definitionally recomputed ones.

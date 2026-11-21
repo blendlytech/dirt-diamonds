@@ -79,6 +79,13 @@ public sealed partial class GameManager : Node
 
     /// <summary>Phase 9c offseason promotion/relegation — public like Career so a ladder/news UI can read <see cref="PromotionManager.LastRun"/>.</summary>
     public PromotionManager Promotions { get; private set; } = null!;
+
+    /// <summary>
+    /// The postseason (slice 13-4): selection, brackets, series, the National
+    /// Ranking views and the tier-carrying ChampionshipWonEvent. Presentation
+    /// reads its DTO views only (GetBracket / GetNationalRanking).
+    /// </summary>
+    public PlayoffManager Playoffs { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
     public RelationshipGraph Relationships { get; private set; } = null!;
 
@@ -507,6 +514,20 @@ public sealed partial class GameManager : Node
         Career.AutopilotSuccession = false;
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
+
+        // 13-4: the postseason, attached AFTER the career so the avatar's
+        // postseason game is claimed (and parked, stopping the clock) before
+        // the day's NPC postseason games play. A champion whose publication
+        // marker is missing is republished, and a save reloaded on the
+        // avatar's postseason game day parks the same fixture again.
+        Playoffs = new PlayoffManager(_database, Baseball, Leagues);
+        Career.Playoffs = Playoffs;
+        Playoffs.AttachTo(Events);
+        Playoffs.RepublishMissingChampions(State.SeasonYear);
+        if (avatarLoaded)
+        {
+            Career.ReclaimPostseasonGame(State.CurrentDay);
+        }
 
         // Phase 9d: the offseason development pass. Attached AFTER CareerManager
         // (ages are post-aging) and BEFORE PromotionManager (develop-before-sort,
@@ -1097,12 +1118,20 @@ public sealed partial class GameManager : Node
     {
         int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
         int schoolHours = LifeSim.AvatarSchoolAvailable ? SchoolCalendar.HoursForDayOfSeason(dayOfSeason) : 0;
-        if (!_avatarTierKnown
-            || !TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours))
+        if (!_avatarTierKnown)
         {
             return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
         }
-        return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
+        if (TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours)
+            // 13-4 (spec §3.2, §16-I10): locked through the team's postseason
+            // run, free from the day after elimination (non-qualifiers: from
+            // selection day).
+            || (Career.HasAvatar && Playoffs is not null && Playoffs.TryGetLockedPostseasonBlocks(
+                State.SeasonYearForDay(day), _avatarTier, Career.AvatarTeamId, dayOfSeason, out practiceHours, out gameHours)))
+        {
+            return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
+        }
+        return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
     }
 
     /// <summary>

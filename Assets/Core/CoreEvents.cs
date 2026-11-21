@@ -385,3 +385,76 @@ public readonly struct RivalryChangedEvent : IGameEvent
         Intensity = intensity;
     }
 }
+
+/// <summary>
+/// Published by the baseball sim's <c>PlayoffManager</c> after the batch that
+/// decided a postseason series commits (slice 13-4, league_restructure.md §13).
+/// Ids and counts only (Core events carry primitives, like
+/// <see cref="RivalryChangedEvent"/>); presentation resolves names. Carries
+/// the tier on every publish as its LeagueTier value (HS 0, College 1, Pro 2).
+/// </summary>
+public readonly struct PlayoffSeriesDecidedEvent : IGameEvent
+{
+    public readonly int SeasonYear;
+
+    /// <summary>The LeagueTier value: 0 HS, 1 College, 2 Pro.</summary>
+    public readonly byte Tier;
+
+    /// <summary>Playoff_Series.series_id (a rowid: display and lookup only, never a stream key).</summary>
+    public readonly long SeriesId;
+
+    public readonly int Round;
+    public readonly int WinnerTeamId;
+    public readonly int LoserTeamId;
+    public readonly int WinnerWins;
+    public readonly int LoserWins;
+
+    public PlayoffSeriesDecidedEvent(
+        int seasonYear, byte tier, long seriesId, int round,
+        int winnerTeamId, int loserTeamId, int winnerWins, int loserWins)
+    {
+        SeasonYear = seasonYear;
+        Tier = tier;
+        SeriesId = seriesId;
+        Round = round;
+        WinnerTeamId = winnerTeamId;
+        LoserTeamId = loserTeamId;
+        WinnerWins = winnerWins;
+        LoserWins = loserWins;
+    }
+}
+
+/// <summary>
+/// Published once per tier-season when its final is decided, after the batch
+/// commits (slice 13-4, spec §8.2a/§13). <see cref="Tier"/> is ALWAYS set: only
+/// a Pro title can satisfy the Phase L reveal predicate
+/// (<see cref="ChampionshipRules.IsRevealEligibleTier"/>); an HS or College
+/// title never can. A crash between the commit and the publication marker
+/// republishes on boot, so consumers dedupe per (season, tier).
+/// </summary>
+public readonly struct ChampionshipWonEvent : IGameEvent
+{
+    public readonly int SeasonYear;
+
+    /// <summary>The LeagueTier value: 0 HS, 1 College, 2 Pro.</summary>
+    public readonly byte Tier;
+
+    public readonly int TeamId;
+
+    public ChampionshipWonEvent(int seasonYear, byte tier, int teamId)
+    {
+        SeasonYear = seasonYear;
+        Tier = tier;
+        TeamId = teamId;
+    }
+}
+
+/// <summary>The reveal-eligibility rule beside the event (spec §8.2a, §16-I8); the reveal itself is Phase L's.</summary>
+public static class ChampionshipRules
+{
+    /// <summary>LeagueTier.Pro's value (GEMINI §2: HS = 0, College = 1, Pro = 2); the harness pins the equality.</summary>
+    public const byte ProTier = 2;
+
+    /// <summary>Only the Pro World Championship can fire the GOAT-father reveal.</summary>
+    public static bool IsRevealEligibleTier(byte tier) => tier == ProTier;
+}

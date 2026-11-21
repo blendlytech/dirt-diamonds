@@ -21,7 +21,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// The season window runs from the Monday of week 1 to the last
 /// regular-season game day: team Practice and Game blocks are locked inside
 /// it and free outside it (§3.2, §16-I10). No tier ever plays on a Sunday.
-/// Postseason days are 13-4's.
+/// Postseason days are 13-4's: <see cref="PostseasonCalendar"/>.
 /// </summary>
 public static class TierSeasonCalendar
 {
@@ -169,18 +169,164 @@ public static class TierSeasonCalendar
     }
 
     /// <summary>True on the tier's team-practice days inside the season window (§3 table).</summary>
-    public static bool IsPracticeDay(LeagueTier tier, int dayOfSeason)
+    public static bool IsPracticeDay(LeagueTier tier, int dayOfSeason) =>
+        IsInSeasonWindow(tier, dayOfSeason) && IsPracticeWeekday(tier, GameCalendar.WeekdayForDayOfSeason(dayOfSeason));
+
+    /// <summary>The tier's practice weekdays (§3 table), regular season and postseason alike.</summary>
+    public static bool IsPracticeWeekday(LeagueTier tier, Weekday weekday) => tier switch
     {
-        if (!IsInSeasonWindow(tier, dayOfSeason))
-        {
-            return false;
-        }
-        Weekday weekday = GameCalendar.WeekdayForDayOfSeason(dayOfSeason);
+        LeagueTier.HS => weekday <= Weekday.Thursday,
+        LeagueTier.College => weekday is Weekday.Monday or Weekday.Tuesday or Weekday.Thursday or Weekday.Friday,
+        _ => weekday is Weekday.Monday or Weekday.Wednesday or Weekday.Friday,
+    };
+}
+
+/// <summary>
+/// The fixed postseason calendar (13-4 brief D3, spec §8 / §16-I13). Every
+/// date is a fixed slot derived from <see cref="TierSeasonCalendar.PostseasonFirstDay"/>
+/// (selection day), so the planner, phone and UI can show it in advance; a
+/// conditional game is played only while its series is live (its row exists
+/// only then: rows on certainty).
+///
+/// | Tier    | Round (id)                     | Best of | Game days (2026 calendar)              |
+/// | HS      | QF (1) · Conf final (2) · State (3) | 1  | 131 · 138 · 145 (Fridays)              |
+/// | College | Play-in (1)                    | 1       | 139 Sat                                |
+/// |         | Conference R1–R4 (2–5)         | 1       | 146 · 153 · 160 · 167 (Saturdays)      |
+/// |         | The Red Dirt Series (6)        | 3       | 172 Thu · 173 Fri · 174 Sat            |
+/// | Pro     | Wild Card (1) · Division (2) · Conf final (3) | 3 | Sat/Tue/Thu from 244 · 251 · 258 |
+/// |         | World Championship (4)         | 5       | 265 · 268 · 270 · 272 · 275            |
+///
+/// Hosting: Bo1 and Bo3 games 1 and 3 and Bo5 games 1, 2 and 5 (2-2-1) are
+/// the high seed's. No slot is ever a Sunday (asserted by the harness).
+/// </summary>
+public static class PostseasonCalendar
+{
+    public const int HsRounds = 3;
+    public const int CollegeRounds = 6;
+    public const int ProRounds = 4;
+
+    /// <summary>College's play-in round id (phase 1); every other postseason round is phase 2.</summary>
+    public const int CollegePlayInRound = 1;
+
+    /// <summary>College's first conference-bracket round (R1, a 16-slot bracket's opener).</summary>
+    public const int CollegeFirstBracketRound = 2;
+
+    /// <summary>The Red Dirt Series' round id (College's final).</summary>
+    public const int CollegeFinalRound = 6;
+
+    /// <summary>Most games any series can take (Pro's World Championship).</summary>
+    public const int MaxBestOf = 5;
+
+    /// <summary>The series-window start meaning "no no-repeat filter" (every series but The Red Dirt Series, D3).</summary>
+    public const long NoSeriesFilter = long.MaxValue;
+
+    /// <summary>Selection day = the first day after the regular season (D1).</summary>
+    public static int SelectionDay(LeagueTier tier) => TierSeasonCalendar.PostseasonFirstDay(tier);
+
+    public static int RoundCount(LeagueTier tier) => tier switch
+    {
+        LeagueTier.HS => HsRounds,
+        LeagueTier.College => CollegeRounds,
+        _ => ProRounds,
+    };
+
+    /// <summary>The championship round (the last).</summary>
+    public static int FinalRound(LeagueTier tier) => RoundCount(tier);
+
+    public static int BestOf(LeagueTier tier, int round)
+    {
+        CheckRound(tier, round);
         return tier switch
         {
-            LeagueTier.HS => weekday <= Weekday.Thursday,
-            LeagueTier.College => weekday is Weekday.Monday or Weekday.Tuesday or Weekday.Thursday or Weekday.Friday,
-            _ => weekday is Weekday.Monday or Weekday.Wednesday or Weekday.Friday,
+            LeagueTier.HS => 1,
+            LeagueTier.College => round == CollegeFinalRound ? 3 : 1,
+            _ => round == ProRounds ? 5 : 3,
         };
+    }
+
+    /// <summary>Schedule_Games.phase of a round: 1 for College's play-in, 2 otherwise.</summary>
+    public static int Phase(LeagueTier tier, int round) =>
+        tier == LeagueTier.College && round == CollegePlayInRound ? 1 : 2;
+
+    /// <summary>The fixed day-of-season of a series' <paramref name="gameInSeries"/>-th game (1-based).</summary>
+    public static int GameDay(LeagueTier tier, int round, int gameInSeries)
+    {
+        CheckRound(tier, round);
+        if (gameInSeries < 1 || gameInSeries > BestOf(tier, round))
+        {
+            throw new ArgumentOutOfRangeException(nameof(gameInSeries), gameInSeries,
+                $"{tier} round {round} is best of {BestOf(tier, round)}.");
+        }
+        int first = SelectionDay(tier);
+        switch (tier)
+        {
+            case LeagueTier.HS:
+                // Selection Sat; the QF the Friday after, then a Friday per round.
+                return first + 6 + 7 * (round - 1);
+            case LeagueTier.College:
+                if (round == CollegeFinalRound)
+                {
+                    // Thu–Fri–Sat of the week after R4 (§8.2).
+                    return first + 39 + (gameInSeries - 1);
+                }
+                // Selection Sun; the play-in the Saturday after, then a Saturday per round.
+                return first + 6 + 7 * (round - 1);
+            default:
+            {
+                // Selection Wed; each round opens on a Saturday, a week apart:
+                // Bo3 Sat/Tue/Thu (+0/+3/+5), Bo5 Sat/Tue/Thu/Sat/Tue (+0/+3/+5/+7/+10).
+                int open = first + 3 + 7 * (round - 1);
+                ReadOnlySpan<int> offsets = stackalloc int[] { 0, 3, 5, 7, 10 };
+                return open + offsets[gameInSeries - 1];
+            }
+        }
+    }
+
+    /// <summary>True when the high seed hosts the game (Bo1; Bo3 games 1, 3; Bo5 games 1, 2, 5).</summary>
+    public static bool HighSeedHosts(int bestOf, int gameInSeries) => bestOf switch
+    {
+        1 => true,
+        3 => gameInSeries != 2,
+        5 => gameInSeries is 1 or 2 or 5,
+        _ => throw new ArgumentOutOfRangeException(nameof(bestOf), bestOf, "Series are best of 1, 3 or 5."),
+    };
+
+    /// <summary>The last possible postseason day of the tier (its final's last slot).</summary>
+    public static int LastDay(LeagueTier tier)
+    {
+        int final = FinalRound(tier);
+        return GameDay(tier, final, BestOf(tier, final));
+    }
+
+    /// <summary>
+    /// The planner's locked team blocks for a postseason day (spec §3.2,
+    /// §16-I10, brief §4.4): locked from selection day through the team's
+    /// elimination or title day (<paramref name="lastAliveDay"/>; pass
+    /// selection day − 1 for a non-qualifier), with Game on the team's game
+    /// days and Practice on the tier's practice weekdays otherwise; free
+    /// sliders before selection and after <paramref name="lastAliveDay"/>.
+    /// </summary>
+    public static bool TryGetLockedTeamBlocks(
+        LeagueTier tier, int dayOfSeason, int lastAliveDay, bool hasGameToday, out int practiceHours, out int gameHours)
+    {
+        if (dayOfSeason < SelectionDay(tier) || dayOfSeason > lastAliveDay)
+        {
+            practiceHours = 0;
+            gameHours = 0;
+            return false;
+        }
+        gameHours = hasGameToday ? TierSeasonCalendar.GameHours : 0;
+        practiceHours = !hasGameToday
+            && TierSeasonCalendar.IsPracticeWeekday(tier, GameCalendar.WeekdayForDayOfSeason(dayOfSeason))
+            ? TierSeasonCalendar.PracticeHours : 0;
+        return true;
+    }
+
+    private static void CheckRound(LeagueTier tier, int round)
+    {
+        if (round < 1 || round > RoundCount(tier))
+        {
+            throw new ArgumentOutOfRangeException(nameof(round), round, $"{tier} has rounds 1–{RoundCount(tier)}.");
+        }
     }
 }

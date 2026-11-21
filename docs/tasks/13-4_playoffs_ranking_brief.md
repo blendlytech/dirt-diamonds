@@ -519,3 +519,57 @@ Opus should fold these 7 numbered refinements into §§3–5 before owner sign-o
 - **The natural series key** `(round, high, low)` is unique by construction, not by a DDL constraint. §2 now requires a harness assertion instead of adding DDL (D4-A keeps DDL frozen).
 
 **No owner-facing change:** the amendments refine the recommended options; none changes a D0–D7 choice or the sanctioned guard. **Next: the owner decides D0–D7.**
+
+## 11. 13-4a build record — Claude Opus 5.5, 2026-11-21
+
+**Branch / worktree:** `p13/13-4a-opus` in `C:\Users\DELL\dnd-opus-134`, from `3a1ba48` (`p13/integration` with this brief merged; `b65a00b` is an ancestor). **For review by:** Gemini 4 Argon (independent sim/persistence review + the D5 holdout record).
+
+### 11.1 §0 baseline (on `3a1ba48`, before any edit)
+
+`C:` free 6.7 GB. Build 0/0. SchemaValidator 174/174. CoreLoop 22/22. GrittyEvents 363/363. MC default 408/415, reds exactly the 7 promotion suites (13-6's); resolver 13/13; tier-ladder 14/14; Pro guard PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`; every allocation line 0 B; 0 leaked `dnd_*` files. Default MC wall 117.9 s (one run). Normalized default-log SHA-256 on this PC: `185a7f39…` (CRLF→LF, `\d+(\.\d+)? ms` → `N ms`; it differs from §0's `7430347A…`, which was taken with another invocation, so the replay below compares against this run).
+
+### 11.2 What was built (§4)
+
+- **Streams** (`PostseasonStreams.cs`): §10.1 Q7's chained SplitMix64 verbatim; `ForGame` on the natural key; `StandingsCoinKey`, `RankingCoinKey`, `Subsample14`.
+- **Standings / ranking / Team_Seasons** (`Standings.cs`): `SeasonTable` (exact integer accumulators, meeting and win matrices), `Standings.Order` (D2-A recursive group rule), `RankingCalculator` (CS-M §3 + Amendment 2), `TeamSeasonsWriter` (D1-A idempotent upsert; seed untouched). Upserted inside each tier sim's results flush (`LeagueSimulator.FlushAccumulated`, only when the flush carries results) and in the selection batch.
+- **Calendar** (`TierSeasonCalendar.cs`): `PostseasonCalendar` — the D3 slots derived from `PostseasonFirstDay`, best-of, phase, hosting (Bo1 / Bo3 1-3 / Bo5 2-2-1), locked postseason blocks.
+- **`PlayoffManager`**: selection (forced flush first), HS/College/Pro seeding, the fixed College trees (no reseeding) and Pro's reseeded Division round, rows on certainty, the macro day handler (plays every due unplayed NPC row, skips the avatar's claimed game), the narrow forfeit, events after commit, the champion publication marker (written by the next day handler, after dispatch) and boot republish, read-only views (`PlayoffBracketView`, `PlayoffSeriesView`, `NationalRankView`), planner blocks.
+- **Macro adapter** (`LeagueSimulator.SimulatePostseasonGame`): `PlayHalfInning` now takes the stream and stat sinks as parameters (the regular path passes `ref _rng` and the season accumulators: same draws, same order). Postseason games use private discard buffers, a separate PED buffer, separate diagnostic counters, never touch the result queue; a rolled-back game puts its starters' rest back.
+- **No-repeat** (Amendment 5): `StarterSelection.SelectOpener(available, usedInSeries)` + `StartedInSeries`, applied over SP and RP slots in both sims; The Red Dirt Series only.
+- **Attended postseason** (Amendment 1): `CareerManager` claims the phase-1/2 row (parks it like a regular game; the clock holds on `HasPendingGame`), plays it on `POSTMICR`, flushes through `MicroGame.FlushGame(…, inBatch)` with stat writes suppressed and the series update in the same batch, no `NormalizeSeason`. `ReclaimPostseasonGame` re-parks the same fixture on boot.
+- **Events** (`CoreEvents.cs`): `PlayoffSeriesDecidedEvent`, `ChampionshipWonEvent`, `ChampionshipRules.IsRevealEligibleTier`.
+- **Composition** (`GameManager.cs`): `Playoffs` attached after the career; boot republish + reclaim; `GetMandatoryBlocksFor` falls through to the postseason blocks.
+- **Strings:** `league.college.final.name` = "The Red Dirt Series".
+- **Harness:** `season-pipeline` runs the guard world with the postseason wired; 8 new default suites; `--college-analysis ranking [--pilot | --smoke]`; CoreLoop +3 postseason clock fixtures.
+
+### 11.3 Interpretations and deviations (for review)
+
+1. **Event tier is a byte.** Core events carry primitives (`NeedsDecayHarness` compiles `CoreEvents.cs` without the Data layer), so `Tier` is the `LeagueTier` value; `ChampionshipRules.ProTier` is pinned to `(byte)LeagueTier.Pro` by a check. Synced to spec §16-I8.
+2. **"Every results flush" (D1)** = each tier sim's results batch (weekly Sunday + the forced selection-day flush). An attended game's own flush doesn't recompute, so the rank stays a weekly snapshot. Synced to §16-I14.
+3. **Double forfeit:** if neither team has a legal pitcher, the high seed is awarded the game (edge rule until 13-5). Synced to §16-I13.
+4. **Selection doesn't fail on unplayed regular-season rows.** In one session the forced flush leaves none (asserted in the guard world). A reload can: a regular-season game parked at quit isn't re-parked, and a crash loses the week's unflushed macro results (both pre-13-4). Throwing would crash the save on selection day, so selection seeds on the completed games and exposes `LastSelectionUnplayed`. The root cause is an open item (§11.5).
+5. **Test seams:** `internal` `SelectCollegeFromRanking`, `CreateSeries`, `RecordResult` (also the forfeit commit), `RankingCalculator.Compare(…, coinA, coinB)`, `LeagueSimulator.StarterId/RelieverId/StaffCounts/RngSnapshot/PendingResultCount/UnflushedSeasonYear`, `CareerManager.RngSnapshot`.
+6. **CoreLoop compiles the Baseball sim** (`Data/League`, `Data/Schools`, `Simulation/Baseball`), as MonteCarloHarness does, so the clock fixtures drive the real career driver and manager.
+7. **Harness SQL** interpolates scratch-world ids and generated player ids (13-3's harness does the same); all production SQL is parameterized in `PlayoffQueries`.
+8. **`--smoke`** (not in D5): exercises every analysis stage at toy sizes on unused training worlds 33–34; never reads 129+, never a verdict. The holdout itself has **not** been run.
+
+### 11.4 Gates (§5)
+
+| Gate | Result |
+| :-- | :-- |
+| Build (`DirtAndDiamonds.sln`, Debug) | 0 warnings / 0 errors |
+| SchemaValidator | 174/174 (no DDL); new SQL checked with `EXPLAIN QUERY PLAN` on an emitted scratch v14 db |
+| CoreLoop | **25/25** (22 + 3 postseason clock fixtures: stop on Division game 1 day 251 for the #1 seed; mid-series reload re-parks the same game 2067 on day 254; locked through the elimination day, free after; non-qualifier free from selection) |
+| GrittyEvents | 363/363 |
+| MC default | **466/473**; reds = exactly the 7 promotion suites; resolver 13/13; tier-ladder 14/14; season-pipeline 30/30 with the **Pro guard byte-exact with the postseason ON** (PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`; 2026 and 2027 postseasons 11 series / one champion; all 10 Q7 channels); every allocation line 0 B incl. the postseason macro (20 games) and attended (10 games) probes; 0 leaks. New suites: standings 7, hs-playoffs 4, college-ranking 7, college-bracket 2, college-series 10, pro-playoffs 4, championship-event 3, attended-postseason 7 |
+| Default log | vs §11.1, normalized: only three pre-existing lines change, all counts (strings `6 keys` → `7 keys`; total; season-pipeline recap); every other line identical; 80 lines added |
+| 20× replay | default, `--no-build`, normalized: **20/20 byte-identical** (`992898354ab2…`) |
+| D7 runtime | 10 interleaved pairs vs a `3a1ba48` build: median paired difference **+9.3 s** (mean +8.5 s) ≤ 15 s. New-build median over 20 runs 126.2 s (104–144 s); baseline median 120.0 s (93–156 s). Above Argon's +4.5–5.7 s forecast but inside D7 |
+| Ranking analysis | `--pilot`: 32 seasons in 16.2 s (367 ms/season); k_req 6 (rank SD: R̂ .903, s .085; replacements: R̂ .869, s .085) ⇒ **k_hold = 32 frozen**, forecast 6.8 min with reserve. `--smoke` ran every stage. **Holdout not run** (Argon's, once) |
+
+### 11.5 Open items
+
+- **Parked regular-season game lost on reload** (pre-13-4): `CareerManager` re-parks only postseason games on boot. Selection tolerates the gap (§11.3 item 4), but the avatar's lost game never gets a result. Recommend a reclaim for regular-season rows in 13-5 (it touches Gate 2's HS path, so it needs its own sanction).
+- **The D5 holdout** is Argon's to run once (`-- --college-analysis ranking`); the pilot froze k_hold = 32 (§11.4).
+- **Query plans:** every `Schedule_Games` read uses `ix_sched_day`; `Playoff_Series` (≤ 34 rows a season) and the `Team_Seasons` tier join scan small tables. Fine at v14's scale with D4-A's no-DDL rule; an index can ride the v15 DDL window if needed.
+- `MicroGame`'s postseason selection, like its regular path, falls back to the top starter when nothing is legal; the career always checks `HasLegalPostseasonPitcher` first and forfeits, so the fallback is unreachable in the attended path.
