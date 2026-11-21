@@ -573,3 +573,97 @@ Opus should fold these 7 numbered refinements into §§3–5 before owner sign-o
 - **The D5 holdout** is Argon's to run once (`-- --college-analysis ranking`); the pilot froze k_hold = 32 (§11.4).
 - **Query plans:** every `Schedule_Games` read uses `ix_sched_day`; `Playoff_Series` (≤ 34 rows a season) and the `Team_Seasons` tier join scan small tables. Fine at v14's scale with D4-A's no-DDL rule; an index can ride the v15 DDL window if needed.
 - `MicroGame`'s postseason selection, like its regular path, falls back to the top starter when nothing is legal; the career always checks `HasLegalPostseasonPitcher` first and forfeits, so the fallback is unreachable in the attended path.
+
+## 12. 13-4a review and D5 holdout — Gemini 4 Argon, 2026-11-21
+
+**Reviewer:** Gemini 4 Argon (Math / calibration owner and primary independent reviewer, [TEAM.md](../TEAM.md) §1/§1a). **Branch / worktree:** `p13/13-4a-review-argon` in `.worktrees/13-4a-review-argon`, reviewing `p13/13-4a-opus` at `82598f3` (`git diff 3a1ba48..82598f3`). **Docs only:** no production or harness files edited.
+
+**Verdict:** **PASS WITH FIXES** — all §5 gates reproduce independently, the sanctioned Pro guard (`PA 81433 / H 18471 / ER 8803`, ledger `932ACE26…8B84`) and normalized default `MonteCarloHarness` log (`992898354ab2…`) are byte-exact with the postseason running, all 10 §10.1 Q7 guard-invariance channels hold, and the single pre-registered D5 ranking holdout (`--college-analysis ranking`, `k_hold = 32` frozen at pilot `k_req = 6`) **PASSES** (`0.9350 ≤ 1.05` on mean rank SD; `0.9347 ≤ 1.05` on mean top-17 replacements; 20× repeat byte-identical; `2.19 min` wall). Zero blockers; 2 should-fixes (S1: `MicroGame` records starts in `PitcherRestLedger` at the start of `PlayGame` without reverting if an interactive game is cancelled or `FlushGame` rolls back; S2: `PlayoffManager.WritePublicationMarkers()` waits for the next calendar day's `OnDayAdvanced` instead of draining after `Events.DispatchPending()` in `GameManager._Process`) and 2 nits (N1, N2) below for Opus to fold before merging into `p13/integration`.
+
+### 12.1 Independent gates on `82598f3`
+
+| Gate | Command | Result |
+| :-- | :-- | :-- |
+| §0 Preconditions | `C:` free space, `git status`, `HEAD`, write check | `6.03 GB` free (≥ 2 GB); clean at `82598f3`; empty-commit write check + soft reset clean |
+| Build (Debug) | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** |
+| SchemaValidator | `dotnet run --project Tools/SchemaValidator -c Release -- --schema …` | **174/174** (0 DDL changes; v14 clean) |
+| CoreLoopHarness | `dotnet run --project Tools/CoreLoopHarness -c Release -- --repo …` | **25/25** (22 baseline + 3 postseason clock/reload/block fixtures; Life↔Baseball scan clean) |
+| GrittyEventsHarness | `dotnet run --project Tools/GrittyEventsHarness -c Release -- --repo …` | **363/363** |
+| MonteCarloHarness (default) | `dotnet run --project Tools/MonteCarloHarness -c Release -- --repo …` | **466/473**; reds = exactly the 7 promotion suites (13-6's); `resolver` 13/13; `tier-ladder` 14/14; `season-pipeline` 30/30 with **Pro guard byte-exact with the postseason ON** (`PA 81433 / H 18471 / ER 8803`, ledger `932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`; 2026 Pro postseason 11 series / 30 games / champion `323`; 2027 Pro postseason 11 series / 32 games / champion `319`; all 10 Q7 channels green); every allocation line **`0 B`** (incl. postseason macro 20 games `0 B`, attended micro 10 games `0 B`); **`0` leaked `%TEMP%\dnd_*` files** |
+| Default log SHA-256 | UTF-8, `CRLF → LF`, `\d+(\.\d+)? ms → N ms` | **`992898354ab25c680dceabf91b5bd5c0ef2f5478be5c96c96215cd812c4921e9`** (matches Opus's 20/20 replay hash `992898354ab2…` byte-for-byte) |
+
+### 12.2 D5 College National Ranking holdout record (run once)
+
+Verified in `Slice134RankingAnalysis.cs:72–147` before execution that the 8-world training pilot (`worlds 1–8 × scheduler 1–2 × outcome 1–2 = 32` spread-25 seasons) computes `k_req` and freezes `k_hold ∈ {32, 48, 64}` before any validation world (`129+`) is touched. Command run once: `dotnet run --project Tools/MonteCarloHarness -c Release -- --repo <worktree> --college-analysis ranking` (exit code `0`, wall time **`2.19 min`**):
+
+- **Pilot (`worlds 1–8 × 2 × 2 = 32` spread-25 seasons, `9.0 s`, `208 ms/season`, world-gen `298 ms/world`):**
+  - Mean rank SD: $\hat{R}_{\text{pilot}} = 0.9028$, $s_{\text{world}} = 0.0847$, $\text{Var}(M_{28}) = 0.2768$, $\text{Var}(M_{14}) = 0.2191$, $\Delta = 0.1048 \implies k_{\text{req}} = 6$.
+  - Mean top-17 replacements: $\hat{R}_{\text{pilot}} = 0.8688$, $s_{\text{world}} = 0.0852$, $\text{Var}(M_{28}) = 0.1825$, $\text{Var}(M_{14}) = 0.1265$, $\Delta = 0.1386 \implies k_{\text{req}} = 4$.
+  - Sizing ladder forecasts (with $1.25\times$ reserve): `k_hold = 32 → 4.1 min`, `48 → 5.6 min`, `64 → 7.0 min` (all $\le 20.0\text{ min}$).
+  - **Frozen:** **`k_hold = 32`** (`validation worlds 129–160 × scheduler 1–4 × outcome 1–4 = 512` spread-25 seasons).
+- **Pre-registered holdout gate (`worlds 129–160`, 512 seasons, 10,000 paired bootstrap resamples at `RngState(28014)`):**
+
+| Metric | 28-Game Mean | 14-Game Sub-Sample Mean | Pooled Ratio $\hat{R}$ (Cluster SE) | 9,500th Bootstrap Ratio (One-Sided 95% UB) | Gate ($\le 1.05$) |
+| :-- | :--: | :--: | :--: | :--: | :--: |
+| **Mean rank SD** | `5.7693` | `6.2203` | `0.9275` (`0.0046`) | **`0.9350`** | **PASS** |
+| **Mean top-17 replacements** | `4.0674` | `4.4146` | `0.9214` (`0.0084`) | **`0.9347`** | **PASS** |
+| **20× single-tuple repeat `(129, 1, 1)`** | — | — | — | Ranks, scores, entrants & RNG state byte-identical (20/20) | **PASS** |
+
+- **Sensitivity on 32 training worlds (`worlds 1–32 × 2 × 2 = 128` seasons, `[DIAG]`):**
+  - Default `(.50, .30, .20)`: rank SD `28/14 = 5.570 / 6.057` (ratio `0.9195`); top-17 replacements `28/14 = 4.141 / 4.437` (ratio `0.9331`).
+  - Candidate `(.60, .25, .15)`: rank SD `28/14 = 5.617 / 6.075` (ratio `0.9246`); top-17 replacements `28/14 = 4.224 / 4.484` (ratio `0.9419`).
+  - Candidate `(.45, .35, .20)`: rank SD `28/14 = 5.561 / 6.053` (ratio `0.9188`); top-17 replacements `28/14 = 4.115 / 4.448` (ratio `0.9251`).
+  - All three weight sets behave similarly; default weights stay **`(.50, .30, .20)`** per CS-M §3.4.
+- **Strength diagnostics (`[DIAG]`, report-only, never saved):**
+  - **Holdout neutral double-round-robins ($R = 4$, $k = 32$, $33,480\text{ games/s}$):** $\rho_{\text{within}} = 0.709 \pm 0.039$, $\rho_{\text{global}} = 0.711 \pm 0.031$, $\Delta\rho = -0.002 \pm 0.018$, top-17 strength overlap $0.842 \pm 0.020$.
+  - **CS-M §3.4 synthetic fixtures ($R_{\text{fix}} = 8$, 8 seasons each):**
+    1. *Equal teams (flat 50):* per-team mean rank `8.75–16.88` (ideal `12.5`), East mean `12.65`.
+    2. *Single dominant team (`201` at 80, others 50):* `#1` in `100%` of seasons; mean score margin `+0.218`; neutral win% `0.965`.
+    3. *Unequal divisions (`201/202/203` at 65, `204` at 50):* 50-rated `204` in the strong division averages rank `18.12` vs `17.38` for a 50-rated team in a weak division (SOS partially cushions the extra division losses).
+    4. *One conference shifted (East 65, West 45):* East places `8.2` of 17 automatic bids while winning `70%` of neutral inter-conference games — the CS-M §3 disconnected-conference limitation (no cross-conference regular-season games), reported explicitly.
+    5. *Reversed team IDs (`201+j ↔ 224−j`, spread 25):* a roster's mean rank moves `2.10` on average (max `7.00`) across 8-season samples — finite-sample season noise, with no systematic low-ID bias under Amendment 2's seeded coin.
+
+### 12.3 Code review of `git diff 3a1ba48..82598f3`
+
+Verified across all six review areas:
+
+1. **Guard invariance & macro refactor:** All 10 channels of §10.1 Q7 are enforced and asserted in `Slice134Suites.cs`. `LeagueSimulator.PlayHalfInning` (`LeagueSimulator.cs:1253–1364`) parameterizes `ref RngState rng`, `BattingLine[] batting`, and `PitchingLine[] pitching`; regular-season `PlayGame` (`:820–830`) passes `ref _rng, _batting, _pitching` with identical draw order. Postseason macro games use `_postBatting`, `_postPitching`, `_postPedGamesPlayed`, `PostseasonShortRestStarts`, and `PostseasonBullpenGames`, never touching `_rng`, `_resultGameIds`, `_resultCount`, or `_unflushedSeasonYear`.
+2. **Streams (`PostseasonStreams.cs`):** Chained SplitMix64 (`Mix64` / `MixCombine`) and all five 64-bit ASCII tags (`POSTMACR`, `POSTMICR`, `STAND64_`, `RANKG64_`, `SUB14CMP`) match §10.1 Q7 verbatim; `ForGame` keys on the natural series key `(round, highSeedTeamId, lowSeedTeamId)` plus `gameInSeries` and `isAttended`. `Subsample14` (`Slice134RankingAnalysis.cs:395–461`) enforces and asserts exact `7H / 7A` per team.
+3. **Standings & ranking (`Standings.cs`):** `SeasonTable` uses exact integer accumulators and `CompareFraction` (`0/0 → 1/2`). `Standings.Order` implements D2-A recursively (mini-league H2H inside `group`, full-season RD ↓, full-season RA ↑, `StandingsCoinKey` ↑, `team_id` ↑ collision fallback, restarting at step 1 on every split). `RankingCalculator` implements CS-M §3 + Amendment 2 (`RankScore` ↓, exact `W` ↓, exact `RD/G` ↓, `RankingCoinKey` ↑, `team_id` ↑). `TeamSeasonsWriter` + `PlayoffQueries.UpsertTeamSeason` leave `seed` untouched on conflict.
+4. **`PlayoffManager` & calendar (`PlayoffManager.cs`, `TierSeasonCalendar.cs`):** All D3 fixed slots, non-Sunday dates, Bo1 / Bo3 1-3 / Bo5 2-2-1 hosting, rows-on-certainty, fixed non-reseeded College trees (`Leaves16` over R1–R4 for 9–12 qualifiers, `Leaves8` over R2–R4 for 6–8 qualifiers), and Pro Division-round reseeding match §10.2. Game result, PED costs, `Pitcher_Rest`, and series/bracket progression commit in one batch before events publish. `ChampionshipRules.IsRevealEligibleTier` is true only for `Pro`.
+5. **Attended postseason (`CareerManager.cs`, `MicroGame.cs`):** Claims phase-1/2 rows on the avatar's team, stops the clock, reclaims on mid-series boot (`ReclaimPostseasonGame`), checks `HasLegalPostseasonPitcher` for the narrow forfeit, applies the Red Dirt Series no-repeat filter over both SP and RP slots, runs on `POSTMICR`, suppresses `Batting_Stats`/`Pitching_Stats` writes in `MicroGame.FlushGame` and skips `NormalizeSeason` in `CareerManager.PlayPendingPostseasonGame`, and commits `ApplyAttendedResultInBatch` in the same transaction.
+6. **Hygiene:** All 12 queries in `PlayoffQueries.cs` are parameterized, pooled, and prepared; 0 DDL edits; warm macro and attended postseason loops allocate `0 B`; College final name comes solely from `league.college.final.name` (`strings.csv:8`); zero MLB/NCAA championship-series names anywhere; `PlayoffBracketView`, `PlayoffSeriesView`, and `NationalRankView` are read-only value DTOs.
+
+#### Findings
+
+- **[Should-fix S1] `MicroGame.SelectPitcher` mutates `PitcherRestLedger` at the start of `PlayGame` and never reverts if an interactive game is cancelled or `FlushGame` rolls back**
+  - **Location:** `Assets/Simulation/Baseball/MicroGame.cs:707, 741, 1127–1128, 1617–1621`; `Assets/Simulation/Baseball/CareerManager.cs:1640–1650`.
+  - **Failure scenario:** When the player starts an interactive attended game (e.g., The Red Dirt Series Game 1 on Day 172), `MicroGame.PlayGame` calls `SelectPitcher` for both teams at lines 1127–1128—before Inning 1 and before `FlushGame`—which immediately executes `RestLedger.RecordStart(aceId, 172)`. If the interactive game is cancelled mid-game via `OperationCanceledException` (which `CareerManager.PlayPendingGame` explicitly leaves pending for autopilot on the next tick) or if `FlushGame` rolls back its DB batch, `RestLedger` retains `lastStart = 172` in memory. When the still-pending Game 1 is replayed on Day 172, `Gap(172, 172) == 0 < MinRestDays(College) = 3` and `StartedInSeries` on Days 173–174 sees `lastStart == 172`, so both teams' rested aces are skipped in Game 1 *and* locked out of Games 2–3 without throwing a committed pitch. (The diagnostic counters `ShortRestStarts` / `BullpenGames` / `PostseasonShortRestStarts` / `PostseasonBullpenGames` also stay incremented.)
+  - **Suggested fix:** Mirror `LeagueSimulator.SimulatePostseasonGame`'s snapshot-and-revert pattern in `MicroGame` (or record the two starters' starts in `RestLedger` and diagnostic counters only inside `FlushGame` / at successful completion, reverting the in-memory `RestLedger` entries if `PlayGame` throws or `FlushGame` rolls back).
+
+- **[Should-fix S2] `PlayoffManager.WritePublicationMarkers()` is only called on the next calendar day's `OnDayAdvanced` tick**
+  - **Location:** `Assets/Simulation/Baseball/PlayoffManager.cs:140, 173–187`; `Assets/Core/GameManager.cs:526, 805`.
+  - **Failure scenario:** When a championship is decided on Day `d` (either in an interactive attended final played via `CareerManager.PlayPendingGame` while the clock is stopped on Day `d`, or on `LastDay(tier)` after `Events.DispatchPending()` drains), `ChampionshipWonEvent` is dispatched to subscribers on Day `d` by `GameManager._Process` (`Events.DispatchPending()`), but `_awaitingMarker` is not persisted to `Game_State` (`playoffs.champion_published.<year>.<tier>`) until the player advances the calendar to Day `d + 1` (`PlayoffManager.OnDayAdvanced`). If the player saves and quits on Championship Night (Day `d`) before advancing to Day `d + 1`, the marker is absent on disk and `RepublishMissingChampions` fires a duplicate `ChampionshipWonEvent` on the next boot.
+  - **Suggested fix:** Call `Playoffs?.WritePublicationMarkers();` immediately after `Events.DispatchPending();` in `GameManager._Process` (`GameManager.cs:805`; `_awaitingMarker.Count == 0` makes it a zero-allocation integer check on ordinary frames).
+
+- **[Nit N1] `LeagueSimulator.ClearPostseasonGameState(revertStarts: true)` writes `last_start_day = 0` for a never-started pitcher and leaves postseason diagnostic counters incremented**
+  - **Location:** `Assets/Simulation/Baseball/LeagueSimulator.cs:992–1008, 1044–1055`; `Assets/Simulation/Baseball/PitcherRestLedger.cs:59–64`.
+  - **Failure scenario:** If a postseason game batch rolls back on a starter who had never started before (`_postStarterHadPrior[k] == false`), `ClearPostseasonGameState(true)` calls `RestLedger.RecordStart(id, 0)`, which marks that pitcher dirty in `PitcherRestLedger` with `last_start_day = 0` (persisting a phantom `0` row on the next flush and changing `StarterSelection.Gap` from `long.MaxValue` to `day`), and does not revert `PostseasonShortRestStarts` / `PostseasonBullpenGames`.
+  - **Suggested fix:** Add a small `RevertStart(playerId, hadPrior, priorDay)` helper on `PitcherRestLedger` (removing the key when `!hadPrior`) and restore `PostseasonShortRestStarts` / `PostseasonBullpenGames` on rollback.
+
+- **[Nit N2] `CareerManager.TryGetScheduledGameFor` checks only phase-0 `SeasonSchedule` rows**
+  - **Location:** `Assets/Simulation/Baseball/CareerManager.cs:1511–1522`.
+  - **Failure scenario:** During the postseason, `GameManager.GetMandatoryBlocksFor` locks the 3-hour `Game` block on the avatar's postseason game days via `Playoffs.TryGetLockedPostseasonBlocks`, but a calendar UI calling `Career.TryGetScheduledGameFor(day, out home, out away)` receives `false` because `SeasonSchedule` caches only phase-0 games.
+  - **Suggested fix:** Fall back to `Playoffs` for certain postseason games involving `_avatarTeamId` on `day` (or note on `TryGetScheduledGameFor` that postseason matchups are read from `Playoffs.GetBracket`).
+
+### 12.4 Rulings on §11.3 interpretations (1–8)
+
+1. **Event tier is a `byte` (§11.3 #1):** **Accept.** `CoreEvents.cs` compiles without the `Data` layer in `NeedsDecayHarness`, matching `RivalryChangedEvent`; `ChampionshipRules.ProTier == (byte)LeagueTier.Pro` is pinned by `championship-event` check 2 and synced to spec §16-I8.
+2. **"Every results flush" (D1) = weekly Sunday flush + forced selection-day flush (§11.3 #2):** **Accept.** Keeps College's `national_rank` a weekly snapshot as designed (§8.2) while including attended regular-season results in every weekly and selection-day recomputation. Synced to §16-I14.
+3. **Double forfeit awards the game to the high seed (§11.3 #3 — explicit ruling):** **Accept with note.** When neither team has a legal pitcher (`PostseasonPlay.BothForfeit`), awarding the forfeit (`RegulationInnings(tier)–0`, `status = 2`) to `series.HighSeedTeamId` is a deterministic, seed-respecting edge rule that guarantees series termination without drawing RNG or writing player stats. Synced to §16-I13; slice 13-5 should confirm whether general `CanField` double forfeits follow the same high-seed (or home-team) convention.
+4. **Selection tolerates unplayed regular-season rows via `LastSelectionUnplayed` (§11.3 #4 — explicit ruling):** **Accept with note.** In any uninterrupted session (including the guard world, asserted in `season-pipeline`), the forced selection-day flush leaves `LastSelectionUnplayed == 0`. Because a reload after quitting with a parked regular-season game or after a mid-week crash can leave unplayed phase-0 rows (a pre-13-4 gap), throwing on Selection Day would brick the save. Seeding from all completed phase-0 games (`status IN (1, 2)`) while exposing `LastSelectionUnplayed` for harness assertions is the right defensive behavior until 13-5 adds regular-season boot reclaim.
+5. **`internal` test seams (§11.3 #5):** **Accept.** All added `internal` members are read-only state inspectors or batch-scoped test entry points that preserve production encapsulation.
+6. **`CoreLoopHarness` compiles the headless Baseball sim (§11.3 #6):** **Accept.** Mirrors `MonteCarloHarness.csproj` so `CoreLoopHarness` exercises the real `TimeManager` + `CareerManager` + `PlayoffManager` composition while `RunBoundaryScan` continues enforcing zero `Life <-> Baseball` cross-references.
+7. **Harness SQL interpolation vs parameterized production SQL (§11.3 #7):** **Accept.** All 12 production statements in `PlayoffQueries.cs` use pooled, prepared `SqliteCommand` objects with typed `@` parameters; SQL string interpolation is confined to scratch-DB harness fixtures in `Tools/`.
+8. **`--smoke` flag on `--college-analysis ranking` (§11.3 #8):** **Accept.** Uses unused training worlds `33–34` at toy sizes as a code-path check without reading validation worlds `129+`, and was not used for the D5 holdout verdict above.
+
