@@ -82,6 +82,33 @@ public static class StarterSelection
         return -1;
     }
 
+    /// <summary>
+    /// The Red Dirt Series opener (13-4 brief D3, Amendment 5): the first
+    /// available reliever in quality order who hasn't started (or opened) in
+    /// this series, or -1. The no-repeat rule covers relievers too, so a
+    /// bullpen game can't route an ace back through a role change.
+    /// </summary>
+    public static int SelectOpener(ReadOnlySpan<bool> relieverAvailable, ReadOnlySpan<bool> usedInSeries)
+    {
+        for (int i = 0; i < relieverAvailable.Length; i++)
+        {
+            if (relieverAvailable[i] && !usedInSeries[i])
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// The no-repeat predicate (Amendment 5): a pitcher whose last start is
+    /// on or after the series' first game day and before today started in
+    /// this series. Derived from the persisted rest ledger, so it survives a
+    /// reload with no extra state.
+    /// </summary>
+    public static bool StartedInSeries(long lastStartDay, long seriesFirstDay, long day) =>
+        lastStartDay != NeverStarted && lastStartDay >= seriesFirstDay && lastStartDay < day;
+
     /// <summary>Calendar-date gap; a never-started pitcher is infinitely rested.</summary>
     public static long Gap(long lastStartDay, long day) =>
         lastStartDay == NeverStarted ? long.MaxValue : day - lastStartDay;

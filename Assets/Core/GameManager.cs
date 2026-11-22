@@ -79,6 +79,13 @@ public sealed partial class GameManager : Node
 
     /// <summary>Phase 9c offseason promotion/relegation — public like Career so a ladder/news UI can read <see cref="PromotionManager.LastRun"/>.</summary>
     public PromotionManager Promotions { get; private set; } = null!;
+
+    /// <summary>
+    /// The postseason (slice 13-4): selection, brackets, series, the National
+    /// Ranking views and the tier-carrying ChampionshipWonEvent. Presentation
+    /// reads its DTO views only (GetBracket / GetNationalRanking).
+    /// </summary>
+    public PlayoffManager Playoffs { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
     public RelationshipGraph Relationships { get; private set; } = null!;
 
@@ -508,6 +515,20 @@ public sealed partial class GameManager : Node
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
 
+        // 13-4: the postseason, attached AFTER the career so the avatar's
+        // postseason game is claimed (and parked, stopping the clock) before
+        // the day's NPC postseason games play. A champion whose publication
+        // marker is missing is republished, and a save reloaded on the
+        // avatar's postseason game day parks the same fixture again.
+        Playoffs = new PlayoffManager(_database, Baseball, Leagues);
+        Career.Playoffs = Playoffs;
+        Playoffs.AttachTo(Events);
+        Playoffs.RepublishMissingChampions(State.SeasonYear);
+        if (avatarLoaded)
+        {
+            Career.ReclaimPostseasonGame(State.CurrentDay);
+        }
+
         // Phase 9d: the offseason development pass. Attached AFTER CareerManager
         // (ages are post-aging) and BEFORE PromotionManager (develop-before-sort,
         // development doc §5: the sweep's scouting reads the just-developed
@@ -781,7 +802,19 @@ public sealed partial class GameManager : Node
 
     public override void _Process(double delta)
     {
+        // 13-4 review S2: a champion crowned today gets its publication marker
+        // this frame, once its event has been dispatched, not on the next day
+        // tick (a quit on championship night would otherwise republish it at
+        // boot). Idleness is read BEFORE the pump: an attended game's worker
+        // publishes its events and then clears its volatile in-flight flag, so
+        // a game idle here had queued them before this dispatch, and no batch
+        // of its own can be open while the marker batch runs.
+        bool attendedGameIdle = !InteractiveGameInFlight && Career is { IsGameInFlight: false };
         Events.DispatchPending();
+        if (attendedGameIdle)
+        {
+            Playoffs?.WritePublicationMarkers();
+        }
         // Phase 11a: Facepunch runs with async callbacks off, so its callback
         // queue is pumped once per frame beside the bus — a bare branch no-op
         // whenever Steam is down.
@@ -1097,12 +1130,20 @@ public sealed partial class GameManager : Node
     {
         int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
         int schoolHours = LifeSim.AvatarSchoolAvailable ? SchoolCalendar.HoursForDayOfSeason(dayOfSeason) : 0;
-        if (!_avatarTierKnown
-            || !TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours))
+        if (!_avatarTierKnown)
         {
             return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
         }
-        return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
+        if (TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours)
+            // 13-4 (spec §3.2, §16-I10): locked through the team's postseason
+            // run, free from the day after elimination (non-qualifiers: from
+            // selection day).
+            || (Career.HasAvatar && Playoffs is not null && Playoffs.TryGetLockedPostseasonBlocks(
+                State.SeasonYearForDay(day), _avatarTier, Career.AvatarTeamId, dayOfSeason, out practiceHours, out gameHours)))
+        {
+            return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
+        }
+        return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
     }
 
     /// <summary>

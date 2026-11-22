@@ -64,6 +64,49 @@ public sealed class PitcherRestLedger
     }
 
     /// <summary>
+    /// What <see cref="RecordStartUndoable"/> overwrote: the pitcher's prior
+    /// entry (or none) and whether it was already waiting for a flush.
+    /// </summary>
+    public readonly record struct StartUndo(string PlayerId, bool HadPrior, long PriorDay, bool WasDirty);
+
+    /// <summary>
+    /// <see cref="RecordStart"/> that returns what it overwrote, so a game
+    /// that never commits can put the ledger back with <see cref="Revert"/>
+    /// (13-4 review S1/N1). Allocation-free.
+    /// </summary>
+    public StartUndo RecordStartUndoable(string playerId, long day)
+    {
+        bool hadPrior = _lastStartDay.TryGetValue(playerId, out long prior);
+        var undo = new StartUndo(playerId, hadPrior, prior, _dirty.Contains(playerId));
+        RecordStart(playerId, day);
+        return undo;
+    }
+
+    /// <summary>
+    /// Restores the entry exactly as it was before the recorded start: the
+    /// prior day, or no entry at all for a pitcher who had never started (no
+    /// phantom day-0 row), and the prior dirty flag (a clean entry already
+    /// matches its Pitcher_Rest row). Revert newest-first when undoing more
+    /// than one start. Call only after the start's flush rolled back (or
+    /// before any flush), never after a commit.
+    /// </summary>
+    public void Revert(in StartUndo undo)
+    {
+        if (undo.HadPrior)
+        {
+            _lastStartDay[undo.PlayerId] = undo.PriorDay;
+        }
+        else
+        {
+            _lastStartDay.Remove(undo.PlayerId);
+        }
+        if (!undo.WasDirty)
+        {
+            _dirty.Remove(undo.PlayerId);
+        }
+    }
+
+    /// <summary>
     /// Writes every changed row through the caller's OPEN batch. The rows
     /// stay dirty: the caller calls <see cref="AcknowledgeFlush"/> only after
     /// its <c>CommitBatch</c> succeeds, so a rolled-back batch leaves them
