@@ -36,7 +36,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 - **Ride the ace:** starter selection with per-tier rest days produces the spec's 2-man Pro rotation naturally. College keeps its 4-man rotation by rest days; its gaps are now 3–4 days, and the owner set College rest to **3** (2026-10-18), so the College ace starts every game (28). Starter-quality ordering and workload values are Math values (CS-M).
 - **Playoffs:** HS bracket of 6 with byes; College 18-team tournament (National Ranking + play-in, single-elimination conference tournaments, then **The Red Dirt Series**: a best-of-3 between the two conference champions on consecutive days, Thu–Fri–Sat, game 3 only if needed; name pending the owner's trademark screen); Pro 12-team Bo3 rounds and a Bo5 Championship.
 - **Pipeline:** HS graduation → recruiting / Signing Day → College class years → declare after sophomore year → July Draft (4 rounds, reverse standings) → Pro. `PipelineManager` replaces `PromotionManager`.
-- **Calibration:** tier deltas HS −20 / College −16 / Pro 0; the resolver guard stays byte-exact; the 154-game MLB season guard is retired and a new Pro guard is recorded once (sanctioned).
+- **Calibration:** tier deltas HS −20 / College −16 / Pro 0; the resolver guard stays byte-exact; the 154-game MLB season guard is retired and a new Pro guard is recorded once (sanctioned, 13-3). `p13/integration` merges to `main` after 13-6, when the promotion suites are replaced (owner 2026-10-25).
 - **Saves:** schema v14 is a clean break (old saves are refused and backed up).
 
 **Slices:** 13-0 prerequisites (sqlite MCP, MC flake) → *(CS-0 College format docs, 2026-10-18; CS-M College Math plan before 13-2/13-3/13-4 build College)* → 13-1 schema + world-gen → 13-2 roster capacities + innings + starter selection → 13-3 schedules + calendars + re-band → 13-4 playoffs + ranking → 13-5 roster lock + forfeits → 13-6 pipeline + draft → 13-7 ripple (achievements, presence, docs, cards). Owners and gates are in spec §15.
@@ -48,7 +48,7 @@ Full history: [archive/progress_archive.md](archive/progress_archive.md). Each s
 
 ## Phase G — Gameplay Core — Milestone MG "Play Ball" (scope realigned 2026-10-25)
 
-**Governing spec:** [design/scope_realignment.md](design/scope_realignment.md) §2.1/§3.1. Older [arcade_baseball_overhaul.md](design/arcade_baseball_overhaul.md) full-game plans are superseded; [gameplay_core.md](design/gameplay_core.md) §1 retains the attribute contracts.
+**Governing spec:** [design/scope_realignment.md](design/scope_realignment.md) §2.1/§3.1. Older [arcade_baseball_overhaul.md](archive/arcade_baseball_overhaul.md) full-game plans are superseded; [gameplay_core.md](reference/attribute_contracts.md) §1 retains the attribute contracts.
 
 - **Authoritative attended game:** the Markov `MicroGame`. The pure-C# `ClutchResolver` uses the existing arcade timing core for optional, offense-only avatar moments and returns contact quality, feeding a capped, centered tilt into `MicroGame`. Unscored batting practice writes nothing. Real-time fielding, baserunning and full 9-inning arcade physics are cancelled.
 - **Shared ratings and neutral paths:** `EffectiveRatings` is the single modifier stack for macro, micro and clutch inputs. Skipped clutch moments, autopilot and background games apply no tilt and remain byte-identical to the calibrated sim. Retain `Player_Fielding` in schema v14.

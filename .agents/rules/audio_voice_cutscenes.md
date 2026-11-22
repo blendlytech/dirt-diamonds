@@ -4,7 +4,7 @@ Specs: `docs/design/voice_and_broadcast_audio.md` (Phase 14) and `docs/design/cu
 
 ## Scope: broadcasters only (owner directive, 2026-10-10)
 
-- ElevenLabs voice is **only** for `BroadcastBooth` and the announcers (56 College/Pro booths + 3 HS pool voices).
+- ElevenLabs voice is **only** for `BroadcastBooth` and the announcers (six conference announcer personas, two per tier, one booth per conference; GEMINI §5).
 - **No** phone voice notes, **no** cutscene voice-over, **no** character, contact or NPC dialogue. Those are text: bubbles, captions, subtitles.
 - A cutscene may use a **broadcaster call** as its audio bed (`announcer_of` + category, or an announcer-bank `clip`). Nothing else may carry a `voice` entry.
 - Reject any `voice_note` field, any contact `voice_profile`, and any non-announcer voice bank or script sheet.
@@ -21,8 +21,7 @@ Specs: `docs/design/voice_and_broadcast_audio.md` (Phase 14) and `docs/design/cu
 
 ## Announcers
 
-- One persona per College and Pro team (56) with an archetype and signature taglines, plus 3 shared HS radio-pool voices with school stingers.
-- No archetype is used more than 5 times, and no two teams in a division share one.
+- **Six conference announcer personas (owner, 2026-10-25):** 2 per tier (HS, College, Pro), one booth per conference; about 900 lines each, roughly 10x the situational depth per voice. Calls react to recklessness, rivalries, streaks and scandals. No per-team voice generation.
 - Announcers are broadcast-clean (no profanity or slurs). Clip categories must map to real at-bat beat signals; unsupported categories are cut, not faked.
 
 ## Cutscenes

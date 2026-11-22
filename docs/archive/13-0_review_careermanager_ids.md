@@ -1,3 +1,5 @@
+> **Archived 2026-11-19 (W1).** Closed brief; kept for history.
+
 # 13-0 Review: deterministic `CareerManager` ids (Claude Opus → Gemini 3.1 Pro)
 
 **Status:** **merged to `main` 2026-10-10** (owner approved; 13-0 closed, see [Merge record](#merge-record-2026-10-10)). Re-review of `c151a01`: approve with conditions C1/C2, both met at merge. See [Re-review](#re-review-of-c151a01-2026-10-10) at the end. Original review: changes requested, 2026-10-10. **Slice:** 13-0 (MC flake). **Reviewer:** Claude Opus 5.5 (TEAM.md §2). **Binding rules:** GEMINI.md §1–§9.

@@ -1,3 +1,5 @@
+> **Archived 2026-11-19 (W1).** Closed brief; kept for history.
+
 # Task Brief: CS-M — College 28-game Math plan (re-band, rest rule, National Ranking)
 
 **Recommended model:** GPT 6 Astra Pro (Math) · **Reviewer:** Claude Opus 5.5 · **Owner gate:** none · **Spec:** `docs/design/league_restructure.md` as updated by CS-0 (§3, §3.1, §6, §8.2, §8.2a, §11.2, §16-I6…I8) · **Branch/worktree:** `p13/CS-M-gpt` in your own worktree (`git worktree add ..\dnd-gpt -b p13/CS-M-gpt origin/main`)

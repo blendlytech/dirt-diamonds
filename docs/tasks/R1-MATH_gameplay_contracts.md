@@ -1,6 +1,6 @@
 # Task Brief: R1-MATH — Pitching centering, fatigue and accepted life modifiers
 
-> **2026-10-13 update (arcade decision, GAME_VISION v2.1):** attended games become true arcade physics ([arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md)). The **pitching-centering, waste-bin and G-8 parts of this brief are retired** with the dice-table pitching mode ([archived](../archive/pitching_mode.md)). The **fatigue correction, O1 skill band (now the arcade's default difficulty target, arcade §9) and life-modifier contracts remain in scope**, and they feed `EffectiveRatings` (arcade §4.2).
+> **2026-10-13 update (arcade decision, GAME_VISION v2.1):** attended games become true arcade physics ([arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md)). The **pitching-centering, waste-bin and G-8 parts of this brief are retired** with the dice-table pitching mode ([archived](../archive/pitching_mode.md)). The **fatigue correction, O1 skill band (now the arcade's default difficulty target, arcade §9) and life-modifier contracts remain in scope**, and they feed `EffectiveRatings` (arcade §4.2).
 
 **Status:** authorized by owner acceptance of all R-1 recommendations (2026-10-10); implementation pending.
 **Recommended model:** Gemini Pro Math

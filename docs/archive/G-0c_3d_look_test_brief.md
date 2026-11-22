@@ -1,9 +1,11 @@
+> **Archived 2026-11-19 (W1).** Closed brief; kept for history.
+
 # Task Brief: G-0c — 3D look test for the arcade field
 
 **Recommended model:** Claude Sonnet 5.5 (UI and feature engineer; owns the presentation runtime)
 **Reviewer:** GPT 6 Astra Pro
-**Owner gate:** the owner plays it and answers three questions: **look direction A, B or C?** ([proposal](../review/visual_direction_3d_proposal.md) §1); **which camera preset?**; and **is hitting fun?** (this also serves as the G-0 feel gate).
-**Spec:** [visual_direction_3d_proposal.md](../review/visual_direction_3d_proposal.md) (PROPOSED, not canonical). The physics and its seam are unchanged: [arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) §2–§3, §5.1, and the G-0 [brief](G-0_arcade_feel_prototype_brief.md) §9–§12.
+**Owner gate:** the owner plays it and answers three questions: **look direction A, B or C?** ([proposal](visual_direction_3d_proposal.md) §1); **which camera preset?**; and **is hitting fun?** (this also serves as the G-0 feel gate).
+**Spec:** [visual_direction_3d_proposal.md](visual_direction_3d_proposal.md) (PROPOSED, not canonical). The physics and its seam are unchanged: [arcade_baseball_overhaul.md](arcade_baseball_overhaul.md) §2–§3, §5.1, and the G-0 [brief](G-0_arcade_feel_prototype_brief.md) §9–§12.
 **Branch / worktree:** `pG/G-0c-sonnet` from the current `origin/main`, in your own worktree (TEAM.md §3).
 **Environment (required):** this is visual work, so it **must run where Godot 4.7 Mono and .NET 8 run and you can see rendered frames**, which means the owner's PC. Use screenshots or captures to judge your own output. The cloud workspace cannot build Godot C#: NuGet is blocked, and G-0b was written blind there. If you can't build and run the scene, **stop before writing code** and say so.
 

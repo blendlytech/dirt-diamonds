@@ -25,13 +25,14 @@ Deduct from health_ceiling and increase detection_risk in the database after eve
 
 `ped_active` is **engine-written by the substance engine only** (Phase L, `docs/design/substances_and_addiction.md` §4). Until S-1 lands, nothing in the live game sets it.
 
-**Arcade engine (Phase G, owner 2026-10-13, `docs/design/arcade_baseball_overhaul.md`):** every game the avatar's team plays runs on a real-time physics engine in `Assets/Simulation/Arcade/`, not on `MicroGame`. Background games stay on the macro sim, and its neutral policies and resolver guard stay byte-identical.
+**Clutch Moment / Arcade core (Phase G reduced to Clutch Moment, `docs/design/scope_realignment.md` §2–§3):**
 
-- **Engine-independent:** no Godot types inside `Assets/Simulation/Arcade/`.
-- **Deterministic:** a fixed step, contact and catches solved analytically, a seeded `RngState` plus recorded inputs. Watched = skipped.
-- **Shared ratings:** the arcade engine reads `EffectiveRatings`, the same modifier stack as the macro sim.
-- **Calibration:** AI-vs-AI games hit the Phase 13 per-tier bands, gated by `Tools/ArcadeHarness`. Physics constants and AI noise tables are Math-owned data.
-- **Isolation:** the arcade engine never references the Life sim, the same boundary as the rest of the baseball engine.
+- Attended games use the Markov `MicroGame` (owner, 2026-10-25); `Assets/Simulation/Arcade/` is only the optional, offense-only **Clutch Moment** timing check for the avatar's high-leverage plate appearances (`ClutchResolver` returns contact quality; a capped, centered tilt feeds `MicroGame`, which remains authoritative for the play result). Full 9-inning arcade physics, real-time fielding and baserunning are cancelled.
+- **Deterministic timing core:** `Assets/Simulation/Arcade/` stays pure C#, with no Godot types, a fixed step, a seed and recorded input. Godot renders snapshots and emits input intent; presentation never drives simulation or consumes the sim's RNG. Batting practice is unscored, writes nothing and uses its own RNG.
+- **Neutral paths stay byte-identical:** skipping the clutch moment, autopilot and background games apply no tilt and preserve the calibrated macro/micro sim and resolver guard. The timing check never supplies a play result directly.
+- **One modifier stack:** effective ratings (tier, person, gear, rust, rivalry, `Active_Effects`, PED, fatigue) are built once in `EffectiveRatings` and shared by the macro sim, `MicroGame` and `ClutchRequest`. Never re-derive them inside one engine.
+- **Calibration and gates:** Gemini 4 Argon owns clutch thresholds, frequency, tilt caps and centering constants (SR-3a); Claude Opus 5.5 reviews. `Tools/ArcadeHarness` validates the clutch/timing core. `run_monte_carlo_batch` validates sim integration and neutral byte identity. Shared `EffectiveRatings` changes run both harnesses.
+- **Isolation:** `Assets/Simulation/Arcade/` never references the Life sim, the same boundary as the rest of the baseball engine.
 
 Gender, ethnicity and listed position never enter the sim. The defensive position comes only from `Player_Fielding`.
 
