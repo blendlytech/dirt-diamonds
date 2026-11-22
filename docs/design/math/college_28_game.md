@@ -2,7 +2,7 @@
 
 > **2026-10-25:** supersession folded into the body; current Math check and remaining gates: [13-3 brief §10](../../tasks/13-3_schedules_calendars_reband_guard_brief.md#10-math-record-and-review-gpt-6-astra-pro).
 
-**Author:** GPT 6 Astra Pro (Math). **Reviewer:** Claude Opus 5.5 — R1–R3 edited-section re-check approved ([CS-M brief](../../tasks/CS-M_college_math.md) §9.1). **Status:** approved plan, empirical calibration pending. The owner settled College rest at 3 on 2026-10-18; 13-1/13-2 are built. The 2026-10-25 fold records those decisions and the approved R/9 and guard contracts; it does not claim completion of the 13-3 measurements.
+**Author:** GPT 6 Astra Pro (Math). **Reviewer:** Claude Opus 5.5 — R1–R3 edited-section re-check approved ([CS-M brief](../../archive/CS-M_college_math.md) §9.1). **Status:** approved plan, empirical calibration pending. The owner settled College rest at 3 on 2026-10-18; 13-1/13-2 are built. The 2026-10-25 fold records those decisions and the approved R/9 and guard contracts; it does not claim completion of the 13-3 measurements.
 
 Authority: [CS-M brief](../../archive/CS-M_college_math.md), [league spec](../league_restructure.md) §§3, 3.1, 6, 8.2, 11.2, 16-I6–I8; [R1-MATH contract](../../tasks/R1-MATH_gameplay_contracts.md). Settled calendar, pairings, no-repeat starter rule and championship reveal safety remain unchanged. Every proposed number or statistical acceptance criterion below awaits Opus review and the named implementation harness. Analytic consequences are distinguished from measured results.
 
