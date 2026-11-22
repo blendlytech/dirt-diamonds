@@ -1,5 +1,5 @@
 {
-  "//": "Home park names for all 68 teams across High School (101\u2013112), College (201\u2013224), and Pro (301\u2013332). Appendix A order. Used for broadcast announcer intros, schedule displays, and UI until the G-7 venue catalog lands. Unique fictional names, <= 40 chars.",
+  "//": "Home park names for all 68 teams across High School (101–112), College (201–224), and Pro (301–332). Appendix A order. Used for broadcast announcer intros, schedule displays, and UI until the G-7 venue catalog lands. Unique fictional names, <= 40 chars.",
   "parks": [
     {
       "team_id": 101,
@@ -184,7 +184,7 @@
     {
       "team_id": 301,
       "abbreviation": "BAY",
-      "home_park": "Bayport Harbor Yards"
+      "home_park": "Bayport Tidewater Park"
     },
     {
       "team_id": 302,

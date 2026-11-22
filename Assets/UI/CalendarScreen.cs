@@ -11,14 +11,14 @@ namespace DirtAndDiamonds.UI;
 /// The browsable week calendar card (BaseballDashboard's card row, next to
 /// ScheduleScreen): one row per day showing the real date, weekday, and the
 /// calendar-mandated School / Practice / Game blocks with their times —
-/// School from <see cref="SchoolCalendar"/>, HS Practice/Game from
-/// <see cref="HsSeasonCalendar"/>, both through the same
+/// School from <see cref="SchoolCalendar"/>, in-season Practice/Game from
+/// <see cref="TierSeasonCalendar"/> (every tier), both through the same
 /// <see cref="GameManager.GetMandatoryBlocksFor"/> projection the
 /// ScheduleScreen's locked rows and SubmitDaySchedule's server-side forcing
 /// read, so what this predicts is exactly what the planner will mandate.
 /// Game rows resolve the opponent through
-/// <see cref="CareerManager.TryGetScheduledGameFor"/> (pure schedule math —
-/// no pending-game state is touched looking ahead). Pure reads; renders are
+/// <see cref="CareerManager.TryGetScheduledGameFor"/> (the in-memory persisted
+/// schedule — no pending-game state or database is touched looking ahead). Pure reads; renders are
 /// dirty-flagged on (shown week, current day), so nothing formats per frame.
 /// Node paths verified against CalendarScreen.tscn before this script was
 /// written.

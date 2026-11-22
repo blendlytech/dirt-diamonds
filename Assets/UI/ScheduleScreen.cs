@@ -277,9 +277,9 @@ public sealed partial class ScheduleScreen : PanelContainer
 
         if (blocks.PracticeGameLocked)
         {
-            // HS: team practice and games land on HsSeasonCalendar's days —
-            // the rows show what the calendar mandates (0 = off day) and the
-            // Game row appears only on game days.
+            // In-season (any tier): team practice and games land on
+            // TierSeasonCalendar's days — the rows show what the calendar
+            // mandates (0 = off day) and the Game row appears only on game days.
             _practiceSlider.Editable = false;
             if (_practiceSlider.Value != blocks.PracticeHours)
             {

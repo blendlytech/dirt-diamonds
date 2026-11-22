@@ -92,12 +92,15 @@ public static class DevelopmentProfile
     /// <summary>
     /// §4 practice conversion: extra growth fraction per practiced hour at
     /// the margin (the "points-per-hour" knob — on a 40-point gap the first
-    /// hour is worth 0.02 rating points). Diminishing returns bend the line
+    /// hour is worth 0.04 rating points). Diminishing returns bend the line
     /// toward <see cref="PracticeFracCap"/> (see
-    /// <see cref="DevelopmentCurve.PracticeFraction"/>): a casual hour a day
-    /// earns a real boost, only a grinder approaches the cap.
+    /// <see cref="DevelopmentCurve.PracticeFraction"/>), e-folding at
+    /// cap / rate = 250 h: a casual hour a day earns a real boost, only a
+    /// grinder approaches the cap. 13-3 M4 (Gemini 4 Argon, signed; was
+    /// 0.0005 / 500 h): a tier's locked in-season practice (80 / 112 / 128 h)
+    /// is worth .068 / .090 / .100 of the remaining gap.
     /// </summary>
-    public const double PracticeFracPerHour = 0.0005;
+    public const double PracticeFracPerHour = 0.001;
 
     /// <summary>The §2.3 physical/skill split, per rating.</summary>
     public static double KindWeightFor(RatingKind kind) => kind switch
@@ -351,7 +354,7 @@ public sealed class DevelopmentManager
     public void RunDevelopment(int completedSeasonYear)
     {
         var roster = new List<RosterPlayerRow>(
-            LeagueDirectory.TierCount * LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+            LeagueDirectory.TierCount * RosterCapacity.MaxTeamsPerTier * RosterCapacity.MaxRoster);
         _baseball.LoadRoster(roster);
         if (roster.Count == 0)
         {

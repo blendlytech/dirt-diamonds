@@ -1,0 +1,8 @@
+keys,en
+ui.clean_break.title,"This save can't be loaded"
+ui.clean_break.older.body,"This save is from an older version of Dirt & Diamonds and can't be loaded. Start a new career?"
+ui.clean_break.older.subtitle,"Your old save is kept on this computer as dirt_and_diamonds.v13.bak. Nothing is deleted. The backup stays local and doesn't sync to Steam Cloud."
+ui.clean_break.newer.body,"This save is from a newer version of Dirt & Diamonds and can't be loaded by this one. Your save hasn't been changed. Update the game to keep playing it."
+ui.clean_break.quit,"Quit"
+ui.clean_break.start,"Start a new career"
+league.college.final.name,"The Red Dirt Series"

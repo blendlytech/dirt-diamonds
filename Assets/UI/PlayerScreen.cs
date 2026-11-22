@@ -28,9 +28,9 @@ public sealed partial class PlayerScreen : PanelContainer
     [Export]
     public string TierFormat { get; set; } = "{0}";
 
-    /// <summary>Comma-separated player-facing tier names, in LeagueTier enum order (HS…MLB).</summary>
+    /// <summary>Comma-separated player-facing tier names, in LeagueTier enum order (HS, College, Pro).</summary>
     [Export]
-    public string TierNamesCsv { get; set; } = "High School,College,Class A,Double-A,Triple-A,MLB";
+    public string TierNamesCsv { get; set; } = "High School,College,Pro";
 
     /// <summary>How the tier chip reads for a High-School avatar: tier name + academic grade (e.g. "High School · Junior").</summary>
     [Export]

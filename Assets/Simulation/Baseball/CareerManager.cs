@@ -15,13 +15,17 @@ public readonly struct PendingAttendedGame
     public readonly int HomeTeamId;
     public readonly int AwayTeamId;
 
-    public PendingAttendedGame(int seasonYear, int dayOfSeason, long absoluteDay, int homeTeamId, int awayTeamId)
+    /// <summary>The Schedule_Games row this game is (slice 13-3); its result is written in the game's flush.</summary>
+    public readonly long GameId;
+
+    public PendingAttendedGame(int seasonYear, int dayOfSeason, long absoluteDay, int homeTeamId, int awayTeamId, long gameId)
     {
         SeasonYear = seasonYear;
         DayOfSeason = dayOfSeason;
         AbsoluteDay = absoluteDay;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
+        GameId = gameId;
     }
 }
 
@@ -139,9 +143,9 @@ public readonly struct BirthAnnouncement
 
 /// <summary>
 /// The Phase 5 career driver: owns the player avatar and every game of the
-/// avatar's team. On each <see cref="DayAdvancedEvent"/> it derives the team's
-/// pairing from the shared <see cref="LeagueSchedule"/> (the macro sim skips
-/// that pairing — see <see cref="LeagueSimulator.SetAttendedTeam"/>) and plays
+/// avatar's team. On each <see cref="DayAdvancedEvent"/> it reads the team's
+/// game from its tier sim's persisted schedule (13-3; the macro sim skips
+/// that game — see <see cref="LeagueSimulator.SetAttendedTeam"/>) and plays
 /// it through <see cref="MicroGame"/>: immediately under the neutral autopilot
 /// when <see cref="AutopilotAttendedGames"/> is set (skipped days, headless
 /// runs), or parked as a <see cref="PendingAttendedGame"/> for the UI to play
@@ -185,21 +189,42 @@ public sealed class CareerManager
     /// <summary>The bus <see cref="AttachTo"/> wired, kept for the <see cref="ChildBornEvent"/> announce.</summary>
     private EventBus? _bus;
 
-    private int[] _teamIds = Array.Empty<int>();
     private string? _avatarPlayerId;
     private int _avatarTeamId;
-    private int _avatarTeamIndex = -1;
     private int _avatarSlot = MicroGame.NoHuman;
 
     // The avatar's league tier, cached by ActivateAvatar (every avatar-pointing
     // path — boot, creation, succession, promotion — funnels through it).
-    // Drives the tier-aware game calendar: an HS avatar only has games on
-    // HsSeasonCalendar's sparse spring schedule.
+    // Selects whose schedule the avatar's games come from (13-3: each tier's
+    // TierSeasonCalendar days, persisted per season).
     private LeagueTier _avatarTier;
 
     private PendingAttendedGame _pending;
     private bool _hasPending;
     private volatile bool _gameInFlight;
+
+    // 13-4 (brief §4.4): the pending game is a postseason game. Its claim
+    // carries the natural series key (the POSTMICR stream's key) and The Red
+    // Dirt Series' no-repeat window; the series update rides the micro-sim's
+    // flush batch through a delegate allocated once.
+    private bool _pendingIsPostseason;
+    private PostseasonGameClaim _postseasonClaim;
+    private readonly Action<int, int> _applyPostseasonResult;
+
+    /// <summary>
+    /// The postseason (slice 13-4): when set, the avatar's phase-1/2 games are
+    /// claimed, parked and played exactly like regular-season ones (the clock
+    /// stops on them), on their own POSTMICR stream, with no stat-row writes
+    /// or normalization (D4-A, Amendment 1). Null — every pre-13-4 harness
+    /// fixture — leaves the career's behavior unchanged.
+    /// </summary>
+    public PlayoffManager? Playoffs { get; set; }
+
+    /// <summary>True when the pending game is a postseason game (harness and UI visibility).</summary>
+    public bool PendingIsPostseason => _hasPending && _pendingIsPostseason;
+
+    /// <summary>A copy of the career stream's state, for the 13-4 invariance checks (Q7 channel 2).</summary>
+    internal RngState RngSnapshot => _rng;
     private LineageFailure _lineageOverReason;
 
     // Two SEPARATE lists, deliberately not shared: _heirScratch is a
@@ -326,6 +351,8 @@ public sealed class CareerManager
         _onDayAdvanced = OnDayAdvanced;
         _onSeasonRolledOver = OnSeasonRolledOver;
         _onChildConceptionRequested = OnChildConceptionRequested;
+        _applyPostseasonResult = (homeScore, awayScore) =>
+            Playoffs!.ApplyAttendedResultInBatch(in _postseasonClaim, homeScore, awayScore);
     }
 
     // ------------------------------------------------------------------
@@ -753,24 +780,10 @@ public sealed class CareerManager
 
     private void ActivateAvatar(string avatarId, int teamId)
     {
-        // 9a: the schedule index must be TIER-relative — LeagueSchedule's
-        // round-robin runs 0..7 WITHIN one league, so _teamIds holds only the
-        // avatar tier's teams (ordered by team_id, matching the tier sim's own
-        // team-index order) and _avatarTeamIndex indexes into that.
+        // 9a: the avatar's games come from its tier's sim (13-3: that sim's
+        // persisted schedule, looked up by team id), so the tier is all the
+        // activation needs; ResolveLeagueFor fails loudly on an untiered team.
         LeagueSimulator league = ResolveLeagueFor(teamId);
-        var teams = new List<TeamRow>(LeagueSimulator.TeamCount);
-        _baseball.LoadTeamsByTier(league.Tier, teams);
-        _teamIds = new int[teams.Count];
-        for (int t = 0; t < teams.Count; t++)
-        {
-            _teamIds[t] = teams[t].TeamId;
-        }
-
-        _avatarTeamIndex = Array.IndexOf(_teamIds, teamId);
-        if (_avatarTeamIndex < 0)
-        {
-            throw new InvalidOperationException($"Avatar team_id {teamId} has no Teams row in tier {league.Tier}.");
-        }
         _avatarSlot = _micro.FindRosterSlot(avatarId);
         if (_avatarSlot == MicroGame.NoHuman)
         {
@@ -780,6 +793,9 @@ public sealed class CareerManager
         _avatarPlayerId = avatarId;
         _avatarTeamId = teamId;
         _avatarTier = league.Tier;
+        // 13-2 (brief D3): the avatar always starts — if the legal-defense
+        // pick leaves them out, they take the DH spot.
+        _micro.SetFeaturedPlayer(avatarId);
         league.SetAttendedTeam(teamId);
 
         // 9b: announce the activation so the Life-sim bridge can re-point the
@@ -797,7 +813,7 @@ public sealed class CareerManager
     /// </summary>
     private string FindDisplacedPlayer(int teamId, PitcherRole role)
     {
-        var roster = new List<RosterPlayerRow>(LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
+        var roster = new List<RosterPlayerRow>(RosterCapacity.MaxTeamsPerTier * RosterCapacity.MaxRoster);
         _baseball.LoadRoster(roster);
 
         bool isPitcher = role != PitcherRole.None;
@@ -1023,7 +1039,7 @@ public sealed class CareerManager
                 {
                     // No signable free agent of the vacated role: invent a
                     // replacement-level (spread 0 = league-average) filler,
-                    // the same path EnsureV4 uses to invent relievers.
+                    // through world-gen's own GeneratePlayer path.
                     (string fillerId, int fillerStuff) = LeagueGenerator.GeneratePlayer(
                         _players, _baseball, teamId, retireeRole, ratingSpread: 0, ref _rng);
                     if (retireeRole != PitcherRole.None)
@@ -1096,8 +1112,8 @@ public sealed class CareerManager
     /// Initialize(); this re-reads the avatar's (possibly new) team, clears
     /// the attended-team claim on every registered tier sim — a cross-tier
     /// move must not leave the ORIGIN sim skipping its old team's games
-    /// forever — and runs the standard activation: tier-relative
-    /// _avatarTeamIndex against the new tier's teams, _avatarSlot re-found,
+    /// forever — and runs the standard activation: the new tier resolved,
+    /// _avatarSlot re-found,
     /// SetAttendedTeam on the new tier's sim, AvatarChangedEvent republished
     /// (the 9b bridge re-points the Life-sim clock + school gate from it).
     /// The avatar keeps every prior stat row — they persist by player_id.
@@ -1411,30 +1427,62 @@ public sealed class CareerManager
         // autopilot before today's schedule is looked at.
         ResolvePendingWithAutopilot();
 
-        if (e.DayOfSeason > LeagueSimulator.RegularSeasonDays)
+        // 13-3: the avatar's game is the tier sim's own persisted schedule
+        // row (attached before this handler, so today's season is loaded).
+        // One table for both is what guarantees the macro sim's
+        // attended-team skip lines up with the game claimed here. Off days
+        // and the offseason simply have no row.
+        if (!_leagues.Get(_avatarTier).TryGetScheduledGame(
+                e.SeasonYear, e.DayOfSeason, _avatarTeamId, out long gameId, out int homeTeamId, out int awayTeamId))
         {
-            return; // offseason
-        }
-        // Same tier-aware seam the macro sim uses: an HS avatar only has a
-        // game on HsSeasonCalendar's sparse days (scheduleDay = the game's
-        // ordinal); every other tier maps identity. Keeping the two call
-        // sites on ONE mapping is what guarantees the attended-team skip in
-        // the HS macro sim lines up with the game claimed here.
-        if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, e.DayOfSeason, out int scheduleDay))
-        {
-            return;
-        }
-        if (!LeagueSchedule.TryGetPairingFor(scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
-        {
+            // 13-4: no regular-season game; the postseason's row (inserted on
+            // an earlier day: rows on certainty) parks exactly like one.
+            ClaimPostseasonGame(e.SeasonYear, e.DayOfSeason, e.Day);
             return;
         }
 
-        _pending = new PendingAttendedGame(
-            e.SeasonYear, e.DayOfSeason, e.Day,
-            _teamIds[pairing.HomeTeam], _teamIds[pairing.AwayTeam]);
+        _pending = new PendingAttendedGame(e.SeasonYear, e.DayOfSeason, e.Day, homeTeamId, awayTeamId, gameId);
         _hasPending = true;
+        _pendingIsPostseason = false;
 
         if (AutopilotAttendedGames || IsAvatarAbsentOn(e.Day))
+        {
+            ResolvePendingWithAutopilot();
+        }
+    }
+
+    /// <summary>
+    /// Boot path (13-4): a save reloaded on the avatar's postseason game day
+    /// (the clock stopped there) parks the same fixture again — same row,
+    /// same teams, same stream. A no-op without an avatar, a playoffs
+    /// source, or a due postseason game.
+    /// </summary>
+    public bool ReclaimPostseasonGame(long day)
+    {
+        if (!HasAvatar || _hasPending)
+        {
+            return false;
+        }
+        ClaimPostseasonGame(_state.SeasonYearForDay(day), GlobalState.DayOfSeasonForDay(day), day);
+        return _hasPending;
+    }
+
+    private void ClaimPostseasonGame(int seasonYear, int dayOfSeason, long day)
+    {
+        if (Playoffs is null
+            || !Playoffs.TryClaimAvatarGame(seasonYear, _avatarTier, dayOfSeason, _avatarTeamId, out PostseasonGameClaim claim))
+        {
+            return;
+        }
+        PostseasonGameRow row = claim.Game;
+        // The game's own calendar day (a crash catch-up plays on its slot's day).
+        long gameDay = day - dayOfSeason + row.DayOfSeason;
+        _pending = new PendingAttendedGame(seasonYear, row.DayOfSeason, gameDay, row.HomeTeamId, row.AwayTeamId, row.GameId);
+        _postseasonClaim = claim;
+        _pendingIsPostseason = true;
+        _hasPending = true;
+
+        if (AutopilotAttendedGames || IsAvatarAbsentOn(gameDay))
         {
             ResolvePendingWithAutopilot();
         }
@@ -1453,11 +1501,14 @@ public sealed class CareerManager
     }
 
     /// <summary>
-    /// The avatar team's scheduled pairing on an arbitrary absolute day —
-    /// pure math over the same tier-aware seam <see cref="OnDayAdvanced"/>
-    /// claims games through, so a browsable calendar UI can look ahead at
-    /// future matchups without touching any pending-game state. False on
-    /// off days, offseason days, and when no avatar exists.
+    /// The avatar team's scheduled game on an arbitrary absolute day — read
+    /// from the same in-memory schedule <see cref="OnDayAdvanced"/> claims
+    /// games from (the current and next season are loaded), so a browsable
+    /// calendar UI can look ahead at future matchups without touching any
+    /// pending-game state or the database. False on off days, the offseason,
+    /// seasons not loaded, and when no avatar exists. A postseason game
+    /// (13-4) is found once its row exists, through <see cref="Playoffs"/>
+    /// (a database read; the regular-season look-up touches none).
     /// </summary>
     public bool TryGetScheduledGameFor(long day, out int homeTeamId, out int awayTeamId)
     {
@@ -1467,19 +1518,17 @@ public sealed class CareerManager
         {
             return false;
         }
+        int seasonYear = _state.SeasonYearForDay(day);
         int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
-        if (dayOfSeason > LeagueSimulator.RegularSeasonDays)
+        if (_leagues.Get(_avatarTier).TryGetScheduledGame(
+            seasonYear, dayOfSeason, _avatarTeamId, out _, out homeTeamId, out awayTeamId))
         {
-            return false;
+            return true;
         }
-        if (!HsSeasonCalendar.TryGetLeagueScheduleDay(_avatarTier, dayOfSeason, out int scheduleDay)
-            || !LeagueSchedule.TryGetPairingFor(scheduleDay, _avatarTeamIndex, out SchedulePairing pairing))
-        {
-            return false;
-        }
-        homeTeamId = _teamIds[pairing.HomeTeam];
-        awayTeamId = _teamIds[pairing.AwayTeam];
-        return true;
+        // 13-4 review N2: postseason rows (Schedule_Games phase 1/2) aren't in
+        // the in-memory regular-season schedule; once certain, ask Playoffs.
+        return Playoffs is not null
+            && Playoffs.TryGetTeamGame(seasonYear, _avatarTier, _avatarTeamId, dayOfSeason, out homeTeamId, out awayTeamId);
     }
 
     /// <summary>
@@ -1514,6 +1563,11 @@ public sealed class CareerManager
             throw new InvalidOperationException("The pending game is already being played.");
         }
 
+        if (_pendingIsPostseason)
+        {
+            return PlayPendingPostseasonGame(ref batterPolicy, ref pitcherPolicy);
+        }
+
         _gameInFlight = true;
         try
         {
@@ -1523,6 +1577,10 @@ public sealed class CareerManager
             // pending game forfeited a day late). Version+day-gated, so this
             // is a no-op on the common no-absence path.
             _micro.RefreshAvailability(_pending.AbsoluteDay);
+            // 13-2: §6 rest is counted on the game's calendar day.
+            _micro.SetGameDay(_pending.AbsoluteDay);
+            // 13-3 (D4): the game's Schedule_Games row goes final in its flush.
+            _micro.SetScheduledGame(_pending.GameId);
             MicroGameResult result = _micro.PlayGame(
                 _pending.HomeTeamId, _pending.AwayTeamId, _avatarSlot,
                 ref batterPolicy, ref pitcherPolicy, ref _rng);
@@ -1536,6 +1594,76 @@ public sealed class CareerManager
                 Normalizer.NormalizeSeason(_pending.SeasonYear, tier);
             }
             _hasPending = false;
+            return result;
+        }
+        finally
+        {
+            _gameInFlight = false;
+        }
+    }
+
+    /// <summary>
+    /// The attended postseason game (13-4 brief §4.4, D4-A, Amendment 1):
+    /// the shared micro-sim on a POSTMICR stream (never the career's own
+    /// <c>_rng</c>, Q7 channel 2), with The Red Dirt Series' no-repeat
+    /// filter; its flush writes no stat rows and runs no normalization, and
+    /// the series update commits in the same batch as the result. A team
+    /// with no legal pitcher forfeits without a game (D3).
+    /// </summary>
+    private MicroGameResult PlayPendingPostseasonGame<TBatter, TPitcher>(ref TBatter batterPolicy, ref TPitcher pitcherPolicy)
+        where TBatter : IBatterPolicy
+        where TPitcher : IPitcherPolicy
+    {
+        PlayoffManager playoffs = Playoffs
+            ?? throw new InvalidOperationException("A postseason game is pending but no PlayoffManager is wired.");
+        PostseasonGameClaim claim = _postseasonClaim;
+        PostseasonGameRow row = claim.Game;
+        _gameInFlight = true;
+        try
+        {
+            long day = _pending.AbsoluteDay;
+            long seriesFirst = claim.SeriesFirstAbsoluteDay(day);
+            _micro.RefreshAvailability(day);
+            bool homeLegal = _micro.HasLegalPostseasonPitcher(row.HomeTeamId, day, seriesFirst);
+            bool awayLegal = _micro.HasLegalPostseasonPitcher(row.AwayTeamId, day, seriesFirst);
+            MicroGameResult result;
+            if (!homeLegal || !awayLegal)
+            {
+                PostseasonPlay play = !homeLegal && !awayLegal ? PostseasonPlay.BothForfeit
+                    : !homeLegal ? PostseasonPlay.HomeForfeits : PostseasonPlay.AwayForfeits;
+                playoffs.RecordAttendedForfeit(in claim, play);
+                int runs = TierRules.RegulationInnings(row.Tier);
+                bool homeWins = play == PostseasonPlay.AwayForfeits
+                    || (play == PostseasonPlay.BothForfeit && row.HomeTeamId == claim.HighSeedTeamId);
+                result = new MicroGameResult(row.HomeTeamId, row.AwayTeamId,
+                    homeWins ? runs : 0, homeWins ? 0 : runs, innings: 0, humanPa: 0, humanPitchesSeen: 0,
+                    homeStarterPitches: 0, awayStarterPitches: 0);
+            }
+            else
+            {
+                _micro.SetGameDay(day);
+                _micro.SetScheduledGame(row.GameId);
+                _micro.SetPostseasonGame(seriesFirst);
+                RngState rng = PostseasonStreams.ForGame(
+                    _leagues.Get(row.Tier).ScheduleSeed, row.SeasonYear, row.Tier, claim.Round,
+                    claim.HighSeedTeamId, claim.LowSeedTeamId, row.GameInSeries, isAttended: true);
+                result = _micro.PlayGame(
+                    row.HomeTeamId, row.AwayTeamId, _avatarSlot, ref batterPolicy, ref pitcherPolicy, ref rng);
+                try
+                {
+                    _micro.FlushGame(row.SeasonYear, checked((int)day), _applyPostseasonResult);
+                }
+                catch
+                {
+                    playoffs.DiscardPendingEvents();
+                    throw;
+                }
+                playoffs.PublishPendingEvents();
+                // No NormalizeSeason: the flush wrote no stat rows (Amendment 1).
+            }
+            _hasPending = false;
+            _pendingIsPostseason = false;
+            playoffs.ReleaseClaim();
             return result;
         }
         finally

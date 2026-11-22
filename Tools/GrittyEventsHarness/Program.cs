@@ -2152,7 +2152,7 @@ internal static class Program
         {
             using World world = World.Create("hsOnboardingChain", GrittyEventJson.Parse(new[] { onboardingJson, rookieJson }));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 101, City = "Crestwood", Name = "Cardinals", Abbreviation = "CRC", League = "HS", Division = "A" });
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 101, City = "Crestwood", Name = "Cardinals", Abbreviation = "CRC", League = "HS", Division = "A" }, LeagueTier.HS);
             baseball.UpsertTeamTier(101, LeagueTier.HS);
 
             world.AddPlayer("hero", age: 16, teamId: 101);
@@ -2181,7 +2181,7 @@ internal static class Program
                 string.Join(",", world.Fired.Select(f => f.EventId).Where(id => RookieBatchEventIds.Contains(id))));
         }
 
-        // (c) positive control: a tier>=2 (MinorA, the floor) avatar still
+        // (c) positive control: a tier>=2 (Pro, the floor; MinorA before v14) avatar still
         // gets the rookie batch -- the gate excludes HS/College, not
         // professional tiers. Isolated to the rookie file alone (the
         // onboarding file is irrelevant here: every one of its events
@@ -2189,8 +2189,8 @@ internal static class Program
         {
             using World world = World.Create("rookiePositiveControl", GrittyEventJson.Parse(rookieJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 201, City = "Rockford", Name = "River Cats", Abbreviation = "ROC", League = "MiLB", Division = "A" });
-            baseball.UpsertTeamTier(201, LeagueTier.MinorA);
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 201, City = "Rockford", Name = "River Cats", Abbreviation = "ROC", League = "PRO", Division = "A" }, LeagueTier.Pro);
+            baseball.UpsertTeamTier(201, LeagueTier.Pro);
 
             world.AddPlayer("proHero", age: 20, teamId: 201);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "proHero");
@@ -2204,7 +2204,7 @@ internal static class Program
                 world.Bus.DispatchPending();
             }
 
-            Check("a tier>=2 (MinorA) avatar still fires clubhouse_welcome -- the rookie batch is NOT globally blocked, only HS/College",
+            Check("a tier>=2 (Pro) avatar still fires clubhouse_welcome -- the rookie batch is NOT globally blocked, only HS/College",
                 world.Fired.Any(f => f.EventId == "clubhouse_welcome"),
                 $"{world.Fired.Count} fires");
         }
@@ -2217,7 +2217,7 @@ internal static class Program
         {
             using World world = World.Create("contaminatedSaveGuard", GrittyEventJson.Parse(new[] { onboardingJson, rookieJson }));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 102, City = "Riverton", Name = "Rams", Abbreviation = "RIV", League = "HS", Division = "A" });
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 102, City = "Riverton", Name = "Rams", Abbreviation = "RIV", League = "HS", Division = "A" }, LeagueTier.HS);
             baseball.UpsertTeamTier(102, LeagueTier.HS);
 
             world.AddPlayer("contaminatedHero", age: 16, teamId: 102);
@@ -2244,18 +2244,18 @@ internal static class Program
         // sentinel through NarrativePollQueries itself, not just the
         // evaluator -- proving the CASE WHEN p.team_id IS NULL branch in the
         // actual poll SQL, alongside a rostered HS/pro pair and a rostered
-        // team with NO Team_Tiers row (the v6->v7 COALESCE-to-MLB(5)
-        // backfill convention, still honored with the new join in place).
+        // team with NO Team_Tiers row (the missing-row COALESCE default:
+        // Pro(2) since schema v14, league_restructure.md §13; MLB(5) before).
         // Also proves gpa round-trips through the same join.
         {
             using World world = World.Create("tierPollJoin", GrittyEventJson.Parse(onboardingJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 301, City = "Testville", Name = "HS Team", Abbreviation = "TVH", League = "HS", Division = "A" });
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 301, City = "Testville", Name = "HS Team", Abbreviation = "TVH", League = "HS", Division = "A" }, LeagueTier.HS);
             baseball.UpsertTeamTier(301, LeagueTier.HS);
-            baseball.InsertTeam(new TeamRow { TeamId = 302, City = "Testburg", Name = "Pro Team", Abbreviation = "TVP", League = "MLB", Division = "A" });
-            baseball.UpsertTeamTier(302, LeagueTier.MLB);
-            baseball.InsertTeam(new TeamRow { TeamId = 303, City = "Orphantown", Name = "No Tier Row", Abbreviation = "ORP", League = "MLB", Division = "A" });
-            // Deliberately no UpsertTeamTier(303, ...) -- proves the missing-row COALESCE(tt.tier, 5) branch.
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 302, City = "Testburg", Name = "Pro Team", Abbreviation = "TVP", League = "PRO", Division = "A" }, LeagueTier.Pro);
+            baseball.UpsertTeamTier(302, LeagueTier.Pro);
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 303, City = "Orphantown", Name = "No Tier Row", Abbreviation = "ORP", League = "PRO", Division = "A" }, LeagueTier.Pro);
+            // Deliberately no UpsertTeamTier(303, ...) -- proves the missing-row COALESCE(tt.tier, 2) branch.
 
             world.AddPlayer("hsPlayer", age: 16, teamId: 301);
             world.AddPlayer("proPlayer", age: 25, teamId: 302);
@@ -2277,11 +2277,11 @@ internal static class Program
 
             Check("a rostered HS-tier subject polls tier 0 through the real Team_Tiers join",
                 hsRow.Tier == 0);
-            Check("a rostered MLB-tier subject polls tier 5",
-                proRow.Tier == 5);
-            Check("a rostered team missing its Team_Tiers row still COALESCEs to MLB(5) (the v6->v7 backfill convention, unbroken by the new join)",
-                untieredRow.Tier == 5);
-            Check("an UNROSTERED subject (NULL team_id, the seeded-parent shape) polls the -1 sentinel end to end through the real SQL, never MLB(5)",
+            Check("a rostered Pro-tier subject polls tier 2",
+                proRow.Tier == 2);
+            Check("a rostered team missing its Team_Tiers row COALESCEs to Pro(2) (league_restructure §13; MLB(5) before schema v14)",
+                untieredRow.Tier == 2);
+            Check("an UNROSTERED subject (NULL team_id, the seeded-parent shape) polls the -1 sentinel end to end through the real SQL, never Pro(2)",
                 parentRow.TeamId == null && parentRow.Tier == -1);
             Check("gpa round-trips through the real Player_Person join",
                 Math.Abs(hsRow.Gpa - 3.8) < 1e-9);
@@ -2814,8 +2814,8 @@ internal static class Program
                 """;
             using World world = World.Create("dirtFixRamps", GrittyEventJson.Parse(rampMirrorJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 601, City = "Testburg", Name = "Ramps", Abbreviation = "RMP", League = "MiLB", Division = "A" });
-            baseball.UpsertTeamTier(601, LeagueTier.MinorA);
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 601, City = "Testburg", Name = "Ramps", Abbreviation = "RMP", League = "PRO", Division = "A" }, LeagueTier.Pro);
+            baseball.UpsertTeamTier(601, LeagueTier.Pro);
 
             world.AddPlayer("useful", age: 24, teamId: 601);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "useful");
@@ -3194,8 +3194,8 @@ internal static class Program
                 """;
             using World world = World.Create("dirtProductTurfMadeUseful", GrittyEventJson.Parse(madeUsefulMirrorJson));
             var baseball = new BaseballQueries(world.Db);
-            baseball.InsertTeam(new TeamRow { TeamId = 701, City = "Testville", Name = "Hustlers", Abbreviation = "HST", League = "MiLB", Division = "A" });
-            baseball.UpsertTeamTier(701, LeagueTier.MinorA);
+            InsertFixtureTeam(baseball, new TeamRow { TeamId = 701, City = "Testville", Name = "Hustlers", Abbreviation = "HST", League = "PRO", Division = "A" }, LeagueTier.Pro);
+            baseball.UpsertTeamTier(701, LeagueTier.Pro);
 
             world.AddPlayer("proHustler", age: 24, teamId: 701);
             world.GameState.SetText(GameStateKeys.AvatarPlayerId, "proHustler");
@@ -4447,31 +4447,35 @@ internal static class Program
     {
         Console.WriteLine("--- School catalog (HS team branding) ---");
 
-        // The shipped file covers the 8-team HS tier (team_ids 101–108); every
-        // entry carries a non-empty display name, an image path, and a
-        // validated primary hex.
+        // The shipped file covers the 12-team HS tier (schema v14, Appendix A:
+        // team_ids 101–112, North 101–106 / South 107–112); every entry
+        // carries a non-empty display name, an image path, and a validated
+        // primary hex.
         string shipped = File.ReadAllText(Path.Combine(_repoRoot, "Assets", "Data", "Schools", "schools.json"));
         SchoolCatalog catalog = SchoolCatalogJson.Parse(shipped);
-        bool wellFormed = catalog.Count == 8;
+        bool wellFormed = catalog.Count == 12;
         foreach (SchoolDefinition s in catalog.Entries)
         {
-            wellFormed &= s.TeamId is >= 101 and <= 108
+            wellFormed &= s.TeamId is >= 101 and <= 112
                 && !string.IsNullOrWhiteSpace(s.DisplayName)
                 && !string.IsNullOrWhiteSpace(s.LogoPath)
                 && s.Primary.Hex.Length == 7 && s.Primary.Hex[0] == '#';
         }
-        Check("shipped schools.json covers HS team_ids 101-108 with names, colors, images",
+        Check("shipped schools.json covers HS team_ids 101-112 (schema v14, Appendix A) with names, colors, images",
             wellFormed, $"{catalog.Count} schools");
 
         // The roster cross-check contract: the HS-tier (team_id, abbreviation)
-        // pairs LeagueGenerator seeds. Pinned as literals here because this
+        // pairs world-gen seeds (league_restructure.md Appendix A, schema v14;
+        // the 13-1 re-key moved PNH/WSF/SMT/RVT to 107–110). Pinned as
+        // literals here because this
         // harness deliberately does not compile the Baseball world-gen assembly
         // (the item-catalog check's transport-gift precedent); GameManager's
         // boot check is the live-roster mirror from the other side.
         var roster = new List<TeamRow>
         {
             HsTeam(101, "CRW"), HsTeam(102, "LKS"), HsTeam(103, "FRV"), HsTeam(104, "OKR"),
-            HsTeam(105, "PNH"), HsTeam(106, "WSF"), HsTeam(107, "SMT"), HsTeam(108, "RVT"),
+            HsTeam(105, "BRK"), HsTeam(106, "CDG"), HsTeam(107, "PNH"), HsTeam(108, "WSF"),
+            HsTeam(109, "SMT"), HsTeam(110, "RVT"), HsTeam(111, "GRF"), HsTeam(112, "HLC"),
         };
         Check("ValidateAgainstRoster passes over the shipped HS roster",
             !ThrowsAny(() => catalog.ValidateAgainstRoster(roster)));
@@ -4486,25 +4490,25 @@ internal static class Program
             ThrowsAny(() => catalog.ValidateAgainstRoster(wrongAbbr)));
 
         var orphan = new List<TeamRow>(roster);
-        orphan.RemoveAt(orphan.Count - 1); // roster lacks 108; catalog still has it
+        orphan.RemoveAt(orphan.Count - 1); // roster lacks 112; catalog still has it
         Check("cross-check rejects an orphaned school entry",
             ThrowsAny(() => catalog.ValidateAgainstRoster(orphan)));
 
         // Loader rejections — each malformed doc is loud and team-labelled. Every
-        // fixture is otherwise valid (image_path included) so the assertion
+        // fixture is otherwise valid (images object included) so the assertion
         // isolates the one intended defect.
         Check("loader rejects a bad hex", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#GG0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "Red", "hex": "#GG0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("loader rejects a missing colors object", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("loader rejects a missing school_name", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
-        Check("loader rejects a missing image_path", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+        Check("loader rejects a missing images.field", SchoolParseThrows(
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png" }, "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("loader rejects a non-integer team_id", SchoolParseThrows(
-            """{ "schools": [ { "team_id": "one", "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "image_path": "res://x.png", "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": "one", "abbreviation": "AAA", "school_name": "A High", "mascot": "Aces", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "Red", "hex": "#FF0000" }, "secondary": { "name": "White", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
         Check("catalog ctor rejects duplicate team_ids", SchoolParseThrows(
-            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A", "mascot": "A", "image_path": "res://a.png", "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" }, { "team_id": 1, "abbreviation": "BBB", "school_name": "B", "mascot": "B", "image_path": "res://b.png", "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
+            """{ "schools": [ { "team_id": 1, "abbreviation": "AAA", "school_name": "A", "mascot": "A", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" }, { "team_id": 1, "abbreviation": "BBB", "school_name": "B", "mascot": "B", "images": { "logo": "res://l.png", "school": "res://s.png", "field": "res://f.png" }, "colors": { "primary": { "name": "R", "hex": "#FF0000" }, "secondary": { "name": "W", "hex": "#FFFFFF" } }, "palette_description": "x", "flavor": "y" } ] }"""));
     }
 
     private static TeamRow HsTeam(int teamId, string abbreviation) => new()
@@ -4557,10 +4561,10 @@ internal static class Program
 
         // Two teams pin the parental-support window: 900 = the HS window
         // open, 901 = graduated (any non-HS tier).
-        baseball.InsertTeam(new TeamRow { TeamId = 900, City = "Test", Name = "Preps", Abbreviation = "PRE" });
+        InsertFixtureTeam(baseball, new TeamRow { TeamId = 900, City = "Test", Name = "Preps", Abbreviation = "PRE" }, LeagueTier.HS);
         baseball.UpsertTeamTier(900, LeagueTier.HS);
-        baseball.InsertTeam(new TeamRow { TeamId = 901, City = "Test", Name = "Pros", Abbreviation = "PRO" });
-        baseball.UpsertTeamTier(901, LeagueTier.MLB);
+        InsertFixtureTeam(baseball, new TeamRow { TeamId = 901, City = "Test", Name = "Pros", Abbreviation = "PRO" }, LeagueTier.Pro);
+        baseball.UpsertTeamTier(901, LeagueTier.Pro);
 
         void AddPerson(string id, int? teamId, double funds)
         {
@@ -4941,6 +4945,21 @@ internal static class Program
         {
             return true;
         }
+    }
+
+    /// <summary>
+    /// Inserts an ad-hoc fixture team as a schema v14-valid row: the static
+    /// conference/division rows first (idempotent), then the team in its tier's
+    /// first conference with a placeholder home park (Teams.conference_id and
+    /// home_park are NOT NULL in v14). The tier row stays the caller's call, so
+    /// a fixture can still leave it out on purpose.
+    /// </summary>
+    private static void InsertFixtureTeam(BaseballQueries baseball, TeamRow team, LeagueTier tier)
+    {
+        baseball.EnsureLeagueStructure();
+        team.ConferenceId = LeagueStructure.FirstConferenceId(tier);
+        team.HomePark = team.City + " Park";
+        baseball.InsertTeam(team);
     }
 
     private static void Check(string name, bool pass, string detail = "") =>

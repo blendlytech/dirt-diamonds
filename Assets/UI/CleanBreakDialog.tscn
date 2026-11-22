@@ -1,0 +1,65 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/CleanBreakDialog.cs" id="1_cleanbreak"]
+
+[node name="CleanBreakDialog" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_cleanbreak")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="Layout" type="VBoxContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="Center/Panel/Layout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "ui.clean_break.title"
+
+[node name="OlderBodyLabel" type="Label" parent="Center/Panel/Layout"]
+layout_mode = 2
+autowrap_mode = 3
+text = "ui.clean_break.older.body"
+
+[node name="OlderSubtitleLabel" type="Label" parent="Center/Panel/Layout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 3
+text = "ui.clean_break.older.subtitle"
+
+[node name="NewerBodyLabel" type="Label" parent="Center/Panel/Layout"]
+visible = false
+layout_mode = 2
+autowrap_mode = 3
+text = "ui.clean_break.newer.body"
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Panel/Layout"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 12
+
+[node name="QuitButton" type="Button" parent="Center/Panel/Layout/Buttons"]
+layout_mode = 2
+text = "ui.clean_break.quit"
+
+[node name="StartButton" type="Button" parent="Center/Panel/Layout/Buttons"]
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "ui.clean_break.start"
