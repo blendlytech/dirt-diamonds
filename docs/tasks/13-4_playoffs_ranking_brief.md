@@ -667,3 +667,38 @@ Verified across all six review areas:
 7. **Harness SQL interpolation vs parameterized production SQL (§11.3 #7):** **Accept.** All 12 production statements in `PlayoffQueries.cs` use pooled, prepared `SqliteCommand` objects with typed `@` parameters; SQL string interpolation is confined to scratch-DB harness fixtures in `Tools/`.
 8. **`--smoke` flag on `--college-analysis ranking` (§11.3 #8):** **Accept.** Uses unused training worlds `33–34` at toy sizes as a code-path check without reading validation worlds `129+`, and was not used for the D5 holdout verdict above.
 
+### 12.5 Resolution of the findings — Claude Opus 5.5, 2026-11-21
+
+All four findings are fixed on `p13/13-4a-opus`. Each fix has a regression check in the `attended-postseason` suite; I mutation-tested the S1 and N1 checks (they go red with the fix reverted).
+
+- **S1 (fixed, postseason games only).**
+  - **Mechanism:** `PitcherRestLedger.RecordStartUndoable` returns a `StartUndo` holding the prior day (or no entry) and the dirty flag; `Revert` puts the ledger back exactly. It's allocation-free.
+  - **When it fires:** `MicroGame.PlayGame` is now a thin wrapper that reverts the game's two starts and its postseason counters when play throws (the interactive cancel). `FlushGame` does the same after a rollback.
+  - **Result:** the replay picks what a never-cancelled game picks. The check compares it with a fresh `MicroGame`; reverted, the replay picked other starters.
+  - **Scope:** regular-season attended games keep their shipped behavior, because §2's Gate 2 freezes the HS regular-season path. They have the same latent cancel and rollback gap (pre-13-4, from 13-2). I've added it to the 13-5 sanction request alongside the regular-season reload reclaim (§11.5).
+- **S2 (fixed).** `GameManager._Process` now runs `Playoffs.WritePublicationMarkers()` right after `Events.DispatchPending()`.
+  - It drains only if no attended game was in flight **before** the pump, read from `InteractiveGameInFlight` and the career's volatile `IsGameInFlight`.
+  - That rules out two races:
+    - writing a marker for an event the worker queued after the pump began;
+    - opening the marker batch while the worker's flush batch is open.
+  - `OnDayAdvanced` still drains, as a backstop.
+  - This is Godot-side, so no headless check covers it; it compiles in the 0/0 build.
+- **N1 (fixed).** `LeagueSimulator`'s rollback uses the same `StartUndo`/`Revert`.
+  - A never-started pitcher loses his entry (no phantom day-0 row).
+  - The postseason short-rest and bullpen counters go back to their pre-game values.
+- **N2 (fixed).** `CareerManager.TryGetScheduledGameFor` falls back to a new `PlayoffManager.TryGetTeamGame`.
+  - It's a UI-time read into its own list.
+  - It returns false without a query outside the postseason window.
+
+**Gates on the fixed tree:**
+
+| Gate | Result |
+| :-- | :-- |
+| Build | 0 warnings / 0 errors |
+| SchemaValidator | 174/174 |
+| CoreLoop | 25/25 |
+| GrittyEvents | 363/363 |
+| MC default | **470/477** (+4 review checks); reds are exactly the 7 promotion suites; Pro guard byte-exact (PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`); every allocation line 0 B, including both postseason probes; 0 leaks |
+| Determinism | Two default runs give the same normalized log (`9bd4066d56c9…`); vs `992898354ab2…`, the normalized log differs only by the four new check lines and two count lines (the total and the attended-postseason recap) |
+
+The D5 verdict (§12.2) is unaffected: ranking and Team_Seasons code didn't change.

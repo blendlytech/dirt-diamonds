@@ -1506,7 +1506,9 @@ public sealed class CareerManager
     /// games from (the current and next season are loaded), so a browsable
     /// calendar UI can look ahead at future matchups without touching any
     /// pending-game state or the database. False on off days, the offseason,
-    /// seasons not loaded, and when no avatar exists.
+    /// seasons not loaded, and when no avatar exists. A postseason game
+    /// (13-4) is found once its row exists, through <see cref="Playoffs"/>
+    /// (a database read; the regular-season look-up touches none).
     /// </summary>
     public bool TryGetScheduledGameFor(long day, out int homeTeamId, out int awayTeamId)
     {
@@ -1516,9 +1518,17 @@ public sealed class CareerManager
         {
             return false;
         }
-        return _leagues.Get(_avatarTier).TryGetScheduledGame(
-            _state.SeasonYearForDay(day), GlobalState.DayOfSeasonForDay(day), _avatarTeamId,
-            out _, out homeTeamId, out awayTeamId);
+        int seasonYear = _state.SeasonYearForDay(day);
+        int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
+        if (_leagues.Get(_avatarTier).TryGetScheduledGame(
+            seasonYear, dayOfSeason, _avatarTeamId, out _, out homeTeamId, out awayTeamId))
+        {
+            return true;
+        }
+        // 13-4 review N2: postseason rows (Schedule_Games phase 1/2) aren't in
+        // the in-memory regular-season schedule; once certain, ask Playoffs.
+        return Playoffs is not null
+            && Playoffs.TryGetTeamGame(seasonYear, _avatarTier, _avatarTeamId, dayOfSeason, out homeTeamId, out awayTeamId);
     }
 
     /// <summary>

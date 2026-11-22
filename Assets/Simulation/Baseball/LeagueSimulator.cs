@@ -65,12 +65,13 @@ public sealed class LeagueSimulator
     private BattingLine[] _postBatting = Array.Empty<BattingLine>();
     private PitchingLine[] _postPitching = Array.Empty<PitchingLine>();
     private int[] _postPedGamesPlayed = Array.Empty<int>();
-    // The last postseason game's starters and their prior last-start days, so
-    // a rolled-back postseason batch can put the rest ledger back (Q7 ch. 3).
-    private readonly string[] _postStarterIds = new string[2];
-    private readonly long[] _postStarterPriorDay = new long[2];
-    private readonly bool[] _postStarterHadPrior = new bool[2];
+    // The last postseason game's two starts and its diagnostic increments, so
+    // a rolled-back postseason batch can put the rest ledger and the counters
+    // back exactly (Q7 ch. 3 and 10; 13-4 review N1).
+    private readonly PitcherRestLedger.StartUndo[] _postStartUndo = new PitcherRestLedger.StartUndo[2];
     private int _postStarterCount;
+    private int _postShortRestBefore;
+    private int _postBullpenBefore;
 
     // 13-4 (brief D1-A): Team_Seasons rides every results flush batch.
     private readonly TeamSeasonsWriter _teamSeasons;
@@ -915,6 +916,8 @@ public sealed class LeagueSimulator
         RefreshRivalryCache();
         RefreshEquipmentCache();
         _postStarterCount = 0;
+        _postShortRestBefore = PostseasonShortRestStarts;
+        _postBullpenBefore = PostseasonBullpenGames;
 
         int homeStarter = PickPostseasonPitcher(homeTeam, day, seriesFirstDay, out bool homeShortRest, out bool homeOpener);
         int awayStarter = PickPostseasonPitcher(awayTeam, day, seriesFirstDay, out bool awayShortRest, out bool awayOpener);
@@ -1014,12 +1017,7 @@ public sealed class LeagueSimulator
 
     private void RecordPostseasonStart(int slot, long day, bool shortRest, bool opener)
     {
-        string playerId = _roster[slot].PlayerId;
-        int k = _postStarterCount++;
-        _postStarterIds[k] = playerId;
-        _postStarterHadPrior[k] = RestLedger.TryGetLastStart(playerId, out long prior);
-        _postStarterPriorDay[k] = prior;
-        RestLedger.RecordStart(playerId, day);
+        _postStartUndo[_postStarterCount++] = RestLedger.RecordStartUndoable(_roster[slot].PlayerId, day);
         if (shortRest)
         {
             PostseasonShortRestStarts++;
@@ -1060,9 +1058,10 @@ public sealed class LeagueSimulator
 
     /// <summary>
     /// Ends a postseason game's in-memory state. After a rollback,
-    /// <paramref name="revertStarts"/> puts the starters' prior last-start
-    /// days back so a retried game replays exactly (a never-started pitcher
-    /// returns as day 0, which §6 reads the same way: always rested).
+    /// <paramref name="revertStarts"/> puts the rest ledger back exactly as it
+    /// was (a never-started pitcher loses his entry, no phantom day-0 row) and
+    /// the postseason diagnostic counters with it, so a retried game replays
+    /// exactly (13-4 review N1).
     /// </summary>
     internal void ClearPostseasonGameState(bool revertStarts)
     {
@@ -1070,8 +1069,10 @@ public sealed class LeagueSimulator
         {
             for (int k = _postStarterCount - 1; k >= 0; k--)
             {
-                RestLedger.RecordStart(_postStarterIds[k], _postStarterHadPrior[k] ? _postStarterPriorDay[k] : 0);
+                RestLedger.Revert(in _postStartUndo[k]);
             }
+            PostseasonShortRestStarts = _postShortRestBefore;
+            PostseasonBullpenGames = _postBullpenBefore;
         }
         _postStarterCount = 0;
         Array.Clear(_postPedGamesPlayed);

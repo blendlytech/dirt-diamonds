@@ -802,7 +802,19 @@ public sealed partial class GameManager : Node
 
     public override void _Process(double delta)
     {
+        // 13-4 review S2: a champion crowned today gets its publication marker
+        // this frame, once its event has been dispatched, not on the next day
+        // tick (a quit on championship night would otherwise republish it at
+        // boot). Idleness is read BEFORE the pump: an attended game's worker
+        // publishes its events and then clears its volatile in-flight flag, so
+        // a game idle here had queued them before this dispatch, and no batch
+        // of its own can be open while the marker batch runs.
+        bool attendedGameIdle = !InteractiveGameInFlight && Career is { IsGameInFlight: false };
         Events.DispatchPending();
+        if (attendedGameIdle)
+        {
+            Playoffs?.WritePublicationMarkers();
+        }
         // Phase 11a: Facepunch runs with async callbacks off, so its callback
         // queue is pumped once per frame beside the bus — a bare branch no-op
         // whenever Steam is down.

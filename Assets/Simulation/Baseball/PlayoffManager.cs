@@ -1040,6 +1040,34 @@ public sealed class PlayoffManager
     }
 
     /// <summary>
+    /// The team's postseason game on the day, once it is certain (its row
+    /// exists, rows-on-certainty D3): the calendar UI's look-up (13-4 review
+    /// N2). Outside the tier's postseason window it returns false without a
+    /// query. UI-time read into its own list.
+    /// </summary>
+    public bool TryGetTeamGame(int seasonYear, LeagueTier tier, int teamId, int dayOfSeason, out int homeTeamId, out int awayTeamId)
+    {
+        homeTeamId = 0;
+        awayTeamId = 0;
+        if (dayOfSeason <= PostseasonCalendar.SelectionDay(tier) || dayOfSeason > PostseasonCalendar.LastDay(tier))
+        {
+            return false;
+        }
+        var games = new List<PostseasonGameRow>();
+        _queries.LoadPostseasonGames(seasonYear, tier, games);
+        foreach (PostseasonGameRow g in games)
+        {
+            if (g.DayOfSeason == dayOfSeason && g.Involves(teamId))
+            {
+                homeTeamId = g.HomeTeamId;
+                awayTeamId = g.AwayTeamId;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// The team's last postseason day: its elimination or title game's day;
     /// the tier's last postseason day while alive; selection day − 1 for a
     /// non-qualifier.

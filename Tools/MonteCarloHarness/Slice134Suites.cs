@@ -1189,6 +1189,99 @@ internal static partial class Program
         Check("attended: the postseason completes around the avatar — 11 series, one champion",
             series.Count == 11 && series.Count(s => s.Round == 4 && s.IsDecided) == 1);
 
+        // 13-4 review fixes (Argon §12.3): S1 (micro starts undone on cancel and on a
+        // rolled-back flush), N1 (macro rollback leaves no phantom day-0 entry and puts
+        // the counters back), N2 (the calendar look-up finds a certain postseason game).
+        {
+            int uHome = ProTeam(14), uAway = ProTeam(15);
+            string[] uPitchers = roster.Where(r => r.IsPitcher && (r.TeamId == uHome || r.TeamId == uAway)).Select(r => r.PlayerId).ToArray();
+            string Snapshot(PitcherRestLedger ledger) => string.Join(",", uPitchers.Select(id => ledger.TryGetLastStart(id, out long d) ? d.ToString() : "-"))
+                + $"|dirty {ledger.DirtyCount}";
+            long uDay = Abs134(year + 60, 172);
+            var uMicro = new MicroGame(db, baseball) { LoggingEnabled = false };
+            uMicro.Initialize();
+            var fresh = new MicroGame(db, baseball) { LoggingEnabled = false };
+            fresh.Initialize();
+            int uHuman = uMicro.FindRosterSlot(roster.First(r => r.TeamId == uHome && !r.IsPitcher).PlayerId);
+            string s0 = Snapshot(uMicro.RestLedger);
+            (int ps0, int pb0) = (uMicro.PostseasonShortRestStarts, uMicro.PostseasonBullpenGames);
+            ulong uSeed = pro.ScheduleSeed;
+            RngState Stream() => PostseasonStreams.ForGame(uSeed, year + 60, LeagueTier.Pro, 6, uHome, uAway, 1, isAttended: true);
+
+            // S1a: cancelled mid-play (the interactive policy's OperationCanceledException).
+            bool cancelled = false;
+            var cancelling = new CancellingBatterPolicy();
+            RngState rngC = Stream();
+            uMicro.SetGameDay(uDay);
+            uMicro.SetPostseasonGame(uDay);
+            try
+            {
+                uMicro.PlayGame(uHome, uAway, uHuman, ref cancelling, ref rngC);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
+            }
+            string s1 = Snapshot(uMicro.RestLedger);
+            bool countersBack = uMicro.PostseasonShortRestStarts == ps0 && uMicro.PostseasonBullpenGames == pb0;
+
+            // The replay picks exactly what a never-cancelled game picks.
+            var neutralU = new NeutralBatterPolicy();
+            RngState rngR = Stream();
+            uMicro.SetGameDay(uDay);
+            uMicro.SetPostseasonGame(uDay);
+            MicroGameResult replay = uMicro.PlayGame(uHome, uAway, uHuman, ref neutralU, ref rngR);
+            var replayStarters = uMicro.LastStarters;
+            var neutralF = new NeutralBatterPolicy();
+            RngState rngF = Stream();
+            fresh.SetGameDay(uDay);
+            fresh.SetPostseasonGame(uDay);
+            MicroGameResult clean = fresh.PlayGame(uHome, uAway, uHuman, ref neutralF, ref rngF);
+            Check("13-4 review S1: a cancelled attended postseason game leaves the rest ledger and postseason counters as it found them; the replay matches a never-cancelled game",
+                cancelled && s1 == s0 && countersBack && replayStarters == fresh.LastStarters
+                && replay.HomeScore == clean.HomeScore && replay.AwayScore == clean.AwayScore,
+                $"cancelled {cancelled}, ledger {(s1 == s0 ? "restored" : "moved")}, starters {replayStarters} vs {fresh.LastStarters}");
+
+            // S1b: the replay's flush rolls back (its in-batch series update throws).
+            bool rolledBack = false;
+            try
+            {
+                uMicro.FlushGame(year + 60, checked((int)uDay), (_, _) => throw new InvalidOperationException("review S1 probe"));
+            }
+            catch (InvalidOperationException)
+            {
+                rolledBack = true;
+            }
+            long restRows = CountRows(db, $"SELECT COUNT(*) FROM Pitcher_Rest WHERE last_start_day = {uDay};");
+            Check("13-4 review S1: a rolled-back attended postseason flush puts the starts and counters back (nothing durable)",
+                rolledBack && Snapshot(uMicro.RestLedger) == s0 && restRows == 0
+                && uMicro.PostseasonShortRestStarts == ps0 && uMicro.PostseasonBullpenGames == pb0,
+                $"rest rows on the day {restRows}");
+
+            // N1: the macro adapter's rollback on pitchers who had never started.
+            string m0 = Snapshot(pro.RestLedger);
+            (int mps0, int mpb0) = (pro.PostseasonShortRestStarts, pro.PostseasonBullpenGames);
+            bool neverStarted = m0.Split('|')[0].Split(',').All(x => x == "-");
+            RngState rngM = PostseasonStreams.ForGame(uSeed, year + 61, LeagueTier.Pro, 2, uHome, uAway, 1);
+            PostseasonPlay played = pro.SimulatePostseasonGame(uHome, uAway, Abs134(year + 61, 251), PostseasonCalendar.NoSeriesFilter, ref rngM, out _, out _);
+            string m1 = Snapshot(pro.RestLedger);
+            pro.ClearPostseasonGameState(revertStarts: true);
+            Check("13-4 review N1: a rolled-back macro postseason game removes a never-started pitcher's entry (no phantom day-0 row) and restores the counters",
+                neverStarted && played == PostseasonPlay.Played && m1 != m0 && Snapshot(pro.RestLedger) == m0
+                && pro.PostseasonShortRestStarts == mps0 && pro.PostseasonBullpenGames == mpb0,
+                $"never started {neverStarted}, after game {(m1 != m0 ? "moved" : "unchanged")}");
+        }
+
+        // N2: the career's calendar look-up finds the avatar's certain postseason games.
+        state.SetCalendar(Abs134(year, lastDay), year);
+        PostseasonGameRow firstAttended = avatarGames.OrderBy(g => g.DayOfSeason).First();
+        bool found = career.TryGetScheduledGameFor(Abs134(year, firstAttended.DayOfSeason), out int n2Home, out int n2Away);
+        bool offDay = career.TryGetScheduledGameFor(Abs134(year, firstAttended.DayOfSeason - 1), out _, out _)
+            == avatarGames.Any(g => g.DayOfSeason == firstAttended.DayOfSeason - 1);
+        Check("13-4 review N2: TryGetScheduledGameFor returns the avatar's postseason matchup once its row exists",
+            found && n2Home == firstAttended.HomeTeamId && n2Away == firstAttended.AwayTeamId && offDay,
+            $"day {firstAttended.DayOfSeason}: {n2Home} v {n2Away}");
+
         // Allocation probes: the postseason game loops (macro adapter + attended micro) allocate 0 B warm.
         int home = ProTeam(11), away = ProTeam(12);
         long probeDay = Abs134(year + 50, 250);
@@ -1232,4 +1325,13 @@ internal static partial class Program
         career.DetachFrom(bus);
         playoffs.DetachFrom(bus);
     }
+}
+
+/// <summary>13-4 review S1 probe: the interactive policy's cancellation, at the human's first PA.</summary>
+internal struct CancellingBatterPolicy : IBatterPolicy
+{
+    public void BeginPa(in HumanPaContext context) => throw new OperationCanceledException("review S1 probe");
+    public BatterIntent NextPitch(in PitchLook look, in CountState count, ref RngState rng) => default;
+    public void OnPitchResolved(in PitchResult result) { }
+    public void OnPaResolved(PaOutcome outcome) { }
 }

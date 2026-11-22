@@ -553,6 +553,33 @@ public sealed class MicroGame
     /// <summary>Postseason bullpen games (Q7 channel 10).</summary>
     internal int PostseasonBullpenGames { get; private set; }
 
+    // 13-4 review S1: the current game's two recorded starts and the
+    // postseason counters before them, so a postseason game that is
+    // cancelled mid-play or whose flush rolls back leaves the rest ledger
+    // (and the Red Dirt Series' no-repeat window) exactly as it found them.
+    // Regular-season games keep their shipped behavior (brief §2, Gate 2).
+    private readonly PitcherRestLedger.StartUndo[] _startUndo = new PitcherRestLedger.StartUndo[2];
+    private int _startUndoCount;
+    private bool _undoArmed; // set once this game's selection snapshot exists
+    private int _postShortRestBefore;
+    private int _postBullpenBefore;
+
+    private void RevertPostseasonStarts()
+    {
+        if (!_postseasonGame || !_undoArmed)
+        {
+            return;
+        }
+        _undoArmed = false;
+        for (int k = _startUndoCount - 1; k >= 0; k--)
+        {
+            RestLedger.Revert(in _startUndo[k]);
+        }
+        _startUndoCount = 0;
+        PostseasonShortRestStarts = _postShortRestBefore;
+        PostseasonBullpenGames = _postBullpenBefore;
+    }
+
     /// <summary>
     /// Marks the next <see cref="PlayGame{TBatter, TPitcher}"/> as a
     /// postseason game (13-4): <paramref name="seriesFirstDay"/> is The Red
@@ -704,7 +731,7 @@ public sealed class MicroGame
                 }
             }
             int starter = _starterSlots[starterBase + pick];
-            RestLedger.RecordStart(_roster[starter].PlayerId, day);
+            _startUndo[_startUndoCount++] = RestLedger.RecordStartUndoable(_roster[starter].PlayerId, day);
             return starter;
         }
 
@@ -738,7 +765,7 @@ public sealed class MicroGame
         {
             bullpenUsed = opener + 1;
             int slot = _relieverSlots[relieverBase + opener];
-            RestLedger.RecordStart(_roster[slot].PlayerId, day);
+            _startUndo[_startUndoCount++] = RestLedger.RecordStartUndoable(_roster[slot].PlayerId, day);
             return slot;
         }
         return starterCount > 0 ? _starterSlots[starterBase] : _relieverSlots[relieverBase];
@@ -1083,6 +1110,28 @@ public sealed class MicroGame
         where TBatter : IBatterPolicy
         where TPitcher : IPitcherPolicy
     {
+        _undoArmed = false;
+        _startUndoCount = 0;
+        try
+        {
+            return PlayGameCore(homeTeamId, awayTeamId, humanSlot, ref batterPolicy, ref pitcherPolicy, ref rng);
+        }
+        catch
+        {
+            // 13-4 review S1: a postseason game cancelled mid-play (the
+            // interactive policy's OperationCanceledException) stays pending
+            // and is replayed, so its starts must not stick.
+            RevertPostseasonStarts();
+            throw;
+        }
+    }
+
+    private MicroGameResult PlayGameCore<TBatter, TPitcher>(
+        int homeTeamId, int awayTeamId, int humanSlot,
+        ref TBatter batterPolicy, ref TPitcher pitcherPolicy, ref RngState rng)
+        where TBatter : IBatterPolicy
+        where TPitcher : IPitcherPolicy
+    {
         if (!_initialized)
         {
             throw new InvalidOperationException("MicroGame.PlayGame before Initialize().");
@@ -1124,6 +1173,10 @@ public sealed class MicroGame
 
         // §6 starter selection (13-2): the shared rule and rest ledger.
         long gameDay = ConsumeGameDay();
+        _startUndoCount = 0;
+        _postShortRestBefore = PostseasonShortRestStarts;
+        _postBullpenBefore = PostseasonBullpenGames;
+        _undoArmed = true;
         int homeStarter = SelectPitcher(homeTeam, gameDay, out int homeBullpenUsed);
         int awayStarter = SelectPitcher(awayTeam, gameDay, out int awayBullpenUsed);
         LastStarters = (_roster[homeStarter].PlayerId, _roster[awayStarter].PlayerId);
@@ -1618,9 +1671,12 @@ public sealed class MicroGame
         {
             _db.RollbackBatch();
             RestLedger.AbandonFlush(); // review R2: rolled back, so the rows stay dirty
+            RevertPostseasonStarts(); // 13-4 review S1: the replay finds the ledger as this game did
             throw;
         }
         RestLedger.AcknowledgeFlush(); // review R2: durable only once committed
+        _undoArmed = false;
+        _startUndoCount = 0;
 
         Array.Clear(_batting);
         Array.Clear(_pitching);
