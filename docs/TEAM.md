@@ -136,6 +136,10 @@ Opus performs the integration gate after review; its own code requires Argon's r
 5. **Merge.** Claude Opus 5.5 merges once the review passes and the gates are green, then logs a compact entry in `progress.md`.
 6. **Owner gates.** Where §2 names an owner gate, nothing merges until the owner says yes.
 7. **Stop and hand off.** The **Author** column in §2 is each slice's **recommended model**. A model works only its own slice and **stops when the definition of done is met**. It never drifts into the next slice. It ends with a handoff note to the human: what was done, the commit, the gates and their results, what's open, and **"Recommended next: `<slice>` by `<model>`"** (plus the reviewer). The human starts the next model.
+8. **Write the next prompt (owner, 2026-11-22).** After the handoff note, the finishing model writes the **complete prompt for the recommended next model**, ready to paste: role, task, worktree and branch, session start, preconditions, task details, rules and finish.
+   - **Owner questions first.** If the model has questions only the owner can answer, and the next model needs those answers to proceed, it asks them in the handoff and **waits for the owner's reply** before writing the prompt. It then folds the answers in. Decisions the next step is designed to settle (for example D-options the owner decides after a Math check is reconciled) don't block the prompt; they're listed as open.
+   - **Carry the rule forward.** Every prompt includes this step's rule, so each model in the chain does the same.
+   - **Gemini sessions.** Their sandbox is scoped to `C:\Users\DELL\dirt_and_diamonds`. The prompt names a worktree under `.worktrees/` (pre-created by Opus, or say who creates it), opens with the sandbox block (`git` and `dotnet` need the owner's grant outside the sandbox; write check first), and gives the no-commit fallback.
 
 ### Gates (from GEMINI.md §9)
 - Anything under `Assets/Simulation/` → `run_monte_carlo_batch`. The resolver guard stays byte-exact; re-baselining a season guard needs explicit sanction.
