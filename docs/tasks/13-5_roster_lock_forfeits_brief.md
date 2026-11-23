@@ -289,7 +289,7 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 - [x] §4 built; call-up retirement complete (no replacement ratings, discard line or `"Call-Up"` left in `Assets/`).
 - [x] §5 gates green; the Pro guard byte-exact with `RosterManager` wired; 20× replay 20/20; D7 met.
 - [x] Argon's independent review of the sim/persistence diff passed (§12: PASS, 0 blockers, 0 should-fixes, 1 harness nit).
-- [ ] Committed and pushed; merged into `p13/integration` by Opus after the review. **Not `main`.**
+- [x] Committed and pushed; merged into `p13/integration` by Opus after the review (2026-11-23; Nit N1 deferred to the 13-6 brief so the merge carries exactly the reviewed `4a38e4c` bytes). **Not `main`.**
 - [x] Handoff (§8) + one `progress.md` line per author. **Then stop.**
 
 ## 7. Out of scope
