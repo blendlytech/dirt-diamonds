@@ -236,7 +236,7 @@ After Gate 4: resume Phase 13's remainder, Phase L runtime, Phase 14 (6 voices),
 
 Gate 2 needs **15a** first, and that is the owner's call (art direction A/B/C, see [archive/visual_direction_3d_proposal.md](../archive/visual_direction_3d_proposal.md) and the G-0c brief). It is the long pole.
 
-**Regression envelope:** a Gate 2 diff may touch `Assets/Simulation/Life/` additively, `Assets/Narrative/` additively, and `Assets/UI/`. It must leave `Assets/Simulation/Baseball/` alone. Required green at every merge: Build 0/0, MonteCarlo 354/354 20-run byte-identical, GrittyEvents 363/363 (+new), NeedsDecay 117/117, CoreLoop 22/22, Hustle 95/95, SchemaValidator.
+**Regression envelope:** a Gate 2 diff may touch `Assets/Simulation/Life/` additively, `Assets/Narrative/` additively, and `Assets/UI/`. It must leave `Assets/Simulation/Baseball/` alone. Required green at every merge: Build 0/0, MonteCarlo 354/354 20-run byte-identical, GrittyEvents 363/363 (+new), NeedsDecay 117/117, CoreLoop 22/22, Hustle 95/95, SchemaValidator. *Exception (owner, 2026-11-23):* 13-5 may change the HS regular-season path for exactly the four changes in [league_restructure.md](league_restructure.md) §16-I18; a neutral HS season stays byte-identical.
 
 ---
 
