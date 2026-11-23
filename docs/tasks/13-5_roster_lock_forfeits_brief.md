@@ -1,6 +1,6 @@
 # Task Brief: 13-5 — Sunday roster lock, attrition, forfeits and call-up retirement
 
-**Status:** **DRAFT 2026-11-22.** Awaiting Gemini 4 Argon's Math check (§9, answered in a new §10) and the owner's D1–D8 (§3). **No build until both are in.**
+**Status:** **DRAFT 2026-11-22; Math check DONE 2026-11-22** (Gemini 4 Argon, §10: APPROVE WITH CHANGES). **Amendments 1–7 and Opus corrections C1–C3 reconciled into §§1–5 on 2026-11-23** (§10.5). **Awaiting the owner's D1–D8 (§3). No build until they're decided.**
 **Recommended model:** **13-5a** (engine, persistence, harness): Claude Opus 5.5 (TEAM.md §2, 13-5 row). Gemini 4 Argon: the Math check of this brief (designation scoring, avatar inputs, stress magnitude, forfeit exposure) and the independent review of the build.
 **Reviewer:** Gemini 4 Argon independently reviews Opus's sim/persistence diff (TEAM.md §1a). Opus reviews Argon's Math record. Opus is the merge gate after review.
 **Owner gate:** D1–D8 before the build. **D3 carries a Gate 2 sanction** under its recommended option. If the build finds that the Pro guard moves (D1), it stops and brings a sanction (13-3 precedent); the recommended D1-A is designed not to move it.
@@ -51,11 +51,11 @@
 
 1. **The guard world never shadows anyone.** It attaches no `AvailabilityLedger` (`Program.cs:529–531`), and `RefreshAvailability` sets `_hasAbsences = false` when the ledger is null (`LeagueSimulator.cs:1134–1137`). Retiring the call-up can't move the guard.
 2. **Designations can be made guard-neutral by construction.** In the guard world every Pro team carries 15 position players, 4 SP and 5 RP; nobody is absent; all ratings are 50.
-   - *Lineup:* `LineupBuilder` is a greedy pick over a candidate set. Over any subset that still contains its 9 picks, it picks the same 9 in the same positions (each step's best unchosen candidate is still present and still best). So if the 9 starters are always active, the lineup over the actives equals today's lineup, byte for byte.
-   - *Pitchers:* on Tue/Thu/Sat with `MinRestDays(Pro) = 3`, the ace starts Tue and Sat (gaps 3 and 4) and #2 starts Thu (gap 7); #3 and #4 never start, and no reliever ever opens. The D3 postseason slots (gaps 3, 2, 2/4) never reach #3 either. Making SP #4 and RP #4–#5 inactive therefore changes no pick.
+   - *Lineup:* `LineupBuilder` is a greedy pick over a candidate set. Over any subset that still contains its 9 picks, it picks the same 9 in the same positions (each step's best unchosen candidate is still present and still best). So if the 9 starters are always active, the lineup over the actives equals today's lineup, byte for byte. Argon proved this for every step, including secondary, out-of-position, DH and featured player (§10.1 Q1). It holds **only if the lock computes the 9 starters with `featuredSlot = -1`** (Amendment 2).
+   - *Pitchers:* on Tue/Thu/Sat with `MinRestDays(Pro) = 3`, the ace starts Tue and Sat (gaps 3 and 4) and #2 starts Thu (gap 7). Each team's 64 regular-season starts split **43 / 21 / 0 / 0**, and no reliever ever opens. The D3 postseason slots reach only #1 and #2 too (§10.1 Q1). Making SP #4 and RP #4–#5 inactive therefore changes no pick.
    - *Counter-case:* a single scalar score with id tie-breaks (D4a-B) would, in the flat world, make the 12 lowest ids active. That can drop a positional starter, so other player ids bat and the ledger SHA moves even when the totals don't.
 3. **"Reshuffle" is new code on the hot path.** The macro sim never rebuilds a lineup today. A per-game-day rebuild must allocate nothing (GEMINI §3), so `LineupBuilder` needs an allocation-free twin, rebuilt only for teams whose Initialize lineup has an ineligible member, with a parity check against `Build`.
-4. **No DDL is needed.** One row per player holds the current week's designation. The re-activation beat needs the prior `is_active`, which the lock reads before it overwrites. "Has this week been locked?" is `MAX(locked_through_day)` over the tier's teams. Tier lives on `Conferences`, not `Teams` (the validator caught a `Teams.tier` join in this brief's first draft).
+4. **No DDL is needed.** One row per player holds the current week's designation. The re-activation beat needs the prior `is_active`, which the lock reads before it overwrites. "Has this week been locked?" is `MAX(locked_through_day)` over the tier's teams. A row **covers** a day only when `locked_through_day > today` (strict, Amendment 1). Sunday `s` writes `s + 7`, so the column reads as "valid until the next lock day, exclusive". Tier isn't a `Teams` column (the validator caught a `Teams.tier` join in this brief's first draft); the queries join `Team_Tiers`, as 13-4a's `PlayoffQueries.cs:44–46` does.
 5. **The narrow postseason forfeit is a special case of `CanField`.** Its pitcher test (available, not used in the Red Dirt Series) is `CanField`'s pitcher clause plus the series filter. Its missing piece is the 9-position-player clause.
 6. **Forfeits skip draws; they never add them.** A forfeited macro game draws nothing from `LeagueSimulator._rng`, and a forfeited attended game draws nothing from `CareerManager._rng`, so later games in that stream shift. That's deterministic and happens only when a forfeit happens (never in the guard world or a neutral run). Designations and double-forfeit awards need no RNG at all.
 
@@ -87,12 +87,15 @@ Each D-option below has a recommendation. Nothing is decided until the owner say
 
 - **A (recommended). Wire `RosterManager` into the guard world (production composition, as 13-4 wired the postseason) and prove the guard byte-exact.** No sanction is needed. The harness asserts these invariance channels:
   1. the guard (PA/H/ER and ledger SHA) is byte-exact;
-  2. every team's 9 `LineupBuilder` starters are active every week, and the lineup-rebuild gate never fires;
-  3. no inactive pitcher is ever selected, and the pick sequence matches the unwired run;
-  4. zero forfeits, regular season and postseason;
-  5. both RNG snapshots (`LeagueSimulator.RngSnapshot` and every postseason stream count) are unchanged across every lock;
-  6. 27 locks a season (Sundays 91–273), 768 rows each, with no stat, `Pitcher_Rest` or `Team_Seasons` write in the lock batch;
-  7. the postseason champion lines in the default log are unchanged.
+  2. every team's 9 `LineupBuilder` starters are active every week, `LineupRebuildCount == 0`, and `OutOfPositionStarters` matches the unwired run;
+  3. no inactive pitcher is ever selected: per team, regular-season starts split 43 / 21 / 0 / 0 with 0 RP openers, and all four short-rest and bullpen counters (regular and postseason) are 0;
+  4. zero forfeits (no `status = 2` row, no `GameForfeitedEvent`), regular season and postseason;
+  5. `LeagueSimulator.RngSnapshot` is unchanged across every lock, and the end-of-season snapshots and every postseason game seed match 13-4a;
+  6. 27 locks a season (Sundays 91–273, 54 in the run), each writing 768 rows (576 active, 192 inactive) with `locked_through_day` = lock day + 7, and no stat, `Pitcher_Rest` or `Team_Seasons` write in the lock batch;
+  7. the postseasons match 13-4a (2026: 11 series, 30 games, champion 323; 2027: 11 series, 32 games, champion 319);
+  8. outside lock coverage (days 1–90 and 280–365), every Pro player reads as active and nothing is written;
+  9. `RosterManager.Version` moves by exactly 1 per lock (54 in all) and never on other days;
+  10. all ten 13-4 §10.1 Q7 postseason channels stay green.
 
   **Stop rule:** if any channel moves, the build stops. It brings either a fix or a sanction request on the 13-3 precedent: re-record the guard, Argon reproduces it 20/20 byte-identical, and the owner sanctions it.
 - **B.** Leave the guard world as 13-4 left it (no `RosterManager`). The guard trivially holds, but it no longer runs the production composition, and designations are proven only by smaller fixtures.
@@ -118,7 +121,7 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 - **A (recommended). All tiers now, under a narrow owner sanction** that lifts the Gate 2 HS freeze for exactly these four changes:
   1. HS call-up retirement and the lineup reshuffle;
   2. HS `CanField` forfeits;
-  3. a regular-season parked-game reclaim on boot (every tier): the avatar team's earliest `status = 0` phase-0 row on or before today re-parks as the same fixture, `game_id` included (query validated, §4);
+  3. a regular-season parked-game reclaim on boot (every tier): the avatar team's earliest `status = 0` phase-0 row on or before today re-parks as the same fixture, `game_id` included (query validated, §4). Before it parks, the reclaim applies the same `CanField` and absent/inactive/autopilot checks as `OnDayAdvanced` (Amendment 6);
   4. the regular-season `StartUndo` revert on cancel or rollback, including `ShortRestStarts` and `BullpenGames`.
 
   *Why:* (3) and (4) fix defects inside Gate 2's own "one Friday game" loop (a reload on game day loses the game today). (1) and (2) apply one rule to every tier, as the spec says. Nothing changes without an absence.
@@ -129,14 +132,19 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 
 - **a. NPC rule (Pro; Math values Argon's).**
   - **A (recommended):**
-    - Over the players healthy at the lock, the 9 `LineupBuilder` starters are always active.
-    - The other 3 active position slots go to the best remaining players by a Math-owned bench score (role-weighted: positional coverage plus bat score).
-    - SP: the top 3 healthy by `CompareQuality`. RP: the top 3 healthy by the same order.
-    - When fewer healthy players exist than active slots, absent players fill them, earliest return first. They still can't play until they return, and an inactive player can't replace them (§7 attrition).
+    - **Healthy** means not absent on any of the team's game days in the locked week (C1, §10.5). An absence that ends before the week's first game, such as one ending on a game-free Monday, doesn't count.
+    - Over the healthy players, the 9 starters from **`LineupBuilder.Build(healthy, featuredSlot: -1)`** are always active. The lock never passes the avatar as featured (Amendment 2).
+    - The other 3 active position slots go to the best remaining healthy players by the bench score in §10.1 Q2 (Amendment 3). It's three sequential greedy picks of `BatScore − 3·Rust` plus the largest still-uncovered coverage bonus (backup C 24, middle infield 18, outfield 15), plus 6 for a secondary position; ties go to `PlayerId` ascending.
+    - SP: the top 3 healthy by `CompareQuality`. RP: the top 3 healthy by the same order. Pitcher quality is always the sims' **baked** stuff + control, exactly as `CompareQuality` reads it (C3).
+    - When fewer healthy players exist than active slots, absent players fill them by **return day ascending, then role quality descending, then `PlayerId` ascending** (§10.1 Q4). They still can't play until they return, and an inactive player can't replace them (§7 attrition).
     - This is what makes D1-A provable.
   - *B:* one role-weighted scalar for all 12 slots. Simpler, but it can bench a positional starter, which moves the guard ledger in the flat world (§1.2 #2) and reshapes lineups in spread worlds.
 - **b. The avatar.**
   - **A (recommended):** the same rule. Ratings decide who starts, and the avatar's **performance, health and coach-affinity** score decides only at the margin, against the bench candidates. A starting-calibre avatar is always active; a fringe avatar can lose his spot. A pitcher avatar is judged the same way at the SP #3/#4 and RP #3–#5 margin.
+    - The margin score is the base role score plus **ΔP + ΔH + ΔA**, with the constants in §10.1 Q3 (Amendment 3).
+    - ΔP: current-season OPS or ERA against the Pro tier, shrunk and clamped (min 20 PA / 18 outs, cap ±18).
+    - ΔA: the affinity proxy, `0.12·(work_ethic−50) + 0.10·(discipline−50) + 0.08·(teamwork−50)`.
+    - ΔH counts missed **game days** (C1): −12 per missed game in the locked week, minus 3 × rust for batters or 2 × rust for pitchers. An avatar who misses every game day that week goes to the unhealthy pool.
   - *B:* the avatar is fully scored, so the coach can bench a starting-calibre avatar for a slump or a bad relationship. More drama, but it can feel arbitrary, and it needs Argon's thresholds to stay fair.
 - **c. Coach affinity (no coach entity exists, §1.1).**
   - **A (recommended):** a proxy from `Player_Person` (`teamwork`, `discipline`, `work_ethic`; `SchemaDefinitions.sql:420–435`), read through `PersonQueries`. The Baseball sim already reads it, so there's no Life reference. Neutral 50 = 0, with Math weights.
@@ -148,10 +156,11 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 
 - **A (recommended). Core events → a Narrative-layer writer.**
   - The events: `RosterDesignationChangedEvent(PlayerId, TeamId, IsActive, WasActive, LockedThroughDay)` (avatar only), published after the lock commits; `GameForfeitedEvent(SeasonYear, Tier byte, GameId, Phase byte, HomeTeamId, AwayTeamId, ForfeitMask byte, WinnerTeamId)`, published after its result commits. Both carry primitives only (13-4 §11.3 #1).
-  - A new `Assets/Narrative/` subscriber writes the coach text with `NarrativeLogQueries.InsertText` in its own batch. It publishes `StressImpulseEvent` on inactivation and an optional relief on re-activation; the magnitudes are data values (§9 Q6).
-  - Contacts: Pro `coach_reyes`, HS `coach_hs`, and a new `coach_college` row (placeholder name).
+  - A new `Assets/Narrative/` subscriber writes the coach text with `NarrativeLogQueries.InsertText` in its own batch. It publishes `StressImpulseEvent` **+15.0** on inactivation and **−5.0** on re-activation (data values, §10.1 Q6).
+  - Contacts: Pro `coach_reyes`, HS `coach_hs`, and a new `coach_college` row (placeholder name; not "Vance", which collides with the Vance County Vipers, §10.5).
   - Texts are `strings.csv` keys with placeholder lines and no `{tokens}` (`NarrativeTokenResolver` is L-3's). Claude Sonnet 5.5 polishes them later.
-  - It fires on transitions only: inactive after active, active after inactive, and each forfeit involving the avatar's team.
+  - It fires on **transitions only**: inactive after active, active after inactive, and each forfeit involving the avatar's team. A second consecutive inactive week sends nothing. **A forfeit sends a coach text with no stress impulse** (Amendment 5).
+  - `WasActive` comes from a row that covered the week just ending (`locked_through_day` = this lock day). A stale row, such as last season's final week, reads as the default (active), so a season's first lock never sends a spurious re-activation (C2).
 - **B.** `RosterManager` writes an engine flag (`Entity_Flags`), and gritty-event content keys on it. It reuses the dispatcher, but the dispatcher is weighted and polled, so the text can lag or never fire.
 - **C.** Events only in 13-5a; texts and stress arrive with Sonnet's content pass.
 
@@ -159,8 +168,8 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 
 - **A (recommended).**
   - **Subscription and window.** `RosterManager` subscribes after the tier sims and before the career (`GameManager.cs:447–516`). On the Sunday tick (`DayOfSeason % 7 == 0`) inside the Pro window (**Sundays 91–273**: the Sunday before opening day 93 through the last postseason Sunday; final 275), it runs after the Pro sim's Sunday flush, so performance inputs see the week's macro stats.
-  - **The lock.** It computes all 32 teams' designations and upserts **768 rows in one batch** with `locked_through_day` = the next Sunday's absolute day. Inside the window that's always today + 7, and the window never crosses a season year.
-  - **Boot.** At boot it hydrates an in-memory active mask (a `Version`ed ledger the sims cache per slot, the `AvailabilityLedger` pattern). If no row covers today inside the window (a crash between the day's commit and the lock's), it **reconciles** by locking now with the most recent Sunday as the nominal day.
+  - **The lock.** It computes all 32 teams' designations and upserts **768 rows in one batch** with `locked_through_day` = the next Sunday's absolute day. Inside the window that's always today + 7, and the window never crosses a season year. A row covers a day only while **`locked_through_day > today`** (strict, Amendment 1), so the final lock (Sunday 273, written as 280) lapses on its own on day 280.
+  - **Boot.** At boot it hydrates an in-memory active mask (a `Version`ed ledger the sims cache per slot, the `AvailabilityLedger` pattern). If no row covers today on a day in 91–279, it **reconciles** by locking now with the most recent Sunday as the nominal day. That's the crash between the day's commit and the lock's, including on Sunday itself: under the strict rule, last week's row stops covering on lock day.
   - **Default.** A player with no covering row is **active**. That covers the days before the first lock, the offseason, a harness avatar created mid-week, and every HS/College player.
   - **Game days.** The designation is an array read (0 B).
   - **Clock.** `TimeManager` doesn't change. SR-2a's week advance runs the Sunday tick like any other day; the lock never stops it, and only the beats' own consequences (a stress spike) might.
@@ -175,7 +184,8 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
   - the guard world with `RosterManager` wired (54 locks × 768 upserts);
   - designation, reload and attended fixtures;
   - allocation probes.
-- No opt-in analysis is planned. Forfeit-frequency estimates are Argon's, report-only (§9 Q7).
+- No opt-in analysis is planned. Forfeit-frequency estimates are Argon's, report-only (§10.1 Q7). Under the absence sources shipped today, organic forfeits are 0 in every tier: only the avatar can be absent.
+- Argon's forecast is **+1.6–3.2 s raw (+1.9–4.0 s with a 1.25× reserve)**, provided the new suites share one or two generated v14 worlds (`Slice135World`; §10.1 Q8, Amendment 7). That's a forecast; the measured D7 gate decides.
 
 ### D8. Roster Status UI
 
@@ -188,30 +198,31 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 2. **`RosterManager`:** the Sunday lock (D6), coach AI inputs (performance from persisted stats, health from `AvailabilityLedger`, the affinity proxy from `PersonQueries`), boot hydrate and reconcile, the `CanField(teamId, day)` façade, the `RosterStatusView` DTO, and `RosterDesignationChangedEvent` after commit.
 3. **`RosterQueries`** (the Data layer; SQL validated on a scratch v14, §0.4):
    - upsert: `INSERT INTO Roster_Designations (player_id, team_id, is_active, locked_through_day) VALUES (…) ON CONFLICT (player_id) DO UPDATE SET team_id = excluded.team_id, is_active = excluded.is_active, locked_through_day = excluded.locked_through_day`;
-   - hydrate: `… FROM Roster_Designations d JOIN Teams t ON t.team_id = d.team_id JOIN Conferences c ON c.conference_id = t.conference_id WHERE c.tier = @tier AND d.locked_through_day >= @today`;
+   - hydrate: `… FROM Roster_Designations d JOIN Team_Tiers tt ON tt.team_id = d.team_id WHERE tt.tier = @tier AND d.locked_through_day > @today` (strict, Amendment 1; the `Team_Tiers` join as in `PlayoffQueries.cs:44–46`; revalidated 2026-11-23, including the Sunday crash boundary);
    - prior state by `player_id` (autoindex);
-   - the latest lock: `MAX(d.locked_through_day)` with the same join.
+   - the latest lock: `COALESCE(MAX(d.locked_through_day), 0)` with the same join.
 4. **Call-up retirement, every sim:**
    - remove the replacement ratings, arsenal, discard-line accrual and `"Call-Up"` feed name;
    - an ineligible batter leaves the lineup, which is rebuilt by the allocation-free `LineupBuilder` twin only for affected teams (parity-checked against `Build`);
+   - `LeagueSimulator` keeps per-slot teamwork (`_slotTeamwork`) after `Initialize`, so a reshuffled lineup re-bakes that game's defense byte with `PersonEffects.BakeTeamDefense`; `CountPedGame` and `CountPostseasonPedGame` credit the 9 who actually played (Amendment 5a);
    - an ineligible starter is skipped, then an eligible reliever opens, else the team forfeits;
-   - `MaybePullPitcher` skips ineligible relievers, and the starter stays in if none is left;
-   - the macro postseason batter shadow is gone;
-   - an absent or inactive avatar is never featured, and his team's game plays without him.
+   - `MaybePullPitcher` scans past ineligible relievers and keeps the current pitcher in if none is eligible. It captures the starter's count with `if (starterPitches < 0.0)`, not `bullpenUsed == 0` (Amendment 4). That also corrects opener games, which today backfill the last reliever's count (§10.5);
+   - the macro postseason batter shadow is gone, and `SimulatePostseasonGame` checks `CanField` before recording any start (Amendment 5b);
+   - an absent or inactive avatar is never featured: `MicroGame` filters its candidates to eligible players, passes `featuredSlot = IsEligible(humanSlot) ? humanSlot : -1`, and gates human batting and pitching the same way (Amendment 2). His team's game plays without him.
 5. **Forfeits (D2):**
    - a status lane in the macro result queue, written at the Sunday flush;
    - a status-carrying `ScheduleQueries` result writer (`UPDATE Schedule_Games SET status = @status, home_score = @homeScore, away_score = @awayScore WHERE game_id = @gameId`, validated);
    - the attended forfeit in `CareerManager`;
    - `PlayoffManager` routed through `CanField`;
    - the double-forfeit award per D2d;
-   - `GameForfeitedEvent` after each commit.
+   - `GameForfeitedEvent` after each commit. Macro regular-season forfeits are buffered with the result lane and publish after `FlushAccumulated` commits; attended and postseason forfeits commit and publish on the game day (Amendment 5c).
 6. **Avatar (D4b, D5, D6):**
    - an inactive Pro avatar never parks; his team's games autopilot without him;
    - `GetMandatoryBlocksFor` drops his Game blocks for the locked week (practice only, spec §7);
    - the beats per D5.
 7. **D3-A items:**
-   - `ReclaimRegularSeasonGame` at boot, beside `ReclaimPostseasonGame`;
-   - the `StartUndo` revert for regular-season attended games.
+   - `ReclaimRegularSeasonGame` at boot, beside `ReclaimPostseasonGame`, with the `CanField` and absent/inactive/autopilot checks of `OnDayAdvanced` (a new `IsAvatarActiveOn`; Amendment 6);
+   - the `StartUndo` revert for regular-season attended games, snapshotting and restoring `ShortRestStarts` and `BullpenGames` beside the postseason counters (Amendment 4).
 8. **Harness:** §5.
 9. **Docs:** spec §7 and new §16 interpretations synced to the approved D-options (I16 lock and designations, I17 the forfeit contract, I18 the Gate 2 sanction scope); the MC skill; `progress.md`; the handoff (§8).
 
@@ -223,7 +234,7 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
 | Schema | `dotnet run --project Tools/SchemaValidator -c Release` (plus `validate_sqlite_schema` on a scratch copy before any new SQL) | 174/174 (no DDL) |
 | CoreLoop | `dotnet run --project Tools/CoreLoopHarness -c Release` | 25/25 + the new clock fixtures below |
 | GrittyEvents | `dotnet run --project Tools/GrittyEventsHarness -c Release` | 363/363 (the contacts registry still loads with `coach_college`) |
-| MC default | `dotnet run --project Tools/MonteCarloHarness -c Release` | 470 + new checks; reds = exactly the 7 promotion suites; resolver byte-identical; **Pro guard byte-exact with `RosterManager` wired** (D1-A's 7 channels); every allocation line 0 B, including the new probes; 0 leaks; within D7 |
+| MC default | `dotnet run --project Tools/MonteCarloHarness -c Release` | 470 + new checks; reds = exactly the 7 promotion suites; resolver byte-identical; **Pro guard byte-exact with `RosterManager` wired** (D1-A's 10 channels); every allocation line 0 B, including the new probes; 0 leaks; within D7 |
 | 20× replay | default, `--no-build`, ×20, normalized | 20/20 byte-identical |
 
 **Rewritten and new default suites:**
@@ -233,13 +244,15 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
   - the discard line is never written (it's gone);
   - an absent ace yields #2 with no call-up;
   - an absent avatar's games autopilot without him while the team plays.
-- **`designations`:**
+- **`designations`** (on the shared `Slice135World`s, Amendment 7):
   - 768 rows per lock, 12/3/3 active per team;
-  - `LineupBuilder` starters always active; the subset-greedy parity (random eligible subsets of spread-25 rosters, `Build` vs the twin, slot-for-slot);
-  - the unhealthy fill (earliest return);
-  - an injured ace inactive;
-  - the avatar margin rule (D4b): a starting-calibre avatar stays active, a fringe one with poor inputs goes inactive;
-  - idempotent re-lock; hydrate equals the last lock; boot reconcile after a simulated missed lock; no RNG moved.
+  - `LineupBuilder` starters always active, computed unfeatured; the subset-greedy parity (random eligible subsets of spread-25 rosters, `Build` vs the twin, slot-for-slot);
+  - Argon's Q2 bench fixture (every weight, the catcher-bucket clear, the `PlayerId` tie);
+  - the Q4 unhealthy-fill fixture (`sp2`/`sp3` active, `sp1` inactive);
+  - an injured ace inactive, and a player absent only on Monday stays active (C1);
+  - the Q3 avatar margin fixtures (each of ΔP, ΔH and ΔA flips the call; the minimum-PA gate; a starting-calibre avatar stays active). Q3's flip 2a moves its return day to lock day + 3, so the absence covers Tuesday's game under C1 (ΔH = −12);
+  - pitcher quality on baked ratings (C3); `WasActive` from the covering row only (C2);
+  - idempotent re-lock; hydrate equals the last lock; boot reconcile after a simulated missed lock, including the Sunday crash boundary (Amendment 1); no RNG moved.
 - **`attrition`:** an active player absent mid-week isn't replaced by an inactive one; the lineup reshuffles from the actives; a team at exactly 9 eligible plays, and at 8 it forfeits.
 - **`forfeits`, per tier:**
   - HS 7–0 and College/Pro 9–0, `status = 2`;
@@ -251,8 +264,10 @@ All four touch the HS regular season only when an absence, a forfeit, a cancel o
   - `GameForfeitedEvent` once, after commit.
 - **`attended-forfeit`:**
   - the avatar's game with a decimated opponent and with his own decimated team: no park, no `MicroGame` call, `CareerManager.RngSnapshot` unchanged;
-  - the coach-text row and the stress event once each (D5-A).
-- **`season-pipeline` additions:** D1-A's channels.
+  - the coach-text row once, with no stress impulse (D5-A, Amendment 5);
+  - a reload on a regular-season game day with a forfeit due resolves it with no park (Amendment 6).
+- **`season-pipeline` additions:** D1-A's 10 channels.
+- **Beats (D5-A, §10.1 Q6):** over three weekly locks, inactive → still inactive → active gives text and +15, then nothing, then text and −5.
 - **`attended-undo`** (D3-A): a cancelled and a rolled-back regular-season attended game replay with the same starters as a never-cancelled one (mutation-tested, as 13-4 S1 was).
 - **Allocation probes:** warm macro game days with a reshuffled lineup, a macro forfeit day, an attended game with an absent reliever, and a locked-week game day: 0 B.
 
@@ -649,3 +664,35 @@ Opus should fold these 7 refinements into §§1–5 before owner sign-off (no §
    > *"In `CareerManager.ReclaimRegularSeasonGame(long day)` (D3-A item 3), after finding the avatar team's earliest `phase = 0 AND status = 0 AND day_of_season <= today` row via `ix_sched_day`, apply the same `CanField` forfeit check and `AutopilotAttendedGames || IsAvatarAbsentOn(gameDay) || !IsAvatarActiveOn(gameDay)` auto-resolve check as `OnDayAdvanced`, so a save reloaded after a game-day crash while the avatar is absent, inactive, or facing a forfeit resolves cleanly instead of parking an unplayable interactive fixture."*
 7. **Amendment 7 — Complete 10-Channel Guard-Invariance Suite & Shared Scratch Worlds (§3 D1-A/D7, §5 `season-pipeline`):**
    > *"In `season-pipeline`, assert all 10 guard-invariance channels from §10.1 Q1 (including default-active offseason transition on `DayOfSeason ∈ [1, 90] ∪ [280, 365]`, `RosterManager.Version == 54`, and `LineupRebuildCount == 0`), and share at most 1–2 generated v14 scratch worlds (`Slice135World`) across the new 13-5 suites to keep the default MC addition within `+1.9–4.0 s ≤ +10.0 s`."*
+
+### 10.5 Opus review of the Math check and reconciliation — Claude Opus 5.5, 2026-11-23
+
+**Verdict: accepted, with three corrections (C1–C3).** Amendments 1–7 and C1–C3 are folded into §1.2 (#2, #4), §3 (D1-A, D3-A, D4a/b, D5-A, D6-A, D7), §4 (items 3, 4, 5, 7) and §5 (`designations`, `attended-forfeit`, `season-pipeline`, beats). Argon's §10.1–§10.4 stay as authored. Argon wrote §10 under the owner's no-commit fallback; I checked its scope and committed it as `53652d2`. It adds only this brief's §10 (nothing deleted from §§1–9) and one `progress.md` line, and `git diff --check` was clean.
+
+**Independently verified:**
+
+- **Q1 proofs.** The subset-greedy argument holds at every `LineupBuilder` step. The featured-player caveat (Amendment 2) is real: `LineupBuilder.cs:79–83` forces a featured slot into the lineup, so a lock that passed the avatar would protect a fringe avatar. The starter split, re-derived from the calendar: 22 Tuesdays + 21 Saturdays = 43 for #1, 21 Thursdays for #2. Every postseason slot reaches only #1 and #2, and the gap into season 2 is 183 days.
+- **Amendment 1 is a real boundary defect.** On a scratch v14 (`sqlite3` over `SchemaDefinitions.sql`, foreign keys on), with lock `98` written: Sunday `98` reads uncovered before the lock commits and covered after it, and Saturday `97` reads covered. That's the strict `>` rule working. I also switched the joins to `Team_Tiers`, matching 13-4a (both plans are a ≤ 768-row scan plus a primary-key lookup).
+- **Amendment 4.** `MicroGame.cs:1314` captures on `bullpenUsed == 0`, and `starterPitches` starts at −1 and is backfilled after the game (`:1200`, `:1257–1264`). Beyond the skipped-index case, this is a **latent pre-13-5 bug in opener games**: `SelectPitcher` hands back `bullpenUsed = opener + 1` (`:766`), so an opener game today reports the last reliever's count as the starter's. The fix changes that report only in opener games, which need an unavailable rotation. The pitch-count band at `Program.cs:1797` samples games without absences, so no default-log line should move; the 13-5a log diff must show that.
+- **Q2's coverage claims.** `LeagueGenerator.SecondaryNeighbours` (`:87–98`) gives no player C as a secondary, gives 2B/SS only to infielders, and gives the outfield only to outfielders and 1B. The buckets are as Argon describes.
+- **`CompareQuality`** (`StarterSelection.cs:115–134`) is baked stuff + control, then stamina, then player id. That's consistent with Q3's slot-3 tie key, given C3.
+- **Q5 arithmetic.** At G = 28, `0.20·RD_norm = 0.10 + RD/1400`; a 9–0 forfeit is 9/1400 = 0.006429, which is 36% of one win's 0.50/28.
+- **Q9 and Q10.** At most 10 players per macro game and 15 per micro game, against College's 20; the D2d-C key packing fits 16-bit team ids.
+- **Tier totals.** `BaseballQueries.LoadLeagueBattingTotals` / `LoadLeaguePitchingTotals(seasonYear, tier)` exist (`:1455`, `:1466`), so Q3's ΔP needs no new query.
+
+**Corrections (applied; Argon to confirm in the 13-5a review):**
+
+- **C1 — absence is measured on game days, not calendar days.** Q1, Q3 and Amendment 3 call a player healthy only if he's available on Monday (`lockDay + 1`), and score the avatar −6 per absent day across Monday–Saturday. Monday isn't a Pro game day. A player whose absence ends Tuesday morning would be inactive all week and miss three games for an absence that costs none.
+  - *Applied:* healthy ⇔ not absent on any of the team's game days in the locked week (Tue/Thu/Sat, or the D3 slots in the postseason). If the team has no game that week, every player counts as healthy.
+  - The avatar's ΔH = −12 per missed game. That keeps Argon's −36 floor at three games; an avatar who misses every game day goes to the unhealthy pool.
+  - Q3's flip 2a moves its return day to lock day + 3, so it still flips (ΔH = −12). The Q4 fixture is unchanged: Tuesday's game is still missed.
+- **C2 — `WasActive` reads only a row that covered the week just ending.** Rows persist across seasons. Without this rule, an avatar who was inactive in last season's final week would get a "re-activated" text at the next season's first lock. A row counts only when its `locked_through_day` equals this lock's day; otherwise the default (active) applies.
+- **C3 — pitcher quality is the sims' baked stuff + control.** Q3's slot-3 score and Q4's fill key name `PitStuff + PitControl`, which reads like the raw `Player_Ratings` columns. `CompareQuality` ranks baked `PitcherRatings` (tier and person). They must match, or a person-baked rotation could split differently between the lock and game day. Batters keep the raw `BatPower + BatContact + BatDiscipline`, which is what `LineupBuilder`'s `BatScore` uses (`LeagueSimulator.cs:528`).
+
+**Read with care:**
+
+- **Q7's table and Q8's timings are forecasts.** No 13-5 code exists, and the session ran no harness. The shipped-source result (0 organic forfeits) is structural: absence consequences are avatar-scoped or gated on NPC state no shipped event moves.
+- **Q6's +15 / −5** are data values with a rationale from the authored content's range, not a measurement. They're tunable after a playtest.
+- **The `coach_college` placeholder** shouldn't be "Coach Vance": Vance County Vipers is a College team (Appendix A). Pick another placeholder; Sonnet names it.
+
+**No owner-facing change:** the amendments and corrections refine the recommended options. None changes a D1–D8 choice or the sanctioned guard. **Next: the owner decides D1–D8.**
