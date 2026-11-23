@@ -17,8 +17,10 @@ public sealed record LineupResult(int[] Slots, FieldingPosition?[] Positions, in
 
 /// <summary>
 /// Who plays (league_restructure.md §5, arcade_baseball_overhaul.md §8.1;
-/// 13-2 brief D3): a deterministic legal defense from Player_Fielding, built
-/// once at Initialize (load-time code, so allocation is fine).
+/// 13-2 brief D3): a deterministic legal defense from Player_Fielding.
+/// <see cref="Build"/> runs at load time (allocation is fine there);
+/// <see cref="BuildInto"/> is its allocation-free twin for the game-day
+/// reshuffle around absent or inactive players (13-5).
 ///
 /// <list type="number">
 /// <item>For C, 1B, 2B, 3B, SS, LF, CF, RF in that order: the best unchosen
@@ -93,6 +95,152 @@ public static class LineupBuilder
             positions[i] = chosen[slots[i]];
         }
         return new LineupResult(slots, positions, outOfPosition);
+    }
+
+    /// <summary>The <see cref="BuildInto"/> position code for the designated hitter.</summary>
+    public const sbyte DesignatedHitter = -1;
+
+    /// <summary>
+    /// The allocation-free twin of <see cref="Build"/> for the game-day path
+    /// (slice 13-5, brief §4 item 4): the same four steps, the same picks,
+    /// written into caller buffers. <paramref name="ordered"/> must already be
+    /// in <see cref="Build"/>'s order (bat score descending, then player id
+    /// ordinal ascending); callers keep a per-team sorted roster from load
+    /// time and filter it to today's eligible players, so no sort runs here.
+    /// <paramref name="slots"/> receives the nine roster slots in batting
+    /// (slot) order and <paramref name="positions"/> their positions as
+    /// <c>(sbyte)FieldingPosition</c> or <see cref="DesignatedHitter"/>.
+    /// Returns the out-of-position count. The MC harness proves it equal to
+    /// <see cref="Build"/> slot for slot over random eligible subsets.
+    /// </summary>
+    public static int BuildInto(
+        ReadOnlySpan<LineupCandidate> ordered, int featuredSlot, Span<int> slots, Span<sbyte> positions)
+    {
+        int n = ordered.Length;
+        if (n < RosterCapacity.Lineup)
+        {
+            throw new InvalidOperationException(
+                $"A lineup needs {RosterCapacity.Lineup} position players; the team has {n}.");
+        }
+        if (n > RosterCapacity.MaxPositionPlayers)
+        {
+            throw new InvalidOperationException(
+                $"BuildInto takes at most {RosterCapacity.MaxPositionPlayers} candidates; got {n}.");
+        }
+
+        Span<bool> taken = stackalloc bool[RosterCapacity.MaxPositionPlayers];
+        taken.Clear();
+        Span<int> pickIndex = stackalloc int[RosterCapacity.Lineup];
+        Span<sbyte> pickPosition = stackalloc sbyte[RosterCapacity.Lineup];
+        Span<sbyte> open = stackalloc sbyte[8];
+        int picks = 0;
+        int openCount = 0;
+
+        // Step 1: primary, then secondary, position by position.
+        FieldingPosition[] field = FieldingPositions.Field;
+        for (int f = 0; f < field.Length; f++)
+        {
+            FieldingPosition position = field[f];
+            int pick = -1;
+            for (int i = 0; i < n; i++)
+            {
+                if (!taken[i] && ordered[i].Primary == position)
+                {
+                    pick = i;
+                    break;
+                }
+            }
+            if (pick < 0)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    if (!taken[i] && ordered[i].Secondary == position)
+                    {
+                        pick = i;
+                        break;
+                    }
+                }
+            }
+            if (pick < 0)
+            {
+                open[openCount++] = (sbyte)position;
+                continue;
+            }
+            taken[pick] = true;
+            pickIndex[picks] = pick;
+            pickPosition[picks++] = (sbyte)position;
+        }
+
+        // Step 2: every open position takes the best unchosen player, out of position.
+        int outOfPosition = 0;
+        for (int o = 0; o < openCount; o++)
+        {
+            int pick = FirstUntaken(taken, n);
+            taken[pick] = true;
+            pickIndex[picks] = pick;
+            pickPosition[picks++] = open[o];
+            outOfPosition++;
+        }
+
+        // Step 3: the DH, or the featured player if the steps above left him out.
+        int featuredIndex = -1;
+        if (featuredSlot >= 0)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                if (ordered[i].Slot == featuredSlot)
+                {
+                    featuredIndex = i;
+                    break;
+                }
+            }
+        }
+        int dh = featuredIndex >= 0 && !taken[featuredIndex] ? featuredIndex : FirstUntaken(taken, n);
+        taken[dh] = true;
+        pickIndex[picks] = dh;
+        pickPosition[picks++] = DesignatedHitter;
+
+        // Step 4: batting order is roster-slot order (insertion sort over nine).
+        for (int i = 1; i < picks; i++)
+        {
+            int index = pickIndex[i];
+            sbyte position = pickPosition[i];
+            int slot = ordered[index].Slot;
+            int j = i - 1;
+            while (j >= 0 && ordered[pickIndex[j]].Slot > slot)
+            {
+                pickIndex[j + 1] = pickIndex[j];
+                pickPosition[j + 1] = pickPosition[j];
+                j--;
+            }
+            pickIndex[j + 1] = index;
+            pickPosition[j + 1] = position;
+        }
+        for (int k = 0; k < RosterCapacity.Lineup; k++)
+        {
+            slots[k] = ordered[pickIndex[k]].Slot;
+            positions[k] = pickPosition[k];
+        }
+        return outOfPosition;
+    }
+
+    /// <summary><see cref="Build"/>'s candidate order: bat score descending, then player id ordinal ascending.</summary>
+    public static int CompareOrder(in LineupCandidate a, in LineupCandidate b)
+    {
+        int byBat = b.BatScore.CompareTo(a.BatScore);
+        return byBat != 0 ? byBat : string.CompareOrdinal(a.PlayerId, b.PlayerId);
+    }
+
+    private static int FirstUntaken(ReadOnlySpan<bool> taken, int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            if (!taken[i])
+            {
+                return i;
+            }
+        }
+        throw new InvalidOperationException("LineupBuilder ran out of candidates (fewer than nine).");
     }
 
     private static int FirstUnchosen(

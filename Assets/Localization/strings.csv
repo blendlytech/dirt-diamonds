@@ -6,3 +6,7 @@ ui.clean_break.newer.body,"This save is from a newer version of Dirt & Diamonds 
 ui.clean_break.quit,"Quit"
 ui.clean_break.start,"Start a new career"
 league.college.final.name,"The Red Dirt Series"
+roster.lock.inactive,"You're on the inactive list this week. Keep working and stay ready."
+roster.lock.reactivated,"You're back on the active roster this week. Be ready."
+roster.forfeit.lost,"We couldn't field a team today, so the game goes down as a forfeit."
+roster.forfeit.won,"The other side couldn't field a team today. We take the forfeit win."

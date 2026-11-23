@@ -38,12 +38,14 @@ internal static class Program
         string schemaPath = Path.Combine(repoRoot, "Assets", "Data", "Database", "SchemaDefinitions.sql");
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_{Guid.NewGuid():N}.db");
         string postseasonPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_post_{Guid.NewGuid():N}.db");
+        string rosterPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_roster_{Guid.NewGuid():N}.db");
 
         try
         {
             RunEventBusChecks();
             RunCalendarChecks(schemaPath, scratchPath);
             RunPostseasonClockChecks(schemaPath, postseasonPath);
+            RunRosterClockChecks(schemaPath, rosterPath);
             RunBoundaryScan(repoRoot);
         }
         catch (Exception ex)
@@ -58,6 +60,9 @@ internal static class Program
             TryDelete(postseasonPath);
             TryDelete(postseasonPath + "-wal");
             TryDelete(postseasonPath + "-shm");
+            TryDelete(rosterPath);
+            TryDelete(rosterPath + "-wal");
+            TryDelete(rosterPath + "-shm");
         }
 
         int failed = 0;
@@ -475,6 +480,199 @@ internal static class Program
                 $"last day {lastAlive}: game {g1}h; day {practiceDay}: practice {p2}h; non-qualifier {nonQualifier} free");
             career.DetachFrom(bus);
             playoffs.DetachFrom(bus);
+        }
+        finally
+        {
+            db.Dispose();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 13-5: the Sunday lock on the real clock (brief §5 CoreLoop fixtures)
+    // ------------------------------------------------------------------
+
+    private static void RunRosterClockChecks(string schemaPath, string scratchPath)
+    {
+        Console.WriteLine("--- 13-5 roster clock (an inactive avatar never parks; forfeits never open the at-bat view; lock, reload, reconcile, beats) ---");
+        const int startYear = 2026;
+        var db = new DatabaseManager(scratchPath);
+        try
+        {
+            db.InitializeSchema(schemaPath);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var genRng = new RngState(20260703UL);
+            LeagueGenerator.GenerateIfEmpty(db, players, baseball, ratingSpread: 0, ref genRng);
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var gameState = new GameStateQueries(db);
+            var clock = new TimeManager(db, gameState, state, bus);
+            clock.Initialize(startYear);
+            int avatarTeam = LeagueStructure.TeamIdBase(LeagueTier.Pro) + 7;
+
+            // Production order: absences, the tier sim, the lock, the career, the beats.
+            var ledger = new AvailabilityLedger();
+            ledger.AttachTo(bus);
+            var normalizer = new StatsNormalizer(db, baseball);
+            var pro = new LeagueSimulator(db, baseball, normalizer, new RngState(777UL), LeagueTier.Pro) { Availability = ledger };
+            pro.Initialize();
+            pro.AttachTo(bus);
+            var leagues = new LeagueDirectory();
+            leagues.Register(pro);
+            var roster = new RosterManager(db, baseball, leagues) { Availability = ledger };
+            roster.AttachTo(bus);
+            pro.Designations = roster;
+            CareerManager ComposeCareer(RosterManager designations, GlobalState calendar)
+            {
+                var micro = new MicroGame(db, baseball)
+                {
+                    LoggingEnabled = false, RestLedger = pro.RestLedger, Availability = ledger, Designations = designations,
+                };
+                micro.Initialize();
+                return new CareerManager(db, players, baseball, gameState, calendar, leagues, micro, new RngState(0xBA5E_BA11UL))
+                {
+                    Normalizer = normalizer, Availability = ledger, Roster = designations, AutopilotAttendedGames = false,
+                };
+            }
+            CareerManager career = ComposeCareer(roster, state);
+            // A fringe avatar in a flat (all-50) world: the coach makes him inactive.
+            career.CreateAvatar("Fringe", "Rookie", avatarTeam, new PlayerRatingsRow
+            {
+                IsPitcher = false, BatPower = 30, BatContact = 30, BatDiscipline = 30,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 30,
+            });
+            career.AttachTo(bus);
+            var writer = new DirtAndDiamonds.Narrative.Roster.RosterBeatWriter(db, new NarrativeLogQueries(db), gameState, players, state);
+            writer.AttachTo(bus);
+            var stress = new List<float>();
+            var forfeits = new List<GameForfeitedEvent>();
+            bus.Subscribe<StressImpulseEvent>(e => stress.Add(e.Delta));
+            bus.Subscribe<GameForfeitedEvent>(e => forfeits.Add(e));
+            string avatarId = career.AvatarPlayerId;
+            long Texts() => Convert.ToInt64(db.ExecuteScalar(db.GetPooledCommand(
+                $"SELECT COUNT(*) FROM Game_Logs WHERE event_type = '{NarrativeLogQueries.EventType}' AND player_id = '{avatarId}';")));
+            long Rows(string sql) => Convert.ToInt64(db.ExecuteScalar(db.GetPooledCommand(sql)));
+            void AdvanceTo(int dayOfSeason, Action? eachDay = null)
+            {
+                while (state.DayOfSeason < dayOfSeason)
+                {
+                    clock.AdvanceDay();
+                    bus.DispatchPending();
+                    eachDay?.Invoke();
+                }
+            }
+            string[] ActiveBench(RosterManager manager, long day)
+            {
+                int team = pro.IndexOfTeam(avatarTeam);
+                var lineup = new HashSet<string>(pro.InitialLineup(team).ToArray().Select(pro.PlayerIdAt));
+                return pro.PositionOrder(team).ToArray().Select(pro.PlayerIdAt)
+                    .Where(id => manager.IsActive(id, day) && !lineup.Contains(id) && id != avatarId).ToArray();
+            }
+
+            // 1. The Sunday lock fires on 91 and the inactive avatar never parks a game that week.
+            int firstLock = RosterRules.FirstLockDayOfSeason;
+            AdvanceTo(firstLock);
+            bool lockedOnSunday = roster.LockCount == 1 && roster.LastLockDay == state.CurrentDay;
+            bool neverParked = true;
+            bool noGameBlock = true;
+            int gameDays = 0;
+            AdvanceTo(firstLock + 6, () =>
+            {
+                neverParked &= !career.HasPendingGame;
+                if (TierSeasonCalendar.TryGetLockedTeamBlocks(LeagueTier.Pro, state.DayOfSeason, out _, out int gameHours) && gameHours > 0)
+                {
+                    gameDays++;
+                    noGameBlock &= !career.IsAvatarActiveOn(state.CurrentDay); // GameManager.GetMandatoryBlocksFor drops the Game block
+                }
+            });
+            long teamGames = Rows($"SELECT COUNT(*) FROM Schedule_Games WHERE season_year = {startYear} AND phase = 0 AND status = 1 " +
+                $"AND day_of_season BETWEEN {firstLock + 1} AND {firstLock + 6} AND (home_team_id = {avatarTeam} OR away_team_id = {avatarTeam});");
+            Check("13-5: the lock fires on Sunday 91; the inactive avatar never parks a game all week, has no Game blocks, and his team's three games are played",
+                lockedOnSunday && neverParked && noGameBlock && gameDays == 3 && teamGames == 3
+                && !roster.IsActive(avatarId, state.CurrentDay),
+                $"locks {roster.LockCount}, game days {gameDays}, team games {teamGames}");
+            Check("13-5: being made inactive is one coach text and a +15 stress impulse",
+                Texts() == 1 && stress.SequenceEqual(new[] { 15.0f }), $"texts {Texts()}, stress [{string.Join(",", stress)}]");
+
+            // 2. A reload mid-week keeps the designations (hydrate, no reconcile).
+            var reloaded = new RosterManager(db, baseball, leagues);
+            bool reconciledMidweek = reloaded.HydrateAndReconcile(state.CurrentDay, state.SeasonYear, state.DayOfSeason);
+            int team0 = pro.IndexOfTeam(avatarTeam);
+            bool same = pro.PositionOrder(team0).ToArray().Select(pro.PlayerIdAt).Append(avatarId)
+                .All(id => reloaded.IsActive(id, state.CurrentDay) == roster.IsActive(id, state.CurrentDay));
+            Check("13-5: a reload mid-week keeps the week's designations (hydrated, nothing reconciled)",
+                !reconciledMidweek && same && reloaded.LockedThroughDay == roster.LockedThroughDay);
+
+            // 3. A missed lock (the manager detached across Sunday 98) is reconciled at boot.
+            roster.DetachFrom(bus);
+            AdvanceTo(firstLock + 8);
+            var rebooted = new RosterManager(db, baseball, leagues) { Availability = ledger };
+            bool reconciled = rebooted.HydrateAndReconcile(state.CurrentDay, state.SeasonYear, state.DayOfSeason);
+            long nextSunday = state.CurrentDay - (state.DayOfSeason - (firstLock + 7)) + GameCalendar.DaysPerWeek;
+            Check("13-5: a missed Sunday lock is reconciled at boot (nominal day = the last Sunday; it covers today)",
+                reconciled && rebooted.LockedThroughDay == nextSunday && rebooted.IsLocked(state.CurrentDay)
+                && !rebooted.IsActive(avatarId, state.CurrentDay) && Texts() == 1,
+                $"reconciled {reconciled}, horizon {rebooted.LockedThroughDay} (expected {nextSunday}), texts {Texts()}");
+            rebooted.AttachTo(bus);
+            pro.Designations = rebooted;
+            career.DetachFrom(bus);
+            career.Roster = rebooted;
+            career.AttachTo(bus);
+
+            // 4. The re-activation beat fires once after the inactive stint: the active bench is out for week 105.
+            int thirdLock = firstLock + 14;
+            foreach (string id in ActiveBench(rebooted, state.CurrentDay))
+            {
+                bus.Publish(new PlayerAbsenceChangedEvent(id, (byte)AbsenceReason.Suspension,
+                    state.CurrentDay - state.DayOfSeason + thirdLock + 7, 0, 0));
+            }
+            AdvanceTo(thirdLock);
+            long textsAfter = Texts();
+            bool active = rebooted.IsActive(avatarId, state.CurrentDay + 1);
+            AdvanceTo(thirdLock + 2); // Tuesday: an active avatar's game parks again
+            bool parksAgain = career.HasPendingGame;
+            Check("13-5: the re-activation beat fires once after the inactive stint (one text, −5 stress) and his next game parks",
+                active && textsAfter == 2 && stress.SequenceEqual(new[] { 15.0f, -5.0f }) && parksAgain,
+                $"active {active}, texts {textsAfter}, stress [{string.Join(",", stress)}], parked {parksAgain}");
+
+            // 5. A forfeit never opens the at-bat view: Thursday's opponent can't field.
+            var policy = new NeutralBatterPolicy();
+            career.PlayPendingGame(ref policy);
+            int thursday = thirdLock + 4;
+            pro.TryGetScheduledGame(startYear, thursday, avatarTeam, out long forfeitGame, out int home, out int away);
+            int opponent = home == avatarTeam ? away : home;
+            foreach (string id in pro.PositionOrder(pro.IndexOfTeam(opponent)).ToArray().Select(pro.PlayerIdAt).Skip(8))
+            {
+                bus.Publish(new PlayerAbsenceChangedEvent(id, (byte)AbsenceReason.Injury,
+                    state.CurrentDay - state.DayOfSeason + thursday + 1, 0, 0));
+            }
+            int forfeitsBefore = forfeits.Count;
+            long textsBefore = Texts();
+            AdvanceTo(thursday);
+            Check("13-5: a forfeit never opens the at-bat view — no pending game, the clock runs on, one GameForfeitedEvent, one coach text, no stress",
+                !career.HasPendingGame && forfeits.Count == forfeitsBefore + 1 && forfeits[^1].GameId == forfeitGame
+                && Texts() == textsBefore + 1 && stress.Count == 2
+                && Rows($"SELECT status FROM Schedule_Games WHERE game_id = {forfeitGame};") == 2,
+                $"pending {career.HasPendingGame}, events {forfeits.Count - forfeitsBefore}, texts {Texts() - textsBefore}");
+
+            // 6. (D3-A) A reload on a regular-season game day re-parks the same fixture.
+            AdvanceTo(thursday + 2);
+            bool parked = career.TryGetPendingGame(out PendingAttendedGame before);
+            career.DetachFrom(bus);
+            state = new GlobalState();
+            clock = new TimeManager(db, gameState, state, bus);
+            clock.Initialize(startYear);
+            CareerManager reloadedCareer = ComposeCareer(rebooted, state);
+            bool loaded = reloadedCareer.LoadExistingAvatar();
+            bool reclaimed = reloadedCareer.ReclaimRegularSeasonGame(state.CurrentDay);
+            reloadedCareer.TryGetPendingGame(out PendingAttendedGame after);
+            Check("13-5 (D3-A): a reload on a regular-season game day re-parks the same fixture (game_id, teams, day)",
+                parked && loaded && reclaimed && !reloadedCareer.PendingIsPostseason && after.GameId == before.GameId
+                && after.GameId != 0 && after.HomeTeamId == before.HomeTeamId && after.AwayTeamId == before.AwayTeamId
+                && after.AbsoluteDay == before.AbsoluteDay,
+                $"game {before.GameId} → {after.GameId}");
+            rebooted.DetachFrom(bus);
+            writer.DetachFrom(bus);
         }
         finally
         {

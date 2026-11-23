@@ -8,7 +8,11 @@ public enum SlotAvailability : byte
 {
     Available = 0,
 
-    /// <summary>Out of the game entirely — a replacement-level call-up shadows the slot.</summary>
+    /// <summary>
+    /// Out of the game entirely — a hole (13-5, spec §7: no minor leagues, so
+    /// nobody is called up). The lineup reshuffles from the eligible players;
+    /// a team that can't field nine and a pitcher forfeits.
+    /// </summary>
     Absent = 1,
 
     /// <summary>Playing, but with effective ratings reduced by the injury-rust penalty.</summary>

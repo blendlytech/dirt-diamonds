@@ -9,6 +9,7 @@ using DirtAndDiamonds.Economy.Items;
 using DirtAndDiamonds.Economy.Phone;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Narrative.Roster;
 using DirtAndDiamonds.Narrative.Social;
 using DirtAndDiamonds.Platform.Steam;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -86,6 +87,17 @@ public sealed partial class GameManager : Node
     /// reads its DTO views only (GetBracket / GetNationalRanking).
     /// </summary>
     public PlayoffManager Playoffs { get; private set; } = null!;
+
+    /// <summary>
+    /// The Pro Sunday roster lock (slice 13-5): designations, the boot
+    /// reconcile, the read-only <see cref="RosterManager.CanField"/> façade
+    /// and <see cref="RosterManager.GetStatusView"/> for the Roster Status
+    /// screen (15c). Presentation only reads it.
+    /// </summary>
+    public RosterManager Roster { get; private set; } = null!;
+
+    /// <summary>The coach beats (13-5, D5-A): texts and stress for the avatar's designation changes and forfeits.</summary>
+    public RosterBeatWriter RosterBeats { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
     public RelationshipGraph Relationships { get; private set; } = null!;
 
@@ -482,6 +494,23 @@ public sealed partial class GameManager : Node
             Leagues.Get((LeagueTier)t).PrepareSeason(State.SeasonYear);
         }
 
+        // 13-5 (brief D6-A): the Pro Sunday lock, subscribed AFTER the tier
+        // sims (the Pro sim's Sunday flush runs first, so the lock sees the
+        // week's stats) and BEFORE the career. Every sim reads its
+        // designations; HS and College have none (everyone active). Boot
+        // hydrates the covering rows and reconciles a missed lock.
+        Roster = new RosterManager(_database, Baseball, Leagues)
+        {
+            Availability = Absences,
+            Persons = Persons,
+        };
+        Roster.AttachTo(Events);
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            Leagues.Get((LeagueTier)t).Designations = Roster;
+        }
+        Roster.HydrateAndReconcile(State.CurrentDay, State.SeasonYear, State.DayOfSeason);
+
         // Career driver (Phase 5): micro-sim + avatar wiring. On a save with
         // an avatar, the attended team is reclaimed from its tier's macro sim
         // here; otherwise the career lies dormant until the UI creates one.
@@ -495,6 +524,7 @@ public sealed partial class GameManager : Node
         Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
         Micro.Availability = Absences;
+        Micro.Designations = Roster;
         Micro.Equipment = Gear;
         // The per-game person refresh is the micro's alone — the tier sims
         // above deliberately stay on the §6.2 season-stable Initialize bake.
@@ -502,6 +532,8 @@ public sealed partial class GameManager : Node
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
         Career.Availability = Absences;
+        // 13-5: an inactive Pro avatar never parks a game (spec §7).
+        Career.Roster = Roster;
         // 12c review: an attended game's flush re-normalizes its tier's rate
         // columns, so the post-game dashboard refresh never reads them stale.
         Career.Normalizer = normalizer;
@@ -526,6 +558,10 @@ public sealed partial class GameManager : Node
         Playoffs.RepublishMissingChampions(State.SeasonYear);
         if (avatarLoaded)
         {
+            // 13-5 (D3-A item 3): a reload on a regular-season game day
+            // re-parks the same fixture (or resolves it: forfeit, absent,
+            // inactive, autopilot), then the postseason's reclaim as in 13-4.
+            Career.ReclaimRegularSeasonGame(State.CurrentDay);
             Career.ReclaimPostseasonGame(State.CurrentDay);
         }
 
@@ -726,6 +762,13 @@ public sealed partial class GameManager : Node
         }
         Contacts = ContactJson.Parse(contactsJson);
         NarrativeLog = new NarrativeLogQueries(_database);
+        // 13-5 (D5-A): the coach beats. Text resolves from the strings table
+        // at write time; the writer only reads Core events and the database.
+        RosterBeats = new RosterBeatWriter(_database, NarrativeLog, GameState, Players, State)
+        {
+            ResolveText = key => Tr(key),
+        };
+        RosterBeats.AttachTo(Events);
         GrittyEventChoices = new EventConsequenceApplier(
             _database, Players, Persons, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);
@@ -1141,6 +1184,12 @@ public sealed partial class GameManager : Node
             || (Career.HasAvatar && Playoffs is not null && Playoffs.TryGetLockedPostseasonBlocks(
                 State.SeasonYearForDay(day), _avatarTier, Career.AvatarTeamId, dayOfSeason, out practiceHours, out gameHours)))
         {
+            // 13-5 (spec §7): an inactive Pro avatar practices but has no
+            // Game block for the locked week.
+            if (gameHours > 0 && !Career.IsAvatarActiveOn(day))
+            {
+                gameHours = 0;
+            }
             return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
         }
         return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
