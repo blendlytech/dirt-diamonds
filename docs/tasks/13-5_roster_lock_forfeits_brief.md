@@ -1,9 +1,9 @@
 # Task Brief: 13-5 — Sunday roster lock, attrition, forfeits and call-up retirement
 
-**Status:** **DRAFT 2026-11-22; Math check DONE 2026-11-22** (Gemini 4 Argon, §10: APPROVE WITH CHANGES). **Amendments 1–7 and Opus corrections C1–C3 reconciled into §§1–5 on 2026-11-23** (§10.5). **Awaiting the owner's D1–D8 (§3). No build until they're decided.**
+**Status:** **D1–D8 APPROVED by the owner 2026-11-23, all as recommended:** D1-A guard world wired + 10 channels; D2 forfeit contract (a, b, c-A, d-A, e, f); D3-A all tiers under the narrow Gate 2 sanction; D4a-A, D4b-A, D4c-A, D4d; D5-A; D6-A; D7 ≤ +10 s; D8-A. **Math check DONE** (Gemini 4 Argon, §10: APPROVE WITH CHANGES); Amendments 1–7 and Opus corrections C1–C3 reconciled into §§1–5 (§10.5). Spec synced: [league_restructure.md](../design/league_restructure.md) §16-I16–I18. **The 13-5a build can start** from `p13/integration` with this brief merged (§0).
 **Recommended model:** **13-5a** (engine, persistence, harness): Claude Opus 5.5 (TEAM.md §2, 13-5 row). Gemini 4 Argon: the Math check of this brief (designation scoring, avatar inputs, stress magnitude, forfeit exposure) and the independent review of the build.
 **Reviewer:** Gemini 4 Argon independently reviews Opus's sim/persistence diff (TEAM.md §1a). Opus reviews Argon's Math record. Opus is the merge gate after review.
-**Owner gate:** D1–D8 before the build. **D3 carries a Gate 2 sanction** under its recommended option. If the build finds that the Pro guard moves (D1), it stops and brings a sanction (13-3 precedent); the recommended D1-A is designed not to move it.
+**Owner gate:** D1–D8 before the build (**approved 2026-11-23**). **D3-A's Gate 2 sanction is granted** for exactly its four changes. If the build finds that the Pro guard moves (D1), it stops and brings a sanction (13-3 precedent); the recommended D1-A is designed not to move it.
 **Spec:** [league_restructure.md](../design/league_restructure.md) §4, §5.1, §7, §10, §11.3, §12, §13, §15 (13-5 row), §16-I5/I9/I13/I14; [scope_realignment.md](../design/scope_realignment.md) §4 (Gate 1 and Gate 2 rows) and §5 (regression envelope); [13-4 brief](13-4_playoffs_ranking_brief.md) §11.3 #3–#4, §11.5, §12.4 #3, §12.5 S1.
 **Branches / worktrees:** brief `p13/13-5-brief-opus` (this file, `C:\Users\DELL\dnd-opus-135`); Math `p13/13-5-mathcheck-argon`; build `p13/13-5a-opus`; review `p13/13-5a-review-argon`. All start from **`p13/integration`** at or after **`b7fbc4c`** (13-4a merged) plus this brief's merge, each in its own worktree, and merge into `p13/integration`, **never `main`** (spec §15, §16-I12).
 
@@ -79,7 +79,7 @@
 
 ## 3. Owner decisions (D1–D8)
 
-Each D-option below has a recommendation. Nothing is decided until the owner says so.
+**Owner, 2026-11-23: all eight approved as recommended** (D1-A, D2 a/b/c-A/d-A/e/f, D3-A, D4a-A/b-A/c-A/d, D5-A, D6-A, D7, D8-A). The alternatives below stay for the record.
 
 ### D1. Call-up retirement and designations vs the sanctioned Pro guard
 

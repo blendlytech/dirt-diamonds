@@ -82,6 +82,7 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Session Log (compact)
 
+- **2026-11-23 — 13-5 brief: owner approves D1–D8 as recommended (Claude Opus 5.5 recorded it; docs only):** brief status + §3; spec [league_restructure.md](design/league_restructure.md) §16-I16 (lock and designations), I17 (forfeits, call-up retirement), I18 (the Gate 2 sanction's four HS-path changes), §11.3 cross-reference; scope_realignment §5 envelope exception. Brief merged into `p13/integration`; build branch `p13/13-5a-opus` created. **Next: Claude Opus 5.5 builds 13-5a (fresh session, brief §0 first); Gemini 4 Argon reviews.**
 - **2026-11-23 — 13-5 brief reconciled with Argon's Math check (Claude Opus 5.5, `p13/13-5-brief-opus` = Argon's `53652d2` + this commit; docs only):** committed Argon's §10 under the no-commit fallback (scope checked: §10 plus one progress line). Accepted APPROVE WITH CHANGES and folded Amendments 1–7 into §§1–5:
   - the strict `locked_through_day > today` coverage (Sunday crash boundary verified on a scratch v14, joins moved to `Team_Tiers`);
   - an unfeatured lock lineup, and an eligibility-gated featured avatar;
