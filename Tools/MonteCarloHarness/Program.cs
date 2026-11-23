@@ -193,6 +193,15 @@ internal static partial class Program
             ("pro-playoffs", () => RunProPlayoffsSuite(schemaPath)),
             ("championship-event", () => RunChampionshipEventSuite(schemaPath)),
             ("attended-postseason", () => RunAttendedPostseasonSuite(schemaPath)),
+            // 13-5: the Sunday lock, attrition, forfeits, the beats and the attended
+            // forfeit/undo, on two shared worlds (the guard world's D1-A channels
+            // ride season-pipeline; the rewritten availability suite sits above).
+            ("designations", () => RunDesignationsSuite(schemaPath)),
+            ("attrition", () => RunAttritionSuite(schemaPath)),
+            ("forfeits", () => RunForfeitsSuite(schemaPath)),
+            ("roster-beats", () => RunRosterBeatsSuite(schemaPath, repoRoot)),
+            ("attended-forfeit", () => RunAttendedForfeitSuite(schemaPath)),
+            ("attended-undo", () => RunAttendedUndoSuite(schemaPath)),
         };
 
         try
@@ -229,6 +238,7 @@ internal static partial class Program
         finally
         {
             CleanupSlice134();
+            CleanupSlice135();
             foreach (string variant in new[]
                 {
                     worldGenScratchPath, worldGenScratchPath + ".b", worldGenScratchPath + ".c", worldGenScratchPath + ".tx",
@@ -534,6 +544,15 @@ internal static partial class Program
         // sanctioned guard below must stay byte-exact.
         var guardLeagues = new LeagueDirectory();
         guardLeagues.Register(league);
+        // 13-5 (brief D1-A): and with the Sunday lock wired as in production —
+        // after the tier sim (its Sunday flush first), before the playoffs —
+        // the guard must still be byte-exact (the ten D1-A channels below).
+        var guardRoster = new RosterManager(db, baseball, guardLeagues);
+        var rosterProbe = new RosterGuardProbe(db, league, guardRoster, bus);
+        guardRoster.AttachTo(bus);
+        rosterProbe.AttachAfterLock(bus);
+        league.Designations = guardRoster;
+        guardRoster.HydrateAndReconcile(state.CurrentDay, state.SeasonYear, state.DayOfSeason);
         var guardPlayoffs = new PlayoffManager(db, baseball, guardLeagues);
         guardPlayoffs.AttachTo(bus);
         var guardProbe = new GuardWorldProbe(db, league, guardPlayoffs, bus);
@@ -544,6 +563,7 @@ internal static partial class Program
             clock.AdvanceDay();
             bus.DispatchPending();
             guardProbe.AfterDay(state);
+            rosterProbe.AfterDay(state);
         }
         stopwatch.Stop();
         int proGamesPerTeam = TierSeasonCalendar.GamesPerTeam(LeagueTier.Pro);
@@ -601,6 +621,9 @@ internal static partial class Program
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Check($"warm game day allocates zero bytes (20 Pro game days / {20 * profiled.TeamCount / 2} games)", allocated == 0, $"{allocated} B");
+
+        // 13-5 (D1-A): the ten invariance channels of the wired Sunday lock.
+        CheckGuardWorldRoster(db, baseball, league, guardRoster, rosterProbe, profiled.OutOfPositionStarters);
     }
 
     private static void AssertSeason(BaseballQueries baseball, int season, int gamesPerSeason)
@@ -4204,7 +4227,7 @@ internal static partial class Program
 
     private static void RunAvailabilitySuite(string schemaPath, string scratchPath)
     {
-        Console.WriteLine("--- Phase 8c roster availability: ledger semantics, replacement shadowing, career benching ---");
+        Console.WriteLine("--- Phase 8c / 13-5 roster availability: ledger semantics, no call-up (an absence is a hole), career benching ---");
 
         // ---- pure ledger semantics (no DB) ----
         var probeLedger = new AvailabilityLedger();
@@ -4300,7 +4323,7 @@ internal static partial class Program
                 $"PA {ledgeredBat.Pa}/{bareBat.Pa} H {ledgeredBat.H}/{bareBat.H} ER {ledgeredPit.Er}/{barePit.Er}");
         }
 
-        // ---- macro shadowing: a suspension costs exactly the absent window ----
+        // ---- macro attrition (13-5, spec §7): an absence is a real hole, no call-up ----
         string absencePath = scratchPath + ".abs";
         using (var absDb = new DatabaseManager(absencePath))
         {
@@ -4345,6 +4368,9 @@ internal static partial class Program
             string teammateId = firstLineup[1];
             int secondTeamId = ProTeam(2);
             string starterId = roster.First(r => r.TeamId == secondTeamId && r.Role == PitcherRole.Starter).PlayerId;
+            // 13-5: the bench a reshuffle draws from, and the ace's #2.
+            string[] firstBench = roster.Where(r => r.TeamId == ProTeam(1) && !r.IsPitcher && !firstLineup.Contains(r.PlayerId))
+                .Select(r => r.PlayerId).ToArray();
 
             var absState = new GlobalState();
             var absBus = new EventBus();
@@ -4368,8 +4394,11 @@ internal static partial class Program
             int batterPa0 = SeasonPa(absPlayers, batterId);
             int teammatePa0 = SeasonPa(absPlayers, teammateId);
             int starterG0 = SeasonG(absPlayers, starterId);
-            Check("pre-absence baseline: both targets have been playing", batterPa0 > 0 && starterG0 > 0,
-                $"batter PA {batterPa0}, starter G {starterG0}");
+            int benchPa0 = firstBench.Sum(id => SeasonPa(absPlayers, id));
+            string aceNumber2 = absLeague.StarterId(secondTeamId, 1);
+            int number2G0 = SeasonG(absPlayers, aceNumber2);
+            Check("pre-absence baseline: both targets have been playing; the bench hasn't batted", batterPa0 > 0 && starterG0 > 0 && benchPa0 == 0,
+                $"batter PA {batterPa0}, starter G {starterG0}, bench PA {benchPa0}");
 
             // Suspend both for the next 7 days (until_day = the next flush + 1),
             // published on the same bus the day events ride — FIFO puts it
@@ -4389,6 +4418,16 @@ internal static partial class Program
             Check("suspended window: batter PA and starter G frozen while the teammate keeps accruing",
                 batterPa1 == batterPa0 && starterG1 == starterG0 && teammatePa1 > teammatePa0,
                 $"batter PA {batterPa0}→{batterPa1}, starter G {starterG0}→{starterG1}, teammate PA {teammatePa0}→{teammatePa1}");
+            int benchPa1 = firstBench.Sum(id => SeasonPa(absPlayers, id));
+            Check("13-5: the absent lineup batter is replaced by a real bench player who accrues PA (the lineup reshuffles)",
+                benchPa1 > 0 && absLeague.LineupRebuildCount > 0, $"bench PA {benchPa0}→{benchPa1}, rebuilds {absLeague.LineupRebuildCount}");
+            LeagueBattingTotals absBat = absBaseball.LoadLeagueBattingTotals(StartYear);
+            LeaguePitchingTotals absPit = absBaseball.LoadLeaguePitchingTotals(StartYear);
+            Check("13-5: no discard line — every plate appearance is a real batter's (league PA = outs + hits + walks charged to real pitchers)",
+                absBat.Pa == absPit.OutsRecorded + absPit.HAllowed + absPit.Bb,
+                $"PA {absBat.Pa} vs {absPit.OutsRecorded + absPit.HAllowed + absPit.Bb}");
+            Check("13-5: the absent ace yields #2 in the rotation — no call-up pitches",
+                SeasonG(absPlayers, aceNumber2) > number2G0, $"#2 G {number2G0}→{SeasonG(absPlayers, aceNumber2)}");
 
             // The next 7 days — both are back.
             for (int i = 0; i < 7; i++)
@@ -4404,7 +4443,7 @@ internal static partial class Program
                 !absDb.IsBatchActive && absDb.RunIntegrityCheck() == "ok" && absDb.RunForeignKeyCheck() == 0);
         }
 
-        // ---- career benching: an absent avatar's game auto-resolves, stats freeze ----
+        // ---- career benching: an absent avatar's game auto-resolves without him (13-5: the team plays on, no call-up) ----
         string careerPath = scratchPath + ".career";
         using var carDb = new DatabaseManager(careerPath);
         carDb.InitializeSchema(schemaPath);
@@ -4475,7 +4514,7 @@ internal static partial class Program
             neverPending && absentReported && avatarPa1 == avatarPa0,
             $"PA {avatarPa0}→{avatarPa1}");
         LeagueBattingTotals duringBat = carBaseball.LoadLeagueBattingTotals(StartYear);
-        Check("the team's games still happened while the avatar sat (attended-game flushes kept landing)",
+        Check("the team's games still happened while the avatar sat, without him (attended-game flushes kept landing)",
             duringBat.Pa > beforeBat.Pa, $"league PA {beforeBat.Pa}→{duringBat.Pa}");
 
         // 13-3: the next game day (off days park nothing).
@@ -8058,15 +8097,24 @@ internal static partial class Program
             long restRows = CountRows(db, RestRowsSql);
             int dirtyAfterBoth = shared.DirtyCount;
             SetRestCommitFault(db, on: false);
-            micro.FlushGame(StartYear, (int)microDay); // the micro's retry carries the macro's rolled-back rows too
+            // 13-5 (D3-A item 4): the rolled-back micro game's own starts were
+            // undone (back to the macro's still-dirty days), so it is replayed;
+            // the replay's flush carries the macro's rolled-back rows too.
+            micro.SetGameDay(microDay);
+            var replayRng = new RngState(MicroSeed + 1322);
+            micro.PlayGame(ProTeam(1), ProTeam(2), MicroGame.NoHuman, ref policy, ref replayRng);
+            bool replaySameStarters = micro.LastStarters == (microHome, microAway);
+            micro.FlushGame(StartYear, (int)microDay);
             int dirtyAfterMicroRetry = shared.DirtyCount;
             bool reloadOk = ReloadMatches(baseball, shared, pitchers, out int started);
             bool microStartsDurable = shared.TryGetLastStart(microHome, out long homeDay) && homeDay == microDay
                 && shared.TryGetLastStart(microAway, out long awayDay) && awayDay == microDay;
             league.FlushPending(); // the macro's stats retry; its rest rows are already durable
             Check("R2 micro caller (MicroGame.FlushGame) + shared ledger: both callers' failed-COMMIT batches keep every "
-                + "start dirty; the micro's retry persists the macro's starts too, and a fresh ledger reloads every day",
+                + "start dirty (13-5 D3-A: the micro's own starts are undone and its replay re-records them); the micro's "
+                + "replay persists the macro's starts too, and a fresh ledger reloads every day",
                 microThrew && macroThrew && restRows == 0 && dirtyBefore > 0 && dirtyAfterBoth == dirtyBefore
+                && replaySameStarters
                 && dirtyAfterMicroRetry == 0 && reloadOk && started == dirtyBefore && microStartsDurable
                 && shared.DirtyCount == 0 && CountRows(db, PitchingRowsSql) > 0 && !db.IsBatchActive
                 && db.RunForeignKeyCheck() == 0 && db.RunIntegrityCheck() == "ok",

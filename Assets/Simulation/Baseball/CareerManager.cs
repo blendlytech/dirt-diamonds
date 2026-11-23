@@ -181,6 +181,7 @@ public sealed class CareerManager
     private readonly GlobalState _state;
     private readonly LeagueDirectory _leagues;
     private readonly MicroGame _micro;
+    private readonly ScheduleQueries _schedule;
     private readonly Action<DayAdvancedEvent> _onDayAdvanced;
     private readonly Action<SeasonRolledOverEvent> _onSeasonRolledOver;
     private readonly Action<ChildConceptionRequestedEvent> _onChildConceptionRequested;
@@ -254,10 +255,21 @@ public sealed class CareerManager
     /// references: null — every pre-8c harness path — changes nothing. When
     /// the avatar is absent (arrest/injury/suspension) on a game day, the
     /// team's game still happens but resolves straight through the autopilot
-    /// (the micro-sim shadows the avatar's slot with the call-up), so the UI
-    /// never sees a pending interactive game the player isn't allowed to play.
+    /// (13-5: the team plays without him; no call-up), so the UI never sees a
+    /// pending interactive game the player isn't allowed to play.
     /// </summary>
     public AvailabilityLedger? Availability;
+
+    /// <summary>
+    /// The Pro Sunday lock (slice 13-5), optional like <see cref="Availability"/>:
+    /// null — every pre-13-5 harness path — reads the avatar as active. An
+    /// inactive avatar never parks a game: his team's games autopilot
+    /// without him for the locked week (spec §7, brief §4 item 6).
+    /// </summary>
+    public RosterManager? Roster;
+
+    /// <summary>Attended regular-season forfeits committed since construction (13-5 harness visibility).</summary>
+    public int AttendedForfeitCount { get; private set; }
 
     /// <summary>
     /// Optional rate-denormalization hook (12c review): when set, every
@@ -347,6 +359,7 @@ public sealed class CareerManager
         _state = state;
         _leagues = leagues;
         _micro = micro;
+        _schedule = new ScheduleQueries(db);
         _rng = rng;
         _onDayAdvanced = OnDayAdvanced;
         _onSeasonRolledOver = OnSeasonRolledOver;
@@ -1444,11 +1457,93 @@ public sealed class CareerManager
         _pending = new PendingAttendedGame(e.SeasonYear, e.DayOfSeason, e.Day, homeTeamId, awayTeamId, gameId);
         _hasPending = true;
         _pendingIsPostseason = false;
+        ResolveOrPark(e.Day);
+    }
 
-        if (AutopilotAttendedGames || IsAvatarAbsentOn(e.Day))
+    /// <summary>
+    /// The regular-season pending game's fate on its day (13-5): a side that
+    /// can't field forfeits it before anything parks (D2f); an absent or
+    /// inactive avatar (or the autopilot) plays it through the autopilot
+    /// without him; otherwise it parks for the player.
+    /// </summary>
+    private void ResolveOrPark(long gameDay)
+    {
+        if (TryForfeitPending(out _, out _))
+        {
+            return;
+        }
+        if (AutopilotAttendedGames || IsAvatarAbsentOn(gameDay) || !IsAvatarActiveOn(gameDay))
         {
             ResolvePendingWithAutopilot();
         }
+    }
+
+    /// <summary>
+    /// D2f: checks <see cref="RosterRules.CanField"/> for both sides of the
+    /// pending regular-season game; on a failure commits the forfeit in its
+    /// own batch (status 2, RegulationInnings–0, the home team on a double
+    /// forfeit), clears the pending game without a MicroGame call or a draw
+    /// from <c>_rng</c>, and publishes <see cref="GameForfeitedEvent"/> after
+    /// the commit. Returns true when it forfeited.
+    /// </summary>
+    private bool TryForfeitPending(out int homeScore, out int awayScore)
+    {
+        long day = _pending.AbsoluteDay;
+        bool homeCannot = !_micro.CanField(_pending.HomeTeamId, day, PostseasonCalendar.NoSeriesFilter);
+        bool awayCannot = !_micro.CanField(_pending.AwayTeamId, day, PostseasonCalendar.NoSeriesFilter);
+        if (!homeCannot && !awayCannot)
+        {
+            homeScore = 0;
+            awayScore = 0;
+            return false;
+        }
+        bool homeWins = RosterRules.ForfeitScore(
+            _avatarTier, homeCannot, awayCannot, homeAwardedOnDouble: true, out homeScore, out awayScore);
+        _db.BeginBatch();
+        try
+        {
+            _schedule.RecordResult(_pending.GameId, 2, homeScore, awayScore);
+            _db.CommitBatch();
+        }
+        catch
+        {
+            _db.RollbackBatch();
+            throw;
+        }
+        _hasPending = false;
+        AttendedForfeitCount++;
+        _bus?.Publish(new GameForfeitedEvent(
+            _pending.SeasonYear, (byte)_avatarTier, _pending.GameId, phase: 0, _pending.HomeTeamId, _pending.AwayTeamId,
+            RosterRules.ForfeitMask(homeCannot, awayCannot), homeWins ? _pending.HomeTeamId : _pending.AwayTeamId));
+        return true;
+    }
+
+    /// <summary>
+    /// Boot path (13-5, D3-A item 3, Amendment 6): a save reloaded on (or
+    /// after) the avatar's regular-season game day parks the same fixture
+    /// again — the avatar team's earliest unplayed phase-0 row on or before
+    /// the day, <c>game_id</c> included — after the same forfeit and
+    /// absent/inactive/autopilot checks as the day handler. A no-op without
+    /// an avatar, with a game already pending, or with no such row.
+    /// </summary>
+    public bool ReclaimRegularSeasonGame(long day)
+    {
+        if (!HasAvatar || _hasPending)
+        {
+            return false;
+        }
+        int seasonYear = _state.SeasonYearForDay(day);
+        int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
+        if (!_schedule.TryGetEarliestUnplayed(seasonYear, _avatarTier, _avatarTeamId, dayOfSeason, out ScheduledGameRow row))
+        {
+            return false;
+        }
+        long gameDay = day - dayOfSeason + row.DayOfSeason;
+        _pending = new PendingAttendedGame(seasonYear, row.DayOfSeason, gameDay, row.HomeTeamId, row.AwayTeamId, row.GameId);
+        _hasPending = true;
+        _pendingIsPostseason = false;
+        ResolveOrPark(gameDay);
+        return _hasPending;
     }
 
     /// <summary>
@@ -1482,7 +1577,11 @@ public sealed class CareerManager
         _pendingIsPostseason = true;
         _hasPending = true;
 
-        if (AutopilotAttendedGames || IsAvatarAbsentOn(gameDay))
+        // 13-5 (D2f): a side that can't field forfeits before anything parks;
+        // an inactive avatar never parks (spec §7).
+        long seriesFirst = claim.SeriesFirstAbsoluteDay(gameDay);
+        if (AutopilotAttendedGames || IsAvatarAbsentOn(gameDay) || !IsAvatarActiveOn(gameDay)
+            || !_micro.CanField(row.HomeTeamId, gameDay, seriesFirst) || !_micro.CanField(row.AwayTeamId, gameDay, seriesFirst))
         {
             ResolvePendingWithAutopilot();
         }
@@ -1492,6 +1591,14 @@ public sealed class CareerManager
     public bool IsAvatarAbsentOn(long day) =>
         HasAvatar && Availability is not null
         && Availability.StateFor(_avatarPlayerId!, day) == SlotAvailability.Absent;
+
+    /// <summary>
+    /// False only when a Pro lock covering the day designates the avatar
+    /// inactive (13-5, Amendment 6). Without a <see cref="Roster"/>, outside
+    /// lock coverage, and in HS and College, the avatar is active.
+    /// </summary>
+    public bool IsAvatarActiveOn(long day) =>
+        !HasAvatar || Roster is null || Roster.IsActive(_avatarPlayerId!, day);
 
     /// <summary>The game waiting on the player, when <see cref="HasPendingGame"/>.</summary>
     public bool TryGetPendingGame(out PendingAttendedGame pending)
@@ -1568,6 +1675,15 @@ public sealed class CareerManager
             return PlayPendingPostseasonGame(ref batterPolicy, ref pitcherPolicy);
         }
 
+        // 13-5 (D2f): a parked game whose side can no longer field (an absence
+        // published after it parked) forfeits instead of playing.
+        PendingAttendedGame pending = _pending;
+        if (TryForfeitPending(out int forfeitHome, out int forfeitAway))
+        {
+            return new MicroGameResult(pending.HomeTeamId, pending.AwayTeamId, forfeitHome, forfeitAway,
+                innings: 0, humanPa: 0, humanPitchesSeen: 0, homeStarterPitches: 0, awayStarterPitches: 0);
+        }
+
         _gameInFlight = true;
         try
         {
@@ -1623,9 +1739,10 @@ public sealed class CareerManager
         {
             long day = _pending.AbsoluteDay;
             long seriesFirst = claim.SeriesFirstAbsoluteDay(day);
-            _micro.RefreshAvailability(day);
-            bool homeLegal = _micro.HasLegalPostseasonPitcher(row.HomeTeamId, day, seriesFirst);
-            bool awayLegal = _micro.HasLegalPostseasonPitcher(row.AwayTeamId, day, seriesFirst);
+            // 13-5 (D2e): one CanField rule, the nine-position-player clause
+            // included, replaces 13-4's pitcher-only test.
+            bool homeLegal = _micro.CanField(row.HomeTeamId, day, seriesFirst);
+            bool awayLegal = _micro.CanField(row.AwayTeamId, day, seriesFirst);
             MicroGameResult result;
             if (!homeLegal || !awayLegal)
             {

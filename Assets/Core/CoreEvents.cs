@@ -458,3 +458,90 @@ public static class ChampionshipRules
     /// <summary>Only the Pro World Championship can fire the GOAT-father reveal.</summary>
     public static bool IsRevealEligibleTier(byte tier) => tier == ProTier;
 }
+
+/// <summary>
+/// The avatar's Pro designation changed at a Sunday lock (slice 13-5, spec
+/// §7, brief D5-A), published after the lock's batch commits. Avatar only,
+/// and only on a transition (<see cref="IsActive"/> ≠ <see cref="WasActive"/>).
+/// <see cref="WasActive"/> comes only from the row that covered the week just
+/// ending (its <c>locked_through_day</c> equals this lock's day); with no such
+/// row the default (active) applies, so a season's first lock never reads a
+/// stale row from the last one (brief §10.5 C2). Primitives only: the
+/// Narrative coach-beat writer consumes it without referencing Baseball.
+/// </summary>
+public readonly struct RosterDesignationChangedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int TeamId;
+    public readonly bool IsActive;
+    public readonly bool WasActive;
+
+    /// <summary>The next lock day (absolute, exclusive): the designation covers days before it.</summary>
+    public readonly long LockedThroughDay;
+
+    public RosterDesignationChangedEvent(string playerId, int teamId, bool isActive, bool wasActive, long lockedThroughDay)
+    {
+        PlayerId = playerId;
+        TeamId = teamId;
+        IsActive = isActive;
+        WasActive = wasActive;
+        LockedThroughDay = lockedThroughDay;
+    }
+}
+
+/// <summary>
+/// A game was forfeited (slice 13-5, spec §4, brief D2): a team couldn't
+/// field 9 eligible position players and a legal pitcher. Published once,
+/// after the result commits (macro regular-season forfeits after the Sunday
+/// flush that writes them; attended and postseason forfeits on the game day).
+/// The score is <c>RegulationInnings(tier)</c>–0 to <see cref="WinnerTeamId"/>,
+/// with <c>Schedule_Games.status = 2</c> and no player stats.
+/// </summary>
+public readonly struct GameForfeitedEvent : IGameEvent
+{
+    /// <summary><see cref="ForfeitMask"/> bit: the home team couldn't field.</summary>
+    public const byte HomeForfeited = 1;
+
+    /// <summary><see cref="ForfeitMask"/> bit: the away team couldn't field.</summary>
+    public const byte AwayForfeited = 2;
+
+    public readonly int SeasonYear;
+
+    /// <summary>The LeagueTier value: 0 HS, 1 College, 2 Pro.</summary>
+    public readonly byte Tier;
+
+    /// <summary>Schedule_Games.game_id.</summary>
+    public readonly long GameId;
+
+    /// <summary>Schedule_Games.phase: 0 regular season, 1 College play-in, 2 postseason.</summary>
+    public readonly byte Phase;
+
+    public readonly int HomeTeamId;
+    public readonly int AwayTeamId;
+
+    /// <summary><see cref="HomeForfeited"/> | <see cref="AwayForfeited"/>; both set is a double forfeit.</summary>
+    public readonly byte ForfeitMask;
+
+    /// <summary>The team awarded the game (the home team or high seed on a double forfeit, D2d-A).</summary>
+    public readonly int WinnerTeamId;
+
+    public GameForfeitedEvent(
+        int seasonYear, byte tier, long gameId, byte phase, int homeTeamId, int awayTeamId, byte forfeitMask, int winnerTeamId)
+    {
+        SeasonYear = seasonYear;
+        Tier = tier;
+        GameId = gameId;
+        Phase = phase;
+        HomeTeamId = homeTeamId;
+        AwayTeamId = awayTeamId;
+        ForfeitMask = forfeitMask;
+        WinnerTeamId = winnerTeamId;
+    }
+
+    /// <summary>True when <paramref name="teamId"/> is the side (or a side) that couldn't field.</summary>
+    public bool Forfeited(int teamId) =>
+        (teamId == HomeTeamId && (ForfeitMask & HomeForfeited) != 0)
+        || (teamId == AwayTeamId && (ForfeitMask & AwayForfeited) != 0);
+
+    public bool Involves(int teamId) => teamId == HomeTeamId || teamId == AwayTeamId;
+}

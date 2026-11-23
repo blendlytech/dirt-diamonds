@@ -8,13 +8,13 @@ public enum PostseasonPlay : byte
 {
     Played = 0,
 
-    /// <summary>The home team had no legal pitcher (the narrow postseason forfeit, brief D3).</summary>
+    /// <summary>The home team couldn't field (13-5: <see cref="RosterRules.CanField"/> — nine eligible position players and a legal pitcher).</summary>
     HomeForfeits = 1,
 
-    /// <summary>The away team had no legal pitcher.</summary>
+    /// <summary>The away team couldn't field.</summary>
     AwayForfeits = 2,
 
-    /// <summary>Neither team had a legal pitcher; the high seed is awarded the game (edge rule pending 13-5).</summary>
+    /// <summary>Neither team could field; the high seed is awarded the game (spec §16-I13, kept by 13-5 D2d-A).</summary>
     BothForfeit = 3,
 }
 
@@ -94,6 +94,7 @@ public sealed class PlayoffManager
     // day handler (their dispatch has drained) to write the marker.
     private readonly List<PlayoffSeriesDecidedEvent> _pendingDecided = new();
     private readonly List<ChampionshipWonEvent> _pendingChampions = new();
+    private readonly List<GameForfeitedEvent> _pendingForfeits = new();
     private readonly List<ChampionshipWonEvent> _awaitingMarker = new();
 
     // The avatar's parked game (0 = none): the day handler leaves it to the career.
@@ -393,6 +394,7 @@ public sealed class PlayoffManager
         PostseasonPlay play = sim.SimulatePostseasonGame(
             row.HomeTeamId, row.AwayTeamId, day, seriesFirst, ref rng, out int homeScore, out int awayScore);
         int status = ForfeitScore(tier, play, row, series, ref homeScore, ref awayScore);
+        QueueForfeitEvent(play, row, homeScore, awayScore);
 
         _db.BeginBatch();
         try
@@ -420,27 +422,40 @@ public sealed class PlayoffManager
         PublishPendingEvents();
     }
 
-    /// <summary>The narrow forfeit's score (RegulationInnings–0, status 2); 1 for a played game.</summary>
+    /// <summary>
+    /// The forfeit's score (status 2) through the one rule,
+    /// <see cref="RosterRules.ForfeitScore"/> (13-5, D2a): RegulationInnings–0
+    /// to the side that fields; on a double forfeit the high seed (D2d-A,
+    /// §16-I13). 1 for a played game, whose score stands.
+    /// </summary>
     private static int ForfeitScore(
         LeagueTier tier, PostseasonPlay play, PostseasonGameRow row, PlayoffSeriesRow series,
         ref int homeScore, ref int awayScore)
     {
-        int runs = TierRules.RegulationInnings(tier);
-        switch (play)
+        if (play == PostseasonPlay.Played)
         {
-            case PostseasonPlay.Played:
-                return 1;
-            case PostseasonPlay.HomeForfeits:
-                (homeScore, awayScore) = (0, runs);
-                return 2;
-            case PostseasonPlay.AwayForfeits:
-                (homeScore, awayScore) = (runs, 0);
-                return 2;
-            default:
-                bool highHome = row.HomeTeamId == series.HighSeedTeamId;
-                (homeScore, awayScore) = highHome ? (runs, 0) : (0, runs);
-                return 2;
+            return 1;
         }
+        RosterRules.ForfeitScore(tier,
+            homeCannotField: play is PostseasonPlay.HomeForfeits or PostseasonPlay.BothForfeit,
+            awayCannotField: play is PostseasonPlay.AwayForfeits or PostseasonPlay.BothForfeit,
+            homeAwardedOnDouble: row.HomeTeamId == series.HighSeedTeamId,
+            out homeScore, out awayScore);
+        return 2;
+    }
+
+    /// <summary>A forfeit's <see cref="GameForfeitedEvent"/>, queued for <see cref="PublishPendingEvents"/> after its batch commits (13-5).</summary>
+    private void QueueForfeitEvent(PostseasonPlay play, PostseasonGameRow row, int homeScore, int awayScore)
+    {
+        if (play == PostseasonPlay.Played)
+        {
+            return;
+        }
+        bool homeCannot = play is PostseasonPlay.HomeForfeits or PostseasonPlay.BothForfeit;
+        bool awayCannot = play is PostseasonPlay.AwayForfeits or PostseasonPlay.BothForfeit;
+        _pendingForfeits.Add(new GameForfeitedEvent(
+            row.SeasonYear, (byte)row.Tier, row.GameId, (byte)row.Phase, row.HomeTeamId, row.AwayTeamId,
+            RosterRules.ForfeitMask(homeCannot, awayCannot), homeScore > awayScore ? row.HomeTeamId : row.AwayTeamId));
     }
 
     private static bool IsRedDirtSeries(LeagueTier tier, int round) =>
@@ -492,7 +507,7 @@ public sealed class PlayoffManager
         ApplySeriesResult(claim.Game.SeasonYear, claim.Game.Tier, series, claim.Game, homeScore, awayScore);
     }
 
-    /// <summary>The attended game's narrow forfeit (no game is played): its own batch, then the events.</summary>
+    /// <summary>The attended game's forfeit (no game is played; 13-5 CanField): its own batch, then the events.</summary>
     public void RecordAttendedForfeit(in PostseasonGameClaim claim, PostseasonPlay play)
     {
         PostseasonGameRow row = claim.Game;
@@ -500,6 +515,7 @@ public sealed class PlayoffManager
         int homeScore = 0;
         int awayScore = 0;
         int status = ForfeitScore(row.Tier, play, row, series, ref homeScore, ref awayScore);
+        QueueForfeitEvent(play, row, homeScore, awayScore);
         RecordResult(row, status, homeScore, awayScore);
     }
 
@@ -949,9 +965,14 @@ public sealed class PlayoffManager
                 _bus.Publish(in e);
                 _awaitingMarker.Add(e);
             }
+            foreach (GameForfeitedEvent e in _pendingForfeits)
+            {
+                _bus.Publish(in e);
+            }
         }
         _pendingDecided.Clear();
         _pendingChampions.Clear();
+        _pendingForfeits.Clear();
     }
 
     /// <summary>A batch rolled back: nothing it decided happened.</summary>
@@ -959,6 +980,7 @@ public sealed class PlayoffManager
     {
         _pendingDecided.Clear();
         _pendingChampions.Clear();
+        _pendingForfeits.Clear();
     }
 
     // ------------------------------------------------------------------
