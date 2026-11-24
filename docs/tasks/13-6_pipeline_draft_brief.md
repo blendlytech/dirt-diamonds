@@ -1,6 +1,6 @@
 # Task Brief: 13-6 — PipelineManager: graduation, recruiting, class years, the Draft, Pro turnover
 
-**Status:** **DRAFT 2026-11-23** (Claude Opus 5.5, `p13/13-6-brief-opus`). Awaiting Gemini 4 Argon's Math check (§9 → a new §10) and the owner's D1–D8.
+**Status:** **RECONCILED 2026-11-24** (Claude Opus 5.5, `p13/13-6-brief-opus`). Drafted 2026-11-23. Gemini 4 Argon's Math check (§10, APPROVE WITH CHANGES) is reviewed and reconciled into §§1–9: Amendments 1–7 and Opus corrections C1–C5 (§10.5). **Awaiting the owner's D1–D8** before the 13-6a build.
 **Recommended model:** **13-6a** (engine, persistence, harnesses): Claude Opus 5.5 (TEAM.md §2, 13-6 row). Gemini 4 Argon: the Math check of this brief (population flows, values, bands, the gradient gate, streams) and the independent review of the build. **13-6b** (phone decisions and the Recruiting/Draft screens, if D8-A): Claude Sonnet 5.5, Gemini 4 Neon reviews.
 **Reviewer:** Gemini 4 Argon independently reviews Opus's sim/persistence diff (TEAM.md §1a). Opus reviews Argon's Math record. Opus is the merge gate after review.
 **Owner gate:** D1–D8 before the build. If the build finds that the Pro guard moves (D1), it stops and brings a sanction (13-3 precedent); the recommended D1-A is designed not to move it.
@@ -33,7 +33,7 @@
 | `Recruiting_Offers` (`:653–659`) | PK (`player_id`, `team_id`, `season_year`); status 0 open / 1 accepted / 2 declined / 3 expired. No index on `season_year` | The avatar's offers and every accepted recruit |
 | `Draft_Picks` (`:661–668`) | PK (`season_year`, `overall_pick`), `round`, `team_id`, `player_id`. No index on `player_id` | The draft record; read by season only |
 | `Entity_Flags` (`:144–157`) | UNIQUE (`player_id`, `flag_name`), `is_active`, `set_on_day`; partial index on active `flag_name` | The free-agent / retired / first-contract state (D3) |
-| Free-agent pool (`BaseballQueries.cs:179–186`, `:1010–1020`; `CareerManager.cs:1257–1283`) | "Signable" = `team_id IS NULL` + a ratings row + age in [18, 42) + health > 40. Used only by succession's backfill | It can't tell a released player from a retiree, an unrecruited HS senior or the avatar's adult children (D3) |
+| Free-agent pool (`BaseballQueries.cs:179–186`, `:1010–1020`; `CareerManager.cs:1257–1283`) | "Signable" = `team_id IS NULL` + a ratings row + age in [18, 42) + health > 40. Used only by succession's backfill, which runs at rollover **before** the pipeline (subscriber #2 vs #4) | It can't tell a released player from a retiree, an unrecruited HS senior, a signed outside recruit awaiting the rollover, or the avatar's adult children (D3; Amendment 6 narrows it by two exclusions) |
 | World-gen (`LeagueGenerator.cs:23–50`) | Ages HS 15–18, College 18–22, Pro 21–36; rosters HS 11–14 / 3–4 / 2–4, College and Pro exactly 15/4/5 = 24 | Steady-state ages differ from world-gen (§1.2 #5); College has 2 spare org slots (cap 26) |
 | `GeneratePlayer` (`:328–421`) | Writes Players, ratings, potential, role, optional person row; **no `Player_Fielding` row** (`:314–315`: "intake and fillers get theirs in 13-6/G-4") | Every pipeline-generated player gets a fielding row (§4 item 6) |
 | Rollover order (`GameManager.cs:447–590`) | `SeasonRolledOverEvent` handlers in attach order: tier sims (flush) → `CareerManager` (`AgeAllPlayers`, succession; `CareerManager.cs:1380–1425`) → `DevelopmentManager` → `PromotionManager` (`RosterManager` and `PlayoffManager` don't subscribe) | `PipelineManager` keeps the last slot: develop-before-sort holds |
@@ -51,7 +51,7 @@
 2. **The guard world can stay pipeline-free.** It has never run aging, development or promotion. Its 2027 season is "the same rosters, one year on", and both seasons feed the sanctioned ledger. Attaching `PipelineManager` there would draft, release and re-init at the 2026→2027 rollover and move the ledger. Unlike 13-5, invariance can't be proven by construction (D1).
 3. **Conservation is by construction, not by tuning.** Every move is a matched exchange per (team, role): HS graduates are replaced by intake, College departures by recruits, and Pro is trimmed to exactly 15/4/5 after the draft. The ±5% Pro population gate (spec §9.3) can fail only where the free-agent pool lacks a role at the opening lock. That's Argon's Q2.
 4. **The free-agent pool needs state the schema doesn't name.** "Unsigned for 2 seasons", "retired" and "first Pro contract" aren't columns. Today's unflagged pool would sign an unrecruited 19-year-old, a retired avatar under 42, or the avatar's own adult children, who are the heir pool. `Entity_Flags` carries engine-written state without DDL (D3).
-5. **Ages and class years don't line up out of the box.** `SchoolGrades` makes 19 the senior age; aging runs before the pipeline at rollover, so a just-graduated senior reads 20. Steady-state College freshmen are 20 (NPC and avatar alike), draft-eligible at 21. World-gen's HS 15–18 and College 18–22 are a one-off transient: no HS senior exists in the first fall, so the first College class comes entirely from outside recruits. 15–16 intake means a 15-year-old spends five HS seasons (the clamp). Argon sizes the transient (Q3); nothing here changes world-gen.
+5. **Ages and class years don't line up out of the box.** `SchoolGrades` makes 19 the senior age; aging runs before the pipeline at rollover, so a just-graduated senior reads 20. Steady-state College freshmen are 20 (NPC and avatar alike), draft-eligible at 21. World-gen's HS 15–18 and College 18–22 are a one-off transient: no HS senior exists in the first fall, so the first College class comes entirely from outside recruits. 15–16 intake would give a 15-year-old five HS seasons (the clamp), so **intake is age 16 only** (Amendment 2). The transient clears in four seasons (Argon Q3). In seasons 2–3 no College player is 22 or older, so the declaration rule keys on class year as well as age (Amendment 3). Nothing here changes world-gen.
 6. **The spec's "held-back" mechanic conflicts with its walk-on guarantee.** §9.1 keeps "merit-based graduation, held-back mechanic all unchanged" (a senior who out-ranks no College incumbent stays in HS) and also guarantees a walk-on offer "so the career always continues". Pro has the same gap: a released or undrafted avatar would be unrostered, which `CareerManager` can't represent today (D4).
 7. **Boot-stream discipline.** `GameManager` hands `PromotionManager` `new RngState(rng.NextUInt64() | 1UL)` (`:586–588`). Removing that draw would shift every later boot consumer, the Life sim seed included. The pipeline keeps the draw at the same position, and uses it once to write a persisted `pipeline_seed` (the 13-3 `schedule_seed` pattern). From that seed it derives per-(season, purpose) streams, so a reload between rollovers can't change an intake or a recruit (Q8). The old boot fork was reload-unstable.
 8. **The ban flag is Pro-only in content.** `banned_for_life` is set only by `dirt_permanent_ban`, gated `tier >= 2`. `record_arrest` is tier-agnostic. So in a pipeline with no avatar release (D4-A), the ban has nothing left to block, and only `record_arrest` matters for recruiting and the draft (D6).
@@ -59,8 +59,8 @@
 ## 2. Hard constraints
 
 - **Allowed paths (13-6a):**
-  - `Assets/Simulation/Baseball/`: new `PipelineManager.cs` (calendar handlers, rollover pass, free agency) and `PipelineRules.cs` (pure: value, bands, draft order, release order, declaration); **delete** `PromotionManager.cs`'s manager and summary (keep `PromotionScore`/`PromotionProfile`, trimmed); edits to `CareerManager.cs` (the avatar handoffs and guarantees, the record-flag constants' new home), `RosterManager.cs` (the pre-lock free-agency hook only), `LeagueGenerator.cs` (a fielding-row helper for generated players and an optional mean offset for outside recruits; **world-gen's draw order unchanged**), `SchoolGrade.cs` and `DevelopmentManager.cs` (comments only).
-  - `Assets/Data/Database/`: new `PipelineQueries.cs` and DTOs (`CollegeEnrollmentRow`, `RecruitingOfferRow`, `DraftPickRow`, `FreeAgentRow`, `PipelineStatusView`).
+  - `Assets/Simulation/Baseball/`: new `PipelineManager.cs` (calendar handlers, rollover pass, free agency) and `PipelineRules.cs` (pure: value, bands, draft order, release order, declaration); **delete** `PromotionManager.cs`'s manager and summary (keep `PromotionScore`/`PromotionProfile`, trimmed); edits to `CareerManager.cs` (the avatar handoffs and guarantees, the record-flag constants' new home), `RosterManager.cs` (the pre-lock free-agency hook only), `LeagueGenerator.cs` (a fielding-row helper for generated players, plus an outside-recruit overload taking a mean offset and a discount age (Amendment 2); **world-gen's draw order unchanged**), and comments only in `SchoolGrade.cs`, `DevelopmentManager.cs`, `PersonEffects.cs` and `Assets/UI/Scouting/ScoutingGrade.cs` (Amendment 7).
+  - `Assets/Data/Database/`: new `PipelineQueries.cs` and DTOs (`CollegeEnrollmentRow`, `RecruitingOfferRow`, `DraftPickRow`, `FreeAgentRow`, a `PipelineCandidateRow` carrying age, `health_ceiling`, potential and the tier's stat line next to the `RosterPlayerRow` ratings (C5), and `PipelineStatusView`). In `BaseballQueries.cs`, only `SqlSelectFreeAgents` changes: two `NOT EXISTS` exclusions (Amendment 6, C1).
   - `Assets/Core/`: `CoreEvents.cs` (four events, §4 item 7), `GameManager.cs` (composition; the boot ensure; the boot draw kept in place).
   - `Assets/Narrative/` (D5-A): a new `PipelineBeatWriter`. `Assets/Localization/strings.csv`: `pipeline.*` placeholder texts.
   - `Tools/MonteCarloHarness/`, `Tools/CoreLoopHarness/`, new `Tools/PipelineHarness/` (added to `DirtAndDiamonds.sln`), `Tools/GrittyEventsHarness/` (the record-flag constants' new home only).
@@ -80,11 +80,15 @@
 
 **Facts** (§1.2 #2): the guard world runs no offseason machinery, and its ledger spans 2026 and 2027.
 
-- **A (recommended). Keep `PipelineManager` out of the guard world**, as `PromotionManager` and `DevelopmentManager` always were. The guard is the Pro *game sim's* regression check; the pipeline gets its own (`PipelineHarness`, §5). The harness adds channels that prove the separation:
-  1. the guard (PA/H/ER and ledger SHA) is byte-exact;
-  2. no `College_Enrollment`, `Recruiting_Offers`, `Draft_Picks` or `pipeline_*` flag row exists in the guard database after 2027;
-  3. a **pipeline-attached twin** of the guard world, run for 2026 only (through day 365, before the rollover), matches the guard world's 2026 ledger byte for byte. That proves the in-season pipeline days (176, 183, 195, 274, 318) and the 27 locks with no signings change no game. 2027 is where the twin diverges, by design;
-  4. in that twin, every lock's free-agency step is a no-op (32 teams at 24, so no signing and no re-init), and `LeagueSimulator.RngSnapshot` is unchanged across each one.
+- **A (recommended). Keep `PipelineManager` out of the guard world**, as `PromotionManager` and `DevelopmentManager` always were. The guard is the Pro *game sim's* regression check; the pipeline gets its own (`PipelineHarness`, §5). `season-pipeline` adds eight channels that prove the separation (Argon Q1, Amendment 7):
+  1. **The guard is byte-exact (no pipeline):** 2026 PA 81433 / H 18471 / ER 8803; the two-season ledger SHA `932ACE26…8B84`.
+  2. **The guard database has no pipeline rows:** after day 730, zero rows in `College_Enrollment`, `Recruiting_Offers` and `Draft_Picks`, no `pipeline_*` flags, and no `pipeline_seed` key.
+  3. **A pipeline-attached twin matches 2026 exactly:** a twin of the guard world, run through day 365 (before the rollover), produces the same PA/H/ER, a byte-identical 2026 ledger, and the same 2026 Pro postseason (11 series, 30 games, champion 323). This proves the in-season pipeline days (176, 183, 195, 274, 318) change no game. 2027 is where the twin diverges, by design.
+  4. **No lock does anything in the twin:** at all 27 locks there are 0 signings and 0 re-initializations. `LeagueSimulator.RngSnapshot` is unchanged across each lock, and at day 365 it equals the guard's. A warm lock allocates 0 B beyond the designation upsert.
+  5. **The twin's calendar ran:** at day 365, 576 enrollment rows; 128 `Draft_Picks` rows for 2026 in inaugural order; 128 active `pipeline_pro_signed` flags; accepted 2026 offers = the 2026→2027 College openings.
+  6. **The twin's Pro rosters didn't change in-season:** through day 365, every Pro team keeps its boot 24-player set (draftees stay on College teams), and every lock's 768 `Roster_Designations` rows match the guard's.
+  7. **The twin's rollover moves players (positive control):** advancing to day 366 moves the 128 draftees to Pro, releases 128 incumbents with `pipeline_free_agent`, and keeps 32 × 15/4/5 = 768. The twin has no `CareerManager`, so nobody ages and HS intake is 0. The pipeline must run with no tier sims except Pro and no avatar (C3).
+  8. **Existing channels stay green:** the 10 postseason channels (13-4 Q7) and the 10 designation/forfeit channels (13-5 D1-A).
 
   **Stop rule:** if channel 1 or 3 moves, the build stops and brings a fix or a sanction request (13-3 precedent).
 - **B.** Wire the pipeline into the guard world and re-baseline the 2027 half of the ledger. It needs a 20/20 Argon reproduction and the owner's sanction, and it ties the guard to every future pipeline tuning.
@@ -93,23 +97,39 @@
 
 - **A (recommended).** Fixed, derived days (every one a non-Sunday; each a named rule in `TierSeasonCalendar` style, not a literal):
   - **Declaration opens, day 176** (the Monday after the Red Dirt Series' last possible day, 174). A College avatar with `class_year ≥ 2` gets the "Declare for the Draft?" decision with his projected round (D5).
-  - **Declaration deadline, day 183** (the first Monday of July). NPCs declare by the rule in §9 Q5; an unanswered avatar decision resolves by the same rule. `declared_season` is written.
-  - **The Draft, day 195** (the second Saturday of July, existing `DraftDay`). 128 picks in one batch; `Draft_Picks` rows; the avatar's signing bonus (avatar-only, D5); `ProContractSignedEvent(wasDrafted: true)` per pick; `DraftCompletedEvent`. **Drafted players stay on their College team until the rollover** (the College season is over); nobody joins a Pro roster mid-season.
-  - **Offers, day 274** (the first Monday of October). Each program's `OpenSpots` by role (players who leave it at the coming rollover: drafted, finished class 4, and any departures). The avatar, a just-finished HS senior, gets 1–5 offers (Q4) as `Recruiting_Offers` rows (status 0).
-  - **Signing Day, day 318** (the second Wednesday of November). The avatar's choice is applied first (unanswered → the best-ranked offering program). Then the NPC assignment runs: programs in last season's national-rank order take the best available recruit for their most-needed role, round by round, until every opening is filled. The pool is HS seniors plus generated outside recruits (Q4). Accepted rows get status 1; the avatar's other offers get 2; anything left open gets 3.
-  - **Rollover (day 1, last handler):** retirements (age ≥ 42 or health ≤ 40, the shipped triggers; free agents per §9.4); HS graduates with an accepted offer → their College team and a class-1 enrollment row; unrecruited NPC seniors → retired from baseball; College class years +1, finished class 4 undrafted → Pro free agents, drafted → their Pro team (enrollment row deleted); Pro releases to exactly 15/4/5, lowest value first per role; HS intake per (team, role, defensive position) to refill graduates. Then one batch, every sim and the micro-sim re-initialize once, and the avatar re-activates.
-  - **Sunday locks 91–273:** before designations, a team below 24 signs the best free agent for its most-needed role (only below the cap; one re-initialization of the Pro sim and the micro-sim per lock with a signing, before the lock reads rosters). In practice this is the day-91 lock after the rollover's releases. A free agent signed without a `pipeline_pro_signed` flag gets `ProContractSignedEvent(wasDrafted: false)`.
-  - **Boot:** an idempotent ensure writes the missing class-year rows for College-rostered players (world-gen and any straggler) by an age map Argon sets (Q3). It also writes `pipeline_seed` once, from the kept boot draw. A crash between a calendar day's commit and the pipeline's re-runs that day's step at boot, keyed on its persisted output (offer rows for the season, a `Draft_Picks` row for the season, and so on), so each step is done exactly once.
+  - **Declaration deadline, day 183** (the first Monday of July). NPCs with `class_year ≥ 2` declare iff `classYear ≥ 3 ∨ age ≥ 22 ∨ 1 ≤ projectedSlot ≤ 64` (Amendment 3). The `classYear ≥ 3` term is identical to `age ≥ 22` in steady state and keeps ≥ 193 declarers through the world-gen transient; expect ~253 declarers a season. An unanswered avatar decision resolves by the same rule; a class-4 senior is always in the pool. `declared_season` is written.
+  - **The Draft, day 195** (the second Saturday of July, existing `DraftDay`). 128 picks in one batch, on the board of declared players ranked by value (`RoleRatingSum` with reliever compensation, Amendment 1). Each pick is best-available, with a role-need tiebreak (Amendment 5): a role short of its cap after known retirements, then a 3/1/1 role quota across the four picks, may take a player within `DraftRoleNeedMargin` 3.0 of the best. The batch also writes:
+    - `Draft_Picks` rows and a `pipeline_pro_signed` flag per pick;
+    - `declared_season = NULL` for undrafted underclassmen, who return (Amendment 3);
+    - the avatar's signing bonus by slot (Amendment 5, avatar-only, D5).
+    After the commit: `FundsImpulseEvent` for the bonus, `ProContractSignedEvent(wasDrafted: true)` per pick, then `DraftCompletedEvent`. **Drafted players stay on their College team until the rollover** (the College season is over); nobody joins a Pro roster mid-season.
+  - **Offers, day 274** (the first Monday of October). Each program's `OpenSpots` by role = role cap minus returning players (`class_year < 4`, not drafted, not due to retire). The avatar, a just-finished HS senior, gets offers from every program whose floor `F(r) = 111.5 − 1.0·(r − 1)` (national rank `r`, `team_id` order if no College standings) he clears and that has an open spot in his role. He gets the best-ranked five, as `Recruiting_Offers` rows (status 0). With none, he gets one walk-on offer (D4a-A, Amendment 4).
+  - **Signing Day, day 318** (the second Wednesday of November). The avatar's choice is applied first (unanswered → the best-ranked offering program). Then the NPC assignment runs: programs in last season's national-rank order take, round by round, the best available recruit for their most-needed role (largest fractional deficit). A team missing a field position takes the best recruit at it if he is within `RecruitPositionNeedMargin` 4.0 of the best (Amendment 4). This continues until every opening is filled.
+    - The pool is HS seniors (`age ≥ 19` before the rollover) plus outside recruits. Outside recruits are rolled in memory: the role's deficit plus a surplus of 15/5/5, age 19, potential mean offset −2, generation discount age 25 (Amendment 2). So ~8% of HS seniors go unrecruited.
+    - **Only outside recruits who sign are written**, with `team_id NULL` until the rollover.
+    - Accepted rows get status 1, the avatar's other offers get 2, and anything left open gets 3.
+  - **Rollover (day 1, last handler, after aging and development; C2 fixes the order):**
+    1. Free agents carried in from earlier seasons retire at `age ≥ 30 ∨ health ≤ 40 ∨ NewSeasonYear − SeasonYearForDay(set_on_day) ≥ 2` (Amendment 6). A release from this rollover always gets at least one signable season.
+    2. Rostered retirements (age ≥ 42 or health ≤ 40, the shipped triggers), flagged `pipeline_retired`.
+    3. HS players with `age > 19` (seniors who just aged) graduate. Those with an accepted offer go to their College team as class 1; unrecruited NPCs are `pipeline_retired`. Signed outside recruits join their College team as class 1.
+    4. College class years go up by 1. Draftees go to their Pro team (enrollment row deleted). Finished class-4 players go undrafted to free agency (the avatar's guaranteed contract, D4b-A).
+    5. Pro releases bring each team to exactly 15/4/5, lowest value first per role, never the avatar. Released players get `pipeline_free_agent`.
+    6. HS intake at **age 16** per (team, role, defensive position) refills the graduates.
+    7. An unplanned College departure (a health retirement) isn't backfilled. That team runs one role short until the next Signing Day refills it.
+
+    Then one batch, every sim and the micro-sim re-initialize once, and the avatar re-activates.
+  - **Sunday locks 91–273:** before designations, a team below 24 signs the best free agent for its most-needed role. Signings happen only below the cap. The most short-handed team picks first, and free agents are valued at neutral P. A lock with a signing re-initializes the Pro sim and the micro-sim once, before the lock reads rosters. In practice this is the day-91 lock after the rollover's releases, and it's ~0–1 signing a season (Argon Q2). A free agent signed without a `pipeline_pro_signed` flag gets `ProContractSignedEvent(wasDrafted: false)`. The fast path reads the Pro sim's per-team role counts: 0 queries, 0 B.
+  - **Boot:** an idempotent ensure writes the missing class-year rows for College-rostered players (world-gen and any straggler): `class_year = clamp(age − 17, 1, 4)`, `entry_season = season − (class_year − 1)`, `declared_season = NULL` (Amendment 3). It also writes `pipeline_seed` once, from the kept boot draw. A crash between a calendar day's commit and the pipeline's re-runs that day's step at boot, keyed on its persisted output (offer rows for the season, a `Draft_Picks` row for the season, and so on), so each step is done exactly once.
 - **B.** Everything at the rollover (offers, Signing Day, declaration and draft on 1 January). It's much simpler, but it has no Draft Night in July, no fall signing, and no signed-prospect offseason (spec §9.3, §10).
 
 ### D3. Free-agent and career-end state (no DDL)
 
 - **A (recommended). Engine-written `Entity_Flags`**, set and cleared only by `PipelineManager` (and by succession's displacement, §4 item 8):
-  - `pipeline_free_agent`: active while a player is a Pro free agent; `set_on_day` = the day he became one. Unsigned seasons = the season difference from `set_on_day`.
+  - `pipeline_free_agent`: active while a player is a Pro free agent; `set_on_day` = the day he became one. Unsigned seasons at the rollover into year Y = `Y − SeasonYearForDay(set_on_day)` (Amendment 6; `PreviousSeasonYear` would retire after three).
   - `pipeline_retired`: a baseball career is over (retirement, an unrecruited HS senior, a retired free agent). Never signable again.
   - `pipeline_pro_signed`: set at a player's first Pro contract. Its absence is what makes a signing "first" for `ProContractSignedEvent`.
   - The **pipeline's** free-agent pool is `team_id IS NULL ∧ pipeline_free_agent active`, with ratings (SQL validated, §4 item 3). An avatar's child, a retiree and an unrecruited teenager are never in it.
-  - **Succession's backfill read stays as shipped in 13-6** (the unflagged window; pre-existing, logged), but the players it displaces or retires get the matching flags. Switching its read to the flagged pool is a sub-choice: it changes the `lineage-*` fixtures, so the recommendation is a follow-up.
+  - **Succession's backfill read keeps its unflagged window** (pre-existing, logged), with **two exclusions** (Amendment 6, C1). Succession runs at rollover *before* the pipeline, so without them it could take a signed outside recruit (`team_id NULL` until subscriber #4) or a retiree. The exclusions: `NOT EXISTS` an accepted `Recruiting_Offers` row, and `NOT EXISTS` an active `pipeline_retired` flag. Both were validated on a scratch v14 (§10.5). The `lineage-*` fixtures have neither kind of row, so they don't move. The players it displaces or retires get the matching flags. Switching its read fully to the flagged pool stays a follow-up sub-choice, because that changes the `lineage-*` fixtures.
   - Content doesn't read these flags in 13-6; if it ever does, they join `check_event_graph_integrity`'s engine-flag allowlist.
 - **B. Derive the state** from `Draft_Picks`, stats rows and age, with no flags. "Unsigned seasons" and "first contract" then need stats-history scans, and retirees stay indistinguishable from free agents below 42.
 - **C. No free agency in 13-6:** teams under the cap get generated replacement-level fillers. That's the simplest path, but it drops a spec rule and the undrafted-senior path.
@@ -119,7 +139,7 @@
 Both parts keep the avatar rostered at every moment, which `CareerManager` requires (§1.2 #6).
 
 - **a. HS → College.**
-  - **A (recommended).** The walk-on guarantee replaces "held back": a senior always moves to College at the rollover after his senior season, by an offer he chose or by a walk-on from the lowest-ranked program. A walk-on joins as an extra if that program is under its role cap (≤ 17 position players, org ≤ 26). Otherwise he displaces its weakest same-role player (the succession displacement rule), who retires from baseball. The four-year HS grade gate is unchanged.
+  - **A (recommended).** The walk-on guarantee replaces "held back": a senior always moves to College at the rollover after his senior season, by an offer he chose or by a walk-on. The walk-on offer comes from the **lowest-ranked program with an open spot in his role** (Amendment 4), so it costs nobody a place. Only if no program has one does it come from the rank-24 program, where he displaces its weakest same-role returning player (the succession displacement rule), who retires from baseball. The four-year HS grade gate is unchanged.
   - *B.* Keep held-back: a senior below every program's band repeats his senior year (no offers, no walk-on) and is recruited again next fall; the walk-on applies only after a second failed fall.
 - **b. College → Pro and release.**
   - **A (recommended).** The avatar is **never released** in v1 (the 9c "promotes, never auto-relegates" precedent): an NPC of his role goes instead. An undrafted avatar who finishes class 4 gets a **guaranteed free-agent contract** from the lowest-ranked Pro team at the rollover (the walk-on rule, displacement included), with `ProContractSignedEvent(wasDrafted: false)`. An undrafted declared junior returns to College. Release, unsigned seasons and the career end they imply stay NPC-only until a follow-up gives the unrostered avatar a home (UI, Life and succession).
@@ -131,12 +151,12 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
   - `PipelineManager` exposes `TryGetPendingRecruitingChoice` / `ResolveRecruiting(teamId)` and `TryGetPendingDeclaration` / `ResolveDeclaration(bool declare)`, with an `AutopilotPipeline` flag (headless default true; `GameManager` sets it false, as it does `AutopilotSuccession`). An unanswered choice resolves at its deadline by the autopilot rule: the best-ranked offer; declare per the NPC rule. **The clock doesn't stop**: the phone text names the deadline.
   - Events (primitives only, after commit): `RecruitingOffersEvent(PlayerId, SeasonYear, OfferCount, IsWalkOn)`, `RecruitSignedEvent(PlayerId, TeamId, SeasonYear, Day)` (the Signing Day cutscene hook, 16b), `DraftCompletedEvent(SeasonYear, Day, AvatarOverallPick, AvatarTeamId)` (0/0 when the avatar wasn't picked), and `ProContractSignedEvent(PlayerId, TeamId, Day, WasDrafted)` (spec §9.4, every first Pro contract, NPCs included).
   - `Assets/Narrative/Pipeline/PipelineBeatWriter` writes the avatar's phone texts in their own batch: offers (`coach_hs`), Signing Day (`coach_college`), the declaration (`agent_diaz`), Draft Night (`agent_diaz`), the undrafted contract (`agent_diaz`). The text is placeholder `pipeline.*` keys with no tokens; Sonnet polishes it. The father's first text is Phase L's, keyed on `ProContractSignedEvent`.
-  - **Signing bonus: avatar only** (`PlayerQueries.AdjustFunds` in the draft batch; Argon sets the slot scale, Q5). NPC funds aren't touched, because the gritty-event dispatcher polls `Players.funds` for scope-any events, and 128 NPC bonuses a year would shift NPC event eligibility.
+  - **Signing bonus: avatar only** (`PlayerQueries.AdjustFunds` in the draft batch, then `FundsImpulseEvent` after the commit, the pattern every money writer uses: the event mirrors a committed delta into the Life sim and doesn't write). The scale is piecewise-linear by slot (Amendment 5): round 1 $50,000 → $22,100, round 2 $20,000 → $12,250, round 3 $11,500 → $6,075, round 4 $5,800 → $2,080. Each round's top value and per-pick slope are `PipelineProfile` values. NPC funds aren't touched, because the gritty-event dispatcher polls `Players.funds` for scope-any events, and 128 NPC bonuses a year would shift NPC event eligibility.
 - **B.** Decisions as gritty-event JSON with choice consequences that write flags the pipeline reads. It reuses the dispatcher, but the dispatcher is weighted and polled, so an offer can arrive late or not at all, and the choice set (1–5 programs) is dynamic.
 
 ### D6. The criminal record in the pipeline
 
-- **A (recommended).** `record_arrest` docks the avatar's value by `RecordArrestPenalty` (3.0, re-sized by Argon, Q9) wherever the pipeline ranks him: his offer band and count, his projected round, NPC teams' draft boards, and (moot under D4b-A) release order. `banned_for_life` (Pro-only by content, §1.2 #8) has no 13-6 effect under D4b-A; the `pipeline-record` suite proves it. NPCs are never read for either flag. The two constants move with the flag names to a new home (`CareerRecordFlags`), since `PromotionManager` is deleted and GrittyEventsHarness reads them.
+- **A (recommended).** `record_arrest` docks the avatar's value by `RecordArrestPenalty` = **1.0** Combine point (Amendment 6). That's one offer-floor step, or ~15–20 draft slots: one projected round at a boundary. The 9c value of 3.0 would cost three offers or nearly two rounds. The dock applies wherever the pipeline ranks him: his offer band and count, his projected round, NPC teams' draft boards, and (moot under D4b-A) release order. `banned_for_life` (Pro-only by content, §1.2 #8) has no 13-6 effect under D4b-A; the `pipeline-record` suite proves it. NPCs are never read for either flag. The two constants move with the flag names to a new home (`CareerRecordFlags`), since `PromotionManager` is deleted and GrittyEventsHarness reads them.
 - **B.** Drop the record from the pipeline (the dock was a 9c promotion rule).
 
 ### D7. Harnesses and runtime
@@ -144,8 +164,8 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
 - **Recommended:**
   - **MC default:** the 7 reds are replaced by green suites (§5) at **≤ +10 s** median paired difference against the §0 baseline (the 13-5 D7 method, interleaved pairs). `development-equilibrium`'s 80-generation ladder run leaves the default.
   - **New `Tools/PipelineHarness`** (opt-in; the gate for any change to the pipeline, its values or the development curve, and it joins `run_monte_carlo_batch`'s skill for those paths):
-    - **default mode:** 20 seasons, offseason-only (calendar days and rollovers with no game sims, as 9d §7's equilibrium ran). Performance reads neutral, so draft and recruiting order fall to their no-history rules. Budget ≤ 60 s;
-    - **`--full` mode:** 3 seasons with all three tier sims playing (real P, real standings, real draft order) for the journey and a composed-rollover check. Budget ≤ 4 min; it runs at the 13-6a build and review, not on every change.
+    - **default mode:** 20 seasons, offseason-only (calendar days and rollovers with no game sims, as 9d §7's equilibrium ran). It generates no `Schedule_Games` rows, and day 91 calls the free-agency hook directly. Performance reads neutral, so draft and recruiting order fall to their no-history rules. Budget ≤ 60 s (Argon forecasts ~5 s with its determinism twin);
+    - **`--full` mode:** 1,193 days (3 seasons plus season 4 through day 98) with all three tier sims playing (real P, real standings, real draft order). It carries a harness-seeded age-19 HS-senior avatar (Amendment 7) through HS → recruited → College → sophomore declaration → drafted → Pro, ending with his first attended Pro game on day 1188 and three composed rollovers. The avatar is built so that he projects in the top 64 at day 176 of season 3, so autopilot declares him; the harness asserts he declared, was drafted and played (C4). Budget ≤ 4 min (Argon forecasts 10–27 s); it runs at the 13-6a build and review, not on every change.
 - *B.* Everything in MC default (over budget by an order of magnitude); *C.* only `--full` mode (20 seasons with games, ~10+ min a run on this PC).
 
 ### D8. Slicing and the UI
@@ -156,12 +176,21 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
 ## 4. Outputs (13-6a, per the recommended options)
 
 1. **`PipelineRules`** (pure, no RNG, no DB):
-   - value: `PromotionScore.Combine(P, S)` with the tier's shrink and the tier's league OPS/ERA, the avatar's record dock (D6);
-   - the avatar's offer band and count (Q4); the NPC recruiting order;
-   - projected slot, the declaration rule and draft order, both the prior-season order and the inaugural one (Q5);
-   - role need, release order and signing order (Q5–Q6);
-   - the free-agent retirement test.
-   Every constant is a named `PipelineProfile` data value.
+   - value: `PromotionScore.Combine(P, S)` with the tier's shrink and the tier's league OPS/ERA, and the avatar's record dock (D6). The scouting sum is `RoleRatingSum`, which credits relievers `+LeagueGenerator.RelieverStaminaPenalty` stamina, clamped at 100 (Amendment 1). Without it, relievers take 6% of picks instead of 20% on the cross-role board. Within-role order is unchanged, and the gradient metric stays on raw sums;
+   - the avatar's offer band and count, and the walk-on (Amendment 4); the NPC recruiting order with its position-coverage tiebreak;
+   - projected slot (rank among `class_year ≥ 2` players), projected round, the declaration rule, the draft pick with its role-need tiebreak (Amendment 5), and draft order:
+     - the prior-season order is reverse elimination round, then reverse `Standings.Order` within a round;
+     - the inaugural order is keyed by `MixCombine(MixCombine(seed, "DRAFTORD"), MixCombine(year, teamId))` (Argon Q5);
+   - release order (Pro value, never the avatar) and signing order (most short-handed team first, neutral-P value);
+   - the free-agent retirement test (Amendment 6) and `SigningBonusForPick` (Amendment 5).
+
+   Every constant is a named `PipelineProfile` data value. The values from Argon's §10:
+   - recruiting and intake: `IntakeMinAge 16`, `IntakeAgeSpan 1`, `OutsideRecruitAge 19`, `OutsideRecruitMeanOffset −2`, `OutsideRecruitDiscountAge 25`, surpluses `15/5/5`;
+   - offers: `OfferTopProgramFloor 111.5`, `OfferRankSlope 1.0`, `MaxAvatarOffers 5`, `RecruitPositionNeedMargin 4.0`;
+   - draft: `DraftRoleNeedMargin 3.0`, `DraftRoleQuota 3/1/1`, the four bonus tops and slopes, `RecordArrestPenalty 1.0`;
+   - free agency: `FreeAgentRetireAge 30`, `FreeAgentMaxUnsignedSeasons 2`;
+   - stream tags: the four stream tags and `InauguralDraftOrderTag` (Q8, table below);
+   - `DefaultPipelineSeed 0x136D_5EED_0000_0001` (harness fixtures only).
 2. **`PipelineManager`:** the D2 handlers; the boot ensure; the rollover pass (one batch, flush before, re-init once after, `ReactivateAvatar` last, as `PromotionManager` did); the pre-lock free-agency hook `RosterManager` calls (`IFreeAgencyMarket`); the D5 pending choices; `PipelineStatusView` (this season's class, offers, projected round, draft board, free agents); a `LastRun` summary for UI and harnesses (removals, graduates, recruits, outside recruits, draftees, releases, signings, intake, retirements).
 3. **`PipelineQueries`** + DTOs. Validated on a scratch v14 (§0.4) with these results:
    - enrollment upsert `INSERT INTO College_Enrollment (player_id, team_id, entry_season, class_year, declared_season) VALUES (…) ON CONFLICT (player_id) DO UPDATE SET team_id = excluded.team_id, class_year = excluded.class_year, declared_season = excluded.declared_season` (insert and update paths executed);
@@ -170,12 +199,28 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
    - offers upsert `… ON CONFLICT (player_id, team_id, season_year) DO UPDATE SET status = excluded.status`; the avatar's offers `WHERE player_id = @playerId AND season_year = @season ORDER BY team_id` (PK search on `player_id`); a season's accepted rows `WHERE season_year = @season AND status = 1 ORDER BY player_id`, and the expiry `UPDATE … SET status = 3 WHERE season_year = @season AND status = 0`. Both are scans: the table grows ~150–200 rows a season, bounded and read twice a year; add no index (no DDL);
    - draft insert and the class read `WHERE season_year = @season ORDER BY overall_pick` (PK search). Never query by `player_id` (no index); "was drafted" is the `pipeline_pro_signed` flag or the in-memory class;
    - the free-agent pool `SELECT p.player_id, …, f.set_on_day FROM Entity_Flags AS f JOIN Players AS p … JOIN Player_Ratings AS r … LEFT JOIN Pitcher_Roles AS pr … WHERE f.flag_name = @flag AND f.is_active = 1 AND p.team_id IS NULL ORDER BY p.player_id` (search on `idx_entity_flags_active_name`, PK probes, a temp B-tree for the order; an inactive flag and an unflagged unrostered player correctly excluded);
-   - flags through the existing `PlayerQueries.SetFlag` upsert; standings and series through the existing `PlayoffQueries.LoadTeamSeasons` / `LoadSeries`.
+   - flags through the existing `PlayerQueries.SetFlag` upsert; standings and series through the existing `PlayoffQueries.LoadTeamSeasons` / `LoadSeries`;
+   - **succession's free-agent read** (`BaseballQueries.SqlSelectFreeAgents`, Amendment 6 / C1) gains `AND NOT EXISTS (SELECT 1 FROM Recruiting_Offers AS ro WHERE ro.player_id = p.player_id AND ro.status = 1) AND NOT EXISTS (SELECT 1 FROM Entity_Flags AS ef WHERE ef.player_id = p.player_id AND ef.flag_name = 'pipeline_retired' AND ef.is_active = 1)`. The flag name is bound as a parameter in code.
+     - Plan: `idx_players_team` search, two correlated subqueries, PK and `UNIQUE (player_id, flag_name)` probes, a temp B-tree for the order.
+     - On throwaway rows it drops exactly the committed recruit and the active retiree. It keeps the flagged free agent, an unflagged adult child, a retiree whose flag is inactive, and a declined-offer holder.
+   - **Streams** (Q8): each is `new RngState(MixCombine(MixCombine(pipelineSeed, tag), (ulong)year) | 1UL)`, derived afresh at each use, never held across days:
+
+     | Stream | Tag | Year key |
+     | :-- | :-- | :-- |
+     | Outside recruits' ratings | `"PIPEOUTR"` | the fall season |
+     | Outside recruits' fielding | `"PIPEORFL"` | the fall season |
+     | HS intake ratings | `"PIPEHSIN"` | the completed season |
+     | HS intake fielding: secondary position, speed, arm (`Player_Fielding` carries all three) | `"PIPEHSFL"` | the completed season |
+
+     None collides with the five `PostseasonStreams` tags.
 4. **Retire `PromotionManager`:** delete the manager and `PromotionSummary`; trim `PromotionProfile` to the value constants; move `RecordArrestFlagName`/`BannedForLifeFlagName` (D6); `GameManager` builds `PipelineManager` in `PromotionManager`'s slot with the same boot draw (§1.2 #7). The stale call-up and promotion-ladder comments in `PersonEffects.cs`, `ScoutingGrade.cs`, `SchoolGrade.cs` and `DevelopmentManager.cs` get the doc-only touch 13-5a §11.5 deferred (comments only).
 5. **Free agency at the lock:** `RosterManager.Lock` calls the market first. With no team below 24 it's a no-op (0 B extra, no re-init). Otherwise the signings commit in their own batch, the Pro sim and the micro-sim re-initialize once, the avatar re-activates if his team changed, and only then do the designations run.
 6. **Generated players get fielding rows:** HS intake inherits the departed player's defensive position (so every HS team keeps its field covered); outside recruits and fillers roll one from `DepthPositionWeights`. Draws come from the pipeline's derived streams and never from world-gen's.
+   - Outside recruits use a `LeagueGenerator` overload: potential mean offset −2, and current from `DevelopmentCurve.RawCurrent(potential, OutsideRecruitDiscountAge = 25, …)` while `Players.age` stays 19. That matches an HS graduate's four development passes (remaining discount fraction 0.158 vs 0.167). With the chronological age 19 instead, College would average below HS (Argon Q4.4).
+   - They're rolled in memory and written only if they sign (Amendment 2).
 7. **Core events** (`CoreEvents.cs`, primitives only): `RecruitingOffersEvent`, `RecruitSignedEvent`, `DraftCompletedEvent`, `ProContractSignedEvent` (D5). Each publishes after its batch commits.
-8. **Avatar (D4, D6):** the walk-on and the undrafted-senior contract through the displacement rule; release protection; the record dock. Succession's displaced NPC gets `pipeline_free_agent` and its retiree gets `pipeline_retired` (its backfill read unchanged, D3).
+8. **Avatar (D4, D6):** the walk-on (an open spot first, then displacement, Amendment 4) and the undrafted-senior contract through the displacement rule; release protection; the record dock. Succession's displaced NPC gets `pipeline_free_agent` and its retiree gets `pipeline_retired`; its backfill read gains the two exclusions in item 3 (D3, C1).
+   - **Optional collaborators (C3):** `PipelineManager` runs with any subset of tier sims, no `CareerManager`, no avatar and no `RosterManager`. That covers the D1-A twin, the offseason-only `PipelineHarness` and pure fixtures. A missing sim is simply not re-initialized, and with no avatar there are no avatar steps.
 9. **Narrative (D5-A):** `PipelineBeatWriter`; `pipeline.*` keys in `strings.csv` (re-import `strings.en.translation` per the Godot headless note, keeping only the translation).
 10. **Harnesses:** §5.
 11. **Docs:** spec §9 / new §16-I19… synced to the approved D-options; the MC skill and a `PipelineHarness` entry; `progress.md`; the handoff (§8).
@@ -195,7 +240,18 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
 
 **MC default: the 7 reds, replaced** (one or two shared spread-25 worlds, the 13-5 Amendment 7 pattern):
 
-- **`pipeline-score`** (from `promotion-sweep`): `PromotionScore` §2.1/§2.2 math unchanged (its three fixtures carried over); value per tier (HS shrink for HS seniors, College shrink for the draft); projected slot; draft order from a fixture standings table (non-playoff by reverse record and I14 ties, playoff teams by elimination round, champion last) and the seeded inaugural order; release order; the free-agent retirement test.
+- **`pipeline-score`** (from `promotion-sweep`): `PromotionScore` §2.1/§2.2 math unchanged (its three fixtures carried over); value per tier (HS shrink for HS seniors, College shrink for the draft); `RoleRatingSum` (a reliever and a starter with equal raw tools score 20 apart; the clamp at 100); projected slot and round. It also covers:
+  - **the offer fixture (Argon Q4.5):** a batter senior with `P = 100` and headroom 0, so `V = 50 + roleSum/3`, gets:
+    - 0 merit offers and a walk-on from rank 24 at 36/36/36 (V 86.00);
+    - 1 offer (rank 24) at 39/39/38 (V 88.67);
+    - 5 offers (ranks 13–17) at 50/50/50 (V 100.00);
+  - the walk-on prefers an open spot;
+  - `ShouldNpcDeclare` in steady state and in the transient;
+  - draft order: from a fixture standings table (non-playoff by reverse record and I14 ties, playoff teams by elimination round, champion last) and the seeded inaugural order;
+  - the role-need tiebreak and quota;
+  - `SigningBonusForPick` (picks 1, 32, 33, 64, 65, 96, 97, 128 → 50,000 / 22,100 / 20,000 / 12,250 / 11,500 / 6,075 / 5,800 / 2,080; 0 and 129 → 0);
+  - release order;
+  - the free-agent retirement test (released into Y: kept at Y+1, retired at Y+2; age 30 retires).
 - **`pipeline-stream`** (from `promotion-stream`): a pipeline with nothing to do (no seniors, no class 4, no declarations, every team at cap) is a complete no-op, and the next season is bit-identical with the pipeline attached vs absent. Each derived stream is reload-stable: a save reloaded mid-season produces the same intake and recruit ids at the next rollover.
 - **`pipeline-avatar`** (from `promotion-avatar`):
   - the four-year grade gate (a max-built freshman stays in HS through three offseasons);
@@ -205,21 +261,35 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
   - undrafted junior returns; undrafted senior's guaranteed contract (`wasDrafted: false`);
   - never released;
   - succession precedence: a pending succession skips the avatar's moves that offseason, NPC moves still run.
-- **`pipeline-record`** (from `promotion-record`): the dock flips a marginal offer and a marginal projected round, and clearing the record flips them back; `banned_for_life` changes nothing (D6-A); NPCs are never read.
+- **`pipeline-record`** (from `promotion-record`), Argon's Q9 fixtures. Clearing the record flips every case back, and NPCs are never read.
+  - **A1:** 39/39/38 drops from 1 offer to the walk-on.
+  - **A2:** 40/40/41 drops from 2 offers to 1.
+  - **B:** a sophomore at 51/51/50 on the spread-0 board falls from slot 64 (round 2) to slot 96 (round 3).
+  - **C:** `banned_for_life` changes nothing (D6-A).
 - **`development-arc`** (rewritten): a developed HS prospect is recruited, drafted and reaches Pro; a health-worn Pro veteran declines, is released, goes unsigned and retires; never-overshoot holds; determinism.
 - **`practice-seam`** (its §10.9 section rewritten): the one College opening goes to the high-headroom probe over its at-ceiling twin through recruiting.
 - **`pipeline-lock`:** a team below 24 signs at the next lock, then re-initializes once; a full league's lock is a 0 B no-op; a released NPC is a free agent with the flag; an unflagged unrostered player (an avatar's adult child, an unrecruited senior) is never signed.
-- **`season-pipeline` additions:** D1-A channels 2–4.
+- **`season-pipeline` additions:** D1-A channels 2–7 (channels 1 and 8 are the existing checks), on one Pro-only 2026 twin. Argon forecasts +1.85 s; the whole MC default comes to about +1.8 s (range +1.2 to +2.8 s, Q10).
 
 **`PipelineHarness` default (20 seasons, offseason-only):**
 
 - **Conservation:** after every rollover and every opening lock, HS teams stay within their generated roster shape with the field covered, College teams hold their role counts (≤ 17 / ≤ 4 / ≤ 5, org ≤ 26), and Pro holds 32 × 15/4/5 = 768, or within ±5% if a role runs dry, with every shortfall reported.
 - **Flows each season:** exactly 128 picks, unique players, all `Draft_Picks` rows legal; recruits = openings; intake = HS graduates; a population ledger per tier (in, out, by cause) that balances.
 - **The journey:** at least one intake player traced HS → College → drafted → Pro, plus the count of intake players who reach Pro by season 20.
-- **The equilibrium gradient:** time-averaged mean talent HS < College < Pro, strictly monotone, for batters and for pitchers (metric, burn-in, window and the stationarity bound per Q7).
+- **The equilibrium gradient** (Argon Q7, Amendment 7):
+  - **Metric:** tier-mean **raw** role sums after each rollover, batters and pitchers separately.
+  - **Seeds:** world `20261603` (9d §7), development `0x9D7000`, `DefaultPipelineSeed`.
+  - **Window:** 5 burn-in seasons, then a 15-season window.
+  - **Monotonicity:** HS < College < Pro, strict, with minimum gaps of batters +3.0 / +10.0 and pitchers +2.0 / +10.0. Observed: batters +6.8 / +18.3, pitchers +5.9 / +17.8.
+  - **Stationarity:** the second half of the window is within 10.0 of the first for every tier (observed 1.7–2.5).
+  - **Flows:** about 128 Pro arrivals a year, a Little's-law career of 6.0 seasons (spec §9.3), and a free-agent pool at the day-91 lock with every role stocked. These are reported, not gated.
 - **Hygiene and determinism:** no unflagged player ever signed; no player in two tiers; enrollment rows only for College-rostered players; FK clean; no open batch; two same-seed runs byte-identical.
 
-**`PipelineHarness --full` (3 seasons, all sims):** real standings drive draft and recruiting order; a composed rollover (sims, roster, career, playoffs, development, pipeline) dispatches without throwing (§1.2 #1); attended avatar games keep working across both tier changes.
+**`PipelineHarness --full` (1,193 days, all sims):**
+- Real standings drive draft and recruiting order.
+- Three composed rollovers (sims, roster, career, playoffs, development, pipeline) dispatch without throwing (§1.2 #1).
+- The age-19 HS-senior avatar is recruited (2026), plays College (2027), declares as a top-64 sophomore and is drafted (2028), and plays his first attended Pro game on day 1188 (C4). Attended games keep working across both tier changes.
+- After the third rollover, a single-snapshot gradient check holds: HS < College < Pro for batters and pitchers.
 
 **CoreLoop fixtures:**
 
@@ -261,6 +331,8 @@ Recommended next: <slice> by <model> (reviewer: <model>)
 Then add one compact line to [progress.md](../progress.md). Don't start the next slice.
 
 ## 9. Questions for Argon's Math check of this brief (answer in a new §10)
+
+*Answered in §10 (Gemini 4 Argon, 2026-11-24) and reconciled into §§1–8 (§10.5). Kept as asked.*
 
 1. **Guard separation (D1-A).** Confirm the pipeline has no path into the Pro game sim during 2026 (the in-season days only write pipeline tables, and the locks sign nobody when every team is at 24). Confirm the 2026-only twin is a sufficient channel, and complete the channel list.
 2. **Population flows and conservation.** Give the steady-state flows per tier and role: HS graduates a season, College openings, outside recruits needed, the draft's role mix, Pro departures by cause, and the free-agent pool's size and role mix at the day-91 lock. Is ±5% reachable at all under D2/D3? What's the probability a role runs dry, and should a replacement-level filler (the succession rule) close it? Is the average Pro career ≈ 6 seasons (spec §9.3)?
@@ -653,7 +725,7 @@ Then add one compact line to [progress.md](../progress.md). Don't start the next
 
 | §1.1 Row | Exact `file:line` on `9277af5` | Verification Result |
 | :--- | :--- | :--- |
-| 1. `PromotionManager` | [PromotionManager.cs:288–869](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Simulation/Baseball/PromotionManager.cs#L288-L869), [GameManager.cs:586–590](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Core/GameManager.cs#L586-L590) | **Confirmed.** `PromotionSummary` (`:288–322`), `PromotionManager` (`:352–869`). Throws `InvalidOperationException` at `:460–468` unless every tier has `LadderTeamsPerTier = 8` teams. Constructed at `GameManager.cs:586–590` with `new RngState(rng.NextUInt64() | 1UL)` (`:588`). |
+| 1. `PromotionManager` | [PromotionManager.cs:288–869](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Simulation/Baseball/PromotionManager.cs#L288-L869), [GameManager.cs:586–590](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Core/GameManager.cs#L586-L590) | **Confirmed.** `PromotionSummary` (`:288–322`), `PromotionManager` (`:352–869`). Throws `InvalidOperationException` at `:460–468` unless every tier has `LadderTeamsPerTier = 8` teams. Constructed at `GameManager.cs:586–590` with `new RngState(rng.NextUInt64() \| 1UL)` (`:588`). |
 | 2. `PromotionScore` / `PromotionProfile` | [PromotionManager.cs:15–280](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Simulation/Baseball/PromotionManager.cs#L15-L280) | **Confirmed.** `PromotionProfile` (`:15–125`: weights `0.5/0.5`, shrinks `200 / 40.0` and HS `35 / 7.0`, `AgeBonusMax = 10.0`, `PeakAge = 27`, `YoungestProspectAge = 15`, `HeadroomForFullProjection = 30`, `HighSchoolAgeCap = 19`, `CollegeAgeCap = 23`, `IntakeMinAge = 15`, `IntakeAgeSpan = 2`, `RecordArrestPenalty = 3.0`), `PromotionScore` (`:137–280`: `Ops`, `LeagueOps`, `LeagueEra`, `BatterPerformance`, `PitcherPerformance`, `AgeBonus`, `ProjectionBonus`, `Headroom`, `Scouting`, `Combine`). |
 | 3. `SchoolGrades` | [SchoolGrade.cs:13–52](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Simulation/Baseball/SchoolGrade.cs#L13-L52) | **Confirmed.** `SchoolGrade` (`Freshman = 0 .. Senior = 3`, `:13–19`), `SchoolGrades.FreshmanAge = CareerManager.StartingAge` (`16`, `:35`), `SeniorAge = PromotionProfile.HighSchoolAgeCap` (`19`, `:38`), `ForAge(int age)` (`:50–51`). |
 | 4. `College_Enrollment` | [SchemaDefinitions.sql:644–650](file:///C:/Users/DELL/dirt_and_diamonds/.worktrees/13-6-mathcheck-argon/Assets/Data/Database/SchemaDefinitions.sql#L644-L650) | **Confirmed.** `player_id TEXT PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE`, `team_id INTEGER NOT NULL REFERENCES Teams(team_id)`, `entry_season INTEGER NOT NULL`, `class_year INTEGER NOT NULL CHECK (class_year >= 1)`, `declared_season INTEGER`, `STRICT`. No reader or writer in `Assets/` today. |
@@ -800,3 +872,63 @@ Executed all §4 item 3 statements on an isolated scratch v14 SQLite database (`
   2. Locks the 8-channel D1-A verification list (Q1.2) and the exact 20-season gradient/stationarity parameters (`BurnInSeasons = 5`, `MeasurementWindowSeasons = 15`, `WorldSeed = 20261603`, `DevelopmentSeed = 0x9D7000UL`, `PipelineSeed = 0x136D_5EED_0000_0001UL`, `GradientStationarityMaxDrift = 10.0`, minimum margins `Bat: +3.0 / +10.0`, `Pit: +2.0 / +10.0`).
   3. Ensures `PipelineHarness` default mode runs `PipelineManager.FillProOpeningsBeforeLock` on day 91 without generating unused `Schedule_Games` rows (`~5 s` total runtime), and specifies that `PipelineHarness --full` seeds the avatar as an **HS Senior (`age = 19`) in Season 1 (`2026`)** and advances **3 full seasons + Season 4 through day 98 (`1,193` days = `3.27` seasons)** so the avatar completes HS Senior (`2026`) → College Freshman (`2027`) → College Sophomore & July Draft (`2028`) → Pro rollover (`day 1096`) → first Pro Sunday lock (`day 1186`) & first attended Pro game (`day 1188`).
 
+---
+
+### 10.5 Opus review and reconciliation — Claude Opus 5.5, 2026-11-24
+
+**Verdict: Argon's §10 is ACCEPTED.** All 7 amendments are reconciled into §§1–8. For Amendment 6's either/or, option (b) is chosen (C1). I add five corrections, C1–C5. Nothing blocks the owner's D1–D8.
+
+**Provenance.** The branch carries the void `7202d65`, its revert `3a1b590` (`git diff c9d56ad..3a1b590` is empty) and the clean `c5a74d3`. The diff touches only this brief and `progress.md`. Every claim below was re-checked at `9277af5`, not taken from §10.
+
+#### 10.5.1 What I re-derived at `9277af5`
+
+| §10 claim | Check | Result |
+| :-- | :-- | :-- |
+| Amendment 1: reliever penalty | `LeagueGenerator.cs:119` `public const int RelieverStaminaPenalty = 20`; `:379` applies it to the stamina **potential**, and current is derived from potential | Confirmed. The constant is public, so `PipelineRules` can reference it |
+| Q3/Q4: age-16 intake, discount age 25 | `DevelopmentManager.cs`: `YouthWeight = clamp((27 − age)/12)` (`:134`); a pass closes `0.5·YW` of the gap (`:177–180`); generation discounts `ProspectDiscount 20 · YW · gapRoll` (`:222–224`). Passes run after `AgeAllPlayers`, at ages 17–20 | Confirmed: `11/12 · (7/12)(7.5/12)(8/12)(8.5/12) = 0.1578` vs `YW(25) = 0.1667`. It holds only if outside recruits are **not** developed at the rollover they join (see C1) |
+| Q4.5 / Q9: fixtures | `Scouting = 100·(sum + ProjectionBonus)/150` (`PromotionManager.cs:274`); `ProjectionBonus(age, 0) = 0` before 27 (`:235–245`); `Combine` 0.5/0.5 | All six values reproduce: 86.00, 88.67, 90.33, 100.00, 100.67, 99.67, with the offer sets and slots 64/96 |
+| Amendment 5: `FundsImpulseEvent` | `CoreEvents.cs:127–144` ("a funds delta already committed"); seven existing writers pair `AdjustFunds` with it | Confirmed, and **a real catch:** the draft brief would have left the Life sim's funds stale after Draft Day. No double credit |
+| Amendment 6: unsigned seasons | `GlobalState.cs:38` `SeasonYearForDay = Start + (day − 1)/365` | Confirmed: released into Y, kept at the rollover into Y+1, retired at Y+2 |
+| Q8: streams | `PostseasonStreams.MixCombine` is public static (`:35`); the five existing tags don't collide with `DRAFTORD`/`PIPEOUTR`/`PIPEORFL`/`PIPEHSIN`/`PIPEHSFL` (ASCII checked); `Player_Fielding` has `secondary_position`, `speed`, `arm` (`SchemaDefinitions.sql:555–563`) | Confirmed: the intake fielding stream is needed even though intake inherits the primary position |
+| Amendment 7: paths | `PersonEffects.cs:55, :112` and `ScoutingGrade.cs:9` say "call-up" | Confirmed |
+| Q2: career length | `768 / 128 = 6.0` | Confirmed |
+| §10.2.3: SQL plans | Re-run on a fresh scratch v14 (`sqlite3` 3.53.3 over `9277af5`'s schema, `user_version` 14, FK on) | All six plans reproduce. `Player_Ratings` shows as a covering-index probe when only the key is selected. FK check empty; `integrity_check` ok |
+
+#### 10.5.2 Amendments: dispositions
+
+1. **Amendment 1 (`RoleRatingSum` +20 for relievers): accepted.** It applies to value only; the gradient metric stays raw. The clamp matters only for a hand-built avatar reliever above 80 stamina.
+2. **Amendment 2 (intake 16, the graduation test across aging, outside-recruit constants, write only on signing): accepted.** The rollover clause "or holds an accepted offer" is redundant, since offers only go to `age ≥ 19`, which is `> 19` after aging. It's harmless and kept as a guard.
+3. **Amendment 3 (boot map, transient-safe declaration rule, reset for undrafted underclassmen): accepted.** It also settles the spec-vs-transient question without changing the spec's steady-state rule.
+4. **Amendment 4 (offer floor, the position tiebreak, the walk-on prefers an open spot): accepted.** The floor is a data value: an avatar at V = 100 gets mid-pack offers (ranks 13–17), which is the intended feel for an average College prospect. `pipeline-score` pins it.
+5. **Amendment 5 (draft tiebreak and 3/1/1 quota, bonus schedule, post-commit funds event): accepted.** The quota sums to five for four picks, so a team takes 3+1, 3+1 or 2+1+1. Argon measured the mix at 63/17/20%, against the 62.5/16.7/20.8% roster.
+6. **Amendment 6 (penalty 1.0, unsigned-season math, the succession guard): accepted, choosing (b) (C1).**
+7. **Amendment 7 (paths, eight channels, PipelineHarness constants, the 1,193-day `--full`): accepted, plus C4.**
+
+#### 10.5.3 Corrections
+
+- **C1. Amendment 6's guard is option (b): narrow succession's read. Option (a), writing outside recruits onto College rosters on day 318, is rejected.**
+  - (a) would put about eight extra players on every College roster for days 318–365.
+  - Under (a), recruits would be College-rostered when `DevelopmentManager` runs at the rollover, so they'd get a development pass (age 20, `YW 7/12`). Discount age 25 already stands in for an HS graduate's four passes. They'd enter more mature than HS graduates (remaining fraction 0.118 vs 0.158), which breaks Amendment 2's calibration.
+  - And under (a), outside recruits would join College before HS signees do.
+  - (b) adds two `NOT EXISTS` clauses to `SqlSelectFreeAgents`. On a scratch v14 it removes exactly the committed recruit and the active retiree. It keeps the flagged free agent, an unflagged adult child (the heir pool, so `lineage-*` doesn't move), a retiree whose flag is inactive and a declined-offer holder. Plan: `idx_players_team` search, then the `Recruiting_Offers` PK and `Entity_Flags` `UNIQUE (player_id, flag_name)` probes, then a temp B-tree.
+  - `BaseballQueries.cs` (that constant only) joins §2's allowed paths.
+- **C2. The rollover pass order is written out** (D2-A, steps 1–7).
+  - The free-agent retirement test runs on the pool carried in, **before** this rollover's releases and undrafted seniors join, so a fresh release always gets one signable season. That's what Argon's pool (~331 at day 91) assumes. Otherwise most veterans released in their 30s would retire before ever reaching a lock.
+  - An unplanned College departure isn't backfilled; next Signing Day's `OpenSpots` refills it. College has no lock and fields from 9 + a pitcher, and Argon measured 0 such departures a year.
+- **C3. `PipelineManager` collaborators are optional.** The D1-A twin has only a Pro sim and no `CareerManager` or avatar. The offseason harness has no sims. Channel 7 in that twin therefore has no aging and no HS intake, and it asserts only the draftee and release moves.
+- **C4. `--full` must make the journey happen, not assume it.** On autopilot, a sophomore declares only if he projects in the top 64. So the harness builds its age-19 avatar to project there at day 176 of season 3 and asserts declared, drafted and played. Otherwise an average avatar stays in College past day 1193 and the check passes vacuously.
+- **C5. The DTOs need age and health.** `RosterPlayerRow` (`BaseballDtos.cs:172`) has ratings and role only. Value, offers, releases and free-agent retirement read age, `health_ceiling`, potential (headroom) and the tier's stat line, so the build gets one `PipelineCandidateRow`. I also escaped a `|` in §10.2.1 row 1 that was splitting that table cell.
+
+#### 10.5.4 Observations (no change)
+
+- **Most College intake is outside recruits (~73%).** Twelve HS teams can't supply 24 programs, so for NPCs, HS → College is the minority path. The avatar's journey is unaffected.
+- **Pro free agency is a holding pen.** About 331 free agents, ~0–1 signing a season, ~189 retirements, all by construction: a team is below 24 only when retirements in a role exceed its picks in that role. It's working as designed, and it's why the undrafted-senior contract (D4b-A) has to be a guarantee rather than a market.
+- **Argon agreed with every recommended D-option (§10.3), and so do I.** The amendments refine D2–D7 within their A options; none changes what the owner is choosing.
+
+#### 10.5.5 Gates for this review
+
+| Check | Result |
+| :-- | :-- |
+| Scratch v14 (fresh, `9277af5` schema) | The amended free-agent read returns the expected rows; six plans reproduce; FK check empty; `integrity_check` ok |
+| Arithmetic | Fixtures A1/A2/B/Q4.5; the 0.1578 discount product; the bonus endpoints; `768/128`; the unsigned-season boundary: all reproduced |
+| Docs only | Only this brief and `progress.md` changed; no DDL |
