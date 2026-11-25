@@ -26,6 +26,8 @@
     <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
     <!-- 13-5: the coach-beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
     <Compile Include="..\..\Assets\Narrative\Roster\*.cs" Link="Narrative\Roster\%(Filename)%(Extension)" />
+    <!-- 13-6: the pipeline's beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
+    <Compile Include="..\..\Assets\Narrative\Pipeline\*.cs" Link="Narrative\Pipeline\%(Filename)%(Extension)" />
     <!--
       Phase 10c (presentation_layer_narrative.md §5, acceptance check 4): the
       scouting grade curve is pure/Godot-free UI math but reads

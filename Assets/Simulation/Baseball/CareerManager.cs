@@ -166,9 +166,9 @@ public sealed class CareerManager
     /// <summary>
     /// The avatar's starting age: 16, a High-School freshman (the grade system
     /// anchors <see cref="SchoolGrade"/>'s freshman year here). Every career
-    /// opens on the bottom rung and spends four amateur seasons — freshman →
-    /// senior — in HS before graduating up the ladder (the
-    /// <see cref="PromotionManager"/> grade gate). NOT the same value as
+    /// opens in HS and spends four amateur seasons — freshman → senior —
+    /// there before the 13-6 pipeline recruits him to College (the
+    /// <see cref="PipelineManager"/>'s graduation rule). NOT the same value as
     /// <see cref="HeirGenetics.HeirGeneticsProfile.MaturityAge"/> (19): an heir
     /// must be older to succeed than a founding avatar is at creation.
     /// </summary>
@@ -193,6 +193,11 @@ public sealed class CareerManager
     private string? _avatarPlayerId;
     private int _avatarTeamId;
     private int _avatarSlot = MicroGame.NoHuman;
+
+    // 13-6 (D4b-C): the released avatar's parent phase. Mirrors the persisted
+    // Game_State.parent_phase_since_day key (a positive value; the takeover
+    // writes 0, since Game_State has no delete).
+    private bool _inParentPhase;
 
     // The avatar's league tier, cached by ActivateAvatar (every avatar-pointing
     // path — boot, creation, succession, promotion — funnels through it).
@@ -255,7 +260,7 @@ public sealed class CareerManager
     /// references: null — every pre-8c harness path — changes nothing. When
     /// the avatar is absent (arrest/injury/suspension) on a game day, the
     /// team's game still happens but resolves straight through the autopilot
-    /// (13-5: the team plays without him; no call-up), so the UI never sees a
+    /// (13-5: the team plays without him; nobody replaces him), so the UI never sees a
     /// pending interactive game the player isn't allowed to play.
     /// </summary>
     public AvailabilityLedger? Availability;
@@ -301,6 +306,17 @@ public sealed class CareerManager
     public bool AutopilotSuccession = true;
 
     public bool HasAvatar => _avatarPlayerId is not null;
+
+    /// <summary>
+    /// 13-6 (D4b-C): false for an avatar released from baseball — the parent
+    /// phase, or a release that ended the game. An unrostered avatar keeps
+    /// his Life sim, never has an attended or clutch game, and every sim's
+    /// attended claim stays cleared. <see cref="AvatarTeamId"/> reads 0.
+    /// </summary>
+    public bool IsAvatarRostered => _avatarPlayerId is not null && _avatarTeamId != 0;
+
+    /// <summary>13-6 (D4b-C): the released avatar is raising his children (Game_State.parent_phase_since_day).</summary>
+    public bool InParentPhase => _inParentPhase;
 
     public string AvatarPlayerId =>
         _avatarPlayerId ?? throw new InvalidOperationException("No career avatar exists.");
@@ -382,12 +398,29 @@ public sealed class CareerManager
         {
             return false;
         }
-        if (!_players.TryGetById(avatarId, out PlayerRow row) || !row.TeamId.HasValue)
+        if (!_players.TryGetById(avatarId, out PlayerRow row))
         {
             throw new InvalidOperationException(
-                $"Game_State names avatar '{avatarId}' but the Players row is missing or unrostered — save is corrupt.");
+                $"Game_State names avatar '{avatarId}' but the Players row is missing — save is corrupt.");
         }
-        ActivateAvatar(avatarId, row.TeamId.Value);
+        // 13-6 (D4b-C): a released avatar is unrostered by design — the parent
+        // phase, or a release that ended the game. Anything else unrostered
+        // is still a corrupt save.
+        _inParentPhase = ReadParentPhase();
+        bool released = _inParentPhase || _gameState.TryGetText(GameStateKeys.LineageOverReason, out _);
+        if (row.TeamId.HasValue)
+        {
+            ActivateAvatar(avatarId, row.TeamId.Value);
+        }
+        else if (released)
+        {
+            ActivateUnrostered(avatarId);
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"Game_State names avatar '{avatarId}' but the Players row is unrostered and the career wasn't released — save is corrupt.");
+        }
 
         // One-time migration for saves whose avatar predates lineage state
         // (§1.3): the existing avatar is the gen-1 founder by definition.
@@ -791,6 +824,57 @@ public sealed class CareerManager
         return null;
     }
 
+    /// <summary>13-6: the persisted parent-phase key (present and positive).</summary>
+    private bool ReadParentPhase() =>
+        _gameState.TryGetInt64(GameStateKeys.ParentPhaseSinceDay, out long since) && since > 0;
+
+    /// <summary>
+    /// 13-6 (D4b-C): the unrostered-avatar activation. No sim has an attended
+    /// team, the micro-sim features nobody, the avatar has no roster slot and
+    /// <see cref="AvatarTeamId"/> reads 0; <see cref="AvatarChangedEvent"/>
+    /// republishes with team 0, so the Life bridge keeps his daily clock (the
+    /// tier-derived school gate reads "no team").
+    /// </summary>
+    private void ActivateUnrostered(string avatarId)
+    {
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            if (_leagues.TryGet((LeagueTier)t, out LeagueSimulator sim))
+            {
+                sim.ClearAttendedTeam();
+            }
+        }
+        _avatarPlayerId = avatarId;
+        _avatarTeamId = 0;
+        _avatarSlot = MicroGame.NoHuman;
+        _hasPending = false;
+        _pendingIsPostseason = false;
+        _micro.SetFeaturedPlayer(null);
+        _bus?.Publish(new AvatarChangedEvent(avatarId, 0));
+    }
+
+    /// <summary>
+    /// 13-6: re-finds the avatar's micro-sim slot after a mid-season roster
+    /// re-initialization (a Sunday-lock free-agent signing) WITHOUT
+    /// republishing <see cref="AvatarChangedEvent"/> — that event resets the
+    /// bloodline's practice credit, which must survive a lock. The team, the
+    /// tier and the attended claim are unchanged (re-init keeps the claim).
+    /// </summary>
+    internal void RefreshAvatarSlot()
+    {
+        if (!IsAvatarRostered)
+        {
+            return;
+        }
+        _avatarSlot = _micro.FindRosterSlot(_avatarPlayerId!);
+        if (_avatarSlot == MicroGame.NoHuman)
+        {
+            throw new InvalidOperationException(
+                $"Avatar '{_avatarPlayerId}' is not in the reloaded roster after a lock signing.");
+        }
+        _micro.SetFeaturedPlayer(_avatarPlayerId);
+    }
+
     private void ActivateAvatar(string avatarId, int teamId)
     {
         // 9a: the avatar's games come from its tier's sim (13-3: that sim's
@@ -1036,17 +1120,36 @@ public sealed class CareerManager
         LeagueSimulator league = ResolveLeagueFor(teamId);
         league.FlushPending();
 
+        // 13-6 (brief §4 item 8): succession's pipeline flags. The retiree's
+        // baseball career is over; a displaced Pro NPC becomes a Pro free agent
+        // (an amateur one retires: the Pro pool is no place for a teenager).
+        long flagDay = Math.Max(0, _state.CurrentDay);
+        bool displacedIsPro = !sameRole && league.Tier == LeagueTier.Pro;
+        bool backfillWasFreeAgent = false;
+        if (backfillId is not null)
+        {
+            var freeAgents = new List<string>();
+            _baseball.LoadActiveFlagPlayerIds(PipelineFlags.FreeAgent, freeAgents);
+            backfillWasFreeAgent = freeAgents.Contains(backfillId);
+        }
+
         _db.BeginBatch();
         try
         {
             _players.SetTeam(retireeId, null);      // §5.3 step 1: retiree → FA, stats persist
             _players.SetTeam(heirId, teamId);       // §5.3 step 2: heir onto the family franchise
+            _players.SetFlag(retireeId, PipelineFlags.Retired, true, flagDay);
             if (!sameRole)
             {
                 _players.SetTeam(displacedId!, null);
+                _players.SetFlag(displacedId!, displacedIsPro ? PipelineFlags.FreeAgent : PipelineFlags.Retired, true, flagDay);
                 if (backfillId is not null)
                 {
                     _players.SetTeam(backfillId, teamId);
+                    if (backfillWasFreeAgent)
+                    {
+                        _players.SetFlag(backfillId, PipelineFlags.FreeAgent, false, flagDay);
+                    }
                 }
                 else
                 {
@@ -1061,6 +1164,33 @@ public sealed class CareerManager
                     }
                 }
             }
+            WriteHeirHandoffInBatch(retireeId, in retiree, heirId, in heir, hasDev, in heirDev, revealedInterest);
+            _db.CommitBatch();
+        }
+        catch
+        {
+            _db.RollbackBatch();
+            throw;
+        }
+
+        // Identical to the tail of CreateAvatar: both sims re-bulk-load, then
+        // the avatar slot/team/attended filter re-resolve against the new roster.
+        league.Initialize();
+        _micro.Initialize();
+        ActivateAvatar(heirId, teamId);
+    }
+
+    /// <summary>
+    /// The §5.3 handoff's Game_State and household writes, inside the
+    /// caller's open batch — shared by <see cref="Succeed"/> and the 13-6
+    /// takeover at 16 (D4b-C): re-point avatar_player_id, dynasty_generation
+    /// + 1, the inherited household (HS-2) and the nurture fold (HS-5).
+    /// </summary>
+    private void WriteHeirHandoffInBatch(
+        string retireeId, in PlayerRow retiree, string heirId, in PlayerRow heir,
+        bool hasDev, in ChildDevelopmentRow heirDev, int revealedInterest)
+    {
+        {
             _gameState.SetText(GameStateKeys.AvatarPlayerId, heirId);
             long generation = _gameState.TryGetInt64(GameStateKeys.DynastyGeneration, out long stored) ? stored : 1;
             _gameState.SetInt64(GameStateKeys.DynastyGeneration, generation + 1);
@@ -1101,26 +1231,14 @@ public sealed class CareerManager
                     Persons!.UpsertChild(NurtureBlend.NeutralRow(heirId, (int)Math.Max(0, _state.CurrentDay)));
                 }
             }
-            _db.CommitBatch();
         }
-        catch
-        {
-            _db.RollbackBatch();
-            throw;
-        }
-
-        // Identical to the tail of CreateAvatar: both sims re-bulk-load, then
-        // the avatar slot/team/attended filter re-resolve against the new roster.
-        league.Initialize();
-        _micro.Initialize();
-        ActivateAvatar(heirId, teamId);
     }
 
     /// <summary>
     /// Re-resolves the avatar against CURRENT database state after an external
-    /// roster mutation has re-initialized the sims — the 9c promotion pass's
-    /// re-activation tail (promotion doc §6), the <see cref="Succeed"/> tail
-    /// generalized cross-tier. The caller (PromotionManager) has already
+    /// roster mutation has re-initialized the sims — the 13-6 pipeline's
+    /// re-activation tail (and development's), the <see cref="Succeed"/> tail
+    /// generalized cross-tier. The caller (PipelineManager) has already
     /// committed its batch and re-run every tier sim's + the micro-sim's
     /// Initialize(); this re-reads the avatar's (possibly new) team, clears
     /// the attended-team claim on every registered tier sim — a cross-tier
@@ -1134,10 +1252,20 @@ public sealed class CareerManager
     public void ReactivateAvatar()
     {
         string avatarId = AvatarPlayerId; // throws if no avatar exists
-        if (!_players.TryGetById(avatarId, out PlayerRow row) || !row.TeamId.HasValue)
+        if (!_players.TryGetById(avatarId, out PlayerRow row))
         {
-            throw new InvalidOperationException(
-                $"Avatar '{avatarId}' is missing or unrostered after a roster mutation — the promotion pass must never bench the avatar.");
+            throw new InvalidOperationException($"Avatar '{avatarId}' is missing after a roster mutation — save is corrupt.");
+        }
+        if (!row.TeamId.HasValue)
+        {
+            // 13-6 (D4b-C): a released avatar is unrostered by design.
+            if (!_inParentPhase && !IsLineageOver)
+            {
+                throw new InvalidOperationException(
+                    $"Avatar '{avatarId}' is unrostered after a roster mutation but wasn't released — only the D4b-C release may bench the avatar.");
+            }
+            ActivateUnrostered(avatarId);
+            return;
         }
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
@@ -1211,8 +1339,257 @@ public sealed class CareerManager
             throw new ArgumentException($"'{heirId}' is not one of the pending succession candidates.", nameof(heirId));
         }
         _hasPendingSuccession = false;
+        if (_inParentPhase)
+        {
+            TakeOver(heirId); // 13-6 (D4b-C): the parent phase's handoff is the takeover at 16
+            return;
+        }
         Succeed(heirId);
         LastSuccession = SuccessionOutcome.Succeeded(heirId);
+    }
+
+    // ------------------------------------------------------------------
+    // 13-6 (D4b-C): the release, the parent phase and the takeover at 16
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The release's Game_State write, inside the pipeline's open rollover
+    /// batch (the pipeline itself unrosters the avatar and flags him
+    /// pipeline_retired): with children, the parent phase starts on
+    /// <paramref name="day"/>; without, the shipped game-over key (NoHeirs).
+    /// </summary>
+    internal void WriteReleaseStateInBatch(bool hasChildren, long day)
+    {
+        if (hasChildren)
+        {
+            _gameState.SetInt64(GameStateKeys.ParentPhaseSinceDay, Math.Max(1, day));
+        }
+        else
+        {
+            _gameState.SetText(GameStateKeys.LineageOverReason, LineageFailureName(LineageFailure.NoHeirs));
+        }
+    }
+
+    /// <summary>The release's in-memory mirror, after the pipeline's batch commits (the caller then re-activates unrostered).</summary>
+    internal void ApplyReleaseState(bool hasChildren)
+    {
+        if (hasChildren)
+        {
+            _inParentPhase = true;
+        }
+        else
+        {
+            _lineageOverReason = LineageFailure.NoHeirs;
+            LastSuccession = SuccessionOutcome.GameOver(LineageFailure.NoHeirs);
+        }
+    }
+
+    /// <summary>A lineage failure's key inside the caller's open batch (the takeover's NoWillingHeir).</summary>
+    internal void WriteGameOverInBatch(LineageFailure reason)
+    {
+        _gameState.SetText(GameStateKeys.LineageOverReason, LineageFailureName(reason));
+        _gameState.SetInt64(GameStateKeys.ParentPhaseSinceDay, 0); // the parent phase ends with the game
+    }
+
+    /// <summary>The in-memory mirror of <see cref="WriteGameOverInBatch"/>, after the commit.</summary>
+    internal void ApplyGameOver(LineageFailure reason)
+    {
+        _lineageOverReason = reason;
+        _inParentPhase = false;
+        LastSuccession = SuccessionOutcome.GameOver(reason);
+    }
+
+    /// <summary>
+    /// The takeover decision (read-only): the parent's children, by the same
+    /// Child-edge walk and age-direction check as <see cref="EvaluateSuccession(List{HeirCandidate})"/>.
+    /// A child of <see cref="PipelineProfile.TakeoverAge"/> or older whose
+    /// revealed interest clears the play threshold is eligible; the autopilot
+    /// takes the highest role sum (ties by player_id). No eligible child and
+    /// every child 16 or older is NoWillingHeir; no child at all is NoHeirs;
+    /// otherwise the phase continues (NotTriggered).
+    /// </summary>
+    public SuccessionOutcome EvaluateTakeover(List<HeirCandidate> eligibleHeirs)
+    {
+        eligibleHeirs.Clear();
+        string parentId = AvatarPlayerId;
+        if (!_players.TryGetById(parentId, out PlayerRow parent))
+        {
+            throw new InvalidOperationException($"Avatar '{parentId}' has no Players row — save is corrupt.");
+        }
+        var relationships = new List<RelationshipRow>();
+        _players.LoadRelationshipsFor(parentId, relationships);
+        bool anyChild = false;
+        bool anyYoung = false;
+        string? bestHeirId = null;
+        int bestSum = -1;
+        foreach (RelationshipRow rel in relationships)
+        {
+            if (rel.Type != RelationshipType.Child)
+            {
+                continue;
+            }
+            string otherId = rel.Player1Id == parentId ? rel.Player2Id : rel.Player1Id;
+            if (!_players.TryGetById(otherId, out PlayerRow other) || other.Age >= parent.Age)
+            {
+                continue; // the parent's own parent, not a child
+            }
+            anyChild = true;
+            if (other.Age < PipelineProfile.TakeoverAge)
+            {
+                anyYoung = true;
+                continue;
+            }
+            int revealedInterest = RevealedInterest(otherId, other.BaseballInterest);
+            if (revealedInterest < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold
+                || other.TeamId.HasValue
+                || !_baseball.TryGetRatings(otherId, out PlayerRatingsRow ratings))
+            {
+                continue;
+            }
+            eligibleHeirs.Add(new HeirCandidate(otherId, other.FirstName, other.LastName, other.Age, revealedInterest, in ratings));
+            int sum = ratings.IsPitcher
+                ? ratings.PitStuff + ratings.PitControl + ratings.PitStamina
+                : ratings.BatPower + ratings.BatContact + ratings.BatDiscipline;
+            if (sum > bestSum || (sum == bestSum && string.CompareOrdinal(otherId, bestHeirId) < 0))
+            {
+                bestSum = sum;
+                bestHeirId = otherId;
+            }
+        }
+        if (bestHeirId is not null)
+        {
+            return SuccessionOutcome.Succeeded(bestHeirId);
+        }
+        if (!anyChild)
+        {
+            return SuccessionOutcome.GameOver(LineageFailure.NoHeirs);
+        }
+        return anyYoung ? SuccessionOutcome.NotTriggered : SuccessionOutcome.GameOver(LineageFailure.NoWillingHeir);
+    }
+
+    /// <summary>
+    /// The interactive takeover (AutopilotSuccession off): parks every
+    /// eligible child as the shipped pending-succession choice; the UI's
+    /// <see cref="ResolvePendingSuccession"/> then runs <see cref="TakeOver"/>.
+    /// </summary>
+    internal void ParkTakeoverChoice()
+    {
+        SuccessionOutcome outcome = EvaluateTakeover(_pendingHeirSnapshot);
+        if (outcome.Kind == SuccessionOutcomeKind.Succeeded)
+        {
+            _hasPendingSuccession = true;
+            LastSuccession = outcome;
+        }
+    }
+
+    /// <summary>The family's HS team: Game_State.family_hs_team_id, or the lowest-team_id HS team when it's missing (an avatar created above HS).</summary>
+    public int FamilyHsTeamId()
+    {
+        if (_gameState.TryGetInt64(GameStateKeys.FamilyHsTeamId, out long stored) && stored > 0
+            && _baseball.TryGetTeamTier((int)stored, out LeagueTier tier) && tier == LeagueTier.HS)
+        {
+            return (int)stored;
+        }
+        var teams = new List<TeamRow>(RosterCapacity.MaxTeamsPerTier);
+        _baseball.LoadTeamsByTier(LeagueTier.HS, teams);
+        int lowest = int.MaxValue;
+        foreach (TeamRow team in teams)
+        {
+            lowest = Math.Min(lowest, team.TeamId);
+        }
+        return lowest == int.MaxValue
+            ? throw new InvalidOperationException("No HS team exists for the takeover.")
+            : lowest;
+    }
+
+    /// <summary>The same-role player the heir displaces on the family HS team (the succession displacement rule).</summary>
+    internal string FindTakeoverDisplaced(int hsTeamId, string heirId)
+    {
+        if (!_baseball.TryGetRatings(heirId, out PlayerRatingsRow ratings))
+        {
+            throw new InvalidOperationException($"Heir '{heirId}' has no Player_Ratings row — save is corrupt.");
+        }
+        return FindDisplacedPlayer(hsTeamId, ResolveRole(heirId, ratings.IsPitcher));
+    }
+
+    /// <summary>
+    /// The takeover's writes, inside the caller's open batch: the heir joins
+    /// the family HS team as a freshman, the displaced player retires from
+    /// baseball (pipeline_retired), the shipped handoff re-points the avatar
+    /// (generation + 1, household, nurture fold), and the parent phase ends
+    /// (its key is written 0: Game_State has no delete).
+    /// </summary>
+    internal void WriteTakeoverInBatch(string heirId, int hsTeamId, string? displacedId, long day)
+    {
+        string parentId = AvatarPlayerId;
+        if (!_players.TryGetById(parentId, out PlayerRow parent) || !_players.TryGetById(heirId, out PlayerRow heir))
+        {
+            throw new InvalidOperationException("The takeover's parent or heir has no Players row — save is corrupt.");
+        }
+        if (heir.TeamId.HasValue)
+        {
+            throw new InvalidOperationException($"Heir '{heirId}' is already rostered on team {heir.TeamId}.");
+        }
+        if (!IsChildOf(parentId, heirId, parent.Age, heir.Age))
+        {
+            throw new ArgumentException($"'{heirId}' is not a child of the avatar — only a child can take over.", nameof(heirId));
+        }
+        ChildDevelopmentRow heirDev = default;
+        bool hasDev = Persons is not null && Persons.TryGetChild(heirId, out heirDev);
+        int revealedInterest = hasDev ? NurtureBlend.FinalInterest(heir.BaseballInterest, in heirDev) : heir.BaseballInterest;
+        if (revealedInterest < HeirGenetics.HeirGeneticsProfile.InterestPlayThreshold || heir.Age < PipelineProfile.TakeoverAge)
+        {
+            throw new InvalidOperationException($"Heir '{heirId}' can't take over (age {heir.Age}, interest {revealedInterest}).");
+        }
+        if (displacedId is not null)
+        {
+            _players.SetTeam(displacedId, null);
+            _players.SetFlag(displacedId, PipelineFlags.Retired, true, Math.Max(0, day));
+        }
+        _players.SetTeam(heirId, hsTeamId);
+        WriteHeirHandoffInBatch(parentId, in parent, heirId, in heir, hasDev, in heirDev, revealedInterest);
+        _gameState.SetInt64(GameStateKeys.ParentPhaseSinceDay, 0);
+        _gameState.SetInt64(GameStateKeys.FamilyHsTeamId, hsTeamId);
+    }
+
+    /// <summary>The takeover's tail, after the commit and the sims' re-initialization: the heir is the avatar now.</summary>
+    internal void CompleteTakeover(string heirId, int hsTeamId)
+    {
+        _inParentPhase = false;
+        _hasPendingSuccession = false;
+        ActivateAvatar(heirId, hsTeamId);
+        LastSuccession = SuccessionOutcome.Succeeded(heirId);
+    }
+
+    /// <summary>
+    /// The interactive takeover (the pending-succession API in the parent
+    /// phase): its own batch, the HS sim flushed before and re-initialized
+    /// after with the micro-sim, then the heir activates.
+    /// </summary>
+    public void TakeOver(string heirId)
+    {
+        if (!_inParentPhase)
+        {
+            throw new InvalidOperationException("The takeover runs only in the parent phase.");
+        }
+        int hsTeamId = FamilyHsTeamId();
+        string displacedId = FindTakeoverDisplaced(hsTeamId, heirId);
+        LeagueSimulator hs = ResolveLeagueFor(hsTeamId);
+        hs.FlushPending();
+        _db.BeginBatch();
+        try
+        {
+            WriteTakeoverInBatch(heirId, hsTeamId, displacedId, _state.CurrentDay);
+            _db.CommitBatch();
+        }
+        catch
+        {
+            _db.RollbackBatch();
+            throw;
+        }
+        hs.Initialize();
+        _micro.Initialize();
+        CompleteTakeover(heirId, hsTeamId);
     }
 
     /// <summary>True when a Child edge links the two ids and the age order marks <paramref name="parentId"/> as the parent (§1.2).</summary>
@@ -1389,6 +1766,16 @@ public sealed class CareerManager
             return;
         }
 
+        // 13-6 (D4b-C): in the parent phase the released avatar retires from
+        // nothing — the pipeline's takeover at 16 (after this handler) is the
+        // only handoff. An unanswered takeover choice from last offseason is
+        // dropped here and re-evaluated against live state by the pipeline.
+        if (_inParentPhase)
+        {
+            _hasPendingSuccession = false;
+            return;
+        }
+
         if (AutopilotSuccession)
         {
             RunSuccessionCheck();
@@ -1426,7 +1813,8 @@ public sealed class CareerManager
 
     private void OnDayAdvanced(DayAdvancedEvent e)
     {
-        if (!HasAvatar)
+        // 13-6 (D4b-C): a released avatar has no team, so no game is offered.
+        if (!IsAvatarRostered)
         {
             return;
         }
@@ -1528,7 +1916,7 @@ public sealed class CareerManager
     /// </summary>
     public bool ReclaimRegularSeasonGame(long day)
     {
-        if (!HasAvatar || _hasPending)
+        if (!IsAvatarRostered || _hasPending)
         {
             return false;
         }
@@ -1554,7 +1942,7 @@ public sealed class CareerManager
     /// </summary>
     public bool ReclaimPostseasonGame(long day)
     {
-        if (!HasAvatar || _hasPending)
+        if (!IsAvatarRostered || _hasPending)
         {
             return false;
         }
@@ -1621,7 +2009,7 @@ public sealed class CareerManager
     {
         homeTeamId = 0;
         awayTeamId = 0;
-        if (!HasAvatar)
+        if (!IsAvatarRostered)
         {
             return false;
         }

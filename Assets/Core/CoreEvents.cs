@@ -545,3 +545,148 @@ public readonly struct GameForfeitedEvent : IGameEvent
 
     public bool Involves(int teamId) => teamId == HomeTeamId || teamId == AwayTeamId;
 }
+
+// ----------------------------------------------------------------------
+// Slice 13-6: the pipeline (league_restructure.md §9; brief D4b-C, D5-A).
+// Each publishes after its batch commits; primitives only, so Life,
+// Narrative and UI learn about the pipeline without referencing Baseball.
+// ----------------------------------------------------------------------
+
+/// <summary>
+/// The avatar's recruiting offers landed (Offers Day, the first Monday of
+/// October): <see cref="OfferCount"/> Recruiting_Offers rows (status 0) for
+/// <see cref="SeasonYear"/>. A walk-on is one offer with
+/// <see cref="IsWalkOn"/> set. The phone's offer texts key on it.
+/// </summary>
+public readonly struct RecruitingOffersEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int SeasonYear;
+    public readonly int OfferCount;
+    public readonly bool IsWalkOn;
+
+    public RecruitingOffersEvent(string playerId, int seasonYear, int offerCount, bool isWalkOn)
+    {
+        PlayerId = playerId;
+        SeasonYear = seasonYear;
+        OfferCount = offerCount;
+        IsWalkOn = isWalkOn;
+    }
+}
+
+/// <summary>
+/// The avatar signed with a College program on Signing Day (the second
+/// Wednesday of November). He joins <see cref="TeamId"/> at the rollover.
+/// The Signing Day cutscene hook (16b).
+/// </summary>
+public readonly struct RecruitSignedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int TeamId;
+    public readonly int SeasonYear;
+    public readonly long Day;
+
+    public RecruitSignedEvent(string playerId, int teamId, int seasonYear, long day)
+    {
+        PlayerId = playerId;
+        TeamId = teamId;
+        SeasonYear = seasonYear;
+        Day = day;
+    }
+}
+
+/// <summary>
+/// The July Draft committed (128 picks). <see cref="AvatarOverallPick"/> and
+/// <see cref="AvatarTeamId"/> are 0 when the avatar wasn't picked.
+/// </summary>
+public readonly struct DraftCompletedEvent : IGameEvent
+{
+    public readonly int SeasonYear;
+    public readonly long Day;
+    public readonly int AvatarOverallPick;
+    public readonly int AvatarTeamId;
+
+    public DraftCompletedEvent(int seasonYear, long day, int avatarOverallPick, int avatarTeamId)
+    {
+        SeasonYear = seasonYear;
+        Day = day;
+        AvatarOverallPick = avatarOverallPick;
+        AvatarTeamId = avatarTeamId;
+    }
+}
+
+/// <summary>
+/// A player's FIRST Pro contract (spec §9.4): every draft pick on Draft Day
+/// (<see cref="WasDrafted"/> true) and every free agent signed at a Sunday
+/// lock without a prior Pro contract (false), NPCs included. Phase L keys
+/// the father's first text on the avatar's.
+/// </summary>
+public readonly struct ProContractSignedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int TeamId;
+    public readonly long Day;
+    public readonly bool WasDrafted;
+
+    public ProContractSignedEvent(string playerId, int teamId, long day, bool wasDrafted)
+    {
+        PlayerId = playerId;
+        TeamId = teamId;
+        Day = day;
+        WasDrafted = wasDrafted;
+    }
+}
+
+/// <summary>
+/// The avatar was released at the rollover (D4b-C): an undrafted College
+/// senior, or a Pro avatar the release order cut. He leaves baseball
+/// (unrostered, pipeline_retired). <see cref="EnteredParentPhase"/> is true
+/// when he has children (the parent phase), false when the release ended the
+/// game (NoHeirs). <see cref="Tier"/> is the LeagueTier value he left.
+/// </summary>
+public readonly struct AvatarReleasedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly byte Tier;
+    public readonly int SeasonYear;
+    public readonly long Day;
+    public readonly bool EnteredParentPhase;
+
+    public AvatarReleasedEvent(string playerId, byte tier, int seasonYear, long day, bool enteredParentPhase)
+    {
+        PlayerId = playerId;
+        Tier = tier;
+        SeasonYear = seasonYear;
+        Day = day;
+        EnteredParentPhase = enteredParentPhase;
+    }
+}
+
+/// <summary>
+/// The avatar's draft-declaration window opened (day 176, a College player
+/// with class year ≥ 2). <see cref="ProjectedRound"/> is 1–4, or 0 when he
+/// projects undrafted; <see cref="IsAutomatic"/> is true for a class-4
+/// senior, who is always in the pool. The deadline is day 183; the clock
+/// doesn't stop. The phone's declaration text keys on it (13-6a build record
+/// §11.3: the one event beyond the brief's five, because Narrative can't read
+/// the Baseball calendar).
+/// </summary>
+public readonly struct DraftDeclarationOpenedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int SeasonYear;
+    public readonly long Day;
+    public readonly int ProjectedSlot;
+    public readonly int ProjectedRound;
+    public readonly bool IsAutomatic;
+
+    public DraftDeclarationOpenedEvent(string playerId, int seasonYear, long day, int projectedSlot, int projectedRound, bool isAutomatic)
+    {
+        PlayerId = playerId;
+        SeasonYear = seasonYear;
+        Day = day;
+        ProjectedSlot = projectedSlot;
+        ProjectedRound = projectedRound;
+        IsAutomatic = isAutomatic;
+    }
+}

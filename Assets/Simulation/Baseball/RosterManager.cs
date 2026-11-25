@@ -62,6 +62,12 @@ public sealed class RosterManager
     /// <summary>The coach-affinity proxy's source (D4c-A). Null reads as the neutral 50s (ΔA = 0).</summary>
     public PersonQueries? Persons;
 
+    /// <summary>
+    /// The pre-lock free-agency hook (slice 13-6, the pipeline). Null — every
+    /// pre-13-6 world, the guard world included — signs nobody.
+    /// </summary>
+    public IFreeAgencyMarket? Market;
+
     /// <summary>Bumped once per committed lock (and once by a boot hydrate that found rows); consumers rebuild caches when it moves.</summary>
     public int Version { get; private set; }
 
@@ -309,6 +315,9 @@ public sealed class RosterManager
         {
             return;
         }
+        // 13-6 (brief §4 item 5): free agency first. A full league is a 0 B
+        // no-op; a signing re-initializes the Pro sim before it's read below.
+        Market?.FillBeforeLock(seasonYear, lockDay);
         sim.PrepareSeason(seasonYear);
         long lockedThrough = lockDay + GameCalendar.DaysPerWeek;
         string? avatarId = ResolveAvatarId();

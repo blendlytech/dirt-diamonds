@@ -32,5 +32,7 @@
     <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
     <!-- 13-5: the coach-beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
     <Compile Include="..\..\Assets\Narrative\Roster\*.cs" Link="Narrative\Roster\%(Filename)%(Extension)" />
+    <!-- 13-6: the pipeline beat writer (Godot-free). -->
+    <Compile Include="..\..\Assets\Narrative\Pipeline\*.cs" Link="Narrative\Pipeline\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

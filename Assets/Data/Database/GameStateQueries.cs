@@ -94,6 +94,28 @@ public static class GameStateKeys
     /// veteran mid-career save is never ambushed by the walkthrough.
     /// </summary>
     public const string TutorialStep = "tutorial_step";
+
+    /// <summary>
+    /// 13-6 (brief §1.2 #7, Q8): the pipeline's persisted seed (long), written
+    /// once from the boot draw PromotionManager used to take. Every pipeline
+    /// draw derives from it by (season year, purpose tag), so a reload between
+    /// rollovers can't change an intake player or a recruit.
+    /// </summary>
+    public const string PipelineSeed = "pipeline_seed";
+
+    /// <summary>
+    /// 13-6 (D4b-C): present (long, the absolute day the avatar was released)
+    /// while the career is in the parent phase. Its presence IS the state; the
+    /// takeover at 16 clears it. Absent on every other save.
+    /// </summary>
+    public const string ParentPhaseSinceDay = "parent_phase_since_day";
+
+    /// <summary>
+    /// 13-6 (D4b-C): the family's HS team (long team_id), written when an
+    /// avatar leaves HS, so a child who takes over at 16 joins that school.
+    /// Missing (an avatar created above HS) → the lowest-team_id HS team.
+    /// </summary>
+    public const string FamilyHsTeamId = "family_hs_team_id";
 }
 
 /// <summary>

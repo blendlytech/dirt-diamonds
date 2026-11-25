@@ -246,7 +246,7 @@ public static class DevelopmentCurve
 
 /// <summary>
 /// What the last development pass did — the 9d counterpart of
-/// <see cref="PromotionSummary"/>/<see cref="CareerManager.LastSuccession"/>,
+/// <see cref="PipelineSummary"/>/<see cref="CareerManager.LastSuccession"/>,
 /// how a UI (or the harness) notices ratings moved.
 /// </summary>
 public readonly struct DevelopmentSummary
@@ -276,7 +276,7 @@ public readonly struct DevelopmentSummary
 /// The Phase 9d offseason development pass (development doc §5): on each
 /// <see cref="SeasonRolledOverEvent"/> — subscribed AFTER
 /// <see cref="CareerManager"/> (ages are post-aging) and BEFORE
-/// <see cref="PromotionManager"/> (the sweep's scouting reads the
+/// <see cref="PipelineManager"/> (the pipeline's values read the
 /// just-developed ratings: develop-before-sort, the §1 "climbs because he
 /// developed" property) — it moves every ROSTERED player's ratings along the
 /// <see cref="DevelopmentCurve"/>: young players close a fraction of the gap
@@ -311,7 +311,7 @@ public sealed class DevelopmentManager
     private RngState _rng;
 
     /// <summary>
-    /// Optional avatar owner (the <see cref="PromotionManager.Career"/>
+    /// Optional avatar owner (the <see cref="PipelineManager.Career"/>
     /// precedent): when attached, the pass re-resolves the avatar's micro
     /// slot after its re-init (the team never changes — development moves
     /// ratings, not people — so this is a defensive re-find, not a transfer)

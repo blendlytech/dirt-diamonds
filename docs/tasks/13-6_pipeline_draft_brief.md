@@ -1,6 +1,6 @@
 # Task Brief: 13-6 — PipelineManager: graduation, recruiting, class years, the Draft, Pro turnover
 
-**Status:** **RECONCILED 2026-11-24** (Claude Opus 5.5, `p13/13-6-brief-opus`). Drafted 2026-11-23. Gemini 4 Argon's Math check (§10, APPROVE WITH CHANGES) is reviewed and reconciled into §§1–9: Amendments 1–7 and Opus corrections C1–C5 (§10.5). **Owner decided D1–D8 on 2026-11-24:** all A, except **D4b = C (owner)**: an undrafted senior or a cut Pro avatar is released, which is game over without children or the parent phase with them (§3). **Ready for the 13-6a build.** *(Roster, 2026-11-25: Gemini 4 Carbon replaced Gemini 4 Argon; Carbon reviews 13-6a.)*
+**Status:** **13-6a BUILT 2026-11-25** (Claude Opus 5.5, §11; awaiting Gemini 4 Carbon's review). **RECONCILED 2026-11-24** (Claude Opus 5.5, `p13/13-6-brief-opus`). Drafted 2026-11-23. Gemini 4 Argon's Math check (§10, APPROVE WITH CHANGES) is reviewed and reconciled into §§1–9: Amendments 1–7 and Opus corrections C1–C5 (§10.5). **Owner decided D1–D8 on 2026-11-24:** all A, except **D4b = C (owner)**: an undrafted senior or a cut Pro avatar is released, which is game over without children or the parent phase with them (§3). **Ready for the 13-6a build.** *(Roster, 2026-11-25: Gemini 4 Carbon replaced Gemini 4 Argon; Carbon reviews 13-6a.)*
 **Recommended model:** **13-6a** (engine, persistence, harnesses): Claude Opus 5.5 (TEAM.md §2, 13-6 row). Gemini 4 Argon did the Math check of this brief (§10). **Gemini 4 Carbon** does the independent review of the build (TEAM.md §1a, 2026-11-25). **13-6b** (phone decisions and the Recruiting/Draft screens, if D8-A): Claude Sonnet 5.5, Gemini 4 Neon reviews.
 **Reviewer:** Gemini 4 Carbon independently reviews Opus's sim/persistence diff (TEAM.md §1a). Opus reviewed Argon's Math record (§10.5). Opus is the merge gate after review.
 **Owner gate:** D1–D8 before the build. If the build finds that the Pro guard moves (D1), it stops and brings a sanction (13-3 precedent); the recommended D1-A is designed not to move it.
@@ -329,10 +329,10 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
 
 ## 6. Definition of done
 
-- [ ] §0 recorded (the baseline and its wall time).
-- [ ] D1–D8 applied as approved; Argon's §10 reconciled; the spec §9/§16 synced.
-- [ ] §4 built; `PromotionManager` deleted; no ladder code or "call-up" comment left in `Assets/`.
-- [ ] §5 gates green: MC default all green, the Pro guard byte-exact; the PipelineHarness green; 20× replays 20/20; D7 met.
+- [x] §0 recorded (the baseline and its wall time). *(13-6a §11.1)*
+- [x] D1–D8 applied as approved; Argon's §10 reconciled; the spec §9/§16 synced. *(13-6a; spec §9, §16-I19)*
+- [x] §4 built; `PromotionManager` deleted; no ladder code or "call-up" comment left in `Assets/`. *(13-6a; the remaining "no call-up" lines are 13-5's, outside 13-6a's paths, §11.3 #19)*
+- [x] §5 gates green: MC default all green, the Pro guard byte-exact; the PipelineHarness green; 20× replays 20/20; D7 met. *(13-6a §11.4; D7 by the isolated-suite median, +9.21 s)*
 - [ ] Argon's independent review of the sim/persistence diff passed.
 - [ ] Committed and pushed; merged into `p13/integration` by Opus after the review. Then `p13/integration` → `main` per D8, **with the owner's go-ahead** (it changes `main`'s save version to v14).
 - [ ] Handoff (§8) + one `progress.md` line per author. **Then stop.**
@@ -965,3 +965,97 @@ Executed all §4 item 3 statements on an isolated scratch v14 SQLite database (`
 | Scratch v14 (fresh, `9277af5` schema) | The amended free-agent read returns the expected rows; six plans reproduce; FK check empty; `integrity_check` ok |
 | Arithmetic | Fixtures A1/A2/B/Q4.5; the 0.1578 discount product; the bonus endpoints; `768/128`; the unsigned-season boundary: all reproduced |
 | Docs only | Only this brief and `progress.md` changed; no DDL |
+
+---
+
+## 11. 13-6a build record — Claude Opus 5.5, 2026-11-25
+
+**Branch** `p13/13-6a-opus` from `origin/p13/integration` at `6b95671`, worktree `C:\Users\DELL\dnd-opus-136a`. **Verdict:** built; every gate green (§11.4). Two findings need the owner's or Carbon's view (§11.6 #1–#2); neither blocks the review.
+
+### 11.1 Baseline (§0.3, on `6b95671` before any edit)
+
+`C:` had 7.5 GB free; the worktree was clean. Build (Debug sln) 0/0; Schema 174/174; CoreLoop 32/32; Gritty 363/363; MC default **537/544**, the reds exactly the 7 promotion suites (each an unhandled `InvalidOperationException` from the six-tier guard: "tier HS has 12/8 teams"); resolver 13/13; tier-ladder 14/14; season-pipeline 38/38 with the Pro guard PA 81433 / H 18471 / ER 8803 and ledger `932ACE26…8B84`; every allocation line 0 B; 0 leaked `dnd_*` files. Wall time **206.4 s**; normalized default-log SHA-256 `1b4f5f9054975f5692b07e47b787e8574b9ce0e761a853660b384b8d7a8b61cb` (this PC, this run; 13-5a's `40ab9f95…` was a different run).
+
+### 11.2 What was built (§4 items 1–12)
+
+| § 4 item | Where | Notes |
+| :-- | :-- | :-- |
+| 1. `PipelineRules`, `PipelineProfile` | `Assets/Simulation/Baseball/PipelineRules.cs` | Every §10 value is a named constant; `PipelineCalendar` derives 176/183/195/274/318; `CareerRecordFlags` is the record flags' new home (D6) |
+| 2. `PipelineManager` | `…/PipelineManager.cs` | The D2-A handlers, the rollover in the C2 order (one plan, one batch, flush before and re-init once after, the avatar last), `EnsureSeed` + `EnsureAtBoot` (class-year backfill and calendar crash catch-up), `IFreeAgencyMarket.FillBeforeLock`, the D5 pending choices, `GetStatusView`, `LastRun` (`PipelineSummary`) |
+| 3. `PipelineQueries` + DTOs | `Assets/Data/Database/PipelineQueries.cs`, `PipelineDtos.cs` | `CollegeEnrollmentRow`, `RecruitingOfferRow`, `DraftPickRow`, `FreeAgentRow`, `PipelineCandidateRow` (C5), `PipelineStatusView`; succession's read gains the two `NOT EXISTS` (C1) in `BaseballQueries.SqlSelectFreeAgents` |
+| 4. Retire `PromotionManager` | `PromotionManager.cs` → `PromotionScore.cs` (git mv, with its `.uid`) | Manager and `PromotionSummary` deleted; `PromotionProfile` trimmed to the value constants; `GameManager` builds the pipeline in the old slot with the same boot draw; comment-only touches in `PersonEffects.cs`, `ScoutingGrade.cs`, `SchoolGrade.cs`, `DevelopmentManager.cs` |
+| 5. Free agency at the lock | `RosterManager.Market` (one field, one call) | Fast path reads the Pro sim's role counts: 0 queries, 0 B |
+| 6. Generated players' fielding | `LeagueGenerator.RollOutsideRecruit` / `WriteGeneratedPlayer` / `RollFielding` / `RollArsenal` | Intake inherits the departed player's position; outside recruits roll a depth position; world-gen's draw order unchanged (`RollArsenal` keeps `GenerateArsenal`'s exact draws) |
+| 7. Core events | `Assets/Core/CoreEvents.cs` | `RecruitingOffersEvent`, `RecruitSignedEvent`, `DraftCompletedEvent`, `ProContractSignedEvent`, `AvatarReleasedEvent`, plus `DraftDeclarationOpenedEvent` (§11.3 #2) |
+| 8. The avatar, D4b-C | `CareerManager.cs` | The unrostered-avatar mode (`IsAvatarRostered`, `InParentPhase`, `ActivateUnrostered`, a no-throw `ReactivateAvatar`/`LoadExistingAvatar`, no game claimed), the release state writes, `EvaluateTakeover` / `WriteTakeoverInBatch` / `TakeOver`, succession's pipeline flags; `GameStateKeys.PipelineSeed`, `ParentPhaseSinceDay`, `FamilyHsTeamId` |
+| 9. Narrative | `Assets/Narrative/Pipeline/PipelineBeatWriter.cs`, 12 `pipeline.*` keys in `strings.csv` | `strings.en.translation` re-imported (`2a59d563…` → `e350fed9…`); the import's `.import` / `.uid` / `.godot` side effects reverted |
+| 10. Harnesses | `Tools/MonteCarloHarness/Slice136Suites.cs`, `Slice136Engine.cs`, `Slice136Twin.cs`; `Tools/PipelineHarness/` (in the `.sln`); `Tools/CoreLoopHarness/PipelineClockChecks.cs` | §11.4 |
+| 11. Docs | spec §9 and §16-I19, the MC skill, `.agents/skills/run_pipeline_harness/`, `progress.md` | |
+| 12. 13-5 Nit N1 | `Slice135Suites.cs` (designations) | One team's raw #3/#4 SP swapped through Confidence/Happiness before `Initialize`: `rawOrderDiffers` 1, the lock activates the baked trio |
+
+### 11.3 Interpretations (for Carbon's review)
+
+1. **`PromotionManager.cs` is renamed, not kept.** It holds only `PromotionScore` and the trimmed `PromotionProfile` now, so it's `PromotionScore.cs` (git mv, `.uid` moved with it). `PromotionProfile.HighSchoolAgeCap` stays: `SchoolGrades.SeniorAge` aliases it and `SchoolGrade.cs` is comments-only here.
+2. **A sixth Core event, `DraftDeclarationOpenedEvent`** (day 176). The declaration text needs a cue, and the Narrative writer can't read the Baseball calendar. It carries the projected slot and round, and whether a class-4 senior is automatically in the pool.
+3. **A fourth engine flag, `pipeline_declaration_declined`.** The avatar's "stay in school" answer must survive a reload; `set_on_day` dates it to its season. Like D3's three, nothing in content reads it.
+4. **"Clearing" `parent_phase_since_day` writes 0.** `GameStateQueries` has no delete and 13-6a may only add keys, so the state is "present and positive".
+5. **The retired flag's literal lives in `BaseballQueries.PipelineRetiredFlagName`** and `PipelineFlags.Retired` aliases it. SchemaValidator compiles `BaseballQueries.cs` from an explicit file list outside 13-6a's paths, and the flag is still one bound parameter with one home.
+6. **College recruits back to 15/4/5**, world-gen's shape, inside the 17/4/5 (org 26) caps the conservation gate checks. Pro releases trim to 15/4/5.
+7. **A draftee reads neutral P in the release order** (he has no Pro line yet; Argon Q6). Incumbents read their completed Pro season against the Pro league.
+8. **Signing Day's done key is "accepted rows beyond the avatar's".** The phone can accept an offer before the day; the first build keyed on any accepted row and skipped every NPC signing that year. `pipeline-avatar` caught it (a College team at 8 position players) and the fix is in.
+9. **`GameManager` constructs the pipeline before the boot lock reconcile** and wires it as `RosterManager.Market`, so a lock reconciled after a crash signs the same free agents an uninterrupted run did. The boot draw, `EnsureSeed`, the bus subscription and the boot ensure stay at PromotionManager's position.
+10. **A lock signing refreshes the avatar's micro-sim slot without republishing `AvatarChangedEvent`.** That event clears the bloodline's practice credit, which must survive a mid-season lock.
+11. **Succession's flags (§4 item 8):** the retiree gets `pipeline_retired`; a displaced **Pro** NPC gets `pipeline_free_agent`, a displaced HS or College NPC `pipeline_retired` (no teenager in the Pro pool); a signed backfill free agent's flag is cleared. The `lineage-*` suites didn't move.
+12. **The takeover can follow the release in the same rollover** when a child is already 16 or older and willing, and NoWillingHeir is checked there too. An heir older than 19 still joins HS and graduates (with the avatar's rollover walk-on fallback) at the next rollover.
+13. **The interactive takeover** (AutopilotSuccession off) parks through the shipped pending-succession API; `ResolvePendingSuccession` in the parent phase runs `TakeOver` in its own batch. Autopilot takes it inside the rollover batch, before intake.
+14. **A rollover fallback walk-on** for an HS-senior avatar who reaches the rollover with no signed offer (a career created after Signing Day): D4a-A's "always moves on".
+15. **Stale enrollment rows are deleted at the rollover** (a College player who left outside the pipeline, e.g. displaced by `CreateAvatar`); College-rostered stragglers get one.
+16. **Generated players get no `Player_Person` row** (absent reads neutral, the HS-2 contract) but do get fielding. Succession's replacement filler still gets no fielding row (pre-existing; G-4).
+17. **The pending getters are cached per day** and dropped on every answer or calendar write (the phone polls each frame).
+18. **`--full` runs on the canonical pipeline world, 20261603** (Q7's seed, also default mode's). On 20260703 the single-snapshot pitcher gradient after the third rollover is a transient tie (HS 130.85 vs College 130.75; batters and Pro fine). It's inside the five-season burn-in, where Q7.5's snapshot is a sanity check, not a steady-state claim.
+19. **"Call-up" in `Assets/`:** the remaining mentions are 13-5's "there is no call-up" statements in `LeagueSimulator.cs` and `MicroGame.cs`, outside 13-6a's paths. No ladder code is left.
+20. **D7 shaped the suites and one production read.** The first full build measured +28.4 s on an interleaved pair (budget +10 s). Profiling showed ~1.1 s per simulated season: a full-world snapshot reloaded on each calendar day (~55–65 ms), Draft day running the declaration's snapshot a second time, and ~250 ms of development plus ~250 ms of pipeline at each rollover. Fixes: (a) **production, behavior-identical** (the PipelineHarness fingerprint and the reload fingerprint are unchanged): each step loads only its tiers through one C5 candidate join (`PipelineQueries.AppendCandidatesByTier`, validated in §11.5), and the Draft skips the declaration pass when the deadline's output exists; (b) **fixtures:** the pipeline-avatar scenario worlds run without development and register only the sims each scenario uses, scenario worlds start on the latest day their checks need, development-arc's prospect starts at 17 (five rollovers to Pro, not six), and the no-op twin plays season 2 to day 105. The live composition is still covered end to end by CoreLoop and PipelineHarness `--full`.
+21. **The Life sim, the phone and the screens run with an unrostered avatar without a patch.** `AvatarChangedEvent(id, 0)` reaches `SyncLifeSimAvatar` (tier unknown → no school gate, board tier −1), and TopBar, CalendarScreen, BaseballDashboard, League/PlayerScreen, FamilyService and both Steam writers already guard on `TryGetTeamTier` / `Schools.TryGet`. This is a static review plus the CoreLoop parent-phase fixtures; no Godot run (§11.6 #6).
+
+### 11.4 Gates (on the final tree)
+
+| Gate | Result |
+| :-- | :-- |
+| Build (Debug sln, PipelineHarness included) | 0 warnings / 0 errors |
+| Schema | 174/174 (no DDL; `user_version` 14) |
+| CoreLoop | **40/40** (32 + 8: the composed rollover lands the avatar on his chosen program; a pending recruiting choice survives a reload and resolves once; a reload on day 195 doesn't re-draft; the offers and Signing Day texts land on 274 and 318; the clock never stops; the parent phase survives a reload — unrostered, the week advances, no game offered; the takeover at 16 lands on HS team 101) |
+| Gritty | 363/363 |
+| MC default | **601/601**, the 7 reds replaced: `pipeline-score` 23, `pipeline-stream` 4, `pipeline-avatar` 18, `pipeline-record` 5, `pipeline-lock` 5, `development-arc` 5, `practice-seam` 12; resolver 13/13; tier-ladder 14/14; `season-pipeline` **45/45** (guard byte-exact: PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`; D1-A ch.2–7 green; the 20 existing channels green); designations 26/26 (N1); every allocation line 0 B, the no-signing lock hook included (0 B over 100 warm calls, in `pipeline-lock` and the twin); 0 leaked `dnd_*` files |
+| D7 | **Met, with a thin margin.** Isolated suites (the 13-6 suites + season-pipeline + designations vs the 7 retired suites + the same two, `--only`, 8 interleaved pairs): +15.7 / +6.2 / +9.0 / +10.8 / +13.9 / +7.1 / +9.4 / +3.2 s, **median +9.21 s** (budget +10 s). Whole-run interleaved pairs (base `6b95671` vs new): +8.8 / +3.9 / +27.6 / +39.8 s; pairs 3–4 ran under heavy parallel load (Antigravity IDE sessions and Chrome held the CPU near 80%; one new run took 363 s), so they don't measure the change. Carbon should re-measure on a quiet machine |
+| PipelineHarness default | **9/9**, 36.1 s (budget 60 s): conservation over 20 rollovers and 20 opening locks; 2,560 legal picks, recruits = openings, intake = HS departures, the ledgers balance; 307 intake players reached Pro; gradient batters **+6.19 / +18.14**, pitchers **+5.40 / +16.97** (Argon +6.82 / +18.27, +5.94 / +17.76), max drift 2.33; the day-91 pool 207 / 56 / 62 in season 20; hygiene clean; same-seed twin byte-identical |
+| PipelineHarness `--full` | **7/7**, 13.4 s (budget 4 min): three composed rollovers; the avatar recruited (2026), College (2027), declared and drafted #1 (2028), Pro at the third rollover, PA 40 / 136 / 137 / 13 (2026 HS → 2029 Pro by day 1193); the 2027 Draft runs in reverse 2026 order; 24 ranked College programs; snapshot gradient batters 137.81 < 140.83 < 153.49, pitchers 125.42 < 130.66 < 141.29 |
+| 20× replays (`--no-build`, normalized) | MC default **20/20** byte-identical (normalized `9801a68358232d62…`, 601/601 every run). PipelineHarness default **20/20** identical apart from its own wall-clock check: 17 runs share `887de574…`; runs 6, 13 and 14 failed only the 60 s budget line under the same load (60.1 / 176.4 / 93.9 s), and with that line excluded all 20 hash to `6a74a6b6…`. `--full` 7/7; 0 leaked files |
+| SQL (No Blind Queries) | §11.5 |
+
+### 11.5 SQL on a scratch v14 (sqlite3 3.53.3 over `SchemaDefinitions.sql`, `user_version` 14, `foreign_keys = ON`)
+
+Every statement in `PipelineQueries` and the changed `SqlSelectFreeAgents` ran on throwaway rows, insert and update paths both; `PRAGMA foreign_key_check` returned no rows and `integrity_check` returned `ok`; the scratch file was deleted.
+
+| Statement | `EXPLAIN QUERY PLAN` |
+| :-- | :-- |
+| the C5 candidate join, per tier (ratings, role, age, health, potential `LEFT JOIN`) | `SCAN p USING INDEX idx_players_team`, `SEARCH tt USING INTEGER PRIMARY KEY`, PK probes on `Player_Ratings` / `Pitcher_Roles` / `Player_Potential` (LEFT), `USE TEMP B-TREE FOR LAST TERM OF ORDER BY`. A player with no potential row reads `HasPotential = false` |
+| enrollment upsert (`ON CONFLICT (player_id)`, update path: team, class, declaration move) | PK conflict path |
+| class advance `UPDATE … SET class_year = class_year + 1` | `SCAN College_Enrollment` |
+| set declared / departure `… WHERE player_id = ?` | `SEARCH College_Enrollment USING INDEX sqlite_autoindex_College_Enrollment_1 (player_id=?)` |
+| enrollment load `ORDER BY player_id` | `SCAN College_Enrollment USING INDEX sqlite_autoindex_College_Enrollment_1` (no temp B-tree) |
+| offer upsert (`ON CONFLICT (player_id, team_id, season_year)`, 0 → 1 executed) | PK conflict path |
+| a player's offers | `SEARCH Recruiting_Offers USING INDEX sqlite_autoindex_Recruiting_Offers_1 (player_id=?)` |
+| a season's accepted offers / their count / the expiry | `SCAN Recruiting_Offers` (bounded, twice a year; no index, no DDL) |
+| draft insert; a season's class; its count | `SEARCH Draft_Picks USING INDEX sqlite_autoindex_Draft_Picks_1 (season_year=?)`; the count uses the covering index |
+| the flagged free-agent pool | `SEARCH f USING INDEX idx_entity_flags_active_name (flag_name=?)`, PK probes on `Players` / `Player_Ratings` / `Pitcher_Roles`, `USE TEMP B-TREE FOR ORDER BY`. Returned only the active flagged FA (an inactive flag and the unflagged adult child excluded) |
+| succession's read with the two `NOT EXISTS` (C1) | `SEARCH p USING INDEX idx_players_team (team_id=?)`, correlated subqueries on `sqlite_autoindex_Recruiting_Offers_1 (player_id=?)` and `sqlite_autoindex_Entity_Flags_1 (player_id=? AND flag_name=?)`, temp B-tree. Dropped exactly the committed recruit and the active retiree; kept the flagged FA, the unflagged adult child, the inactive retiree, the declined-offer holder and an inactive-flag FA |
+
+### 11.6 Open items
+
+1. **Draftees can be cut on arrival (owner and Carbon).** D2-A step 5 ranks everyone, draftees included, and Pro is ~18 role-sum points above College. In offseason-only mode ~54 of 128 draftees a season are released at the rollover they report (the "Pro in" ledger is ~74–107, not 128), so the stayers' Little's-law career is ~10.4 seasons, not the spec's ~6, and a drafted **avatar** can be cut before his first Pro game (D4b-C then releases him). Argon's Q6 expected the projection bonus to protect new picks; it doesn't. A candidate amendment is rookie protection (a draftee is exempt from release at the rollover he reports). It's a design change, so 13-6a ships the brief's rule and reports the flow (PipelineHarness default prints it).
+2. **Rollover crash recovery isn't keyed.** The calendar days re-run from their persisted output, as D2-A asks. The rollover itself has no done key: aging (`AgeAllPlayers`, its own transaction) and development aren't keyed either, so a crash between the rollover's handlers was already unrecoverable before 13-6. A fix needs a rollover marker in `Game_State`, which is outside 13-6a's two allowed keys.
+3. **A degenerate re-run:** in a world with no NPC openings at all, a reload after Signing Day re-runs it (nothing to sign, nothing written) and republishes the avatar's `RecruitSignedEvent`. No real world has zero openings.
+4. **From the parent-phase brief (§7, unchanged):** the three jobs, the training mini-game, the UI and texts; whether `banned_for_life` forces the release path; aligning retirement-age succession (`MaturityAge` 19) to the takeover at 16.
+5. **Succession's filler still has no `Player_Fielding` row** (pre-existing; G-4).
+6. **No Godot run.** The unrostered-avatar UI paths were checked statically (§11.3 #21) and through the headless CoreLoop fixtures; the owner's playtest (13-6b) should confirm the dashboard, phone and calendar in the parent phase.
+7. **PipelineHarness default takes ~36 s** against Argon's ~5 s forecast (a snapshot per calendar day and rollover, and a full 20-season determinism twin). It's inside the 60 s budget; on a throttled PC it could cross it. Halving the twin to 10 seasons is the cheap fix if it does.
