@@ -82,6 +82,12 @@ Session-orientation file for every model. **Keep it lean:** at session end, appe
 
 ## Session Log (compact)
 
+- **2026-11-25 — ROSTER: Gemini 4 Carbon replaces Gemini 4 Argon completely (owner directive; Claude Opus 5.5, `p13/roster-carbon-opus`, docs only):**
+  - Argon is leaving the owner's plan. The owner has Carbon and Neon at Low–High, and the Neon Orchestrator.
+  - Carbon takes every outstanding Argon seat: sim/calibration/math owner, and primary independent reviewer of Opus's sim, persistence and schema diffs. The Neon Orchestrator takes the Argon Orchestrator's content waves.
+  - Updated [TEAM.md](TEAM.md) (status, strength order Carbon ≈ Neon > Hydrogen per Google's model cards, the §1 table, a §1a succession row and review pairs, the §2 rows); `GEMINI.md`, `CLAUDE.md` and `.agents/rules/baseball_engine.md`; and the 13-6 brief header (Carbon reviews 13-6a, branch `p13/13-6a-review-carbon`).
+  - Completed slices keep "Gemini 4 Argon (historical)". Older specs follow the new §1a row without edits. Also merged the approved 13-6 brief into `p13/integration` (`c47e7f8`).
+  - **Next: 13-6a build by Claude Opus 5.5 (Gemini 4 Carbon reviews).**
 - **2026-11-24 — 13-6 brief RECONCILED: Argon's §10 accepted, §10.5 Opus review (Claude Opus 5.5, `p13/13-6-brief-opus` fast-forwarded to `c5a74d3`; docs only):** [brief §10.5](tasks/13-6_pipeline_draft_brief.md#105-opus-review-and-reconciliation--claude-opus-55-2026-11-24).
   - Re-derived the load-bearing §10 claims at `9277af5`: the reliever penalty (`:119/:379`), the 0.1578 vs 0.1667 discount, the six fixture values, `FundsImpulseEvent` as a committed-delta mirror (a real catch), the `SeasonYearForDay` math, the five non-colliding stream tags, and `768/128 = 6.0`.
   - Re-ran the plans on a fresh scratch v14 (FK empty, `integrity_check` ok).
