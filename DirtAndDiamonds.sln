@@ -20,6 +20,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HoldemHarness", "Tools\Hold
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcadeHarness", "Tools\ArcadeHarness\ArcadeHarness.csproj", "{4FDEFACE-4036-4971-AE1B-A5030D45C2E9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PipelineHarness", "Tools\PipelineHarness\PipelineHarness.csproj", "{6ADD2275-AE2F-4A91-A09A-4688D4F50084}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -81,6 +83,12 @@ Global
 		{4FDEFACE-4036-4971-AE1B-A5030D45C2E9}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
 		{4FDEFACE-4036-4971-AE1B-A5030D45C2E9}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
 		{4FDEFACE-4036-4971-AE1B-A5030D45C2E9}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084}.ExportRelease|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -94,5 +102,6 @@ Global
 		{4AF09451-B9F8-4C26-8FBA-428FD0E8B1AA} = {7558C531-8002-4685-86A3-0ACD46186210}
 		{B14F5399-5577-491C-8236-B5C693EA59F3} = {7558C531-8002-4685-86A3-0ACD46186210}
 		{4FDEFACE-4036-4971-AE1B-A5030D45C2E9} = {7558C531-8002-4685-86A3-0ACD46186210}
+		{6ADD2275-AE2F-4A91-A09A-4688D4F50084} = {7558C531-8002-4685-86A3-0ACD46186210}
 	EndGlobalSection
 EndGlobal

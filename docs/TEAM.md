@@ -1,40 +1,48 @@
 # Dirt & Diamonds — Team Roster & Operating Model
 
-**Status:** **confirmed by the owner 2026-10-10; roster updated 2026-10-13** (Gemini 3.1 Pro and Pro Math unavailable, §1a) (proposed the same day by Claude Opus 5.5 at the owner's request). It replaced the single-lead "Model Delegation Doctrine" that used to sit in BUILD_PLAN (removed 2026-10-10). The owner can reassign any role. Roles are assigned by **kind of work**, not by brand. If a model turns out stronger or weaker at something, move the work and update this file.
+**Status:** owner-directed roster, **2026-11-19**, amended **2026-11-25**, until the owner changes it. It replaces the 2026-10-25 GPT-primary staffing: the GPT models (6.1 Sol, 6 Astra, 6 Sol) are no longer assigned. **2026-11-25 (owner): Gemini 4 Carbon replaces Gemini 4 Carbon completely** (Argon is leaving the owner's plan), and the Argon Orchestrator goes with it. Active models: **Claude Opus 5.5**, **Claude Sonnet 5.5**, **Gemini 4 Carbon** (Low–High), **Gemini 4 Neon** (Low–High), **Gemini Hydrogen**, plus the **Neon Orchestrator** (Low–High). Strength order for the Gemini models, from Google's published model cards (2026-11): Carbon ≈ Neon > Hydrogen. Carbon is Argon's deep-reasoning successor, built on it, with more thinking and longer verification loops. Gemini 3.8 Flash is also leaving and isn't assigned. Completed authorship and review history stays historical.
 
-**Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building, v2), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17 and Phase L), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Older docs name past authors ("Fable 5", "Opus 4.8", "Sonnet 5"); those are not roles. **This file is the only source of current roles.**
+**Read with:** [GAME_VISION.md](GAME_VISION.md) (what we're building, v3.0), [BUILD_PLAN.md](BUILD_PLAN.md) (Phases 13–17 and Phase L), [progress.md](progress.md) (where we are), [README.md](README.md) (the docs map). Older docs name past authors ("Fable 5", "Opus 4.8", "Sonnet 5", "GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol"); those are not current roles. **This file is the only source of current roles.**
 
 ---
 
 ## 1. Who does what
 
-| Model | Role | Owns | Never does |
+| Model (typical effort) | Role | Owns | Never does |
 | :-- | :-- | :-- | :-- |
-| **The owner (you)** | Director and publisher | Vision, taste, art-direction picks, tagline approval, listening QA, playtests, ElevenLabs account/key/plan, Steamworks, trademark, pricing, every external submission and payment | — |
-| **Claude Opus 5.5** | **Integration lead and chief architect** | The Phase 13 critical path in the calibrated core (roster capacities, schedules, pipeline/draft, re-band); final merge gate for every slice; writing task briefs for other models; reviewing GPT's work (sim, math and tools) and Sonnet's runtime work; narrative quality (story cutscene scripts, store copy); release-candidate test plan | Merging its own sim changes without an independent review; owner-only actions |
-| ~~**Gemini 3.1 Pro**~~ | **Unavailable from 2026-10-13** (owner) | Its roles moved: independent sim-diff review → GPT 6 Astra Pro; presentation runtime (14a, 14d, 16a/b, 17a, L-7, S-4) → Claude Sonnet; sim-side league rules (13-4, 13-5) → Claude Opus. See §1a | — |
-| ~~**Gemini 3.1 Pro Math**~~ | **Unavailable from 2026-10-13** (owner) | Calibration and math moved to **GPT 6 Astra Pro** (see §1a) | — |
-| **Gemini 3.8 Flash** | **Content at volume** | Announcer personas and ~5,600 script lines (14c); cutscene definition JSON from approved scripts (16c–16e); team seed data (names, parks, colors); retake sheets; simpler screens and phone skins (15c/15f) | Touching `Assets/Simulation/`; approving its own content |
-| **Claude Sonnet 5.5** | **UI and feature engineer** | Phase 15 design system and screen rebuilds (15b, 15c, 15e); **from 2026-10-13 also the presentation runtime** (14a buses + `VoiceDirector`, 14d `BroadcastBooth`, 16a/b `CutscenePlayer`/`CutsceneDirector`, 17a achievements/presence, L-7 press runtime, S-4); the Phase 13 league UI (bracket, draft board, recruiting, roster status, standings); 13-7 ripple fixes; the Around the League card | Calibrated-core changes |
-| **Claude Fable 5.1** | **Inactive** (joined 2026-10; prepaid API credit exhausted 2026-10-10) | Authored the G-2 pitching-mode design ([pitching_mode.md](archive/pitching_mode.md) rev 1). Its R-1 review role moved to GPT 6 Astra Pro (owner, 2026-10-10). Re-engage only through a new brief with fresh credit | Merging its own changes; changing GAME_VISION without the owner's yes; touching `Assets/Simulation/` outside a briefed slice |
-| **GPT 6 Astra Pro** | **Senior engineer: gameplay models + standalone tools; calibration and math owner; independent sim-diff reviewer** (owner 2026-10-10, expanded 2026-10-13 when Gemini 3.1 Pro became unavailable) | **Arcade engine** G-1 mapping, G-2, G-3, G-4 (arcade §12); **calibration** (per-tier bands, the new Pro guard, physics constants, difficulty targets, R1-MATH, S-2 and every former "Math" item); **independent review** of Claude Opus's and Claude Sonnet's sim diffs; R-1 (done 2026-10-10); self-contained tools with their own test suites: `Tools/VoiceGen`, `Tools/AudioManifestHarness`, `Tools/CutsceneHarness`, notices generator; 17b drafts | Merging its own sim changes without Gemini Pro's independent review and the Opus merge gate; game code under `Assets/` outside a briefed slice; real API runs; anything involving the live key |
+| **The owner (you)** | Director and publisher | Vision, art direction, content/listening approval, playtests, accounts, keys, Steamworks, legal, trademark, pricing and external submissions/payments | Model implementation work |
+| **Claude Opus 5.5** (High) | Integration lead, chief architect and core engineer | Phase 13 core, schema/persistence (R1-SAVE), Phase L/S core, task briefs, integration gate, narrative direction, release QA; review of Carbon-authored math/engine/tools | Approve its own implementation; owner-only actions |
+| **Gemini 4 Carbon** (High for math, schema, persistence and reviews; Medium otherwise) | Simulation, calibration and math owner; primary independent reviewer | Math plans and constants (R1-MATH, SR-3a, S-2, 13-x Math), shared rating contracts, standalone tools; independent review of every Opus simulation/persistence/schema diff | Approve its own math or implementation; owner-only actions |
+| **Claude Sonnet 5.5** (Med–High) | UI, presentation, feature and content engineer | Screens/theme, presentation runtime, narrative JSON, announcer scripts, seed data, art integration, mods and exporters | Unbriefed calibrated-core changes; approve its own work; owner-only actions |
+| **Gemini 4 Neon** (Med) | Mid-tier engineer and UI/content reviewer | Review of Sonnet UI/content diffs that touch no `Assets/Simulation/`, schema or persistence paths; harness fixes, data files and mid-size tooling from a brief | Calibrated-core or schema authorship; self-review; owner-only actions |
+| **Gemini Hydrogen** (Low–Med) | Mechanical worker | Link repair, rule/skill text syncs, archive moves, formatting, checklist-driven data edits, each with a pass/fail check named in the brief | Any C# under `Assets/`, any design decision, any review |
+| **Neon Orchestrator** | Wave runner (mechanical and content waves) | Splits a briefed wave across workers on one branch: mechanical cleanup across Hydrogen workers (Neon reviews the combined diff), and, since 2026-11-25, the Argon Orchestrator's Gate 2+ content volume (e.g. SR-1b/1c Burner Phone arcs) across Sonnet/Hydrogen writers with Carbon consistency review. Opus integrates | Expanding scope beyond the wave brief; engine or schema changes |
 
+### 1a. Current role succession (owner, 2026-11-19; Argon → Carbon 2026-11-25)
 
-### 1a. Role succession (owner, 2026-10-13): Gemini 3.1 Pro and Pro Math are unavailable
+**Apply this mapping to every outstanding assignment, reviewer, merge gate and next-step recommendation in older specs, task briefs, rules and skills.** It supersedes the 2026-10-25 GPT-primary table and the 2026-10-13 succession. Historical completed work, branch names (e.g. `p13/13-4-gpt`, `p13/13-6-mathcheck-argon`) and commit attribution are not renamed: §2 keeps Gemini 4 Argon on slices it finished. Staffing updates do not resume paused slices or waive scope, test or owner gates.
 
-Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **read them through this table** (this file is the only source of current roles):
-
-| Where a doc says | Read it as |
+| Earlier assignment | Current assignee |
 | :-- | :-- |
-| **Gemini Pro reviews** a Claude Opus or Claude Sonnet sim/engine diff | **GPT 6 Astra Pro** reviews |
-| **Gemini Pro reviews** GPT 6 Astra Pro's work | **Claude Opus** reviews |
-| **Gemini Pro Math / "Math"** owns or signs a number | **GPT 6 Astra Pro** (Math). If GPT also authored the slice, **Claude Opus** reviews the math |
-| **Gemini Pro authors** presentation runtime (14a, 14d, 16a/b, 17a, L-7 runtime, S-4) | **Claude Sonnet** authors; Claude Opus reviews |
-| **Gemini Pro authors** sim-side league rules (13-4 playoffs + ranking, 13-5 Sunday lock + forfeits) | **Claude Opus** authors; GPT 6 Astra Pro reviews |
-| **Gemini Pro reviews** a UI or presentation diff (15b/15c/15e, G-5) | **GPT 6 Astra Pro** reviews |
-| Joint **Claude Opus + GPT 6 Astra Pro** slices | Each reviews the other's part; Claude Opus is still the merge gate |
+| GPT 6.1 Sol (integration lead, brief author, merge gate, core) — formerly Claude Opus | **Claude Opus 5.5** |
+| GPT 6 Astra / GPT 6 Astra Pro (sim, calibration, Math, primary reviewer) — formerly Gemini Pro Math | **Gemini 4 Carbon** |
+| **Gemini 4 Argon** (2026-11-19 roster: sim, calibration, Math, primary reviewer; every outstanding Argon assignment in any doc, brief, rule or skill) | **Gemini 4 Carbon** (owner, 2026-11-25) |
+| Argon Orchestrator (content waves) | **Neon Orchestrator** (owner, 2026-11-25) |
+| GPT 6 Sol (UI, presentation, content) — formerly Claude Sonnet / Gemini Flash | **Claude Sonnet 5.5** |
+| Gemini Argon review reserve (2026-10-25) | **Gemini 4 Carbon** (Argon became a full assignee 2026-11-19, then left 2026-11-25) |
+| Gemini 3.8 Flash mechanical/seed-data work (Flash is leaving too) | **Gemini Hydrogen** (mechanical) or **Claude Sonnet 5.5** (content that needs judgement) |
+| Any other unavailable-model assignment not explicitly listed | **Claude Opus 5.5** assigns it in the brief before work starts |
 
-**Independence rule:** the author never reviews their own work, and a same-family review (e.g. Opus reviewing Sonnet's sim code) is a stand-in, not an independent review. Sim-diff merges need a GPT review or a Claude review of GPT's work.
+**Review independence:** a separate session reviews the exact diff; no model approves its own authored part.
+- Opus implementation → **Carbon** review (cross-family).
+- Carbon math/implementation → **Opus** review.
+- Sonnet UI/content → **Neon** when the diff has no `Assets/Simulation/`, schema, persistence or `EffectiveRatings` paths; otherwise **Carbon**.
+- Hydrogen/orchestrator waves → **Neon** reviews the combined diff; Opus runs the integration gate.
+- Joint slices: each reviews only the other's part; if parts cannot be separated, the uninvolved senior model (Carbon or Opus) reviews the combined diff.
+
+Opus performs the integration gate after review; its own code requires Carbon's review first. Owner gates remain unchanged.
+
+**Effort and token discipline:** use High effort for Opus/Carbon on schema, persistence, calibration and secrecy-boundary work; Medium for Sonnet/Neon UI and reviews; Low–Medium for Hydrogen. Every delegated session gets a brief (or a compact review packet: question, constraints, exact diff/file ranges, existing gate results) rather than open-ended repository exploration.
 
 ---
 
@@ -43,71 +51,96 @@ Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **re
 | Slice | Author | Reviewer | Owner gate |
 | :-- | :-- | :-- | :-- |
 | **13-0** sqlite MCP + MC flake recap/seed | Claude Opus | Gemini Pro (done 2026-10-10) | — |
-| **13-1** schema v14 + world-gen | Claude Opus (+ Flash: team seed data) | GPT 6 Astra Pro | Team names |
-| **13-2** roster capacities + innings + starter selection | Claude Opus | GPT 6 Astra Pro (sim + Math) | — |
-| **13-3** schedules + calendars + re-band + new Pro guard | Claude Opus + GPT 6 Astra Pro (Math) | each other's part | Sanction the new guard |
-| **13-4** playoffs + ranking | Claude Opus + GPT 6 Astra Pro (Math) (+ Sonnet: bracket UI) | each other's part | — |
-| **13-5** Sunday lock + forfeits | Claude Opus | GPT 6 Astra Pro | — |
-| **13-6** pipeline + draft | Claude Opus + GPT 6 Astra Pro (Math) (+ Sonnet: recruiting/draft UI) | each other's part | Playtest |
-| **13-7** ripple | Sonnet | GPT 6 Astra Pro | — |
-| **14a** buses + VoiceDirector | Claude Sonnet | Claude Opus | Ear check |
-| **14b** VoiceGen + AudioManifestHarness | GPT Astra Pro | Claude Opus | Pilot run (your key) |
-| **14c** 56 personas + scripts | Flash | Claude Opus (voice/quality) | **Approve taglines** |
-| **14d** BroadcastBooth + highlights | Claude Sonnet | Claude Opus | Playtest |
+| **13-1** schema v14 + world-gen *(done)* | Claude Opus 5.5 (+ Claude Sonnet 5.5: team seed data) | Gemini 4 Argon (historical) | Team names |
+| **13-2** roster capacities + innings + starter selection *(done)* | Claude Opus 5.5 | Gemini 4 Argon (sim + Math; historical) | — |
+| **13-3** schedules + calendars + re-band + new Pro guard *(done)* | Claude Opus 5.5 + Gemini 4 Argon (Math; historical) | each other's part | Sanction the new guard |
+| **13-4** playoffs + ranking *(engine done; bracket UI in 15c)* | Claude Opus 5.5 + Gemini 4 Argon (Math; historical) (+ Claude Sonnet 5.5: bracket UI) | each other's part | — |
+| **13-5** Sunday lock + forfeits *(13-5a done)* | Claude Opus 5.5 | Gemini 4 Argon (historical) | — |
+| **13-6** pipeline + draft | Claude Opus 5.5 + Gemini 4 Argon (brief Math check, done 2026-11-24) (+ Claude Sonnet 5.5: recruiting/draft UI) | **Gemini 4 Carbon** reviews 13-6a; Opus reviewed the Math check; Gemini 4 Neon reviews 13-6b | Playtest |
+| **13-7** ripple | Claude Sonnet 5.5 | Gemini 4 Carbon | — |
+| **14a** buses + VoiceDirector | Claude Sonnet 5.5 | Claude Opus 5.5 | Ear check |
+| **14b** VoiceGen + AudioManifestHarness | Gemini 4 Carbon | Claude Opus 5.5 | Pilot run (your key) |
+| **14c / SR-9** 6 conference personas + ~900 lines each | Claude Sonnet 5.5 | Claude Opus 5.5 (voice/quality) | **Approve taglines** |
+| **14d** BroadcastBooth + highlights | Claude Sonnet 5.5 | Claude Opus 5.5 | Playtest |
 | ~~**14e** voice notes~~ | **Cut 2026-10-10** (broadcasters only) | — | — |
-| **14f** full generation + QA | Flash (retake sheets) | — | **Listening QA** |
-| **15a** art direction | Claude Opus (direction briefs + prompt packs) | — | **Pick the direction** |
-| **15b** design system | Sonnet | GPT 6 Astra Pro | Component gallery |
-| **15c** screen rebuilds | Sonnet (complex) / Flash (simple) | GPT 6 Astra Pro | Screenshot review |
-| **15d** art production | Owner + AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste** |
-| **15e** motion / **15f** phone skins | Sonnet / Flash | GPT 6 Astra Pro | — |
-| **16a/16b** CutscenePlayer + Director + events | Claude Sonnet | Claude Opus | — |
-| **16** CutsceneHarness | GPT Astra Pro | Claude Opus | — |
-| **16c–16e** cutscene content | Claude Opus (story scripts) → Flash (definitions) | Claude Sonnet (wiring) | **Story sign-off** |
-| **G-0** arcade feel prototype (batter vs pitcher, placeholder art) | **G-0a physics: Claude Opus (built 2026-10-13, `pG/G-0a-opus`)** · G-0b scene: Claude Sonnet | Claude Opus (stand-in review done 2026-10-13; same family, not independent) → **independent re-review: GPT 6 Astra Pro** | **"Hitting is fun"** |
-| **G-1** attribute audit (**done inside R-1**, GPT 6 Astra Pro) → ratings-to-physics mapping (gameplay_core §1, arcade §4) | GPT 6 Astra Pro (mapping + Math) | Claude Opus | ~~Default difficulty target~~ (decided: O1 skill band) |
-| **G-2** arcade physics core + rules engine + `ArcadeHarness` | GPT 6 Astra Pro (owner 2026-10-10: senior engineer for gameplay models) | Claude Opus (sim diff + merge gate) | — |
-| **G-3** arcade AI + calibration to Phase 13 bands | GPT 6 Astra Pro (engine + Math) | Claude Opus | — |
-| **G-4** integration (`EffectiveRatings`, `Player_Fielding`, flush, autopilot, booth beats, R1-EFFECTS projections) | GPT 6 Astra Pro | Claude Opus | — |
-| **G-5** arcade presentation + controls + watch & skip | Claude Sonnet | GPT 6 Astra Pro | Playtest |
-| ~~**G-6** take over the team + baserunning~~ | **Deferred past 1.0** (owner, 2026-10-16) | — | — |
-| **G-7** venue catalog (68) + venue screens (reusable kits + team dressing, R-1 Q13) | Claude Sonnet (+ Flash: catalog data) | Claude Opus | — |
-| **G-8** art: 16-bit sprites, field kits, venue art | Owner + artist/AI art tools (Flash: integration) | Claude Opus (consistency) | **Taste; art source** |
-| **G-9** tuning + difficulty presets (O1 skill band as the default target) | GPT 6 Astra Pro (Math) + Claude Sonnet (data) | Claude Opus | **Sign-off; Classic's fate** |
+| **14f** full generation + QA | Claude Sonnet 5.5 (retake sheets) | — | **Listening QA** |
+| **15a** art direction | Claude Opus 5.5 (direction briefs + prompt packs) | — | **Pick the direction** |
+| **15b** design system | Claude Sonnet 5.5 | Gemini 4 Carbon | Component gallery |
+| **15c** screen rebuilds | Claude Sonnet 5.5 (all screens) | Gemini 4 Carbon | Screenshot review |
+| **15d** art production | Owner + AI art tools (Claude Sonnet 5.5: integration) | Claude Opus 5.5 (consistency) | **Taste** |
+| **15e** motion / **15f** phone skins | Claude Sonnet 5.5 | Gemini 4 Carbon | — |
+| **16a/16b** CutscenePlayer + Director + events | Claude Sonnet 5.5 | Claude Opus 5.5 | — |
+| **16** CutsceneHarness | Gemini 4 Carbon | Claude Opus 5.5 | — |
+| **16c–16e** cutscene content | Claude Opus 5.5 (story scripts) → Claude Sonnet 5.5 (definitions) | Gemini 4 Carbon | **Story sign-off** |
+| **G-0** prototype (historical) | Built by Claude Opus / Claude Sonnet in 2026-10; retain original attribution | Completed review history remains in its brief | Outstanding timing/scene work is now **SR-3a: Gemini 4 Carbon / SR-3b: Claude Sonnet 5.5**, reviewed per those rows |
+| **G-1** attribute audit (done inside R-1) → retained batter-side clutch mapping | Gemini 4 Carbon (mapping + Math) | Claude Opus 5.5 | Clutch scope per SR-3a |
+| ~~**G-2** full arcade physics + rules~~ | **Cancelled 2026-10-25** (scope_realignment §2.1) | — | — |
+| ~~**G-3** arcade AI + full-game calibration~~ | **Cancelled 2026-10-25** | — | — |
+| **G-4 → SR-3a** reduced integration: `ClutchRequest` from `EffectiveRatings` | Gemini 4 Carbon | Claude Opus 5.5 | See SR-3a |
+| **G-5 → SR-3b** clutch overlay + batting practice (merged with G-9) | Claude Sonnet 5.5 | Gemini 4 Carbon | Playtest |
+| ~~**G-6** team takeover + real-time baserunning~~ | **Cancelled 2026-10-25** | — | — |
+| **G-7** venue catalog + screens | Claude Sonnet 5.5 (+ Claude Sonnet 5.5: data); **paused beyond the HS slice** | Claude Opus 5.5 | Golden slice before mass generation |
+| **G-8** field/venue art | Owner + art tools (Claude Sonnet 5.5: integration); **paused beyond the HS slice** | Claude Opus 5.5 | **Taste; Gate 3** |
+| **G-9 → SR-3b** clutch-only tuning/assists | Claude Sonnet 5.5 (Gemini 4 Carbon Math constants in SR-3a) | Claude Opus 5.5 | Playtest; no general difficulty framework |
 | ~~old G-2 pitching mode / old G-8 Read v2~~ | **Retired 2026-10-13** by the arcade decision; docs in `archive/` | — | — |
 | **L-0** docs + no-abortion content fix | Claude Opus | Gemini Pro (done) | **DONE 2026-10-10** |
-| **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus (+ Sonnet: New Career UI) | GPT 6 Astra Pro | — |
-| **L-2** legends roster, identity catalog, record map | Flash | Claude Opus | **Ethnicity list, legend backstories** |
-| **L-3** tokens, `unknown_fan`, father arc, `ProContractSignedEvent`, reveal ordering | Claude Opus (scripts + event) | GPT 6 Astra Pro | **Father's lines** |
-| **L-4** pregnancy, placement, `AdoptChild`, maternity, missing piece | Claude Opus (+ Flash: agency events) | GPT 6 Astra Pro | — |
-| **L-5** temptation, `Indiscretions`, `TemptationMath`, `Active_Effects`, clutch, partner pool + kin guard | Claude Opus + GPT 6 Astra Pro (Math) (+ **owner: `DiscoveryChance`**) | each other's part | Tone of the lure |
-| **L-6** hidden children: intake, both reveals, PI search, reclaim, `Succeed` rostered heir | Claude Opus | GPT 6 Astra Pro (sim + Math) | — |
-| **L-7** press clippings + News tab | Claude Sonnet (runtime + tab) + Flash (articles) | Claude Opus | — |
-| **L-8** Trailblazer route content + calls | Claude Opus (story) → Flash | Claude Sonnet (wiring) | **Story sign-off** |
-| **S-1** substance engine, `ped_active` writer, Rehab absence, `AvatarDied` | Claude Opus | GPT 6 Astra Pro | — |
-| **S-2** substance magnitudes | GPT 6 Astra Pro (Math) | Claude Opus | — |
-| **S-3** substance content + PED re-gate | Claude Opus (scripts) → Flash | GPT 6 Astra Pro | — |
-| **S-4** the asterisk (press + record book) | Claude Sonnet + Flash | Claude Opus | — |
+| **L-1** schema v15 + identity + legends + poverty + New Career fields | Claude Opus 5.5 (+ Claude Sonnet 5.5: New Career UI) | Gemini 4 Carbon | — |
+| **L-2** legends roster, identity catalog, record map | Claude Sonnet 5.5 | Claude Opus 5.5 | **Ethnicity list, legend backstories** |
+| **L-3** tokens, `unknown_fan`, father arc, `ProContractSignedEvent`, reveal ordering | Claude Opus 5.5 (scripts + event) | Gemini 4 Carbon | **Father's lines** |
+| **L-4** pregnancy, placement, `AdoptChild`, maternity, missing piece | Claude Opus 5.5 (+ Claude Sonnet 5.5: agency events) | Gemini 4 Carbon | — |
+| **L-5** temptation, `Indiscretions`, `TemptationMath`, `Active_Effects`, clutch, partner pool + kin guard | Claude Opus 5.5 + Gemini 4 Carbon (Math) (+ **owner: `DiscoveryChance`**) | each other's part | Tone of the lure |
+| **L-6** hidden children: intake, both reveals, PI search, reclaim, `Succeed` rostered heir | Claude Opus 5.5 | Gemini 4 Carbon (sim + Math) | — |
+| **L-7** press clippings + News tab | Claude Sonnet 5.5 (runtime + tab) + Claude Sonnet 5.5 (articles) | Claude Opus 5.5 | — |
+| **L-8** Trailblazer route content + calls | Claude Opus 5.5 (story) → Claude Sonnet 5.5 | Gemini 4 Carbon | **Story sign-off** |
+| **S-1** substance engine, `ped_active` writer, Rehab absence, `AvatarDied` | Claude Opus 5.5 | Gemini 4 Carbon | — |
+| **S-2** substance magnitudes | Gemini 4 Carbon (Math) | Claude Opus 5.5 | — |
+| **S-3** substance content + PED re-gate | Claude Opus 5.5 (scripts) → Claude Sonnet 5.5 | Gemini 4 Carbon | — |
+| **S-4** the asterisk (press + record book) | Claude Sonnet 5.5 (runtime + content) | Claude Opus 5.5 | — |
 | **R-1** full-project review ([brief](tasks/R-1_full_review_brief.md); Fable 5.1's credit ran out before it began) | **GPT 6 Astra Pro** (owner reassignment, 2026-10-10) | Claude Opus (triage) | **Accept / reject proposals** |
-| **17a** achievements + presence | Claude Sonnet | Claude Opus | — |
-| **17b** legal + notices drafts | GPT Astra Pro | Claude Opus | **Legal sign-off, trademark** |
-| **17c** store copy + trailer script | Claude Opus | — | **Approve** |
-| **17d** release-candidate QA | Claude Opus (plan + gates) | GPT 6 Astra Pro | **Full playthrough** |
+| **17a** achievements + presence | Claude Sonnet 5.5 | Claude Opus 5.5 | — |
+| **17b** legal + notices drafts | Gemini 4 Carbon | Claude Opus 5.5 | **Legal sign-off, trademark** |
+| **17c** store copy + trailer script | Claude Opus 5.5 | — | **Approve** |
+| **17d** release-candidate QA | Claude Opus 5.5 (plan + gates) | Gemini 4 Carbon | **Full playthrough** |
 | **17e** submission + launch | Owner | — | Owner |
 
-**Parallel tracks from day one:** Claude Opus runs Phase 13 (the critical path). Claude Sonnet takes 14a (from Gemini Pro, 2026-10-13). GPT Astra Pro builds VoiceGen. Flash drafts announcer personas. Claude Opus writes the 15a art-direction briefs alongside 13-0/13-1.
+### Scope realignment assignments (SR-0 through SR-9)
+
+[scope_realignment.md](design/scope_realignment.md) supplies slice scope and owner gates; this roster supplies current authors and reviewers. SR-0 and other completed rows retain historical attribution. All outstanding work uses the 2026-11-19 roster in section 1a. Paused/cancelled status and unresolved scope decisions are unchanged.
+
+| Slice | Author | Reviewer | Owner gate |
+| :-- | :-- | :-- | :-- |
+| **SR-0** scope spec, GAME_VISION v3.0, GEMINI, BUILD_PLAN, TEAM, progress | Claude Opus (draft) → GPT (owner-assigned completion) | Owner | **Read GAME_VISION v3.0** |
+| **SR-1a** event-framework `outcomes[]` | Claude Opus 5.5 | Gemini 4 Carbon | — |
+| **SR-1b** Fencing + Robbery narrative arcs; mine hustle numbers | Claude Opus 5.5 → Claude Sonnet 5.5 | Gemini 4 Carbon | Story sign-off |
+| **SR-1c** retire two screens + phone buttons; delete after parity | Claude Sonnet 5.5 | Gemini 4 Carbon | **Delete approval** |
+| **SR-2a/b** stance engine / `GameManager` + stance UI | Claude Opus 5.5 / Claude Sonnet 5.5 | Gemini 4 Carbon (+ Math values) | Stance table sign-off |
+| **SR-3a** `ClutchResolver` + `BatterIntentKind.Clutch` + tilt/Math constants | **Gemini 4 Carbon** | Claude Opus 5.5 | **Clutch feels right** |
+| **SR-3b** clutch overlay + batting practice | Claude Sonnet 5.5 | Gemini 4 Carbon | Playtest |
+| **SR-4** Gate 2 screens (scope_realignment §5 rows 6-12) | Claude Sonnet 5.5 | Gemini 4 Carbon | Screenshot review |
+| **SR-5** Golden vertical slice (Gate 3) | Owner + AI art tools; Claude Sonnet 5.5 integration | Claude Opus 5.5 | **Taste** |
+| **SR-6** `mods/` loader | Claude Sonnet 5.5 | Gemini 4 Carbon | — |
+| **SR-7** Tabloid feed | Claude Sonnet 5.5 (runtime + content) | Claude Opus 5.5 | — |
+| **SR-8** Rap Sheet exporter | Claude Sonnet 5.5 | Gemini 4 Carbon | — |
+| **SR-9** six booths: persona framework, trigger catalog, scripts | Claude Opus 5.5 → Claude Sonnet 5.5 | Gemini 4 Carbon | **Approve taglines** |
+
+**Execution priority:** Claude Opus 5.5 continues **13-1 on `p13/integration`**, reviewed by Gemini 4 Carbon (Argon before 2026-11-25), then 13-2/13-3 and the v15-DDL-only freeze gate. Prepare Gate 2 from scope_realignment §5: SR-1, SR-2 and SR-4 with 15a/15b/15c; the owner chooses art direction. Phases 14 and 16 production pause until after Gate 4; SR-9 informs the six-persona scope when audio resumes. SR-3a/b clutch work must not block the neutral `MicroGame` demo. SR-5 is Gate 3; SR-6–SR-8 follow Gate 4. No model starts the next slice without its brief and assignment.
 
 ---
 
+
 ## 3. How work flows
 
-1. **Brief.** Claude Opus writes a task brief in `docs/tasks/` before any delegated slice starts, from [TASK_BRIEF_TEMPLATE.md](tasks/TASK_BRIEF_TEMPLATE.md) ([voicegen_task_brief.md](tasks/voicegen_task_brief.md) is a worked example). It must name the **recommended model** and the **handoff**: context, hard constraints (allowed paths), inputs, outputs, tests, definition of done, out of scope.
+1. **Brief.** Claude Opus 5.5 writes a task brief in `docs/tasks/` before any delegated slice starts, from [TASK_BRIEF_TEMPLATE.md](tasks/TASK_BRIEF_TEMPLATE.md) ([voicegen_task_brief.md](tasks/voicegen_task_brief.md) is a worked example). It must name the **recommended model** and the **handoff**: context, hard constraints (allowed paths), inputs, outputs, tests, definition of done, out of scope.
 2. **Branch + worktree.** Each task runs on its own branch named `p<phase>/<slice>-<model>` (e.g. `p14/14b-gpt`), **checked out in that model's own git worktree** (`git worktree add ..\dnd-<model> -b <branch> origin/main`). A branch alone is not isolation: two models in the same checkout share one working tree and one `bin/` folder (2026-10-10: two sessions edited `CareerManager.cs` and rebuilt the MC harness under each other). **Nobody builds on `main` directly, and nobody builds in another model's worktree.**
 3. **Build and self-check.** The author runs the gates named in the brief and hands back a diff plus the gate output.
 4. **Review.** **The author never reviews their own work.** The reviewer from §2 checks the diff against the brief and the design doc, and reruns the gates.
-5. **Merge.** Claude Opus merges once the review passes and the gates are green, then logs a compact entry in `progress.md`.
+5. **Merge.** Claude Opus 5.5 merges once the review passes and the gates are green, then logs a compact entry in `progress.md`.
 6. **Owner gates.** Where §2 names an owner gate, nothing merges until the owner says yes.
 7. **Stop and hand off.** The **Author** column in §2 is each slice's **recommended model**. A model works only its own slice and **stops when the definition of done is met**. It never drifts into the next slice. It ends with a handoff note to the human: what was done, the commit, the gates and their results, what's open, and **"Recommended next: `<slice>` by `<model>`"** (plus the reviewer). The human starts the next model.
+8. **Write the next prompt (owner, 2026-11-22).** After the handoff note, the finishing model writes the **complete prompt for the recommended next model**, ready to paste: role, task, worktree and branch, session start, preconditions, task details, rules and finish.
+   - **Owner questions first.** If the model has questions only the owner can answer, and the next model needs those answers to proceed, it asks them in the handoff and **waits for the owner's reply** before writing the prompt. It then folds the answers in. Decisions the next step is designed to settle (for example D-options the owner decides after a Math check is reconciled) don't block the prompt; they're listed as open.
+   - **Carry the rule forward.** Every prompt includes this step's rule, so each model in the chain does the same.
+   - **Gemini sessions.** Their sandbox is scoped to `C:\Users\DELL\dirt_and_diamonds`. The prompt names a worktree under `.worktrees/` (pre-created by Opus, or say who creates it), opens with the sandbox block (`git` and `dotnet` need the owner's grant outside the sandbox; write check first), and gives the no-commit fallback.
 
 ### Gates (from GEMINI.md §9)
 - Anything under `Assets/Simulation/` → `run_monte_carlo_batch`. The resolver guard stays byte-exact; re-baselining a season guard needs explicit sanction.
@@ -125,10 +158,10 @@ Gemini 3.8 Flash stays. Older docs, specs and briefs still name Gemini Pro; **re
 
 ## 5. Open decisions for the owner
 
-1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed this roster; Claude Opus 5.5 is integration lead. GEMINI.md and league_restructure.md now point here.
+1. ~~**Who leads.**~~ **Resolved 2026-10-10:** the owner confirmed the original roster. **Current lead: Claude Opus 5.5** under the 2026-11-19 roster directive.
 2. **Auto-committer policy (R-1 accepted):** no automatic commits/pushes to main or shared/integration branches. Disable it for those targets; any retained automation is restricted to an explicitly chosen personal scratch branch. Reviewed human-directed integration only. This records policy, not a claim that an external service has been disabled.
 3. ~~**Repo visibility.**~~ **Resolved 2026-10-10:** the repo is private.
 
 ## R-1 accepted repair assignments (2026-10-10)
 
-The owner accepted all [R-1 answers](review/r1/06_owner_questions.md). The [BUILD_PLAN execution table](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) links the eight scoped briefs. Opus owns SAVE-1/SAVE-2/FAMILY and durable REVEAL/STEAM work; *(from 2026-10-13, §1a)* GPT 6 Astra Pro independently reviews them and Claude Sonnet owns the presentation/Steam integration. GPT 6 Astra Pro owns R1-MATH (Claude Opus reviews); GPT owns accepted EFFECTS projections and LEARN engine DTO/session seams, Opus development, Sonnet LEARN UI. These assignments supplement existing slices; they do not authorize simultaneous edits to shared files. Stop and hand off per §3.
+The owner accepted all [R-1 answers](review/r1/06_owner_questions.md). The [BUILD_PLAN execution table](BUILD_PLAN.md#r-1-accepted-execution-order-2026-10-10) links the eight scoped briefs. Claude Opus 5.5 owns SAVE-1/SAVE-2/FAMILY and durable REVEAL/STEAM work; *(from 2026-10-13, §1a)* Gemini 4 Carbon independently reviews them and Claude Sonnet 5.5 owns the presentation/Steam integration. Gemini 4 Carbon owns R1-MATH (Claude Opus 5.5 reviews); Gemini 4 Carbon owns accepted EFFECTS projections and LEARN engine DTO/session seams, Claude Opus 5.5 development, Claude Sonnet 5.5 LEARN UI. These assignments supplement existing slices; they do not authorize simultaneous edits to shared files. Stop and hand off per §3.

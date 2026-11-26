@@ -84,13 +84,51 @@ public sealed class MicroGame
     private PitcherArsenal[] _arsenals = Array.Empty<PitcherArsenal>();
     private bool[] _pedActive = Array.Empty<bool>();
 
+    // Team-indexed, sized by RosterCapacity and looped to each team's own
+    // counts (§5.2, slice 13-2): the lineup in batting order, starters and
+    // relievers in StarterSelection quality order.
     private int[] _teamIds = Array.Empty<int>();
+    private LeagueTier[] _teamTier = Array.Empty<LeagueTier>();
     private int[] _lineupSlots = Array.Empty<int>();
-    private int[] _rotationSlots = Array.Empty<int>();
-    private int[] _bullpenSlots = Array.Empty<int>();
+    private int[] _starterSlots = Array.Empty<int>();
+    private int[] _starterCount = Array.Empty<int>();
+    private int[] _relieverSlots = Array.Empty<int>();
+    private int[] _relieverCount = Array.Empty<int>();
+    private List<LineupCandidate>[] _teamCandidates = Array.Empty<List<LineupCandidate>>();
     private byte[] _teamDefense = Array.Empty<byte>();
-    private int[] _teamGamesPlayed = Array.Empty<int>();
     private int _teamCount;
+
+    // 13-2: the game's calendar day for §6 rest. The career driver sets it per
+    // attended game; headless callers that never do get one day per game.
+    private long _gameDay;
+    private bool _gameDaySet;
+    private long _autoGameDay = 1;
+
+    // 13-3 (brief D4): the Schedule_Games row the next game is, set by the
+    // career driver per attended game; FlushGame marks it final in the
+    // game's own batch. Headless callers that never set one write no result.
+    private readonly ScheduleQueries _scheduleQueries;
+    private long _scheduledGameId;
+    private long _flushGameId;
+    private int _flushHomeScore;
+    private int _flushAwayScore;
+
+    private string? _featuredPlayerId;
+
+    /// <summary>
+    /// Last-start days for §6 starter selection (slice 13-2): a private ledger
+    /// by default; GameManager assigns the one shared with every tier sim.
+    /// </summary>
+    public PitcherRestLedger RestLedger { get; set; } = new();
+
+    /// <summary>Starts made on short rest (the §6 fallback), for the 13-2 harness.</summary>
+    internal int ShortRestStarts { get; private set; }
+
+    /// <summary>Games where no starter could go and a reliever opened (§6), for the 13-2 harness.</summary>
+    internal int BullpenGames { get; private set; }
+
+    /// <summary>The last game's starting pitchers (home, away), for the 13-2 harness's macro/micro parity check.</summary>
+    internal (string Home, string Away) LastStarters { get; private set; }
 
     // Game-scoped accumulators (cleared at the start of every PlayGame).
     private BattingLine[] _batting = Array.Empty<BattingLine>();
@@ -168,29 +206,46 @@ public sealed class MicroGame
     /// </summary>
     public AvailabilityLedger? Availability;
 
-    /// <summary>Feed name for a shadowed slot's plate appearances (a nameless roster fill-in, not the absent player).</summary>
-    private const string ReplacementDisplayName = "Call-Up";
-
-    // The replacement call-up's fixed league-shaped arsenal (the v3→v4
-    // backfill's 60/25/15 mix at replacement-level stuff) — only consulted
-    // when the human bats against a shadowed pitcher.
-    private static readonly PitcherArsenal ReplacementArsenal = new(
-        LeagueSimulator.ReplacementRating, 40, 60,
-        LeagueSimulator.ReplacementRating, 40, 25,
-        LeagueSimulator.ReplacementRating, 40, 15);
-
     // Per-slot availability caches (Phase 8c), rebuilt when the ledger's
-    // Version or the refreshed day moves; per-team replacement ratings baked
-    // at Initialize with each team's own tier deltas (the micro-sim is
-    // global — a shadowed HS slot is shadowed by an HS-environment call-up).
+    // Version or the refreshed day moves. 13-5: no call-up shadows anyone
+    // (spec §7) — an absent player simply doesn't play.
     private bool[] _slotUnavailable = Array.Empty<bool>();
     private byte[] _slotRustPenalty = Array.Empty<byte>();
     private readonly List<AbsenceEntry> _absenceScratch = new();
     private int _absenceVersionSeen = -1;
     private long _absenceDaySeen = -1;
     private bool _hasAbsences;
-    private BatterRatings[] _replacementBatterByTeam = Array.Empty<BatterRatings>();
-    private PitcherRatings[] _replacementPitcherByTeam = Array.Empty<PitcherRatings>();
+
+    /// <summary>
+    /// The Pro Sunday lock's designations (slice 13-5), optional like
+    /// <see cref="Availability"/>: null — and every HS/College player, and
+    /// every day outside lock coverage — reads as active. An inactive player
+    /// is ineligible exactly like an absent one.
+    /// </summary>
+    public RosterManager? Designations;
+
+    private bool[] _slotInactive = Array.Empty<bool>();
+    private readonly List<string> _inactiveScratch = new();
+    private int _designationVersionSeen = -1;
+    private long _designationDaySeen = -1;
+    private bool _hasInactive;
+    private Dictionary<string, int> _slotByPlayerId = new(StringComparer.Ordinal);
+
+    // 13-5 (brief §4 item 4): each team plays its base lineup (RebuildLineups)
+    // unless one of those nine is ineligible today; then the allocation-free
+    // LineupBuilder twin rebuilds it from the team's eligible players, kept
+    // in Build's order since Initialize, with the featured avatar only when
+    // he is eligible (Amendment 2). PlayHalfInning reads only these.
+    private LineupCandidate[] _orderedCandidates = Array.Empty<LineupCandidate>();
+    private int[] _gameLineupSlots = Array.Empty<int>();
+    private byte[] _gameDefense = Array.Empty<byte>();
+    private readonly LineupCandidate[] _twinScratch = new LineupCandidate[RosterCapacity.MaxPositionPlayers];
+    private readonly int[] _twinSlots = new int[RosterCapacity.Lineup];
+    private readonly sbyte[] _twinPositions = new sbyte[RosterCapacity.Lineup];
+    private int _featuredSlot = NoHuman;
+
+    /// <summary>Game-day lineups rebuilt around an ineligible player (13-5 harness visibility).</summary>
+    internal int LineupRebuildCount { get; private set; }
 
     /// <summary>
     /// Purchased-gear source (Phase 8e), optional like <see cref="Rivalries"/>:
@@ -228,6 +283,7 @@ public sealed class MicroGame
     {
         _db = db;
         _queries = queries;
+        _scheduleQueries = new ScheduleQueries(db);
     }
 
     private struct BattingLine
@@ -282,20 +338,32 @@ public sealed class MicroGame
         // construction. MLB (and every pre-v7 world) is all-zero deltas.
         var teamIndexById = new Dictionary<int, int>(_teamCount);
         _teamTierDeltas = new TierRatingDeltas[_teamCount];
+        _teamTier = new LeagueTier[_teamCount];
         for (int t = 0; t < _teamCount; t++)
         {
             _teamIds[t] = teams[t].TeamId;
+            _teamTier[t] = teams[t].Tier;
             _teamTierDeltas[t] = TierEffects.For(teams[t].Tier);
             teamIndexById.Add(teams[t].TeamId, t);
         }
+        RestLedger.HydrateOnce(_queries);
 
-        var rosterRows = new List<RosterPlayerRow>(_teamCount * LeagueSimulator.RosterSizePerTeam);
+        var rosterRows = new List<RosterPlayerRow>(_teamCount * RosterCapacity.MaxRoster);
         _queries.LoadRoster(rosterRows);
         _roster = rosterRows.ToArray();
 
         var pedIds = new List<string>();
         _queries.LoadActiveFlagPlayerIds(LeagueSimulator.PedActiveFlagName, pedIds);
         var pedSet = new HashSet<string>(pedIds, StringComparer.Ordinal);
+
+        // 13-2 (brief D3): who plays is a legal defense from Player_Fielding.
+        var fieldingRows = new List<PlayerFieldingRow>();
+        _queries.LoadAllFielding(fieldingRows);
+        var fieldingById = new Dictionary<string, PlayerFieldingRow>(fieldingRows.Count, StringComparer.Ordinal);
+        foreach (PlayerFieldingRow f in fieldingRows)
+        {
+            fieldingById[f.PlayerId] = f;
+        }
 
         // Arsenal rows keyed by player for slot assembly below (load-time only).
         var arsenalRows = new List<PitchArsenalRow>(_roster.Length * 3);
@@ -333,6 +401,15 @@ public sealed class MicroGame
         _absenceVersionSeen = -1; // roster changed — force a cache rebuild
         _absenceDaySeen = -1;
         _hasAbsences = false;
+        _slotInactive = new bool[slots];
+        _designationVersionSeen = -1; // roster changed — force a cache rebuild
+        _designationDaySeen = -1;
+        _hasInactive = false;
+        _slotByPlayerId = new Dictionary<string, int>(slots, StringComparer.Ordinal);
+        for (int i = 0; i < slots; i++)
+        {
+            _slotByPlayerId[_roster[i].PlayerId] = i;
+        }
         _slotGearBoost = new byte[slots];
         _equipmentVersionSeen = -1; // roster changed — force a cache rebuild
         _hasEquipment = false;
@@ -340,39 +417,29 @@ public sealed class MicroGame
         _slotTeam = new int[slots];
         _slotInLineup = new bool[slots];
         _personVersionSeen = -1; // roster changed — force a cache rebuild
-        // One extra line past the roster: the discard row a shadowed slot's
-        // replacement accumulates into. FlushGame loops the roster length
-        // only, so a call-up's stats and PED bookkeeping never reach the
-        // database or the absent player.
-        _batting = new BattingLine[slots + 1];
-        _pitching = new PitchingLine[slots + 1];
-        _playedThisGame = new bool[slots + 1];
-
-        // Phase 8c: each team's replacement call-up plays in that team's tier
-        // environment, the same per-team baking the roster arrays get below.
-        _replacementBatterByTeam = new BatterRatings[_teamCount];
-        _replacementPitcherByTeam = new PitcherRatings[_teamCount];
+        // 13-5: one line per roster slot — the retired call-up's discard
+        // line is gone; only real players ever play.
+        _batting = new BattingLine[slots];
+        _pitching = new PitchingLine[slots];
+        _playedThisGame = new bool[slots];
+        _orderedCandidates = new LineupCandidate[_teamCount * RosterCapacity.MaxPositionPlayers];
+        _gameLineupSlots = new int[_teamCount * RosterCapacity.Lineup];
+        _gameDefense = new byte[_teamCount];
+        _lineupSlots = new int[_teamCount * RosterCapacity.Lineup];
+        _starterSlots = new int[_teamCount * RosterCapacity.MaxStarters];
+        _starterCount = new int[_teamCount];
+        _relieverSlots = new int[_teamCount * RosterCapacity.MaxRelievers];
+        _relieverCount = new int[_teamCount];
+        _teamDefense = new byte[_teamCount];
+        _teamCandidates = new List<LineupCandidate>[_teamCount];
+        var starters = new List<int>[_teamCount];
+        var relievers = new List<int>[_teamCount];
         for (int t = 0; t < _teamCount; t++)
         {
-            TierRatingDeltas deltas = _teamTierDeltas[t];
-            _replacementBatterByTeam[t] = new BatterRatings(
-                TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.BatPower),
-                TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.BatContact),
-                TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.BatDiscipline), pedActive: false);
-            _replacementPitcherByTeam[t] = new PitcherRatings(
-                TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.PitStuff),
-                TierEffects.Shift(LeagueSimulator.ReplacementRating, deltas.PitControl),
-                (byte)LeagueSimulator.ReplacementRating);
+            _teamCandidates[t] = new List<LineupCandidate>(RosterCapacity.MaxPositionPlayers);
+            starters[t] = new List<int>(RosterCapacity.MaxStarters);
+            relievers[t] = new List<int>(RosterCapacity.MaxRelievers);
         }
-        _lineupSlots = new int[_teamCount * LeagueSimulator.LineupSize];
-        _rotationSlots = new int[_teamCount * LeagueSimulator.RotationSize];
-        _bullpenSlots = new int[_teamCount * LeagueSimulator.BullpenSize];
-        _teamDefense = new byte[_teamCount];
-        _teamGamesPlayed = new int[_teamCount];
-
-        Span<int> lineupCount = stackalloc int[_teamCount];
-        Span<int> rotationCount = stackalloc int[_teamCount];
-        Span<int> bullpenCount = stackalloc int[_teamCount];
         // Fielding/teamwork sums are retained past Initialize (fields, not
         // stack scratch): the per-game person refresh re-bakes a team's
         // defense byte from them when a lineup teamwork lever moves.
@@ -425,45 +492,315 @@ public sealed class MicroGame
 
                 switch (row.Role)
                 {
-                    case PitcherRole.Starter when rotationCount[team] < LeagueSimulator.RotationSize:
-                        _rotationSlots[team * LeagueSimulator.RotationSize + rotationCount[team]++] = i;
+                    case PitcherRole.Starter:
+                        starters[team].Add(i);
                         break;
-                    case PitcherRole.Reliever when bullpenCount[team] < LeagueSimulator.BullpenSize:
-                        _bullpenSlots[team * LeagueSimulator.BullpenSize + bullpenCount[team]++] = i;
+                    case PitcherRole.Reliever:
+                        relievers[team].Add(i);
                         break;
-                    case PitcherRole.None:
+                    default:
                         throw new InvalidOperationException(
-                            $"Pitcher {row.PlayerId} has no Pitcher_Roles row — the v4 backfill/generation invariant is broken.");
+                            $"Pitcher {row.PlayerId} has no Pitcher_Roles row — the generation invariant is broken.");
                 }
             }
-            else if (lineupCount[team] < LeagueSimulator.LineupSize)
+            else
             {
-                _lineupSlots[team * LeagueSimulator.LineupSize + lineupCount[team]++] = i;
-                _slotInLineup[i] = true;
-                _teamFieldingSum[team] += row.Fielding;
-                _teamTeamworkSum[team] += person.Teamwork;
+                fieldingById.TryGetValue(row.PlayerId, out PlayerFieldingRow fielding);
+                bool hasFielding = fielding.PlayerId is not null;
+                _teamCandidates[team].Add(new LineupCandidate(
+                    i, row.PlayerId, row.BatPower + row.BatContact + row.BatDiscipline,
+                    hasFielding ? fielding.DefensivePosition : null,
+                    hasFielding ? fielding.SecondaryPosition : null));
             }
         }
 
         for (int t = 0; t < _teamCount; t++)
         {
-            if (lineupCount[t] < LeagueSimulator.LineupSize || rotationCount[t] < LeagueSimulator.RotationSize ||
-                bullpenCount[t] < LeagueSimulator.BullpenSize)
+            LeagueSimulator.CheckCapacity(teams[t], _teamCandidates[t].Count, starters[t].Count, relievers[t].Count);
+            _starterCount[t] = RankPitchers(starters[t], _starterSlots, t * RosterCapacity.MaxStarters);
+            _relieverCount[t] = RankPitchers(relievers[t], _relieverSlots, t * RosterCapacity.MaxRelievers);
+            // 13-5: the team's position players in Build's order, for the twin.
+            var ordered = new List<LineupCandidate>(_teamCandidates[t]);
+            ordered.Sort(static (a, b) => LineupBuilder.CompareOrder(in a, in b));
+            ordered.CopyTo(_orderedCandidates, t * RosterCapacity.MaxPositionPlayers);
+        }
+        _initialized = true;
+        RebuildLineups();
+    }
+
+    /// <summary>
+    /// Marks the one player who always starts (the avatar; 13-2 brief D3): if
+    /// the legal-defense pick leaves him out, he replaces the DH. Stored, so
+    /// every later re-Initialize honors it too; null clears it.
+    /// </summary>
+    public void SetFeaturedPlayer(string? playerId)
+    {
+        _featuredPlayerId = playerId;
+        if (_initialized)
+        {
+            RebuildLineups();
+        }
+    }
+
+    /// <summary>The calendar day the next <see cref="PlayGame{TBatter, TPitcher}"/> is played on (§6 rest).</summary>
+    public void SetGameDay(long day)
+    {
+        _gameDay = day;
+        _gameDaySet = true;
+    }
+
+    /// <summary>The Schedule_Games row the next <see cref="PlayGame{TBatter, TPitcher}"/> is (13-3); its result is written by <see cref="FlushGame"/>.</summary>
+    public void SetScheduledGame(long gameId) => _scheduledGameId = gameId;
+
+    // 13-4: the next game is a postseason game (brief §4.4). Selection then
+    // applies the series no-repeat filter (The Red Dirt Series only:
+    // _seriesFirstDay = its game-1 absolute day, else NoSeriesFilter) and
+    // counts into the postseason diagnostics, never the regular-season ones
+    // (Math record §10.1 Q7 channel 10). Consumed by the next PlayGame.
+    private bool _postseasonNext;
+    private bool _postseasonGame;
+    private long _seriesFirstDay = PostseasonCalendar.NoSeriesFilter;
+
+    /// <summary>Postseason short-rest starts (Q7 channel 10).</summary>
+    internal int PostseasonShortRestStarts { get; private set; }
+
+    /// <summary>Postseason bullpen games (Q7 channel 10).</summary>
+    internal int PostseasonBullpenGames { get; private set; }
+
+    // 13-4 review S1: the current game's two recorded starts and the
+    // counters before them, so a game that is cancelled mid-play or whose
+    // flush rolls back leaves the rest ledger (and the Red Dirt Series'
+    // no-repeat window) exactly as it found them. 13-5 (D3-A item 4, under
+    // the Gate 2 sanction): every attended game, regular season included,
+    // with ShortRestStarts and BullpenGames restored beside the postseason
+    // counters (Amendment 4).
+    private readonly PitcherRestLedger.StartUndo[] _startUndo = new PitcherRestLedger.StartUndo[2];
+    private int _startUndoCount;
+    private bool _undoArmed; // set once this game's selection snapshot exists
+    private int _postShortRestBefore;
+    private int _postBullpenBefore;
+    private int _shortRestBefore;
+    private int _bullpenBefore;
+
+    private void RevertStarts()
+    {
+        if (!_undoArmed)
+        {
+            return;
+        }
+        _undoArmed = false;
+        for (int k = _startUndoCount - 1; k >= 0; k--)
+        {
+            RestLedger.Revert(in _startUndo[k]);
+        }
+        _startUndoCount = 0;
+        PostseasonShortRestStarts = _postShortRestBefore;
+        PostseasonBullpenGames = _postBullpenBefore;
+        ShortRestStarts = _shortRestBefore;
+        BullpenGames = _bullpenBefore;
+    }
+
+    /// <summary>
+    /// Marks the next <see cref="PlayGame{TBatter, TPitcher}"/> as a
+    /// postseason game (13-4): <paramref name="seriesFirstDay"/> is The Red
+    /// Dirt Series' game-1 absolute day (its no-repeat window), else
+    /// <see cref="PostseasonCalendar.NoSeriesFilter"/>.
+    /// </summary>
+    public void SetPostseasonGame(long seriesFirstDay)
+    {
+        _postseasonNext = true;
+        _seriesFirstDay = seriesFirstDay;
+    }
+
+    /// <summary>
+    /// <see cref="RosterRules.CanField"/> for one team on the day (slice 13-5,
+    /// D2e): at least nine eligible (available ∧ active) position players and
+    /// a legal pitcher — eligible and, inside The Red Dirt Series' window
+    /// (<paramref name="seriesFirstDay"/>; else
+    /// <see cref="PostseasonCalendar.NoSeriesFilter"/>), not yet used in it.
+    /// It replaces 13-4's narrow pitcher-only test. Refreshes the day's
+    /// caches (Version- and day-gated), reads the rest ledger, records
+    /// nothing; allocation-free once warm.
+    /// </summary>
+    public bool CanField(int teamId, long day, long seriesFirstDay)
+    {
+        RefreshAvailability(day);
+        int team = TeamIndexOf(teamId);
+        int positionPlayers = 0;
+        List<LineupCandidate> candidates = _teamCandidates[team];
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            positionPlayers += IsIneligible(candidates[i].Slot) ? 0 : 1;
+        }
+        int pitchers = 0;
+        int starterBase = team * RosterCapacity.MaxStarters;
+        for (int k = 0; k < _starterCount[team]; k++)
+        {
+            pitchers += IsLegalInSeries(_starterSlots[starterBase + k], seriesFirstDay, day) ? 1 : 0;
+        }
+        int relieverBase = team * RosterCapacity.MaxRelievers;
+        for (int k = 0; k < _relieverCount[team]; k++)
+        {
+            pitchers += IsLegalInSeries(_relieverSlots[relieverBase + k], seriesFirstDay, day) ? 1 : 0;
+        }
+        return RosterRules.CanField(positionPlayers, pitchers);
+    }
+
+    private bool IsLegalInSeries(int slot, long seriesFirstDay, long day)
+    {
+        if (IsIneligible(slot))
+        {
+            return false;
+        }
+        long last = RestLedger.TryGetLastStart(_roster[slot].PlayerId, out long l) ? l : StarterSelection.NeverStarted;
+        return !StarterSelection.StartedInSeries(last, seriesFirstDay, day);
+    }
+
+    private long ConsumeGameDay()
+    {
+        if (_gameDaySet)
+        {
+            _gameDaySet = false;
+            return _gameDay;
+        }
+        return _autoGameDay++;
+    }
+
+    /// <summary>
+    /// Builds every team's lineup (LineupBuilder, brief D3) and its §3
+    /// defense byte. Mean-then-shift-then-teamwork, the exact formula
+    /// LeagueSimulator bakes, so the same lineup carries the same defense
+    /// byte in both sims.
+    /// </summary>
+    private void RebuildLineups()
+    {
+        int featuredSlot = _featuredPlayerId is null ? NoHuman : FindRosterSlot(_featuredPlayerId);
+        _featuredSlot = featuredSlot;
+        for (int t = 0; t < _teamCount; t++)
+        {
+            List<LineupCandidate> candidates = _teamCandidates[t];
+            foreach (LineupCandidate c in candidates)
             {
-                throw new InvalidOperationException(
-                    $"Team {_teamIds[t]} has {lineupCount[t]}/{LeagueSimulator.LineupSize} position players, " +
-                    $"{rotationCount[t]}/{LeagueSimulator.RotationSize} starters and " +
-                    $"{bullpenCount[t]}/{LeagueSimulator.BullpenSize} relievers — cannot host an attended game " +
-                    "(did LeagueGenerator.EnsureV4 run?).");
+                _slotInLineup[c.Slot] = false;
             }
-            // Mean-then-shift-then-teamwork, the exact formula LeagueSimulator
-            // bakes, so the same team carries the same defense byte in both sims.
+            int featuredHere = featuredSlot != NoHuman && _slotTeam[featuredSlot] == t ? featuredSlot : -1;
+            LineupResult lineup = LineupBuilder.Build(candidates, featuredHere);
+            _teamFieldingSum[t] = 0;
+            _teamTeamworkSum[t] = 0;
+            for (int k = 0; k < RosterCapacity.Lineup; k++)
+            {
+                int slot = lineup.Slots[k];
+                _lineupSlots[t * RosterCapacity.Lineup + k] = slot;
+                _slotInLineup[slot] = true;
+                _teamFieldingSum[t] += _roster[slot].Fielding;
+                _teamTeamworkSum[t] += _slotPersonDeltas[slot].Teamwork;
+            }
             _teamDefense[t] = PersonEffects.BakeTeamDefense(
-                _teamFieldingSum[t], LeagueSimulator.LineupSize,
-                _teamTierDeltas[t].Defense, _teamTeamworkSum[t]);
+                _teamFieldingSum[t], RosterCapacity.Lineup, _teamTierDeltas[t].Defense, _teamTeamworkSum[t]);
+        }
+    }
+
+    /// <summary>Writes <paramref name="pitchers"/> into a slot table in StarterSelection quality order; returns the count.</summary>
+    private int RankPitchers(List<int> pitchers, int[] table, int offset)
+    {
+        pitchers.Sort((a, b) => StarterSelection.CompareQuality(
+            in _pitcherRatings[a], _roster[a].PlayerId, in _pitcherRatings[b], _roster[b].PlayerId));
+        for (int k = 0; k < pitchers.Count; k++)
+        {
+            table[offset + k] = pitchers[k];
+        }
+        return pitchers.Count;
+    }
+
+    /// <summary>
+    /// §6 starter selection (slice 13-2), the same rule and ledger the macro
+    /// sim uses: the best rested starter, else the best-rested on short rest,
+    /// else a reliever opens (<paramref name="bullpenUsed"/> then skips past
+    /// him). 13-5: only eligible pitchers are candidates, and the caller has
+    /// already passed <see cref="CanField"/>, so one always exists.
+    /// </summary>
+    private int SelectPitcher(int team, long day, out int bullpenUsed)
+    {
+        int minRest = TierRules.MinRestDays(_teamTier[team]);
+        int starterCount = _starterCount[team];
+        int starterBase = team * RosterCapacity.MaxStarters;
+        Span<long> lastStart = stackalloc long[RosterCapacity.MaxStarters];
+        Span<bool> available = stackalloc bool[RosterCapacity.MaxStarters];
+        // 13-4: The Red Dirt Series' no-repeat filter (all false outside it).
+        Span<bool> usedInSeries = stackalloc bool[RosterCapacity.MaxStarters];
+        usedInSeries.Clear();
+        for (int k = 0; k < starterCount; k++)
+        {
+            int slot = _starterSlots[starterBase + k];
+            lastStart[k] = RestLedger.TryGetLastStart(_roster[slot].PlayerId, out long last)
+                ? last : StarterSelection.NeverStarted;
+            available[k] = !IsIneligible(slot);
+            if (_postseasonGame)
+            {
+                usedInSeries[k] = StarterSelection.StartedInSeries(lastStart[k], _seriesFirstDay, day);
+            }
         }
 
-        _initialized = true;
+        bullpenUsed = 0;
+        int pick = StarterSelection.SelectStarter(
+            lastStart[..starterCount], available[..starterCount], usedInSeries[..starterCount],
+            day, minRest, out bool shortRest);
+        if (pick >= 0)
+        {
+            // D5: TierRules.StartCapacityFactor(shortRest) is exactly 1 while
+            // the workload knobs ship neutral; applying a non-zero penalty to
+            // PitcherFatigue is R1-MATH's (PitcherFatigue.cs is outside 13-2).
+            if (shortRest)
+            {
+                if (_postseasonGame)
+                {
+                    PostseasonShortRestStarts++;
+                }
+                else
+                {
+                    ShortRestStarts++;
+                }
+            }
+            int starter = _starterSlots[starterBase + pick];
+            _startUndo[_startUndoCount++] = RestLedger.RecordStartUndoable(_roster[starter].PlayerId, day);
+            return starter;
+        }
+
+        int relieverCount = _relieverCount[team];
+        int relieverBase = team * RosterCapacity.MaxRelievers;
+        Span<bool> relieverAvailable = stackalloc bool[RosterCapacity.MaxRelievers];
+        Span<bool> relieverUsed = stackalloc bool[RosterCapacity.MaxRelievers];
+        relieverUsed.Clear();
+        for (int k = 0; k < relieverCount; k++)
+        {
+            int slot = _relieverSlots[relieverBase + k];
+            relieverAvailable[k] = !IsIneligible(slot);
+            if (_postseasonGame)
+            {
+                long last = RestLedger.TryGetLastStart(_roster[slot].PlayerId, out long l) ? l : StarterSelection.NeverStarted;
+                relieverUsed[k] = StarterSelection.StartedInSeries(last, _seriesFirstDay, day);
+            }
+        }
+        int opener = _postseasonGame
+            ? StarterSelection.SelectOpener(relieverAvailable[..relieverCount], relieverUsed[..relieverCount])
+            : StarterSelection.SelectOpener(relieverAvailable[..relieverCount]);
+        if (_postseasonGame)
+        {
+            PostseasonBullpenGames++;
+        }
+        else
+        {
+            BullpenGames++;
+        }
+        if (opener < 0)
+        {
+            throw new InvalidOperationException(
+                $"Team {_teamIds[team]} has no eligible pitcher on day {day}; check CanField before PlayGame (13-5).");
+        }
+        bullpenUsed = opener + 1;
+        int openerSlot = _relieverSlots[relieverBase + opener];
+        _startUndo[_startUndoCount++] = RestLedger.RecordStartUndoable(_roster[openerSlot].PlayerId, day);
+        return openerSlot;
     }
 
     /// <summary>
@@ -499,7 +836,9 @@ public sealed class MicroGame
     /// this shares <see cref="BakeSlotRatings"/> (and the retained
     /// fielding/teamwork sums) with Initialize, refresh ≡ re-Initialize
     /// whenever ledger and Player_Person agree — which the read-back publish
-    /// contract guarantees. Ids outside the roster are skipped; the linear
+    /// contract guarantees. That equivalence includes WHO pitches: a moved
+    /// pitcher's team re-ranks its starter/reliever tables in place (13-2
+    /// review R1). Ids outside the roster are skipped; the linear
     /// <see cref="FindRosterSlot"/> probe is fine here (moved levers are
     /// sparse — typically the avatar — and rebuilds are gated).
     /// </summary>
@@ -512,6 +851,11 @@ public sealed class MicroGame
         _personVersionSeen = PersonLevers.Version;
 
         Span<bool> defenseDirty = stackalloc bool[_teamCount];
+        // 13-2 review R1: a pitcher's re-baked stuff/control moves his D2
+        // quality, so his team's ranked starter/reliever tables re-sort below
+        // — SelectPitcher scans them in rank order, and a re-Initialize ranks
+        // after the same bake.
+        Span<bool> pitcherOrderDirty = stackalloc bool[_teamCount];
         PersonLevers.CopyAll(_personScratch);
         for (int i = 0; i < _personScratch.Count; i++)
         {
@@ -536,16 +880,53 @@ public sealed class MicroGame
                 defenseDirty[_slotTeam[slot]] = true;
             }
             _slotPersonDeltas[slot] = next;
+            PitcherRatings before = _pitcherRatings[slot];
             BakeSlotRatings(slot, in next);
+            if (_roster[slot].IsPitcher
+                && StarterSelection.Quality(in before) != StarterSelection.Quality(in _pitcherRatings[slot]))
+            {
+                pitcherOrderDirty[_slotTeam[slot]] = true;
+            }
         }
         for (int t = 0; t < _teamCount; t++)
         {
             if (defenseDirty[t])
             {
                 _teamDefense[t] = PersonEffects.BakeTeamDefense(
-                    _teamFieldingSum[t], LeagueSimulator.LineupSize,
+                    _teamFieldingSum[t], RosterCapacity.Lineup,
                     _teamTierDeltas[t].Defense, _teamTeamworkSum[t]);
             }
+            if (pitcherOrderDirty[t])
+            {
+                ReRankPitchers(_starterSlots, t * RosterCapacity.MaxStarters, _starterCount[t]);
+                ReRankPitchers(_relieverSlots, t * RosterCapacity.MaxRelievers, _relieverCount[t]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Restores one team's ranked pitcher table to the D2 order in place
+    /// after a person refresh re-baked a pitcher (13-2 review R1). Insertion
+    /// sort over ≤ <see cref="RosterCapacity.MaxStarters"/> entries:
+    /// allocation-free, and because <see cref="StarterSelection.CompareQuality"/>
+    /// is a total order (player ids are distinct), it lands exactly the order
+    /// <see cref="RankPitchers"/> gives a re-Initialize over the same bake.
+    /// </summary>
+    private void ReRankPitchers(int[] table, int offset, int count)
+    {
+        int end = offset + count;
+        for (int i = offset + 1; i < end; i++)
+        {
+            int slot = table[i];
+            int j = i - 1;
+            while (j >= offset && StarterSelection.CompareQuality(
+                in _pitcherRatings[slot], _roster[slot].PlayerId,
+                in _pitcherRatings[table[j]], _roster[table[j]].PlayerId) < 0)
+            {
+                table[j + 1] = table[j];
+                j--;
+            }
+            table[j + 1] = slot;
         }
     }
 
@@ -586,6 +967,7 @@ public sealed class MicroGame
     /// </summary>
     public void RefreshAvailability(long day)
     {
+        RefreshDesignations(day);
         if (Availability is null)
         {
             _hasAbsences = false;
@@ -624,20 +1006,52 @@ public sealed class MicroGame
         }
     }
 
-    /// <summary>True when the slot is shadowed by the replacement call-up today.</summary>
-    private bool IsShadowed(int slot) => _hasAbsences && _slotUnavailable[slot];
+    /// <summary>
+    /// Rebuilds the per-slot inactive cache (13-5) when the manager's Version
+    /// or the day moves; part of <see cref="RefreshAvailability"/>, so every
+    /// caller that refreshes absences refreshes designations too. Ids outside
+    /// the roster are skipped; allocation-free once warm.
+    /// </summary>
+    private void RefreshDesignations(long day)
+    {
+        if (Designations is null)
+        {
+            _hasInactive = false;
+            return;
+        }
+        if (Designations.Version == _designationVersionSeen && day == _designationDaySeen)
+        {
+            return;
+        }
+        _designationVersionSeen = Designations.Version;
+        _designationDaySeen = day;
+        Array.Clear(_slotInactive);
+        _hasInactive = false;
+        Designations.CopyInactive(day, _inactiveScratch);
+        for (int i = 0; i < _inactiveScratch.Count; i++)
+        {
+            if (_slotByPlayerId.TryGetValue(_inactiveScratch[i], out int slot))
+            {
+                _slotInactive[slot] = true;
+                _hasInactive = true;
+            }
+        }
+    }
+
+    /// <summary>Out of today's game (13-5): absent (Phase 8c) or inactive (the Pro lock). No call-up shadows the slot.</summary>
+    private bool IsIneligible(int slot) =>
+        (_hasAbsences && _slotUnavailable[slot]) || (_hasInactive && _slotInactive[slot]);
+
+    /// <summary>True when the slot can play in the game the caches were last refreshed for.</summary>
+    internal bool IsEligible(int slot) => !IsIneligible(slot);
 
     /// <summary>
     /// The base ratings a pitching slot carries into its fatigue model today:
-    /// the team's replacement call-up when absent, rust-docked when
-    /// recovering, the baked array value otherwise (exact pre-8c bytes).
+    /// rust-docked when recovering, the baked array value otherwise (exact
+    /// pre-8c bytes). 13-5: an ineligible pitcher never pitches.
     /// </summary>
-    private PitcherRatings EffectivePitcherBase(int team, int slot, bool shadowed)
+    private PitcherRatings EffectivePitcherBase(int slot)
     {
-        if (shadowed)
-        {
-            return _replacementPitcherByTeam[team];
-        }
         // Phase 8e: gear boosts the tier-baked value BEFORE any rust dock
         // (equipment_quality.md §5 order) — and before fatigue seeding, so
         // fatigue erodes geared ratings the same way it erodes rusty ones.
@@ -750,11 +1164,34 @@ public sealed class MicroGame
     /// the player's avatar (<see cref="NoHuman"/> for none); the batter policy
     /// supplies that avatar's per-pitch input when batting, the pitcher policy
     /// its pitch calls when on the mound — the neutral policies for headless
-    /// runs (§6.1). Game-flow rules (9 innings, home half skipped when ahead,
-    /// extras while tied) mirror the macro-sim exactly; §8.5 bullpen pulls
+    /// runs (§6.1). Game-flow rules (the home team's tier's regulation
+    /// innings, §4; home half skipped when ahead; extras while tied) mirror
+    /// the macro-sim exactly; §8.5 bullpen pulls
     /// happen between half-innings off the fatigue multiplier.
     /// </summary>
     public MicroGameResult PlayGame<TBatter, TPitcher>(
+        int homeTeamId, int awayTeamId, int humanSlot,
+        ref TBatter batterPolicy, ref TPitcher pitcherPolicy, ref RngState rng)
+        where TBatter : IBatterPolicy
+        where TPitcher : IPitcherPolicy
+    {
+        _undoArmed = false;
+        _startUndoCount = 0;
+        try
+        {
+            return PlayGameCore(homeTeamId, awayTeamId, humanSlot, ref batterPolicy, ref pitcherPolicy, ref rng);
+        }
+        catch
+        {
+            // 13-4 review S1 / 13-5 D3-A item 4: a game cancelled mid-play
+            // (the interactive policy's OperationCanceledException) stays
+            // pending and is replayed, so its starts must not stick.
+            RevertStarts();
+            throw;
+        }
+    }
+
+    private MicroGameResult PlayGameCore<TBatter, TPitcher>(
         int homeTeamId, int awayTeamId, int humanSlot,
         ref TBatter batterPolicy, ref TPitcher pitcherPolicy, ref RngState rng)
         where TBatter : IBatterPolicy
@@ -781,33 +1218,70 @@ public sealed class MicroGame
         _pendingLogs.Clear();
         _flushHomeTeamId = homeTeamId;
         _flushAwayTeamId = awayTeamId;
+        _flushGameId = _scheduledGameId;
+        _scheduledGameId = 0;
+        // 13-4: postseason context is per game, like the scheduled row.
+        _postseasonGame = _postseasonNext;
+        _postseasonNext = false;
+        if (!_postseasonGame)
+        {
+            _seriesFirstDay = PostseasonCalendar.NoSeriesFilter;
+        }
 
-        int homeStarter = _rotationSlots[homeTeam * LeagueSimulator.RotationSize + _teamGamesPlayed[homeTeam] % LeagueSimulator.RotationSize];
-        int awayStarter = _rotationSlots[awayTeam * LeagueSimulator.RotationSize + _teamGamesPlayed[awayTeam] % LeagueSimulator.RotationSize];
-        _teamGamesPlayed[homeTeam]++;
-        _teamGamesPlayed[awayTeam]++;
+        // 13-5 (Amendment 2): an absent or inactive avatar is not the human
+        // in this game — he is never featured, never bats and never pitches;
+        // his team plays without him. Callers refresh the day's caches first
+        // (CareerManager does before every attended game).
+        if (humanSlot != NoHuman && IsIneligible(humanSlot))
+        {
+            humanSlot = NoHuman;
+        }
+
+        // 13-2 (brief D3): the human always starts. A position-player human
+        // the legal-defense pick benched becomes the featured player (the DH
+        // spot); the rebuild happens once, so warm games stay allocation-free.
+        if (humanSlot != NoHuman && !_roster[humanSlot].IsPitcher && !_slotInLineup[humanSlot])
+        {
+            SetFeaturedPlayer(_roster[humanSlot].PlayerId);
+        }
+
+        // §6 starter selection (13-2): the shared rule and rest ledger.
+        long gameDay = ConsumeGameDay();
+
+        // 13-5 (D2f): an attended game is played only when both sides can
+        // field; the career driver forfeits before ever calling PlayGame.
+        bool homeFields = PrepareGameLineup(homeTeam);
+        bool awayFields = PrepareGameLineup(awayTeam);
+        if (!homeFields || !awayFields)
+        {
+            throw new InvalidOperationException(
+                $"Attended game {homeTeamId} v {awayTeamId} on day {gameDay}: a team can't field; " +
+                "check CanField and record the forfeit instead (13-5).");
+        }
+
+        _startUndoCount = 0;
+        _postShortRestBefore = PostseasonShortRestStarts;
+        _postBullpenBefore = PostseasonBullpenGames;
+        _shortRestBefore = ShortRestStarts;
+        _bullpenBefore = BullpenGames;
+        _undoArmed = true;
+        int homeStarter = SelectPitcher(homeTeam, gameDay, out int homeBullpenUsed);
+        int awayStarter = SelectPitcher(awayTeam, gameDay, out int awayBullpenUsed);
+        LastStarters = (_roster[homeStarter].PlayerId, _roster[awayStarter].PlayerId);
+        int regulationInnings = TierRules.RegulationInnings(_teamTier[homeTeam]);
 
         // §8/§8.5: starters decay via the fatigue multiplier and hand off to
-        // the bullpen when it sinks below the pull threshold. Phase 8c: a
-        // shadowed slot's fatigue model runs on the replacement call-up's
-        // base ratings (PED never applies to the call-up) and its stats land
-        // on the discard line.
+        // the bullpen when it sinks below the pull threshold.
         int homePitcher = homeStarter;
         int awayPitcher = awayStarter;
-        bool homePitcherShadowed = IsShadowed(homeStarter);
-        bool awayPitcherShadowed = IsShadowed(awayStarter);
-        int homePitcherStat = homePitcherShadowed ? _roster.Length : homeStarter;
-        int awayPitcherStat = awayPitcherShadowed ? _roster.Length : awayStarter;
-        PitcherRatings homeBase = EffectivePitcherBase(homeTeam, homeStarter, homePitcherShadowed);
-        PitcherRatings awayBase = EffectivePitcherBase(awayTeam, awayStarter, awayPitcherShadowed);
-        var homeFatigue = new PitcherFatigue(in homeBase, _pedActive[homeStarter] && !homePitcherShadowed, FatigueEnabled);
-        var awayFatigue = new PitcherFatigue(in awayBase, _pedActive[awayStarter] && !awayPitcherShadowed, FatigueEnabled);
-        int homeBullpenUsed = 0;
-        int awayBullpenUsed = 0;
+        PitcherRatings homeBase = EffectivePitcherBase(homeStarter);
+        PitcherRatings awayBase = EffectivePitcherBase(awayStarter);
+        var homeFatigue = new PitcherFatigue(in homeBase, _pedActive[homeStarter], FatigueEnabled);
+        var awayFatigue = new PitcherFatigue(in awayBase, _pedActive[awayStarter], FatigueEnabled);
         double homeStarterPitches = -1.0;
         double awayStarterPitches = -1.0;
-        int homeStarterStat = homePitcherStat;
-        int awayStarterStat = awayPitcherStat;
+        int homeStarterStat = homeStarter;
+        int awayStarterStat = awayStarter;
         _pitching[homeStarterStat].G++;
         _pitching[homeStarterStat].Gs++;
         _pitching[awayStarterStat].G++;
@@ -823,25 +1297,25 @@ public sealed class MicroGame
 
         for (inning = 1; ; inning++)
         {
-            MaybePullPitcher(homeTeam, ref homePitcher, ref homePitcherStat, ref homePitcherShadowed,
+            MaybePullPitcher(homeTeam, ref homePitcher,
                 ref homeFatigue, ref homeBullpenUsed, ref homeStarterPitches);
             awayScore += PlayHalfInning(
-                awayTeam, homePitcher, homePitcherStat, homePitcherShadowed,
-                ref homeFatigue, _teamDefense[homeTeam], ref awayOrder,
+                awayTeam, homePitcher,
+                ref homeFatigue, _gameDefense[homeTeam], ref awayOrder,
                 humanSlot, inning, isTopHalf: true, awayScore, homeScore,
                 ref batterPolicy, ref pitcherPolicy, ref rng, ref humanPa, ref humanPitches);
-            if (inning >= 9 && homeScore > awayScore)
+            if (inning >= regulationInnings && homeScore > awayScore)
             {
                 break;
             }
-            MaybePullPitcher(awayTeam, ref awayPitcher, ref awayPitcherStat, ref awayPitcherShadowed,
+            MaybePullPitcher(awayTeam, ref awayPitcher,
                 ref awayFatigue, ref awayBullpenUsed, ref awayStarterPitches);
             homeScore += PlayHalfInning(
-                homeTeam, awayPitcher, awayPitcherStat, awayPitcherShadowed,
-                ref awayFatigue, _teamDefense[awayTeam], ref homeOrder,
+                homeTeam, awayPitcher,
+                ref awayFatigue, _gameDefense[awayTeam], ref homeOrder,
                 humanSlot, inning, isTopHalf: false, awayScore, homeScore,
                 ref batterPolicy, ref pitcherPolicy, ref rng, ref humanPa, ref humanPitches);
-            if (inning >= 9 && homeScore != awayScore)
+            if (inning >= regulationInnings && homeScore != awayScore)
             {
                 break;
             }
@@ -872,14 +1346,11 @@ public sealed class MicroGame
 
         // §6/§8.4 post-game hook bookkeeping: participants are marked so flush
         // can apply the shared LeagueSimulator.Ped* costs per flagged player.
-        // A shadowed slot marks the discard line instead — the absent player
-        // did not take the field, so no PED game is ever charged to them.
-        for (int i = 0; i < LeagueSimulator.LineupSize; i++)
+        // 13-5: the nine who actually took the field (the game lineup).
+        for (int i = 0; i < RosterCapacity.Lineup; i++)
         {
-            int homeBatter = _lineupSlots[homeTeam * LeagueSimulator.LineupSize + i];
-            int awayBatter = _lineupSlots[awayTeam * LeagueSimulator.LineupSize + i];
-            _playedThisGame[IsShadowed(homeBatter) ? _roster.Length : homeBatter] = true;
-            _playedThisGame[IsShadowed(awayBatter) ? _roster.Length : awayBatter] = true;
+            _playedThisGame[_gameLineupSlots[homeTeam * RosterCapacity.Lineup + i]] = true;
+            _playedThisGame[_gameLineupSlots[awayTeam * RosterCapacity.Lineup + i]] = true;
         }
         _playedThisGame[homeStarterStat] = true;
         _playedThisGame[awayStarterStat] = true;
@@ -893,6 +1364,8 @@ public sealed class MicroGame
             _pendingLogs.Add(new PendingLog(null, "final", _payloadBuilder.ToString()));
         }
 
+        _flushHomeScore = homeScore;
+        _flushAwayScore = awayScore;
         _gamePendingFlush = true;
         return new MicroGameResult(
             homeTeamId, awayTeamId, homeScore, awayScore, inning,
@@ -902,33 +1375,113 @@ public sealed class MicroGame
     /// <summary>
     /// §8.5: lifts the current pitcher between half-innings once his fatigue
     /// multiplier drops below <see cref="BullpenPullThreshold"/>, bringing the
-    /// next fresh reliever (their own stamina-derived capacity). The starter's
-    /// final pitch count is captured on his way out for the game line. An
-    /// absent reliever still burns his bullpen turn but the call-up shadows
-    /// him: replacement ratings, stats and PED bookkeeping to the discard line.
+    /// next fresh, eligible reliever (their own stamina-derived capacity).
+    /// 13-5 (Amendment 4): ineligible relievers (absent, or inactive in Pro)
+    /// are skipped; with none left the current pitcher stays in. The starter's
+    /// final pitch count is captured the first time anyone relieves him
+    /// (<c>starterPitches &lt; 0</c>), which also fixes opener games, where
+    /// <paramref name="bullpenUsed"/> starts past the opener.
     /// </summary>
     private void MaybePullPitcher(
-        int team, ref int pitcherSlot, ref int pitcherStatSlot, ref bool pitcherShadowed,
+        int team, ref int pitcherSlot,
         ref PitcherFatigue fatigue, ref int bullpenUsed, ref double starterPitches)
     {
-        if (!BullpenEnabled || bullpenUsed >= LeagueSimulator.BullpenSize ||
+        if (!BullpenEnabled || bullpenUsed >= _relieverCount[team] ||
             fatigue.Multiplier >= BullpenPullThreshold)
         {
             return;
         }
-        if (bullpenUsed == 0)
+        int relieverBase = team * RosterCapacity.MaxRelievers;
+        while (bullpenUsed < _relieverCount[team] && IsIneligible(_relieverSlots[relieverBase + bullpenUsed]))
+        {
+            bullpenUsed++;
+        }
+        if (bullpenUsed >= _relieverCount[team])
+        {
+            return;
+        }
+        if (starterPitches < 0.0)
         {
             starterPitches = fatigue.PitchesThrown;
         }
-        int reliever = _bullpenSlots[team * LeagueSimulator.BullpenSize + bullpenUsed++];
+        int reliever = _relieverSlots[relieverBase + bullpenUsed++];
         pitcherSlot = reliever;
-        pitcherShadowed = IsShadowed(reliever);
-        pitcherStatSlot = pitcherShadowed ? _roster.Length : reliever;
-        PitcherRatings relieverBase = EffectivePitcherBase(team, reliever, pitcherShadowed);
-        fatigue = new PitcherFatigue(in relieverBase, _pedActive[reliever] && !pitcherShadowed, FatigueEnabled);
-        _pitching[pitcherStatSlot].G++;
-        _playedThisGame[pitcherStatSlot] = true;
+        PitcherRatings relieverBase2 = EffectivePitcherBase(reliever);
+        fatigue = new PitcherFatigue(in relieverBase2, _pedActive[reliever], FatigueEnabled);
+        _pitching[reliever].G++;
+        _playedThisGame[reliever] = true;
     }
+
+    /// <summary>
+    /// Sets the team's game lineup and defense byte for this game (13-5) and
+    /// returns false when fewer than nine position players are eligible. The
+    /// base lineup plays when all nine of its members are eligible (0 B);
+    /// else the allocation-free twin rebuilds it from the eligible players in
+    /// Build's order, featuring the stored featured player only when he is
+    /// eligible (Amendment 2), and the defense byte re-bakes exactly as
+    /// <see cref="RebuildLineups"/> bakes it.
+    /// </summary>
+    private bool PrepareGameLineup(int team)
+    {
+        int lineupBase = team * RosterCapacity.Lineup;
+        bool intact = true;
+        if (_hasAbsences || _hasInactive)
+        {
+            for (int k = 0; k < RosterCapacity.Lineup; k++)
+            {
+                if (IsIneligible(_lineupSlots[lineupBase + k]))
+                {
+                    intact = false;
+                    break;
+                }
+            }
+        }
+        if (intact)
+        {
+            Array.Copy(_lineupSlots, lineupBase, _gameLineupSlots, lineupBase, RosterCapacity.Lineup);
+            _gameDefense[team] = _teamDefense[team];
+            return true;
+        }
+
+        int eligible = 0;
+        int orderBase = team * RosterCapacity.MaxPositionPlayers;
+        int count = _teamCandidates[team].Count;
+        for (int k = 0; k < count; k++)
+        {
+            LineupCandidate candidate = _orderedCandidates[orderBase + k];
+            if (!IsIneligible(candidate.Slot))
+            {
+                _twinScratch[eligible++] = candidate;
+            }
+        }
+        if (eligible < RosterCapacity.Lineup)
+        {
+            return false;
+        }
+        int featured = _featuredSlot != NoHuman && _slotTeam[_featuredSlot] == team && !IsIneligible(_featuredSlot)
+            ? _featuredSlot : -1;
+        LineupBuilder.BuildInto(_twinScratch.AsSpan(0, eligible), featured, _twinSlots, _twinPositions);
+        int fieldingSum = 0;
+        int teamworkSum = 0;
+        for (int k = 0; k < RosterCapacity.Lineup; k++)
+        {
+            int slot = _twinSlots[k];
+            _gameLineupSlots[lineupBase + k] = slot;
+            fieldingSum += _roster[slot].Fielding;
+            teamworkSum += _slotPersonDeltas[slot].Teamwork;
+        }
+        _gameDefense[team] = PersonEffects.BakeTeamDefense(
+            fieldingSum, RosterCapacity.Lineup, _teamTierDeltas[team].Defense, teamworkSum);
+        LineupRebuildCount++;
+        return true;
+    }
+
+    /// <summary>The last game's lineup for a team (harness visibility: who actually took the field).</summary>
+    internal ReadOnlySpan<int> GameLineup(int teamId) =>
+        _gameLineupSlots.AsSpan(TeamIndexOf(teamId) * RosterCapacity.Lineup, RosterCapacity.Lineup);
+
+    /// <summary>A roster slot's player id (harness visibility).</summary>
+    internal string PlayerIdAt(int slot) => _roster[slot].PlayerId;
 
     private int TeamIndexOf(int teamId)
     {
@@ -948,7 +1501,7 @@ public sealed class MicroGame
     /// chain runs only when the human bats or pitches (§1).
     /// </summary>
     private int PlayHalfInning<TBatter, TPitcher>(
-        int battingTeam, int pitcherSlot, int pitcherStatSlot, bool pitcherShadowed,
+        int battingTeam, int pitcherSlot,
         ref PitcherFatigue fatigue, byte defense, ref int orderPos,
         int humanSlot, int inning, bool isTopHalf, int awayScore, int homeScore,
         ref TBatter batterPolicy, ref TPitcher pitcherPolicy, ref RngState rng,
@@ -966,36 +1519,27 @@ public sealed class MicroGame
 
         while (outs < 3)
         {
-            int batterSlot = _lineupSlots[battingTeam * LeagueSimulator.LineupSize + orderPos];
-            orderPos = (orderPos + 1) % LeagueSimulator.LineupSize;
+            int batterSlot = _gameLineupSlots[battingTeam * RosterCapacity.Lineup + orderPos];
+            orderPos = (orderPos + 1) % RosterCapacity.Lineup;
 
-            // Phase 8c: an absent batter's PA plays as the team's replacement
-            // call-up with stats discarded; a recovering one bats rust-docked.
-            bool batterShadowed = false;
-            byte batterRust = 0;
-            if (_hasAbsences)
-            {
-                batterShadowed = _slotUnavailable[batterSlot];
-                batterRust = _slotRustPenalty[batterSlot];
-            }
-            int batterStatSlot = batterShadowed ? _roster.Length : batterSlot;
+            // Phase 8c: a recovering batter bats rust-docked. 13-5: an
+            // absent one isn't in the game lineup at all.
+            byte batterRust = _hasAbsences ? _slotRustPenalty[batterSlot] : (byte)0;
 
             PitcherRatings effectivePitcher = fatigue.EffectiveRatings();
             // Phase 6: an active rivalry bends this PA on BOTH paths below —
             // the boost lands on the effective ratings the same way fatigue
             // already does, upstream of the shared resolver, so the human's
             // pitch-chain anchor p* shifts consistently with an NPC macro PA.
-            // No rivalry crosses a shadowed slot — the call-up is a stranger.
-            byte rivalry = _hasRivalries && !batterShadowed && !pitcherShadowed
+            byte rivalry = _hasRivalries
                 ? _rivalrySlots[batterSlot * _roster.Length + pitcherSlot] : (byte)0;
             // Phase 8e: gear boosts the batter's tier-baked ratings BEFORE any
-            // rust dock (equipment_quality.md §5 order); the call-up carries
-            // no gear. Boost 0 is the identity — a no-gear PA keeps the exact
-            // pre-8e bytes on both the macro and pitch-chain paths.
-            byte batterGear = _hasEquipment && !batterShadowed ? _slotGearBoost[batterSlot] : (byte)0;
-            BatterRatings batter = batterShadowed
-                ? _replacementBatterByTeam[battingTeam]
-                : ApplyRust(EquipmentEffects.Batter(in _batterRatings[batterSlot], batterGear), batterRust);
+            // rust dock (equipment_quality.md §5 order). Boost 0 is the
+            // identity — a no-gear PA keeps the exact pre-8e bytes on both
+            // the macro and pitch-chain paths.
+            byte batterGear = _hasEquipment ? _slotGearBoost[batterSlot] : (byte)0;
+            BatterRatings batter =
+                ApplyRust(EquipmentEffects.Batter(in _batterRatings[batterSlot], batterGear), batterRust);
             if (rivalry != 0)
             {
                 batter = RivalryEffects.Batter(in batter, rivalry);
@@ -1004,11 +1548,11 @@ public sealed class MicroGame
             PaOutcome outcome;
             int pitches = 0;
 
-            // A shadowed human slot is an NPC PA — the player is in jail /
-            // suspended / hurt; the call-up filling their spot macro-resolves,
-            // so no policy handshake ever engages for a benched avatar.
-            bool humanBatting = batterSlot == humanSlot && !batterShadowed;
-            bool humanPitching = pitcherSlot == humanSlot && !pitcherShadowed;
+            // 13-5 (Amendment 2): humanSlot is already NoHuman when the avatar
+            // is absent or inactive, so no policy handshake ever engages for a
+            // benched avatar.
+            bool humanBatting = batterSlot == humanSlot;
+            bool humanPitching = pitcherSlot == humanSlot;
             if (humanBatting || humanPitching)
             {
                 // Inner chain (§5): anchor to the shared resolver, invert the
@@ -1016,9 +1560,7 @@ public sealed class MicroGame
                 AtBatResolver.ComputeProbabilities(in batter, in effectivePitcher, defense, anchor);
                 PitchClassRates rates = PitchChain.SolveNeutral(
                     anchor[(int)PaOutcome.Walk], anchor[(int)PaOutcome.Strikeout]);
-                // A shadowed NPC pitcher throws the fixed replacement arsenal
-                // (the human never faces the absent player's real mix).
-                PitcherArsenal arsenal = pitcherShadowed ? ReplacementArsenal : _arsenals[pitcherSlot];
+                PitcherArsenal arsenal = _arsenals[pitcherSlot];
                 var matchup = new PitchMatchup(
                     in arsenal, effectivePitcher.Control, batter.Discipline, batter.Contact);
                 // Runs already scored this half count toward the batting side.
@@ -1050,8 +1592,8 @@ public sealed class MicroGame
                 fatigue.AddNpcPa();
             }
 
-            ref BattingLine bat = ref _batting[batterStatSlot];
-            ref PitchingLine pit = ref _pitching[pitcherStatSlot];
+            ref BattingLine bat = ref _batting[batterSlot];
+            ref PitchingLine pit = ref _pitching[pitcherSlot];
             bat.Pa++;
             int paRuns = 0;
 
@@ -1111,16 +1653,14 @@ public sealed class MicroGame
 
             if (LoggingEnabled)
             {
-                AppendPaLog(inning, isTopHalf, batterSlot, batterShadowed, pitcherSlot, pitcherShadowed, outcome, paRuns, pitches);
+                AppendPaLog(inning, isTopHalf, batterSlot, pitcherSlot, outcome, paRuns, pitches);
             }
             // NPC feed: the human's own PA already renders via the bridge's
             // outcome queue ("Your PA: ..."), so only queue the others here.
-            // A shadowed human slot IS an NPC PA (the call-up bats) — feed it.
-            if (FeedSink != null && (batterSlot != humanSlot || batterShadowed))
+            if (FeedSink != null && batterSlot != humanSlot)
             {
                 FeedSink.PublishNpcPa(new NpcPaFeedEvent(
-                    batterShadowed ? ReplacementDisplayName : _displayNames[batterSlot],
-                    outcome, inning, isTopHalf, paRuns, rivalry != 0));
+                    _displayNames[batterSlot], outcome, inning, isTopHalf, paRuns, rivalry != 0));
             }
         }
         return runs;
@@ -1166,18 +1706,17 @@ public sealed class MicroGame
 
     /// <summary>
     /// §10: payloads are built at PA boundaries, never inside the pitch loop.
-    /// A shadowed slot's PA is attributed to no one (null player_id, the
-    /// league-level convention) and names "replacement" as the pitcher — the
-    /// absent player must never appear to have played.
+    /// 13-5: every PA is a real player's (no call-up), so every row names its
+    /// batter and pitcher.
     /// </summary>
     private void AppendPaLog(
-        int inning, bool isTopHalf, int batterSlot, bool batterShadowed,
-        int pitcherSlot, bool pitcherShadowed, PaOutcome outcome, int runs, int pitches)
+        int inning, bool isTopHalf, int batterSlot,
+        int pitcherSlot, PaOutcome outcome, int runs, int pitches)
     {
         _payloadBuilder.Clear();
         _payloadBuilder.Append("{\"inning\":").Append(inning)
             .Append(",\"half\":\"").Append(isTopHalf ? "top" : "bottom")
-            .Append("\",\"pitcher\":\"").Append(pitcherShadowed ? "replacement" : _roster[pitcherSlot].PlayerId)
+            .Append("\",\"pitcher\":\"").Append(_roster[pitcherSlot].PlayerId)
             .Append("\",\"outcome\":\"").Append(OutcomeName(outcome))
             .Append("\",\"runs\":").Append(runs);
         if (pitches > 0)
@@ -1185,7 +1724,7 @@ public sealed class MicroGame
             _payloadBuilder.Append(",\"pitches\":").Append(pitches);
         }
         _payloadBuilder.Append('}');
-        _pendingLogs.Add(new PendingLog(batterShadowed ? null : _roster[batterSlot].PlayerId, "pa", _payloadBuilder.ToString()));
+        _pendingLogs.Add(new PendingLog(_roster[batterSlot].PlayerId, "pa", _payloadBuilder.ToString()));
     }
 
     private static string OutcomeName(PaOutcome outcome) => outcome switch
@@ -1208,12 +1747,23 @@ public sealed class MicroGame
     /// costs (shared LeagueSimulator.Ped* constants), and the buffered
     /// play-by-play — in one transaction, then clears the pending state.
     /// </summary>
-    public void FlushGame(int seasonYear, int gameDay)
+    public void FlushGame(int seasonYear, int gameDay) => FlushGame(seasonYear, gameDay, null);
+
+    /// <summary>
+    /// The flush with a 13-4 postseason hook. A postseason game (marked by
+    /// <see cref="SetPostseasonGame"/>) writes NO Batting_Stats /
+    /// Pitching_Stats rows (brief D4-A, Amendment 1) yet still commits its
+    /// PED costs, Game_Logs, rest and schedule result; <paramref name="inBatch"/>
+    /// then runs inside the same transaction (the series update), so the
+    /// result and its series effects commit together or not at all.
+    /// </summary>
+    public void FlushGame(int seasonYear, int gameDay, Action<int, int>? inBatch)
     {
         if (!_gamePendingFlush)
         {
             throw new InvalidOperationException("No played game pending flush.");
         }
+        bool writeStats = !_postseasonGame;
 
         _db.BeginBatch();
         try
@@ -1221,7 +1771,7 @@ public sealed class MicroGame
             for (int i = 0; i < _roster.Length; i++)
             {
                 ref readonly BattingLine bat = ref _batting[i];
-                if (bat.Pa > 0)
+                if (writeStats && bat.Pa > 0)
                 {
                     _queries.AddBattingGameCounts(
                         _roster[i].PlayerId, seasonYear,
@@ -1229,7 +1779,7 @@ public sealed class MicroGame
                 }
 
                 ref readonly PitchingLine pit = ref _pitching[i];
-                if (pit.G > 0)
+                if (writeStats && pit.G > 0)
                 {
                     _queries.AddPitchingGameCounts(
                         _roster[i].PlayerId, seasonYear,
@@ -1251,13 +1801,30 @@ public sealed class MicroGame
                     seasonYear, gameDay, _flushHomeTeamId, _flushAwayTeamId,
                     log.PlayerId, log.EventType, log.Payload);
             }
+            // 13-2 (brief D4): the attended game's starts ride its own batch.
+            RestLedger.FlushDirty(_queries);
+            // 13-3 (brief D4): and so does its schedule row's final score.
+            if (_flushGameId != 0)
+            {
+                _scheduleQueries.RecordFinal(_flushGameId, _flushHomeScore, _flushAwayScore);
+            }
+            inBatch?.Invoke(_flushHomeScore, _flushAwayScore);
             _db.CommitBatch();
         }
         catch
         {
             _db.RollbackBatch();
+            RestLedger.AbandonFlush(); // review R2: rolled back, so the rows stay dirty
+            RevertStarts(); // 13-4 review S1 / 13-5 D3-A: the replay finds the ledger as this game did
+            // 13-5: its starts are gone, so a bare retry would write the box
+            // score without them. The game must be replayed (the career's
+            // pending game is, on the next attempt).
+            _gamePendingFlush = false;
             throw;
         }
+        RestLedger.AcknowledgeFlush(); // review R2: durable only once committed
+        _undoArmed = false;
+        _startUndoCount = 0;
 
         Array.Clear(_batting);
         Array.Clear(_pitching);

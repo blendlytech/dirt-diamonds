@@ -1,8 +1,10 @@
+> **Restored 2026-11-19 (W1).** Documents the shipped attended MicroGame read input, which is authoritative again under GAME_VISION v3.0 / GEMINI §11. Clutch Moment (SR-3a) layers on top; it doesn't replace this.
+
 # At-Bat "Read the Pitch" Input Model
 
-> **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** none beyond Phase 13 calibration.
+> **Reference (shipped system), superseded for attended games by Phase G.** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2.2.
 
-> **Planned changes (2026-10-09):** Mechanics unchanged. Visuals are redesigned from scratch in Phase 15 ([visual_redesign.md](../design/visual_redesign.md)); the mechanics here are unchanged.
+> **The end state (GAME_VISION §3 pillar 2 and §5).** Batting in attended games is **real-time arcade physics**, not a read of a dice-table pitch: you time the swing and place a contact cursor, and bat-ball contact, exit velocity and launch angle come from physics. Contact sets the cursor size and timing window, Power sets bat speed, and Discipline sets how early the pitch's type and location read on screen ([arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) §3.2, §4.1, §5.1). Your player also pitches and fields there (arcade §5.2, §5.3). This "Read the Pitch" model stays in the code only as the **Classic sim** fallback (arcade §11) and moves to `archive/` when G-4 ships. Its §7.4 playtest and re-band are retired (arcade §11).
 
 **Status:** DESIGN (Opus 4.8, 2026-07-07). No code. Supersedes the v4 Swing/Take
 batter input inside `PitchChain.SimulatePa` for the *human* path only.

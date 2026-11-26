@@ -26,11 +26,10 @@ Choices must write immediate consequences (e.g. deduct funds) AND write hidden f
 
 ## Hustle State Machines
 
-Hustles operate as isolated interactive nodes:
+**Narcotics** and **Texas Hold'em** operate as isolated interactive hustle nodes; **Fencing** and **Robbery** are **Burner Phone narrative branches** (SR-1b, `outcomes[]`), not interactive hustle nodes:
 
 - **Narcotics:** 3-tier system (Inventory Drop → Profit/Toxicity Cut → Territory Control vs Factions), with re-up and supplier haggle.
-- **Fencing:** alternating-offer negotiation, multi-lot.
-- **Robbery:** case → approach → execute → press-your-luck → getaway.
+- **Fencing** and **Robbery:** Burner Phone narrative branches (SR-1b, `outcomes[]`), not interactive hustle nodes.
 - **Texas Hold'em:** direct mathematical card simulation evaluating pot odds.
 - **Legal Work:** a Work block that drains Energy and Fitness for modest pay.
 

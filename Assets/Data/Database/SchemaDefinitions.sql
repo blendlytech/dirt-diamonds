@@ -4,6 +4,15 @@
 -- Schema evolution is keyed on PRAGMA user_version (see end of file);
 -- never rename/drop a column saved games reference without a migration step.
 --
+-- Schema v14 (Phase 13, league_restructure.md §12/§14) is a pre-1.0 CLEAN
+-- BREAK. Boot reads user_version BEFORE this script runs; a save at 1..13 (or
+-- above 14) is refused, and only with the player's consent is it renamed to
+-- dirt_and_diamonds.v13.bak (never deleted or overwritten; SaveCompatibility)
+-- and a new world generated. So this script only ever runs on an empty file
+-- or a v14 save, and the v3..v13 migration backfills that a fresh world never
+-- needs are gone. From 1.0 on, every schema change ships a migration
+-- (GEMINI.md §4).
+--
 -- Connection-level pragmas (journal_mode=WAL, foreign_keys=ON, synchronous)
 -- are set by DatabaseManager on every connection open, NOT in this script,
 -- because foreign_keys is per-connection and cannot be persisted here.
@@ -177,19 +186,45 @@ CREATE TABLE IF NOT EXISTS Game_State (
 ) STRICT;
 
 -- ----------------------------------------------------------------------------
--- Teams — league structure (Phase 3 / schema v3). team_id is the value the
--- previously unconstrained Players.team_id points at; rosters and schedules
--- group by it. A real FK on Players.team_id needs a Players table rebuild and
--- is deferred — the relationship is enforced at the query layer for now, with
--- the mandated hot-path index (idx_players_team) added below.
+-- Conferences / Divisions — schema v14 (league_restructure.md §2.3). Static
+-- league structure written once at world-gen from LeagueStructure (no rng).
+-- HS has two 6-team conferences and no divisions; College is 2 conferences x
+-- 3 divisions of 4; Pro is 2 x 4 divisions of 4. tier mirrors the C#
+-- LeagueTier enum (0 = HS, 1 = College, 2 = Pro).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Conferences (
+    conference_id INTEGER PRIMARY KEY,
+    tier          INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2),
+    name          TEXT    NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS Divisions (
+    division_id   INTEGER PRIMARY KEY,
+    conference_id INTEGER NOT NULL REFERENCES Conferences(conference_id),
+    name          TEXT    NOT NULL
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Teams — league structure (Phase 3 / schema v3; v14 adds the conference,
+-- division and home park). team_id is the value the unconstrained
+-- Players.team_id points at; rosters and schedules group by it. A real FK on
+-- Players.team_id needs a Players table rebuild and is deferred — the
+-- relationship is enforced at the query layer, with the mandated hot-path
+-- index (idx_players_team) added below. league/division stay display text
+-- (the UI's labels); conference_id/division_id are the structure. division_id
+-- is NULL for HS (no divisions). home_park feeds announcer intros and the UI
+-- (Assets/Data/League/home_parks.json until the G-7 venue catalog).
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS Teams (
-    team_id      INTEGER PRIMARY KEY,
-    city         TEXT    NOT NULL,
-    name         TEXT    NOT NULL,
-    abbreviation TEXT    NOT NULL,
-    league       TEXT,
-    division     TEXT
+    team_id       INTEGER PRIMARY KEY,
+    city          TEXT    NOT NULL,
+    name          TEXT    NOT NULL,
+    abbreviation  TEXT    NOT NULL,
+    league        TEXT,
+    division      TEXT,
+    conference_id INTEGER NOT NULL REFERENCES Conferences(conference_id),
+    division_id   INTEGER REFERENCES Divisions(division_id),
+    home_park     TEXT    NOT NULL
 ) STRICT;
 
 -- Mandated hot-path index: the macro-sim bulk-loads rosters grouped by team_id.
@@ -231,12 +266,8 @@ CREATE TABLE IF NOT EXISTS Pitcher_Roles (
     role      INTEGER NOT NULL CHECK (role IN (1, 2))
 ) STRICT;
 
--- v3→v4 backfill: every pre-v4 pitcher was a complete-game starter (rosters
--- were 9 + 5 with no relievers), so they migrate as role 1. INSERT OR IGNORE
--- keeps this idempotent on every boot; post-v4 code writes role rows
--- explicitly at player creation, so this only ever touches migrated saves.
-INSERT OR IGNORE INTO Pitcher_Roles (player_id, role)
-    SELECT player_id, 1 FROM Player_Ratings WHERE is_pitcher = 1;
+-- (The v3→v4 role backfill went with the v14 clean break: every path that
+-- creates a pitcher writes its role row, so a fresh world never needed it.)
 
 -- ----------------------------------------------------------------------------
 -- Pitch_Arsenals — schema v4. Per-pitch-type ratings (micro doc §13): three
@@ -255,20 +286,8 @@ CREATE TABLE IF NOT EXISTS Pitch_Arsenals (
     PRIMARY KEY (player_id, pitch_type)
 ) STRICT;
 
--- v3→v4 backfill: migrated pitchers get a conservative league-shaped arsenal
--- derived from pit_stuff (fastball rides the raw stuff, breaking ball carries
--- the movement, offspeed sits behind both) with a standard 60/25/15 mix.
--- Fresh worlds never see these rows — LeagueGenerator writes varied arsenals
--- at creation and INSERT OR IGNORE makes the backfill a no-op for them.
-INSERT OR IGNORE INTO Pitch_Arsenals (player_id, pitch_type, velocity, movement, usage_weight)
-    SELECT player_id, 'Fastball', pit_stuff, 40, 60
-    FROM Player_Ratings WHERE is_pitcher = 1;
-INSERT OR IGNORE INTO Pitch_Arsenals (player_id, pitch_type, velocity, movement, usage_weight)
-    SELECT player_id, 'Breaking', MAX(0, pit_stuff - 20), pit_stuff, 25
-    FROM Player_Ratings WHERE is_pitcher = 1;
-INSERT OR IGNORE INTO Pitch_Arsenals (player_id, pitch_type, velocity, movement, usage_weight)
-    SELECT player_id, 'Offspeed', MAX(0, pit_stuff - 25), MIN(100, pit_stuff + 5), 15
-    FROM Player_Ratings WHERE is_pitcher = 1;
+-- (The v3→v4 stuff-derived arsenal backfill went with the v14 clean break:
+-- every path that creates a pitcher calls LeagueGenerator.GenerateArsenal.)
 
 -- ----------------------------------------------------------------------------
 -- Life_Needs — schema v5. Persists the five NeedsEngine/NeedsState fields
@@ -309,26 +328,19 @@ CREATE TABLE IF NOT EXISTS Life_Stress (
 -- ----------------------------------------------------------------------------
 -- Team_Tiers — schema v7. The career-ladder dimension (Phase 9a): one row per
 -- team naming which league tier it plays in. tier mirrors the C# LeagueTier
--- enum: 0 = HS, 1 = College, 2 = MinorA, 3 = MinorAA, 4 = MinorAAA, 5 = MLB.
--- A separate table rather than an ALTER on Teams so the v6→v7 migration stays
--- purely additive and this script remains the whole migration — ALTER TABLE
--- ADD COLUMN is not idempotent, the same reasoning as Pitcher_Roles/Life_Stress.
--- The PK doubles as the hot-path index for the tier-scoped roster join
--- (Players.team_id → Team_Tiers.team_id probe); the tier filter itself scans
--- at most 48 rows and needs no index of its own.
+-- enum: 0 = HS, 1 = College, 2 = Pro (schema v14 collapsed the six-rung
+-- ladder; Pro keeps the old MinorA ordinal, so content gates written
+-- `tier >= 2` hold). Kept as its own table in v14 (13-1 brief §3.2.1) so every
+-- shipped tier join stays intact. The PK doubles as the hot-path index for
+-- the tier-scoped roster join (Players.team_id → Team_Tiers.team_id probe);
+-- the tier filter itself scans at most 68 rows and needs no index of its own.
+-- (The v6→v7 tier-5 backfill went with the v14 clean break: 5 is out of range
+-- now, and world-gen writes every team's tier row.)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS Team_Tiers (
     team_id INTEGER PRIMARY KEY REFERENCES Teams(team_id) ON DELETE CASCADE,
-    tier    INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 5)
+    tier    INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2)
 ) STRICT;
-
--- v6→v7 backfill: every pre-v7 team was the one MLB-calibrated league, so
--- existing teams migrate as tier 5 (MLB). INSERT OR IGNORE keeps this
--- idempotent on every boot; post-v7 code (LeagueGenerator/EnsureTierLeagues)
--- writes tier rows explicitly at team creation, so this only ever touches
--- migrated saves — a fresh world's Teams table is empty when this runs.
-INSERT OR IGNORE INTO Team_Tiers (team_id, tier)
-    SELECT team_id, 5 FROM Teams;
 
 -- ----------------------------------------------------------------------------
 -- Player_Absences — schema v8. The roster-availability store (Phase 8c): one
@@ -391,17 +403,8 @@ CREATE TABLE IF NOT EXISTS Player_Potential (
     fielding       INTEGER NOT NULL DEFAULT 50 CHECK (fielding       BETWEEN 0 AND 100)
 ) STRICT;
 
--- v9→v10 backfill: every pre-v10 player gets potential = current ratings —
--- zero headroom, so the founding generation only ever DECLINES (no growth
--- spurt on the first 9d boot); only post-v10 intake (which writes its own
--- potential row at creation) gets the full growth arc. INSERT OR IGNORE keeps
--- this idempotent on every boot AND guarantees it never clobbers a real
--- potential row in a developed post-v10 world (validated on a scratch db:
--- copies on first apply, wholesale no-op after).
-INSERT OR IGNORE INTO Player_Potential
-    (player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding)
-    SELECT player_id, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding
-    FROM Player_Ratings;
+-- (The v9→v10 potential = current backfill went with the v14 clean break:
+-- every path that writes Player_Ratings writes its Player_Potential row.)
 
 -- ----------------------------------------------------------------------------
 -- Player_Person — schema v11. The High School phase's person-stat layer
@@ -431,7 +434,10 @@ CREATE TABLE IF NOT EXISTS Player_Person (
     work_ethic    INTEGER NOT NULL DEFAULT 50  CHECK (work_ethic    BETWEEN 0 AND 100)
 ) STRICT;
 
--- v10→v11 backfill AND standing heal: every person gets a neutral row.
+-- v10→v11 backfill AND standing heal: every person gets a neutral row. KEPT
+-- in v14 (the one backfill a fresh world depends on): HS intake, succession
+-- fillers and newborns are created without a person row, and this heal gives
+-- them one on the next boot.
 -- Unlike the Life_Needs no-backfill pattern, person stats are READ by systems
 -- that never write them (event prerequisites, dating, the sim's HS-6 modifier
 -- layer), so absent-row fallbacks would have to be duplicated in every reader.
@@ -536,8 +542,134 @@ CREATE TABLE IF NOT EXISTS Child_Rearing_Commitment (
     weekly_funding INTEGER NOT NULL DEFAULT 0 CHECK (weekly_funding BETWEEN 0 AND 300)
 ) STRICT;
 
+-- ----------------------------------------------------------------------------
+-- Player_Fielding — schema v14 (arcade_baseball_overhaul.md §8.1). The sim's
+-- defensive position, and the only one: GEMINI.md §11 forbids any sim path
+-- from reading the story-only listed position (v15 Player_Identity). One row
+-- per player, pitchers included ('P'); Appendix A world-gen writes it for
+-- every generated player, and each team's position players cover all eight
+-- field positions. secondary_position is nullable. speed and arm are 0–100,
+-- 50 = league average; their arcade meaning is slice G-4's. The PK doubles
+-- as the hot-path index for the roster join.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Player_Fielding (
+    player_id          TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    defensive_position TEXT    NOT NULL
+        CHECK (defensive_position IN ('P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF')),
+    secondary_position TEXT
+        CHECK (secondary_position IN ('P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF')),
+    speed              INTEGER NOT NULL DEFAULT 50 CHECK (speed BETWEEN 0 AND 100),
+    arm                INTEGER NOT NULL DEFAULT 50 CHECK (arm   BETWEEN 0 AND 100),
+    CHECK (secondary_position IS NULL OR secondary_position <> defensive_position)
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Pitcher_Rest — schema v14 (slice 13-2, brief D4; league_restructure.md §6).
+-- The absolute game day of each pitcher's last start: the one memory "ride
+-- the ace" starter selection reads (gap since last start ≥ MinRestDays), so
+-- rest survives week and year boundaries and a reload. No row = never
+-- started = fully rested. Written by the sims' existing flush batches through
+-- PitcherRestLedger. A v14 addition, not a v15: v14 is unreleased. The PK is
+-- the hydration index.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Pitcher_Rest (
+    player_id      TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    last_start_day INTEGER NOT NULL CHECK (last_start_day >= 0)
+) STRICT;
+
+-- ----------------------------------------------------------------------------
+-- Phase 13 league tables — schema v14 (league_restructure.md §12). 13-1
+-- creates them so the version is complete; they stay empty until their
+-- writers land: Schedule_Games (13-3 SeasonScheduler), Playoff_Series +
+-- Team_Seasons (13-4), Roster_Designations (13-5 Sunday lock),
+-- College_Enrollment + Recruiting_Offers + Draft_Picks (13-6 PipelineManager).
+-- Team columns carry real FKs (Teams rows are never deleted); player columns
+-- follow the ON DELETE CASCADE convention.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS Playoff_Series (
+    series_id         INTEGER PRIMARY KEY,
+    season_year       INTEGER NOT NULL,
+    tier              INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2),
+    round             INTEGER NOT NULL CHECK (round >= 1),
+    best_of           INTEGER NOT NULL CHECK (best_of IN (1, 3, 5)),
+    high_seed_team_id INTEGER NOT NULL REFERENCES Teams(team_id),
+    low_seed_team_id  INTEGER NOT NULL REFERENCES Teams(team_id),
+    high_wins         INTEGER NOT NULL DEFAULT 0 CHECK (high_wins >= 0),
+    low_wins          INTEGER NOT NULL DEFAULT 0 CHECK (low_wins >= 0),
+    winner_team_id    INTEGER REFERENCES Teams(team_id),
+    CHECK (high_seed_team_id <> low_seed_team_id)
+) STRICT;
+
+-- phase: 0 regular, 1 play-in, 2 playoff. status: 0 scheduled, 1 final, 2 forfeit.
+CREATE TABLE IF NOT EXISTS Schedule_Games (
+    game_id        INTEGER PRIMARY KEY,
+    season_year    INTEGER NOT NULL,
+    tier           INTEGER NOT NULL CHECK (tier BETWEEN 0 AND 2),
+    day_of_season  INTEGER NOT NULL CHECK (day_of_season >= 1),
+    home_team_id   INTEGER NOT NULL REFERENCES Teams(team_id),
+    away_team_id   INTEGER NOT NULL REFERENCES Teams(team_id),
+    phase          INTEGER NOT NULL CHECK (phase BETWEEN 0 AND 2),
+    series_id      INTEGER REFERENCES Playoff_Series(series_id),
+    game_in_series INTEGER CHECK (game_in_series >= 1),
+    status         INTEGER NOT NULL DEFAULT 0 CHECK (status BETWEEN 0 AND 2),
+    home_score     INTEGER CHECK (home_score >= 0),
+    away_score     INTEGER CHECK (away_score >= 0),
+    CHECK (home_team_id <> away_team_id)
+) STRICT;
+
+-- The §12 index: the sims read one tier's games for one day.
+CREATE INDEX IF NOT EXISTS ix_sched_day ON Schedule_Games(season_year, tier, day_of_season);
+
+-- Materialized standings + the College national ranking, one row per team-season.
+CREATE TABLE IF NOT EXISTS Team_Seasons (
+    team_id       INTEGER NOT NULL REFERENCES Teams(team_id),
+    season_year   INTEGER NOT NULL,
+    wins          INTEGER CHECK (wins >= 0),
+    losses        INTEGER CHECK (losses >= 0),
+    runs_scored   INTEGER CHECK (runs_scored >= 0),
+    runs_allowed  INTEGER CHECK (runs_allowed >= 0),
+    national_rank INTEGER CHECK (national_rank >= 1),
+    seed          INTEGER CHECK (seed >= 1),
+    PRIMARY KEY (team_id, season_year)
+) STRICT;
+
+-- The Pro weekly Sunday lock (College/HS: unused, §16-I5).
+CREATE TABLE IF NOT EXISTS Roster_Designations (
+    player_id          TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    team_id            INTEGER NOT NULL REFERENCES Teams(team_id),
+    is_active          INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+    locked_through_day INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS College_Enrollment (
+    player_id       TEXT    PRIMARY KEY REFERENCES Players(player_id) ON DELETE CASCADE,
+    team_id         INTEGER NOT NULL REFERENCES Teams(team_id),
+    entry_season    INTEGER NOT NULL,
+    class_year      INTEGER NOT NULL CHECK (class_year >= 1),
+    declared_season INTEGER
+) STRICT;
+
+-- status: 0 open, 1 accepted, 2 declined, 3 expired.
+CREATE TABLE IF NOT EXISTS Recruiting_Offers (
+    player_id   TEXT    NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    team_id     INTEGER NOT NULL REFERENCES Teams(team_id),
+    season_year INTEGER NOT NULL,
+    status      INTEGER NOT NULL DEFAULT 0 CHECK (status BETWEEN 0 AND 3),
+    PRIMARY KEY (player_id, team_id, season_year)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS Draft_Picks (
+    season_year  INTEGER NOT NULL,
+    overall_pick INTEGER NOT NULL CHECK (overall_pick >= 1),
+    round        INTEGER NOT NULL CHECK (round >= 1),
+    team_id      INTEGER NOT NULL REFERENCES Teams(team_id),
+    player_id    TEXT    NOT NULL REFERENCES Players(player_id) ON DELETE CASCADE,
+    PRIMARY KEY (season_year, overall_pick)
+) STRICT;
+
 COMMIT;
 
--- Schema version 13 — adds Relationship_History (purely additive; see its
--- own comment above). Bump with every migration.
-PRAGMA user_version = 13;
+-- Schema version 14 — the Phase 13 clean break (see the header): three tiers,
+-- Conferences/Divisions, the Teams v14 columns, Player_Fielding and the league
+-- tables above. Bump with every schema change.
+PRAGMA user_version = 14;

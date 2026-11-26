@@ -572,6 +572,8 @@ public sealed partial class BurnerPhone : PanelContainer
         _volumeSlider.SetValueNoSignal(UiSfx.Instance.Volume);
         _volumeSlider.ValueChanged += OnVolumeChanged;
         _volumeSlider.DragEnded += OnVolumeDragEnded;
+
+        InitPipelineCard();
     }
 
     public override void _ExitTree()
@@ -594,6 +596,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _replayButton.Pressed -= OnReplayPressed;
         _volumeSlider.ValueChanged -= OnVolumeChanged;
         _volumeSlider.DragEnded -= OnVolumeDragEnded;
+        ExitPipelineCard();
     }
 
     private static void OnVolumeChanged(double value)
@@ -664,6 +667,7 @@ public sealed partial class BurnerPhone : PanelContainer
         RefreshBankTab(gm);
         RefreshMarketplaceTab(gm);
         RefreshFamilyTab(gm);
+        RefreshPipelineCard(gm);
 
         bool hasPending = gm.GrittyEventChoices.TryGetPendingChoice(out PendingGrittyChoice pending);
         bool unchanged = _initialized
@@ -848,7 +852,7 @@ public sealed partial class BurnerPhone : PanelContainer
     /// </summary>
     private void RefreshDecisionAttentionCues(GameManager gm, bool hasPending, PendingGrittyChoice pending)
     {
-        _phoneTabs.SetTabTitle(_eventsTabIndex, hasPending ? UnreadMarker + _eventsTabPlainTitle : _eventsTabPlainTitle);
+        ApplyEventsTabBadge();
 
         _attentionBanner.Visible = hasPending;
         if (hasPending)

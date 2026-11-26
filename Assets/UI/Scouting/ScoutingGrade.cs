@@ -5,8 +5,8 @@ namespace DirtAndDiamonds.UI.Scouting;
 /// <summary>
 /// Phase 10c (presentation_layer_narrative.md §5.2): the eight-band scout
 /// letter grade. Centered so 50 (league average, per BaseballDtos'
-/// PlayerRatingsRow convention) reads C+ and 40 (the 8c replacement-level
-/// call-up floor) reads one grade below. Deliberately Godot-free/pure so
+/// PlayerRatingsRow convention) reads C+ and 40 (a replacement-level
+/// floor) reads one grade below. Deliberately Godot-free/pure so
 /// Tools/MonteCarloHarness can compile and fixture-pin it directly alongside
 /// the PromotionScore math it reads from (§5.1 — "reuses these verbatim").
 /// </summary>

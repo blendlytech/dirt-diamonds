@@ -21,5 +21,10 @@
     <Compile Include="..\..\Assets\Data\Database\PlayerDtos.cs" Link="Data\PlayerDtos.cs" />
     <Compile Include="..\..\Assets\Data\Database\PlayerQueries.cs" Link="Data\PlayerQueries.cs" />
     <Compile Include="..\..\Assets\Data\Database\PersonQueries.cs" Link="Data\PersonQueries.cs" />
+    <!-- Schema v14 (13-1): the baseball query layer for the v14 table checks, and the clean-break code GameManager runs. -->
+    <Compile Include="..\..\Assets\Data\Database\BaseballDtos.cs" Link="Data\BaseballDtos.cs" />
+    <Compile Include="..\..\Assets\Data\Database\BaseballQueries.cs" Link="Data\BaseballQueries.cs" />
+    <Compile Include="..\..\Assets\Data\Database\LeagueStructure.cs" Link="Data\LeagueStructure.cs" />
+    <Compile Include="..\..\Assets\Data\Database\SaveCompatibility.cs" Link="Data\SaveCompatibility.cs" />
   </ItemGroup>
 </Project>

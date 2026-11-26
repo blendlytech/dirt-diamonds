@@ -385,3 +385,318 @@ public readonly struct RivalryChangedEvent : IGameEvent
         Intensity = intensity;
     }
 }
+
+/// <summary>
+/// Published by the baseball sim's <c>PlayoffManager</c> after the batch that
+/// decided a postseason series commits (slice 13-4, league_restructure.md §13).
+/// Ids and counts only (Core events carry primitives, like
+/// <see cref="RivalryChangedEvent"/>); presentation resolves names. Carries
+/// the tier on every publish as its LeagueTier value (HS 0, College 1, Pro 2).
+/// </summary>
+public readonly struct PlayoffSeriesDecidedEvent : IGameEvent
+{
+    public readonly int SeasonYear;
+
+    /// <summary>The LeagueTier value: 0 HS, 1 College, 2 Pro.</summary>
+    public readonly byte Tier;
+
+    /// <summary>Playoff_Series.series_id (a rowid: display and lookup only, never a stream key).</summary>
+    public readonly long SeriesId;
+
+    public readonly int Round;
+    public readonly int WinnerTeamId;
+    public readonly int LoserTeamId;
+    public readonly int WinnerWins;
+    public readonly int LoserWins;
+
+    public PlayoffSeriesDecidedEvent(
+        int seasonYear, byte tier, long seriesId, int round,
+        int winnerTeamId, int loserTeamId, int winnerWins, int loserWins)
+    {
+        SeasonYear = seasonYear;
+        Tier = tier;
+        SeriesId = seriesId;
+        Round = round;
+        WinnerTeamId = winnerTeamId;
+        LoserTeamId = loserTeamId;
+        WinnerWins = winnerWins;
+        LoserWins = loserWins;
+    }
+}
+
+/// <summary>
+/// Published once per tier-season when its final is decided, after the batch
+/// commits (slice 13-4, spec §8.2a/§13). <see cref="Tier"/> is ALWAYS set: only
+/// a Pro title can satisfy the Phase L reveal predicate
+/// (<see cref="ChampionshipRules.IsRevealEligibleTier"/>); an HS or College
+/// title never can. A crash between the commit and the publication marker
+/// republishes on boot, so consumers dedupe per (season, tier).
+/// </summary>
+public readonly struct ChampionshipWonEvent : IGameEvent
+{
+    public readonly int SeasonYear;
+
+    /// <summary>The LeagueTier value: 0 HS, 1 College, 2 Pro.</summary>
+    public readonly byte Tier;
+
+    public readonly int TeamId;
+
+    public ChampionshipWonEvent(int seasonYear, byte tier, int teamId)
+    {
+        SeasonYear = seasonYear;
+        Tier = tier;
+        TeamId = teamId;
+    }
+}
+
+/// <summary>The reveal-eligibility rule beside the event (spec §8.2a, §16-I8); the reveal itself is Phase L's.</summary>
+public static class ChampionshipRules
+{
+    /// <summary>LeagueTier.Pro's value (GEMINI §2: HS = 0, College = 1, Pro = 2); the harness pins the equality.</summary>
+    public const byte ProTier = 2;
+
+    /// <summary>Only the Pro World Championship can fire the GOAT-father reveal.</summary>
+    public static bool IsRevealEligibleTier(byte tier) => tier == ProTier;
+}
+
+/// <summary>
+/// The avatar's Pro designation changed at a Sunday lock (slice 13-5, spec
+/// §7, brief D5-A), published after the lock's batch commits. Avatar only,
+/// and only on a transition (<see cref="IsActive"/> ≠ <see cref="WasActive"/>).
+/// <see cref="WasActive"/> comes only from the row that covered the week just
+/// ending (its <c>locked_through_day</c> equals this lock's day); with no such
+/// row the default (active) applies, so a season's first lock never reads a
+/// stale row from the last one (brief §10.5 C2). Primitives only: the
+/// Narrative coach-beat writer consumes it without referencing Baseball.
+/// </summary>
+public readonly struct RosterDesignationChangedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int TeamId;
+    public readonly bool IsActive;
+    public readonly bool WasActive;
+
+    /// <summary>The next lock day (absolute, exclusive): the designation covers days before it.</summary>
+    public readonly long LockedThroughDay;
+
+    public RosterDesignationChangedEvent(string playerId, int teamId, bool isActive, bool wasActive, long lockedThroughDay)
+    {
+        PlayerId = playerId;
+        TeamId = teamId;
+        IsActive = isActive;
+        WasActive = wasActive;
+        LockedThroughDay = lockedThroughDay;
+    }
+}
+
+/// <summary>
+/// A game was forfeited (slice 13-5, spec §4, brief D2): a team couldn't
+/// field 9 eligible position players and a legal pitcher. Published once,
+/// after the result commits (macro regular-season forfeits after the Sunday
+/// flush that writes them; attended and postseason forfeits on the game day).
+/// The score is <c>RegulationInnings(tier)</c>–0 to <see cref="WinnerTeamId"/>,
+/// with <c>Schedule_Games.status = 2</c> and no player stats.
+/// </summary>
+public readonly struct GameForfeitedEvent : IGameEvent
+{
+    /// <summary><see cref="ForfeitMask"/> bit: the home team couldn't field.</summary>
+    public const byte HomeForfeited = 1;
+
+    /// <summary><see cref="ForfeitMask"/> bit: the away team couldn't field.</summary>
+    public const byte AwayForfeited = 2;
+
+    public readonly int SeasonYear;
+
+    /// <summary>The LeagueTier value: 0 HS, 1 College, 2 Pro.</summary>
+    public readonly byte Tier;
+
+    /// <summary>Schedule_Games.game_id.</summary>
+    public readonly long GameId;
+
+    /// <summary>Schedule_Games.phase: 0 regular season, 1 College play-in, 2 postseason.</summary>
+    public readonly byte Phase;
+
+    public readonly int HomeTeamId;
+    public readonly int AwayTeamId;
+
+    /// <summary><see cref="HomeForfeited"/> | <see cref="AwayForfeited"/>; both set is a double forfeit.</summary>
+    public readonly byte ForfeitMask;
+
+    /// <summary>The team awarded the game (the home team or high seed on a double forfeit, D2d-A).</summary>
+    public readonly int WinnerTeamId;
+
+    public GameForfeitedEvent(
+        int seasonYear, byte tier, long gameId, byte phase, int homeTeamId, int awayTeamId, byte forfeitMask, int winnerTeamId)
+    {
+        SeasonYear = seasonYear;
+        Tier = tier;
+        GameId = gameId;
+        Phase = phase;
+        HomeTeamId = homeTeamId;
+        AwayTeamId = awayTeamId;
+        ForfeitMask = forfeitMask;
+        WinnerTeamId = winnerTeamId;
+    }
+
+    /// <summary>True when <paramref name="teamId"/> is the side (or a side) that couldn't field.</summary>
+    public bool Forfeited(int teamId) =>
+        (teamId == HomeTeamId && (ForfeitMask & HomeForfeited) != 0)
+        || (teamId == AwayTeamId && (ForfeitMask & AwayForfeited) != 0);
+
+    public bool Involves(int teamId) => teamId == HomeTeamId || teamId == AwayTeamId;
+}
+
+// ----------------------------------------------------------------------
+// Slice 13-6: the pipeline (league_restructure.md §9; brief D4b-C, D5-A).
+// Each publishes after its batch commits; primitives only, so Life,
+// Narrative and UI learn about the pipeline without referencing Baseball.
+// ----------------------------------------------------------------------
+
+/// <summary>
+/// The avatar's recruiting offers landed (Offers Day, the first Monday of
+/// October): <see cref="OfferCount"/> Recruiting_Offers rows (status 0) for
+/// <see cref="SeasonYear"/>. A walk-on is one offer with
+/// <see cref="IsWalkOn"/> set. The phone's offer texts key on it.
+/// </summary>
+public readonly struct RecruitingOffersEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int SeasonYear;
+    public readonly int OfferCount;
+    public readonly bool IsWalkOn;
+
+    public RecruitingOffersEvent(string playerId, int seasonYear, int offerCount, bool isWalkOn)
+    {
+        PlayerId = playerId;
+        SeasonYear = seasonYear;
+        OfferCount = offerCount;
+        IsWalkOn = isWalkOn;
+    }
+}
+
+/// <summary>
+/// The avatar signed with a College program on Signing Day (the second
+/// Wednesday of November). He joins <see cref="TeamId"/> at the rollover.
+/// The Signing Day cutscene hook (16b).
+/// </summary>
+public readonly struct RecruitSignedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int TeamId;
+    public readonly int SeasonYear;
+    public readonly long Day;
+
+    public RecruitSignedEvent(string playerId, int teamId, int seasonYear, long day)
+    {
+        PlayerId = playerId;
+        TeamId = teamId;
+        SeasonYear = seasonYear;
+        Day = day;
+    }
+}
+
+/// <summary>
+/// The July Draft committed (128 picks). <see cref="AvatarOverallPick"/> and
+/// <see cref="AvatarTeamId"/> are 0 when the avatar wasn't picked.
+/// <see cref="AvatarPlayerId"/> names the avatar when he was draft-eligible
+/// (a College class ≥ 2 before the picks; null otherwise), and
+/// <see cref="AvatarWasAutomaticSenior"/> says he was a class-4 senior, so
+/// certainly in the pool. Both come from the pre-draft enrollment, so Draft
+/// Night's text needs no state from day 176 (13-6a S1: reload-safe).
+/// </summary>
+public readonly struct DraftCompletedEvent : IGameEvent
+{
+    public readonly int SeasonYear;
+    public readonly long Day;
+    public readonly int AvatarOverallPick;
+    public readonly int AvatarTeamId;
+    public readonly string? AvatarPlayerId;
+    public readonly bool AvatarWasAutomaticSenior;
+
+    public DraftCompletedEvent(int seasonYear, long day, int avatarOverallPick, int avatarTeamId,
+        string? avatarPlayerId, bool avatarWasAutomaticSenior)
+    {
+        SeasonYear = seasonYear;
+        Day = day;
+        AvatarOverallPick = avatarOverallPick;
+        AvatarTeamId = avatarTeamId;
+        AvatarPlayerId = avatarPlayerId;
+        AvatarWasAutomaticSenior = avatarWasAutomaticSenior;
+    }
+}
+
+/// <summary>
+/// A player's FIRST Pro contract (spec §9.4): every draft pick on Draft Day
+/// (<see cref="WasDrafted"/> true) and every free agent signed at a Sunday
+/// lock without a prior Pro contract (false), NPCs included. Phase L keys
+/// the father's first text on the avatar's.
+/// </summary>
+public readonly struct ProContractSignedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int TeamId;
+    public readonly long Day;
+    public readonly bool WasDrafted;
+
+    public ProContractSignedEvent(string playerId, int teamId, long day, bool wasDrafted)
+    {
+        PlayerId = playerId;
+        TeamId = teamId;
+        Day = day;
+        WasDrafted = wasDrafted;
+    }
+}
+
+/// <summary>
+/// The avatar was released at the rollover (D4b-C): an undrafted College
+/// senior, or a Pro avatar the release order cut. He leaves baseball
+/// (unrostered, pipeline_retired). <see cref="EnteredParentPhase"/> is true
+/// when he has children (the parent phase), false when the release ended the
+/// game (NoHeirs). <see cref="Tier"/> is the LeagueTier value he left.
+/// </summary>
+public readonly struct AvatarReleasedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly byte Tier;
+    public readonly int SeasonYear;
+    public readonly long Day;
+    public readonly bool EnteredParentPhase;
+
+    public AvatarReleasedEvent(string playerId, byte tier, int seasonYear, long day, bool enteredParentPhase)
+    {
+        PlayerId = playerId;
+        Tier = tier;
+        SeasonYear = seasonYear;
+        Day = day;
+        EnteredParentPhase = enteredParentPhase;
+    }
+}
+
+/// <summary>
+/// The avatar's draft-declaration window opened (day 176, a College player
+/// with class year ≥ 2). <see cref="ProjectedRound"/> is 1–4, or 0 when he
+/// projects undrafted; <see cref="IsAutomatic"/> is true for a class-4
+/// senior, who is always in the pool. The deadline is day 183; the clock
+/// doesn't stop. The phone's declaration text keys on it (13-6a build record
+/// §11.3: the one event beyond the brief's five, because Narrative can't read
+/// the Baseball calendar).
+/// </summary>
+public readonly struct DraftDeclarationOpenedEvent : IGameEvent
+{
+    public readonly string PlayerId;
+    public readonly int SeasonYear;
+    public readonly long Day;
+    public readonly int ProjectedSlot;
+    public readonly int ProjectedRound;
+    public readonly bool IsAutomatic;
+
+    public DraftDeclarationOpenedEvent(string playerId, int seasonYear, long day, int projectedSlot, int projectedRound, bool isAutomatic)
+    {
+        PlayerId = playerId;
+        SeasonYear = seasonYear;
+        Day = day;
+        ProjectedSlot = projectedSlot;
+        ProjectedRound = projectedRound;
+        IsAutomatic = isAutomatic;
+    }
+}

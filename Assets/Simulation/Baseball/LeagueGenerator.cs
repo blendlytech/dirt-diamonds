@@ -3,9 +3,10 @@ using DirtAndDiamonds.Data;
 namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
-/// One-time world-gen for the background league: seeds Teams, Players and
-/// Player_Ratings when the save has no league yet (new game). Deterministic
-/// under a fixed <see cref="RngState"/> seed. Runs once per save — this is
+/// One-time world-gen for the league: seeds the schema v14 world
+/// (league_restructure.md §2, §5.3, Appendix A) when the save has no league
+/// yet (new game). Deterministic under a fixed <see cref="RngState"/> seed: the
+/// same seed gives byte-identical tables. Runs once per save — this is
 /// load-time code, not simulation-loop code, so ordinary allocation is fine.
 /// </summary>
 public static class LeagueGenerator
@@ -14,103 +15,87 @@ public static class LeagueGenerator
     /// 0 generates a perfectly average league (the §8 calibration roster).</summary>
     public const int DefaultRatingSpread = 25;
 
-    private static readonly (string City, string Name, string Abbr, string Division)[] TeamSeeds =
-    {
-        ("Bayport", "Barons", "BAY", "East"),
-        ("Kingsbridge", "Krakens", "KBR", "East"),
-        ("Harborview", "Herons", "HBV", "East"),
-        ("Ironvale", "Foxes", "IRV", "East"),
-        ("Dustfield", "Drifters", "DST", "West"),
-        ("Mesa Roja", "Rattlers", "MRJ", "West"),
-        ("Silverlake", "Sharks", "SLK", "West"),
-        ("Cascadia", "Wolves", "CAS", "West"),
-    };
-
-    // Ladder-tier team seeds (Phase 9a). One 8-team league per tier below MLB;
-    // MLB keeps TeamSeeds above (its ids and generation order are the frozen
-    // M1 prefix). Indexed by (int)LeagueTier for tiers 0–4.
-    private static readonly (string City, string Name, string Abbr, string Division)[][] TierTeamSeeds =
-    {
-        new[] // HS
-        {
-            ("Crestwood", "Cardinals", "CRW", "East"),
-            ("Lakeside", "Longhorns", "LKS", "East"),
-            ("Fairview", "Falcons", "FRV", "East"),
-            ("Oak Ridge", "Owls", "OKR", "East"),
-            ("Pinehurst", "Panthers", "PNH", "West"),
-            ("Westfield", "Warhawks", "WSF", "West"),
-            ("Summit", "Spartans", "SMT", "West"),
-            ("Riverton", "Rams", "RVT", "West"),
-        },
-        new[] // College
-        {
-            ("Ashford State", "Admirals", "ASH", "East"),
-            ("Blue Valley", "Bison", "BLV", "East"),
-            ("Carverton Tech", "Chargers", "CVT", "East"),
-            ("Dunmore", "Dukes", "DNM", "East"),
-            ("Eastlake", "Eagles", "ELU", "West"),
-            ("Fort Garland", "Grizzlies", "FTG", "West"),
-            ("Hollis", "Hawks", "HOL", "West"),
-            ("Midland", "Mavericks", "MAM", "West"),
-        },
-        new[] // MinorA
-        {
-            ("Cedar Rapids", "Colts", "CDR", "East"),
-            ("Twin Forks", "Trout", "TWF", "East"),
-            ("Palmetto", "Pelicans", "PLM", "East"),
-            ("Bozeman", "Bighorns", "BZM", "East"),
-            ("Yuba City", "Yellowjackets", "YBC", "West"),
-            ("Galena", "Gliders", "GLN", "West"),
-            ("Norwood", "Nailers", "NRW", "West"),
-            ("Sablewood", "Stallions", "SBW", "West"),
-        },
-        new[] // MinorAA
-        {
-            ("Hattiesburg", "Hornets", "HTB", "East"),
-            ("Roanoke", "Ridgerunners", "RNK", "East"),
-            ("Laredo", "Lobos", "LRD", "East"),
-            ("Chattahoochee", "Catfish", "CHT", "East"),
-            ("Provo", "Prospectors", "PRV", "West"),
-            ("Sioux Bend", "Storm", "SXB", "West"),
-            ("Kannapolis", "Knights", "KNP", "West"),
-            ("Modesto", "Mustangs", "MDS", "West"),
-        },
-        new[] // MinorAAA
-        {
-            ("Albuquerque", "Aviators", "ABQ", "East"),
-            ("Toledo", "Titans", "TLD", "East"),
-            ("Fresno", "Firebirds", "FRS", "East"),
-            ("Omaha", "Outlaws", "OMA", "East"),
-            ("Scranton", "Steamers", "SCR", "West"),
-            ("Tacoma", "Thunder", "TAC", "West"),
-            ("Charlotte", "Crowns", "CLT", "West"),
-            ("Durham", "Drakes", "DRM", "West"),
-        },
-    };
-
-    /// <summary>Teams.league label per tier (display flavor, not logic).</summary>
-    private static readonly string[] TierLeagueLabels = { "HS", "CBL", "A", "AA", "AAA", "DL" };
-
-    // Tier-appropriate generated ages: Age = min + NextInt(span). MLB keeps the
-    // frozen 21 + NextInt(16); the ladder gets younger as it descends. NPCs do
-    // not yet age OUT of a tier (promotion is 9c) — a disclosed 9a artifact.
+    /// <summary>
+    /// Generated ages per tier (§5.3), indexed by (int)<see cref="LeagueTier"/>:
+    /// Age = min + NextInt(span). HS 15–18 (consistent with SchoolGrade),
+    /// College 18–22, Pro 21–36 (the frozen v3 MLB roll).
+    /// </summary>
     private static readonly (int Min, int Span)[] TierAgeRolls =
     {
         (15, 4),  // HS: 15–18
-        (18, 4),  // College: 18–21
-        (19, 6),  // MinorA: 19–24
-        (20, 7),  // MinorAA: 20–26
-        (21, 8),  // MinorAAA: 21–28
-        (21, 16), // MLB: 21–36 — the frozen v3 roll, never change
+        (18, 5),  // College: 18–22
+        (21, 16), // Pro: 21–36
     };
 
     /// <summary>
-    /// First team_id of a tier's 8-team block minus one: MLB keeps the frozen
-    /// ids 1–8; lower tiers sit in readable hundred-blocks (HS 101–108,
-    /// College 201–208, … MinorAAA 501–508).
+    /// One tier's generated roster shape; each count is <c>min + NextInt(span)</c>,
+    /// and a span of 1 is a fixed count that draws nothing.
     /// </summary>
-    internal static int TierTeamIdBase(LeagueTier tier) =>
-        tier == LeagueTier.MLB ? 0 : ((int)tier + 1) * 100;
+    private readonly record struct RosterShape(
+        int PositionMin, int PositionSpan, int StartersMin, int StartersSpan, int RelieversMin, int RelieversSpan);
+
+    /// <summary>
+    /// Per-tier generation targets (§5.1/§5.3, 13-1 brief §3.2.3), indexed by
+    /// (int)<see cref="LeagueTier"/>. HS: 11–14 position players, 3–4 SP,
+    /// 2–4 RP (as specified). College: 15 / 4 / 5 = 24, inside every College
+    /// cap (≤ 17 / ≤ 4 / ≤ 5, org 26) with 2 org slots left for recruiting.
+    /// Pro: exactly 15 / 4 / 5 = 24, the Pro org cap. Designations stay
+    /// unwritten until 13-5.
+    /// </summary>
+    private static readonly RosterShape[] TierRosterShapes =
+    {
+        new(11, 4, 3, 2, 2, 3), // HS
+        new(15, 1, 4, 1, 5, 1), // College
+        new(15, 1, 4, 1, 5, 1), // Pro
+    };
+
+    // ---- Player_Fielding generation (schema v14, arcade_baseball_overhaul.md §8.1) ----
+    // 13-1 owns one invariant: every team's position players cover all eight
+    // field positions (the first eight roster slots take them in
+    // FieldingPositions.Field order; slots are exchangeable, since every slot
+    // rolls the same rating bell). Everything else below is a PROPOSAL,
+    // Math-owned (GPT 6 Astra Pro, G-1/G-4): the depth weights, the secondary
+    // rate and the neighbour table are data values to tune, never logic. The
+    // pass draws from its own stream (GenerateIfEmpty), so tuning it never
+    // moves a rating.
+
+    /// <summary>
+    /// PROPOSAL (Math-owned): primary-position weights for position players
+    /// past the first eight. Catchers weigh most, so most rosters carry a
+    /// backup; the premium up-the-middle spots (2B, SS, CF) come next.
+    /// </summary>
+    private static readonly (FieldingPosition Position, int Weight)[] DepthPositionWeights =
+    {
+        (FieldingPosition.C, 3),
+        (FieldingPosition.FirstBase, 1),
+        (FieldingPosition.SecondBase, 2),
+        (FieldingPosition.ThirdBase, 1),
+        (FieldingPosition.Shortstop, 2),
+        (FieldingPosition.LeftField, 1),
+        (FieldingPosition.CenterField, 2),
+        (FieldingPosition.RightField, 1),
+    };
+
+    /// <summary>PROPOSAL (Math-owned): the share of position players who also list a secondary position.</summary>
+    public const double SecondaryPositionRate = 0.35;
+
+    /// <summary>
+    /// PROPOSAL (Math-owned): the positions a player at each primary can
+    /// credibly back up, indexed by (int)<see cref="FieldingPosition"/>. A
+    /// secondary is drawn uniformly from the row. Pitchers list none.
+    /// </summary>
+    private static readonly FieldingPosition[][] SecondaryNeighbours =
+    {
+        Array.Empty<FieldingPosition>(),                                                                  // P
+        new[] { FieldingPosition.FirstBase },                                                             // C
+        new[] { FieldingPosition.ThirdBase, FieldingPosition.LeftField, FieldingPosition.RightField },    // 1B
+        new[] { FieldingPosition.Shortstop, FieldingPosition.ThirdBase },                                 // 2B
+        new[] { FieldingPosition.FirstBase, FieldingPosition.Shortstop, FieldingPosition.SecondBase },    // 3B
+        new[] { FieldingPosition.SecondBase, FieldingPosition.ThirdBase },                                // SS
+        new[] { FieldingPosition.RightField, FieldingPosition.CenterField, FieldingPosition.FirstBase },  // LF
+        new[] { FieldingPosition.LeftField, FieldingPosition.RightField },                                // CF
+        new[] { FieldingPosition.LeftField, FieldingPosition.CenterField, FieldingPosition.FirstBase },   // RF
+    };
 
     private static readonly string[] FirstNames =
     {
@@ -134,74 +119,90 @@ public static class LeagueGenerator
     public const int RelieverStaminaPenalty = 20;
 
     /// <summary>
-    /// Seeds the full league (8 teams × 9 position players + 5 starters + 3
-    /// relievers, schema v4) in one batch transaction when Teams is empty.
-    /// Returns false when a league already exists (normal boot on an existing
-    /// save). The 9+5 loop draws exactly the v3 sequence from the caller's
-    /// stream — every M1 calibration line is byte-for-byte reproducible — and
-    /// all v4 additions (relievers, arsenals) draw from a Split() fork.
+    /// Seeds the schema v14 world in ONE batch transaction when Teams is empty
+    /// (13-1 brief §4.4): the static conference and division rows, all 68
+    /// Appendix A teams with their tier rows and home parks, then every team's
+    /// roster (ratings, role, potential, person row) with a Player_Fielding row
+    /// for every player, then every pitcher's arsenal. Returns false when a
+    /// league already exists (normal boot on an existing save).
+    ///
+    /// <para><b>Determinism.</b> A pure function of <paramref name="rng"/>'s
+    /// seed. Draw order is fixed: two sub-stream seeds first, then tier HS →
+    /// College → Pro, team id ascending (= <see cref="LeagueStructure.Teams"/>
+    /// order), then roster slot (position players, starters, relievers), with
+    /// each team's three count rolls before its players. Each player keeps the
+    /// per-player <c>Split()</c> fork for the prospect discount and person
+    /// stats (the HS-2 pattern), so person stats never shift a rating draw. The
+    /// fielding and arsenal passes draw from their own seeded streams, so a
+    /// Math retune of either never moves a rating either.</para>
     /// </summary>
+    /// <param name="homeParks">team_id → park name, from home_parks.json
+    /// (<c>HomeParkCatalog.ToHomeParkMap</c>), which must cover every team.
+    /// Null writes <see cref="LeagueStructure.PlaceholderHomePark"/> names
+    /// (headless fixtures only; the game always passes the catalog).</param>
     public static bool GenerateIfEmpty(
         DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
-        int ratingSpread, ref RngState rng, PersonQueries? persons = null)
+        int ratingSpread, ref RngState rng, PersonQueries? persons = null,
+        IReadOnlyDictionary<int, string>? homeParks = null)
     {
         if (baseball.CountTeams() > 0)
         {
             return false;
         }
 
+        // Sub-streams for the two Math-tunable passes, seeded from the first
+        // two main-stream draws (never a Split() of the main stream, whose
+        // long-jump would overlap the per-player discount forks).
+        var fieldingRng = new RngState(rng.NextUInt64() | 1UL);
+        var arsenalRng = new RngState(rng.NextUInt64() | 1UL);
+
         // (id, stuff) of every pitcher in generation order, for the arsenal pass.
-        var pitchers = new List<(string Id, int Stuff)>(
-            TeamSeeds.Length * (LeagueSimulator.RotationSize + LeagueSimulator.BullpenSize));
+        var pitchers = new List<(string Id, int Stuff)>(LeagueStructure.Teams.Length * 9);
+        var teamPositionPlayers = new List<string>(TierRosterShapes[0].PositionMin + TierRosterShapes[0].PositionSpan);
+        var teamPitchers = new List<string>(9);
 
         db.BeginBatch();
         try
         {
-            for (int t = 0; t < TeamSeeds.Length; t++)
+            // Structure first: conferences, divisions, teams, tier rows. No rng.
+            baseball.EnsureLeagueStructure();
+            foreach (TeamSeed seed in LeagueStructure.Teams)
             {
-                (string city, string name, string abbr, string division) = TeamSeeds[t];
-                int teamId = t + 1;
-                baseball.InsertTeam(new TeamRow
-                {
-                    TeamId = teamId,
-                    City = city,
-                    Name = name,
-                    Abbreviation = abbr,
-                    League = "DL",
-                    Division = division,
-                });
-                // Schema v7: this league is the MLB rung. Writing the tier row
-                // draws no rng, so the frozen M1 generation prefix is untouched.
-                baseball.UpsertTeamTier(teamId, LeagueTier.MLB);
-
-                // Frozen v3 prefix: 9 + 5 per team, main-stream draws only.
-                for (int slot = 0; slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize; slot++)
-                {
-                    bool isPitcher = slot >= LeagueSimulator.LineupSize;
-                    (string id, int stuff) = GeneratePlayer(
-                        players, baseball, teamId, isPitcher ? PitcherRole.Starter : PitcherRole.None,
-                        ratingSpread, ref rng, persons: persons);
-                    if (isPitcher)
-                    {
-                        pitchers.Add((id, stuff));
-                    }
-                }
+                baseball.InsertTeam(LeagueStructure.ToTeamRow(seed, HomeParkFor(seed, homeParks)));
+                baseball.UpsertTeamTier(seed.TeamId, seed.Tier);
             }
 
-            // v4 pass — forked stream so the prefix above never moves.
-            RngState v4Rng = rng.Split();
-            for (int t = 0; t < TeamSeeds.Length; t++)
+            // Rosters, in the fixed draw order.
+            foreach (TeamSeed seed in LeagueStructure.Teams)
             {
-                for (int slot = 0; slot < LeagueSimulator.BullpenSize; slot++)
+                RosterShape shape = TierRosterShapes[(int)seed.Tier];
+                (int minAge, int ageSpan) = TierAgeRolls[(int)seed.Tier];
+                int positionCount = RollCount(shape.PositionMin, shape.PositionSpan, ref rng);
+                int starterCount = RollCount(shape.StartersMin, shape.StartersSpan, ref rng);
+                int relieverCount = RollCount(shape.RelieversMin, shape.RelieversSpan, ref rng);
+
+                teamPositionPlayers.Clear();
+                teamPitchers.Clear();
+                for (int i = 0; i < positionCount; i++)
                 {
+                    (string id, _) = GeneratePlayer(
+                        players, baseball, seed.TeamId, PitcherRole.None, ratingSpread, ref rng, minAge, ageSpan, persons);
+                    teamPositionPlayers.Add(id);
+                }
+                for (int i = 0; i < starterCount + relieverCount; i++)
+                {
+                    PitcherRole role = i < starterCount ? PitcherRole.Starter : PitcherRole.Reliever;
                     (string id, int stuff) = GeneratePlayer(
-                        players, baseball, t + 1, PitcherRole.Reliever, ratingSpread, ref v4Rng, persons: persons);
+                        players, baseball, seed.TeamId, role, ratingSpread, ref rng, minAge, ageSpan, persons);
+                    teamPitchers.Add(id);
                     pitchers.Add((id, stuff));
                 }
+                GenerateTeamFielding(baseball, teamPositionPlayers, teamPitchers, ratingSpread, ref fieldingRng);
             }
+
             foreach ((string id, int stuff) in pitchers)
             {
-                GenerateArsenal(baseball, id, stuff, ratingSpread, ref v4Rng);
+                GenerateArsenal(baseball, id, stuff, ratingSpread, ref arsenalRng);
             }
 
             db.CommitBatch();
@@ -214,176 +215,109 @@ public static class LeagueGenerator
         return true;
     }
 
-    /// <summary>
-    /// v3→v4 save top-up: fills any team's bullpen to <see cref="LeagueSimulator.BullpenSize"/>
-    /// relievers (Players + ratings + role + arsenal) in one batch. Migrated
-    /// pitchers' role/arsenal rows come from the idempotent DDL backfill; only
-    /// people have to be invented here. No-op (and no rng draws) on a
-    /// post-v4 world. Call before the sims Initialize.
-    /// </summary>
-    public static bool EnsureV4(
-        DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
-        int ratingSpread, ref RngState rng, PersonQueries? persons = null)
+    private static string HomeParkFor(in TeamSeed seed, IReadOnlyDictionary<int, string>? homeParks)
     {
-        if (baseball.CountTeams() == 0)
+        if (homeParks is null)
         {
-            return false; // no league yet — GenerateIfEmpty owns fresh worlds
+            return LeagueStructure.PlaceholderHomePark(seed);
+        }
+        return homeParks.TryGetValue(seed.TeamId, out string? park)
+            ? park
+            : throw new InvalidOperationException(
+                $"The home park catalog has no row for team {seed.TeamId} ({seed.Abbreviation}).");
+    }
+
+    private static int RollCount(int min, int span, ref RngState rng) =>
+        span <= 1 ? min : min + rng.NextInt(span);
+
+    /// <summary>
+    /// Writes one team's Player_Fielding rows: position players in roster-slot
+    /// order (the first eight cover the eight field positions; the rest draw a
+    /// primary from <see cref="DepthPositionWeights"/>; each may roll a
+    /// secondary), then its pitchers (<see cref="FieldingPosition.P"/>, no
+    /// secondary). Every row rolls speed then arm on the shared rating bell.
+    /// Joins the caller's open batch.
+    /// </summary>
+    private static void GenerateTeamFielding(
+        BaseballQueries baseball, List<string> positionPlayers, List<string> pitchers,
+        int ratingSpread, ref RngState rng)
+    {
+        if (positionPlayers.Count < FieldingPositions.Field.Length)
+        {
+            throw new InvalidOperationException(
+                $"A team needs at least {FieldingPositions.Field.Length} position players to cover the field; it has {positionPlayers.Count}.");
         }
 
-        var roster = new List<RosterPlayerRow>(
-            LeagueSimulator.TeamCount * LeagueSimulator.RosterSizePerTeam);
-        baseball.LoadRoster(roster);
-
-        Span<int> relievers = stackalloc int[LeagueSimulator.TeamCount + 1];
-        foreach (RosterPlayerRow row in roster)
+        for (int slot = 0; slot < positionPlayers.Count; slot++)
         {
-            if (row.Role == PitcherRole.Reliever && row.TeamId >= 1 && row.TeamId <= LeagueSimulator.TeamCount)
+            FieldingPosition primary = slot < FieldingPositions.Field.Length
+                ? FieldingPositions.Field[slot]
+                : DrawDepthPosition(ref rng);
+            FieldingPosition? secondary = null;
+            if (rng.NextDouble() < SecondaryPositionRate)
             {
-                relievers[row.TeamId]++;
+                FieldingPosition[] neighbours = SecondaryNeighbours[(int)primary];
+                secondary = neighbours[rng.NextInt(neighbours.Length)];
             }
+            baseball.UpsertFielding(new PlayerFieldingRow
+            {
+                PlayerId = positionPlayers[slot],
+                DefensivePosition = primary,
+                SecondaryPosition = secondary,
+                Speed = RollRating(ratingSpread, ref rng),
+                Arm = RollRating(ratingSpread, ref rng),
+            });
         }
 
-        bool topUpNeeded = false;
-        for (int teamId = 1; teamId <= LeagueSimulator.TeamCount; teamId++)
+        foreach (string pitcherId in pitchers)
         {
-            if (relievers[teamId] < LeagueSimulator.BullpenSize)
+            baseball.UpsertFielding(new PlayerFieldingRow
             {
-                topUpNeeded = true;
-            }
+                PlayerId = pitcherId,
+                DefensivePosition = FieldingPosition.P,
+                SecondaryPosition = null,
+                Speed = RollRating(ratingSpread, ref rng),
+                Arm = RollRating(ratingSpread, ref rng),
+            });
         }
-        if (!topUpNeeded)
-        {
-            return false;
-        }
+    }
 
-        db.BeginBatch();
-        try
+    private static FieldingPosition DrawDepthPosition(ref RngState rng)
+    {
+        int total = 0;
+        foreach ((_, int weight) in DepthPositionWeights)
         {
-            for (int teamId = 1; teamId <= LeagueSimulator.TeamCount; teamId++)
+            total += weight;
+        }
+        int roll = rng.NextInt(total);
+        foreach ((FieldingPosition position, int weight) in DepthPositionWeights)
+        {
+            if (roll < weight)
             {
-                for (int i = relievers[teamId]; i < LeagueSimulator.BullpenSize; i++)
-                {
-                    (string id, int stuff) = GeneratePlayer(
-                        players, baseball, teamId, PitcherRole.Reliever, ratingSpread, ref rng, persons: persons);
-                    GenerateArsenal(baseball, id, stuff, ratingSpread, ref rng);
-                }
+                return position;
             }
-            db.CommitBatch();
+            roll -= weight;
         }
-        catch
-        {
-            db.RollbackBatch();
-            throw;
-        }
-        return true;
+        throw new InvalidOperationException("Depth-position weights are empty.");
     }
 
     /// <summary>
     /// Invents one player (Players + ratings + role row when a pitcher) on
     /// <paramref name="teamId"/>, joining the caller's open batch. Internal
-    /// because it is a building block, not a lifecycle: world-gen and EnsureV4
-    /// call it in bulk, and the succession handoff (heir mechanics §5.4) calls
+    /// because it is a building block, not a lifecycle: world-gen and the
+    /// pipeline's HS intake call it in bulk, and the succession handoff
+    /// (heir mechanics §5.4) calls
     /// it for a replacement-level backfill filler when the free-agent pool has
     /// nobody of the vacated role. A pitcher still needs
-    /// <see cref="GenerateArsenal"/> called after.
+    /// <see cref="GenerateArsenal"/> called after. It writes no Player_Fielding
+    /// row: world-gen writes those per team (the all-eight-positions invariant
+    /// is a team property), and the 13-6 pipeline writes its intake's through
+    /// <see cref="RollFielding"/> (the succession filler's is G-4's).
     /// </summary>
-    /// <summary>
-    /// v6→v7 world top-up (Phase 9a), the same migration-function pattern as
-    /// <see cref="EnsureV4"/>: seeds every ladder tier below MLB that has no
-    /// teams yet — one 8-team league per tier, each team fully staffed
-    /// 9 + 5 + 3 with arsenals, tier-appropriate ages — in one batch. Runs on
-    /// both migrated saves (which have only the backfilled-MLB league) and
-    /// fresh worlds (right after <see cref="GenerateIfEmpty"/>). No-op, and no
-    /// rng draws, once every tier is populated — so existing harness fixtures
-    /// that never call this keep their MLB-only worlds byte-for-byte.
-    ///
-    /// The uniform 9+5+3 roster shape across HS→MLB is a deliberate, disclosed
-    /// 9a simplification: LineupSize/RotationSize/BullpenSize are compile-time
-    /// constants shared by both sims' array shapes.
-    /// </summary>
-    public static bool EnsureTierLeagues(
-        DatabaseManager db, PlayerQueries players, BaseballQueries baseball,
-        int ratingSpread, ref RngState rng, PersonQueries? persons = null)
-    {
-        if (baseball.CountTeams() == 0)
-        {
-            return false; // no world yet — GenerateIfEmpty owns fresh worlds
-        }
-
-        Span<bool> tierMissing = stackalloc bool[LeagueDirectory.TierCount];
-        bool anyMissing = false;
-        for (int t = 0; t < (int)LeagueTier.MLB; t++)
-        {
-            tierMissing[t] = baseball.CountTeamsInTier((LeagueTier)t) == 0;
-            anyMissing |= tierMissing[t];
-        }
-        if (!anyMissing)
-        {
-            return false;
-        }
-
-        db.BeginBatch();
-        try
-        {
-            for (int t = 0; t < (int)LeagueTier.MLB; t++)
-            {
-                if (!tierMissing[t])
-                {
-                    continue;
-                }
-                var tier = (LeagueTier)t;
-                (int minAge, int ageSpan) = TierAgeRolls[t];
-                var pitchers = new List<(string Id, int Stuff)>(
-                    TierTeamSeeds[t].Length * (LeagueSimulator.RotationSize + LeagueSimulator.BullpenSize));
-
-                for (int s = 0; s < TierTeamSeeds[t].Length; s++)
-                {
-                    (string city, string name, string abbr, string division) = TierTeamSeeds[t][s];
-                    int teamId = TierTeamIdBase(tier) + s + 1;
-                    baseball.InsertTeam(new TeamRow
-                    {
-                        TeamId = teamId,
-                        City = city,
-                        Name = name,
-                        Abbreviation = abbr,
-                        League = TierLeagueLabels[t],
-                        Division = division,
-                    });
-                    baseball.UpsertTeamTier(teamId, tier);
-
-                    for (int slot = 0; slot < LeagueSimulator.RosterSizePerTeam; slot++)
-                    {
-                        PitcherRole role =
-                            slot < LeagueSimulator.LineupSize ? PitcherRole.None
-                            : slot < LeagueSimulator.LineupSize + LeagueSimulator.RotationSize ? PitcherRole.Starter
-                            : PitcherRole.Reliever;
-                        (string id, int stuff) = GeneratePlayer(
-                            players, baseball, teamId, role, ratingSpread, ref rng, minAge, ageSpan, persons);
-                        if (role != PitcherRole.None)
-                        {
-                            pitchers.Add((id, stuff));
-                        }
-                    }
-                }
-                foreach ((string id, int stuff) in pitchers)
-                {
-                    GenerateArsenal(baseball, id, stuff, ratingSpread, ref rng);
-                }
-            }
-            db.CommitBatch();
-        }
-        catch
-        {
-            db.RollbackBatch();
-            throw;
-        }
-        return true;
-    }
-
     /// <param name="minAge">Low end of the generated-age roll. The defaults are
-    /// the frozen v3 roll (21 + NextInt(16)) — every pre-9a caller keeps them;
-    /// EnsureTierLeagues passes the tier-appropriate window. The roll is one
-    /// NextInt draw either way, so the draw sequence shape never changes.</param>
+    /// the frozen v3 roll (21 + NextInt(16)); world-gen passes each tier's §5.3
+    /// window. The roll is one NextInt draw either way, so the draw sequence
+    /// shape never changes.</param>
     /// <param name="ageSpan">Width of the generated-age roll.</param>
     /// <param name="persons">HS-2 (person-layer doc §2.5): when wired AND the
     /// world rolls a real spread, the player also gets a modest person-stat
@@ -497,6 +431,26 @@ public static class LeagueGenerator
     public static void GenerateArsenal(
         BaseballQueries baseball, string playerId, int pitStuff, int ratingSpread, ref RngState rng)
     {
+        // Load-time path (world-gen, creation, succession, intake): a tiny array is fine.
+        var pitches = new PitchArsenalRow[ArsenalSize];
+        RollArsenal(playerId, pitStuff, ratingSpread, ref rng, pitches);
+        foreach (PitchArsenalRow pitch in pitches)
+        {
+            baseball.UpsertArsenalPitch(in pitch);
+        }
+    }
+
+    /// <summary>Pitches in a generated arsenal (fastball, breaking, offspeed).</summary>
+    public const int ArsenalSize = 3;
+
+    /// <summary>
+    /// <see cref="GenerateArsenal"/>'s rolls without the writes, in the exact
+    /// same draw order (usage, then each pitch's velocity and movement), so
+    /// the 13-6 outside recruits can be rolled in memory and written only if
+    /// they sign. World-gen's stream is unchanged.
+    /// </summary>
+    public static void RollArsenal(string playerId, int pitStuff, int ratingSpread, ref RngState rng, Span<PitchArsenalRow> destination)
+    {
         static int Jitter(int halfWidth, int spread, ref RngState rng) =>
             spread == 0 || halfWidth == 0 ? 0 : rng.NextInt(2 * halfWidth + 1) - halfWidth;
 
@@ -504,31 +458,176 @@ public static class LeagueGenerator
         int breakingUsage = ratingSpread == 0 ? 25 : 15 + rng.NextInt(16);       // 15–30
         int offspeedUsage = 100 - fastballUsage - breakingUsage;                 // ≥ 0 by bounds
 
-        baseball.UpsertArsenalPitch(new PitchArsenalRow
+        int fastVelocity = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100);
+        int fastMovement = Math.Clamp(40 + Jitter(10, ratingSpread, ref rng), 0, 100);
+        destination[0] = new PitchArsenalRow
         {
-            PlayerId = playerId,
-            Type = PitchType.Fastball,
-            Velocity = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100),
-            Movement = Math.Clamp(40 + Jitter(10, ratingSpread, ref rng), 0, 100),
-            UsageWeight = fastballUsage,
-        });
-        baseball.UpsertArsenalPitch(new PitchArsenalRow
+            PlayerId = playerId, Type = PitchType.Fastball,
+            Velocity = fastVelocity, Movement = fastMovement, UsageWeight = fastballUsage,
+        };
+        int breakVelocity = Math.Clamp(pitStuff - 20 + Jitter(8, ratingSpread, ref rng), 0, 100);
+        int breakMovement = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100);
+        destination[1] = new PitchArsenalRow
         {
-            PlayerId = playerId,
-            Type = PitchType.Breaking,
-            Velocity = Math.Clamp(pitStuff - 20 + Jitter(8, ratingSpread, ref rng), 0, 100),
-            Movement = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100),
-            UsageWeight = breakingUsage,
-        });
-        baseball.UpsertArsenalPitch(new PitchArsenalRow
+            PlayerId = playerId, Type = PitchType.Breaking,
+            Velocity = breakVelocity, Movement = breakMovement, UsageWeight = breakingUsage,
+        };
+        int offVelocity = Math.Clamp(pitStuff - 25 + Jitter(8, ratingSpread, ref rng), 0, 100);
+        int offMovement = Math.Clamp(pitStuff + 5 + Jitter(10, ratingSpread, ref rng), 0, 100);
+        destination[2] = new PitchArsenalRow
         {
-            PlayerId = playerId,
-            Type = PitchType.Offspeed,
-            Velocity = Math.Clamp(pitStuff - 25 + Jitter(8, ratingSpread, ref rng), 0, 100),
-            Movement = Math.Clamp(pitStuff + 5 + Jitter(10, ratingSpread, ref rng), 0, 100),
-            UsageWeight = offspeedUsage,
-        });
+            PlayerId = playerId, Type = PitchType.Offspeed,
+            Velocity = offVelocity, Movement = offMovement, UsageWeight = offspeedUsage,
+        };
     }
+
+    // ------------------------------------------------------------------
+    // Slice 13-6: pipeline-generated players (intake, outside recruits)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// One player rolled in memory (13-6 Amendment 2): every row he would
+    /// write, written only by <see cref="WriteGeneratedPlayer"/> (an outside
+    /// recruit who signs). Never touches world-gen's stream.
+    /// </summary>
+    public sealed class GeneratedPlayer
+    {
+        public PlayerRow Player;
+        public PlayerRatingsRow Ratings;
+        public PlayerPotentialRow Potential;
+        public PitcherRole Role;
+        public PlayerFieldingRow Fielding;
+        public readonly PitchArsenalRow[] Arsenal = new PitchArsenalRow[ArsenalSize];
+
+        public string PlayerId => Player.PlayerId;
+    }
+
+    /// <summary>
+    /// Rolls an outside recruit in memory (13-6 brief §4 item 6): the same
+    /// draw shape as <see cref="GeneratePlayer"/> (guid, names, recklessness,
+    /// the seven potential bells, a Split() fork for the discount), with the
+    /// potential bell centred <paramref name="meanOffset"/> off 50 and the
+    /// current ratings discounted at <paramref name="discountAge"/> while
+    /// Players.age stays <paramref name="age"/>; the fielding row (a depth
+    /// primary for position players) and the arsenal from their own streams.
+    /// </summary>
+    public static GeneratedPlayer RollOutsideRecruit(
+        PitcherRole role, int ratingSpread, int age, int meanOffset, int discountAge,
+        ref RngState rng, ref RngState fieldingRng)
+    {
+        var g = new GeneratedPlayer { Role = role };
+        string playerId = NextGuid(ref rng);
+        string firstName = FirstNames[rng.NextInt(FirstNames.Length)];
+        string lastName = LastNames[rng.NextInt(LastNames.Length)];
+        g.Player = new PlayerRow
+        {
+            PlayerId = playerId,
+            FirstName = firstName,
+            LastName = lastName,
+            Age = age,
+            TeamId = null,
+            Funds = 0,
+            HealthCeiling = 100,
+            Recklessness = RollRating(ratingSpread, ref rng),
+            BaseballInterest = 0,
+            DetectionRisk = 0,
+        };
+        bool isPitcher = role != PitcherRole.None;
+        int mean = 50 + meanOffset;
+        g.Potential = new PlayerPotentialRow
+        {
+            PlayerId = playerId,
+            BatPower = RollRating(ratingSpread, mean, ref rng),
+            BatContact = RollRating(ratingSpread, mean, ref rng),
+            BatDiscipline = RollRating(ratingSpread, mean, ref rng),
+            PitStuff = RollRating(ratingSpread, mean, ref rng),
+            PitControl = RollRating(ratingSpread, mean, ref rng),
+            PitStamina = RollRating(ratingSpread, mean, ref rng),
+            Fielding = RollRating(ratingSpread, mean, ref rng),
+        };
+        if (role == PitcherRole.Reliever)
+        {
+            g.Potential.PitStamina = Math.Max(0, g.Potential.PitStamina - RelieverStaminaPenalty);
+        }
+        PlayerPotentialRow pot = g.Potential;
+        var ratings = new PlayerRatingsRow { PlayerId = playerId, IsPitcher = isPitcher };
+        if (ratingSpread == 0)
+        {
+            ratings.BatPower = pot.BatPower;
+            ratings.BatContact = pot.BatContact;
+            ratings.BatDiscipline = pot.BatDiscipline;
+            ratings.PitStuff = pot.PitStuff;
+            ratings.PitControl = pot.PitControl;
+            ratings.PitStamina = pot.PitStamina;
+            ratings.Fielding = pot.Fielding;
+        }
+        else
+        {
+            RngState discountRng = rng.Split();
+            ratings.BatPower = DevelopmentCurve.RawCurrent(pot.BatPower, discountAge, ref discountRng);
+            ratings.BatContact = DevelopmentCurve.RawCurrent(pot.BatContact, discountAge, ref discountRng);
+            ratings.BatDiscipline = DevelopmentCurve.RawCurrent(pot.BatDiscipline, discountAge, ref discountRng);
+            ratings.PitStuff = DevelopmentCurve.RawCurrent(pot.PitStuff, discountAge, ref discountRng);
+            ratings.PitControl = DevelopmentCurve.RawCurrent(pot.PitControl, discountAge, ref discountRng);
+            ratings.PitStamina = DevelopmentCurve.RawCurrent(pot.PitStamina, discountAge, ref discountRng);
+            ratings.Fielding = DevelopmentCurve.RawCurrent(pot.Fielding, discountAge, ref discountRng);
+        }
+        g.Ratings = ratings;
+        g.Fielding = RollFielding(playerId,
+            isPitcher ? FieldingPosition.P : DrawDepthPosition(ref fieldingRng), ratingSpread, ref fieldingRng);
+        if (isPitcher)
+        {
+            RollArsenal(playerId, ratings.PitStuff, ratingSpread, ref rng, g.Arsenal);
+        }
+        return g;
+    }
+
+    /// <summary>Writes every row of a rolled player (joins the caller's open batch); <paramref name="teamId"/> null leaves him unrostered.</summary>
+    public static void WriteGeneratedPlayer(PlayerQueries players, BaseballQueries baseball, GeneratedPlayer g, int? teamId)
+    {
+        PlayerRow row = g.Player;
+        row.TeamId = teamId;
+        players.Insert(in row);
+        baseball.UpsertRatings(in g.Ratings);
+        baseball.UpsertPotential(in g.Potential);
+        baseball.UpsertFielding(in g.Fielding);
+        if (g.Role != PitcherRole.None)
+        {
+            baseball.UpsertPitcherRole(g.PlayerId, g.Role);
+            foreach (PitchArsenalRow pitch in g.Arsenal)
+            {
+                baseball.UpsertArsenalPitch(in pitch);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One Player_Fielding row for a pipeline-generated player (13-6 brief §4
+    /// item 6): the given primary (an HS intake inherits the departed
+    /// player's, so every HS team keeps its field covered; pitchers are P),
+    /// then the same secondary / speed / arm rolls world-gen makes, from the
+    /// caller's stream.
+    /// </summary>
+    public static PlayerFieldingRow RollFielding(string playerId, FieldingPosition primary, int ratingSpread, ref RngState rng)
+    {
+        FieldingPosition? secondary = null;
+        if (primary != FieldingPosition.P && rng.NextDouble() < SecondaryPositionRate)
+        {
+            FieldingPosition[] neighbours = SecondaryNeighbours[(int)primary];
+            secondary = neighbours[rng.NextInt(neighbours.Length)];
+        }
+        return new PlayerFieldingRow
+        {
+            PlayerId = playerId,
+            DefensivePosition = primary,
+            SecondaryPosition = secondary,
+            Speed = RollRating(ratingSpread, ref rng),
+            Arm = RollRating(ratingSpread, ref rng),
+        };
+    }
+
+    /// <summary>A primary position from <see cref="DepthPositionWeights"/> (fillers and outside recruits; 13-6).</summary>
+    public static FieldingPosition RollDepthPosition(ref RngState rng) => DrawDepthPosition(ref rng);
 
     /// <summary>
     /// One draw from the same first-name pool world-gen uses — for callers
@@ -592,5 +691,16 @@ public static class LeagueGenerator
         }
         double bell = (rng.NextDouble() + rng.NextDouble() + rng.NextDouble() - 1.5) / 1.5;
         return Math.Clamp((int)Math.Round(50 + spread * bell), 0, 100);
+    }
+
+    /// <summary>The same bell centred on <paramref name="mean"/> (13-6 outside recruits); spread 0 reads the mean.</summary>
+    private static int RollRating(int spread, int mean, ref RngState rng)
+    {
+        if (spread == 0)
+        {
+            return mean;
+        }
+        double bell = (rng.NextDouble() + rng.NextDouble() + rng.NextDouble() - 1.5) / 1.5;
+        return Math.Clamp((int)Math.Round(mean + spread * bell), 0, 100);
     }
 }

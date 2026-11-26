@@ -48,8 +48,8 @@ Every cutscene can be skipped (the first view of a `story` cutscene included, af
 
 - **`CutsceneDirector`** (`Assets/UI/Cutscenes/`, presentation layer) subscribes to bus events and the booth's `BigPlay`. It maps events to cutscene ids, fills slot values from DTOs, and enqueues.
 - **`CutscenePlayer`** is a permanent, self-hiding sibling in `Main.tscn` (the shipped overlay idiom). It plays one definition at a time.
-- **Clock and input:** while a cutscene plays, the real-time `GameClock` **soft-pauses** (the same mechanism hustle sessions use, [real_time_clock_slice_g.md](../reference/real_time_clock_slice_g.md)), and the at-bat sequencer treats a big-play cutscene as one more **beat**: the next `AwaitingInput` waits for it ([at_bat_presentation.md](../reference/at_bat_presentation.md) §3).
-- **Boundary:** presentation only. Cutscenes never write the DB or sim state and never block the sim thread beyond the at-bat beat gate that already exists. **Calibration-inert.**
+- **Clock and input:** while a cutscene plays, the real-time `GameClock` **soft-pauses** (the same mechanism hustle sessions use, [real_time_clock_slice_g.md](../reference/real_time_clock_slice_g.md)). In the attended game a big-play cutscene is a **dead-ball hold**: the arcade world doesn't tick and the next pitch waits for it ([arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) §7.7). In the Classic sim, the next `AwaitingInput` waits instead ([at_bat_presentation.md](../reference/at_bat_presentation.md) §3).
+- **Boundary:** presentation only. Cutscenes never write the DB or sim state and never hold the game beyond that dead-ball hold. **Calibration-inert.**
 
 ### 3.1 Queue and rate limits
 

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.League;
 using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Economy.Equipment;
 using DirtAndDiamonds.Economy.Family;
@@ -8,6 +9,7 @@ using DirtAndDiamonds.Economy.Items;
 using DirtAndDiamonds.Economy.Phone;
 using DirtAndDiamonds.Narrative.Contacts;
 using DirtAndDiamonds.Narrative.Events;
+using DirtAndDiamonds.Narrative.Roster;
 using DirtAndDiamonds.Narrative.Social;
 using DirtAndDiamonds.Platform.Steam;
 using DirtAndDiamonds.Simulation.Baseball;
@@ -46,6 +48,9 @@ public sealed partial class GameManager : Node
     // NOTE: same export-filter caveat — schools.json (HS team branding) must
     // join the Phase 9 export include filters like the other content .json.
     private const string SchoolsResourcePath = "res://Assets/Data/Schools/schools.json";
+
+    // Schema v14 home parks (13-1a content), read once at world-gen.
+    private const string HomeParksResourcePath = "res://Assets/Data/League/home_parks.json";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -70,11 +75,38 @@ public sealed partial class GameManager : Node
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
 
-    /// <summary>Phase 9d offseason development pass — public like Promotions so a player-development UI card can read <see cref="DevelopmentManager.LastRun"/>.</summary>
+    /// <summary>Phase 9d offseason development pass — public like Pipeline so a player-development UI card can read <see cref="DevelopmentManager.LastRun"/>.</summary>
     public DevelopmentManager Development { get; private set; } = null!;
 
-    /// <summary>Phase 9c offseason promotion/relegation — public like Career so a ladder/news UI can read <see cref="PromotionManager.LastRun"/>.</summary>
-    public PromotionManager Promotions { get; private set; } = null!;
+    /// <summary>
+    /// Slice 13-6: the pipeline (graduation, recruiting, class years, the
+    /// July Draft, Pro releases, Sunday-lock free agency) — public like
+    /// Career so the 13-6b phone cards and Draft board read
+    /// <see cref="PipelineManager.GetStatusView"/> and send intent through
+    /// its Resolve… calls.
+    /// </summary>
+    public PipelineManager Pipeline { get; private set; } = null!;
+
+    /// <summary>13-6 (D5-A): the pipeline's phone texts.</summary>
+    public DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter PipelineBeats { get; private set; } = null!;
+
+    /// <summary>
+    /// The postseason (slice 13-4): selection, brackets, series, the National
+    /// Ranking views and the tier-carrying ChampionshipWonEvent. Presentation
+    /// reads its DTO views only (GetBracket / GetNationalRanking).
+    /// </summary>
+    public PlayoffManager Playoffs { get; private set; } = null!;
+
+    /// <summary>
+    /// The Pro Sunday roster lock (slice 13-5): designations, the boot
+    /// reconcile, the read-only <see cref="RosterManager.CanField"/> façade
+    /// and <see cref="RosterManager.GetStatusView"/> for the Roster Status
+    /// screen (15c). Presentation only reads it.
+    /// </summary>
+    public RosterManager Roster { get; private set; } = null!;
+
+    /// <summary>The coach beats (13-5, D5-A): texts and stress for the avatar's designation changes and forfeits.</summary>
+    public RosterBeatWriter RosterBeats { get; private set; } = null!;
     public LifeSimManager LifeSim { get; private set; } = null!;
     public RelationshipGraph Relationships { get; private set; } = null!;
 
@@ -203,6 +235,22 @@ public sealed partial class GameManager : Node
     /// <summary>Phase 11a: the sole Steam SDK owner — public like Career/Hustles so 11b's achievement subscriber and 11d's presence writer route through its guarded wrappers, never Steamworks directly.</summary>
     public SteamIntegration Steam { get; private set; } = null!;
 
+    /// <summary>
+    /// Schema v14 clean break (league_restructure.md §14, 13-1 brief §3.2.5):
+    /// non-<see cref="SaveRefusal.None"/> when boot found a save it can't open
+    /// and stopped before touching it. The clean-break dialog reads this flag
+    /// and answers with <see cref="ConfirmCleanBreak"/> (older saves only) or a
+    /// quit. While it is set, nothing past <see cref="Steam"/> is constructed
+    /// and <c>_Process</c> is off.
+    /// </summary>
+    public SaveRefusal PendingSaveRefusal { get; private set; }
+
+    /// <summary>The refused save's PRAGMA user_version (0 when nothing was refused).</summary>
+    public int RefusedSaveVersion { get; private set; }
+
+    /// <summary>Where <see cref="ConfirmCleanBreak"/> moved the old save (null until it has).</summary>
+    public string? CleanBreakBackupPath { get; private set; }
+
     // Phase 11b: the achievements bus subscriber — private like _rivalryLedger
     // (nothing reads it; it exists exactly as long as the bus does).
     private AchievementManager _achievements = null!;
@@ -271,7 +319,33 @@ public sealed partial class GameManager : Node
         Steam = new SteamIntegration();
         Steam.Initialize();
 
+        BootCareer();
+    }
+
+    /// <summary>
+    /// The career boot: open the save, apply the schema, generate or load the
+    /// world, wire every system. Schema v14 clean break: the save's
+    /// user_version is read BEFORE the schema script (or anything else) touches
+    /// the file. A pre-v14 or newer-build save sets
+    /// <see cref="PendingSaveRefusal"/> and stops here with the file untouched;
+    /// <see cref="ConfirmCleanBreak"/> re-enters from the top once the player
+    /// agrees to start over.
+    /// </summary>
+    private void BootCareer()
+    {
         string databasePath = ProjectSettings.GlobalizePath(SaveFilePath);
+        PendingSaveRefusal = SaveCompatibility.Inspect(databasePath, out int saveVersion);
+        RefusedSaveVersion = PendingSaveRefusal == SaveRefusal.None ? 0 : saveVersion;
+        if (PendingSaveRefusal != SaveRefusal.None)
+        {
+            // Nothing below exists yet, so nothing may pump.
+            SetProcess(false);
+            GD.Print(
+                $"[GameManager] Save at '{databasePath}' is schema v{saveVersion} ({PendingSaveRefusal}); " +
+                $"this build is v{SaveCompatibility.CurrentSchemaVersion}. Career boot stopped; awaiting the player.");
+            return;
+        }
+
         _database = new DatabaseManager(databasePath);
 
         string ddl = FileAccess.GetFileAsString(SchemaResourcePath);
@@ -306,22 +380,48 @@ public sealed partial class GameManager : Node
                 ? bootSpeed
                 : (long)TimeSpeed.Normal);
 
+        // Schema v14 home parks (13-1a content): pure data like schools.json,
+        // cross-checked against the Appendix A table before world-gen writes
+        // them into Teams.home_park. A content edit that breaks the join fails
+        // here, never at a broadcast intro.
+        string homeParksJson = FileAccess.GetFileAsString(HomeParksResourcePath);
+        if (string.IsNullOrWhiteSpace(homeParksJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{HomeParksResourcePath}' ({FileAccess.GetOpenError()}) — the home park catalog is missing.");
+        }
+        HomeParkCatalog homeParks = HomeParkCatalog.Parse(homeParksJson);
+        homeParks.ValidateAgainst(LeagueStructure.Teams);
+
         // World-gen on first boot only; an existing save keeps its league.
         // In-game runs are not required to be replay-deterministic (that is
         // the harness's contract), so a wall-clock seed is fine here.
         var rng = new RngState(unchecked((ulong)System.Environment.TickCount64) | 1UL);
-        // HS-2: Persons wired in so fresh worlds seed the §2.5 organic
-        // person-stat spread at generation (from the per-player fork — the
-        // rating draws are untouched); migrated saves keep their backfilled
-        // neutral rows (INSERT OR IGNORE never clobbers).
+        // Schema v14 (league_restructure.md §5.3, Appendix A): 68 teams in
+        // three tiers, per-tier rosters, Player_Fielding for every player, one
+        // transaction. HS-2: Persons wired in so the world seeds the §2.5
+        // organic person-stat spread (from the per-player fork — the rating
+        // draws are untouched).
         bool newLeague = LeagueGenerator.GenerateIfEmpty(
-            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
-        // v3→v4 save top-up: invents the relievers the DDL backfill cannot
-        // (roles/arsenals for migrated pitchers come from the schema script).
-        LeagueGenerator.EnsureV4(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
-        // v6→v7 world top-up (Phase 9a): seeds the five ladder tiers below MLB
-        // on both migrated saves and fresh worlds. No-op once they exist.
-        LeagueGenerator.EnsureTierLeagues(_database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons);
+            _database, Players, Baseball, LeagueGenerator.DefaultRatingSpread, ref rng, Persons,
+            homeParks.ToHomeParkMap());
+
+        // HS team branding (schools.json) — pure content like the item catalog
+        // below, then the loud boot-time cross-check against the live HS roster
+        // world-gen just wrote: every HS team needs a school, abbreviations must
+        // agree, no orphan entries. A content edit that breaks the join fails
+        // here, never at the team picker. (13-1 moved this ahead of the sims, so
+        // a fresh v14 boot validates it before the sims' expected-red stop.)
+        string schoolsJson = FileAccess.GetFileAsString(SchoolsResourcePath);
+        if (string.IsNullOrWhiteSpace(schoolsJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{SchoolsResourcePath}' ({FileAccess.GetOpenError()}) — the school catalog is missing.");
+        }
+        Schools = SchoolCatalogJson.Parse(schoolsJson);
+        var hsRosterAudit = new List<TeamRow>();
+        Baseball.LoadTeamsByTier(LeagueTier.HS, hsRosterAudit);
+        Schools.ValidateAgainstRoster(hsRosterAudit);
 
         // Split the wall-clock stream before the sims copy it, so no two
         // consumers ever replay each other's draws.
@@ -361,18 +461,25 @@ public sealed partial class GameManager : Node
         PersonLevers.AttachTo(Events);
 
         // Phase 9a: one macro-sim per ladder tier, each bulk-loading only its
-        // own 8-team league, each with its own forked rng stream. All six run
-        // the same day loop off the bus; the avatar's tier is resolved by
-        // CareerManager through the directory.
+        // own league, each with its own forked rng stream. All three run the
+        // same day loop off the bus; the avatar's tier is resolved by
+        // CareerManager through the directory. Each sim plays its tier's
+        // persisted Schedule_Games season (13-3).
         Leagues = new LeagueDirectory();
         var normalizer = new StatsNormalizer(_database, Baseball);
+        // 13-2 (league_restructure.md §6): ONE rest ledger for every tier sim
+        // and the micro-sim, so the attended game and the background league
+        // agree on who is rested. Hydrated from Pitcher_Rest on first use.
+        var restLedger = new PitcherRestLedger();
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
         {
             var tierSim = new LeagueSimulator(
                 _database, Baseball, normalizer, new RngState(rng.NextUInt64() | 1UL), (LeagueTier)t);
             // HS-6: person levers bake at Initialize, so the source must be
-            // wired first (unlike the per-PA ledgers below).
+            // wired first (unlike the per-PA ledgers below); the rest ledger
+            // hydrates there too.
             tierSim.Persons = Persons;
+            tierSim.RestLedger = restLedger;
             tierSim.Initialize();
             tierSim.Rivalries = _rivalryLedger;
             tierSim.Availability = Absences;
@@ -380,6 +487,45 @@ public sealed partial class GameManager : Node
             tierSim.AttachTo(Events);
             Leagues.Register(tierSim);
         }
+
+        // 13-3 (brief D1): the save's schedule seed is written once. Split()
+        // forks without advancing the boot stream, so no other consumer's
+        // draws move. Then each tier's current and next season are ensured
+        // (generated once, never regenerated) and loaded before the career
+        // or the calendar UI looks at them.
+        if (!GameState.TryGetInt64(SeasonScheduler.ScheduleSeedKey, out _))
+        {
+            ulong scheduleSeed = rng.Split().NextUInt64();
+            _database.RunInBatch(() => GameState.SetInt64(SeasonScheduler.ScheduleSeedKey, unchecked((long)scheduleSeed)));
+        }
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            Leagues.Get((LeagueTier)t).PrepareSeason(State.SeasonYear);
+        }
+
+        // 13-6: the pipeline exists before the boot lock reconcile below, so a
+        // missed lock's free-agency signings are the same ones an uninterrupted
+        // run made (the lock calls the pipeline first). Its boot draw and bus
+        // subscription stay in PromotionManager's old slot further down.
+        Pipeline = new PipelineManager(_database, Players, Baseball, GameState, State, Leagues);
+
+        // 13-5 (brief D6-A): the Pro Sunday lock, subscribed AFTER the tier
+        // sims (the Pro sim's Sunday flush runs first, so the lock sees the
+        // week's stats) and BEFORE the career. Every sim reads its
+        // designations; HS and College have none (everyone active). Boot
+        // hydrates the covering rows and reconciles a missed lock.
+        Roster = new RosterManager(_database, Baseball, Leagues)
+        {
+            Availability = Absences,
+            Persons = Persons,
+            Market = Pipeline,
+        };
+        Roster.AttachTo(Events);
+        for (int t = 0; t < LeagueDirectory.TierCount; t++)
+        {
+            Leagues.Get((LeagueTier)t).Designations = Roster;
+        }
+        Roster.HydrateAndReconcile(State.CurrentDay, State.SeasonYear, State.DayOfSeason);
 
         // Career driver (Phase 5): micro-sim + avatar wiring. On a save with
         // an avatar, the attended team is reclaimed from its tier's macro sim
@@ -390,9 +536,11 @@ public sealed partial class GameManager : Node
         // HS-6: wired before Initialize for the same bake-time reason as the
         // tier sims above.
         Micro.Persons = Persons;
+        Micro.RestLedger = restLedger;
         Micro.Initialize();
         Micro.Rivalries = _rivalryLedger;
         Micro.Availability = Absences;
+        Micro.Designations = Roster;
         Micro.Equipment = Gear;
         // The per-game person refresh is the micro's alone — the tier sims
         // above deliberately stay on the §6.2 season-stable Initialize bake.
@@ -400,6 +548,8 @@ public sealed partial class GameManager : Node
         Career = new CareerManager(
             _database, Players, Baseball, GameState, State, Leagues, Micro, careerRng);
         Career.Availability = Absences;
+        // 13-5: an inactive Pro avatar never parks a game (spec §7).
+        Career.Roster = Roster;
         // 12c review: an attended game's flush re-normalizes its tier's rate
         // columns, so the post-game dashboard refresh never reads them stale.
         Career.Normalizer = normalizer;
@@ -413,29 +563,52 @@ public sealed partial class GameManager : Node
         bool avatarLoaded = Career.LoadExistingAvatar();
         Career.AttachTo(Events);
 
+        // 13-4: the postseason, attached AFTER the career so the avatar's
+        // postseason game is claimed (and parked, stopping the clock) before
+        // the day's NPC postseason games play. A champion whose publication
+        // marker is missing is republished, and a save reloaded on the
+        // avatar's postseason game day parks the same fixture again.
+        Playoffs = new PlayoffManager(_database, Baseball, Leagues);
+        Career.Playoffs = Playoffs;
+        Playoffs.AttachTo(Events);
+        Playoffs.RepublishMissingChampions(State.SeasonYear);
+        if (avatarLoaded)
+        {
+            // 13-5 (D3-A item 3): a reload on a regular-season game day
+            // re-parks the same fixture (or resolves it: forfeit, absent,
+            // inactive, autopilot), then the postseason's reclaim as in 13-4.
+            Career.ReclaimRegularSeasonGame(State.CurrentDay);
+            Career.ReclaimPostseasonGame(State.CurrentDay);
+        }
+
         // Phase 9d: the offseason development pass. Attached AFTER CareerManager
-        // (ages are post-aging) and BEFORE PromotionManager (develop-before-sort,
-        // development doc §5: the sweep's scouting reads the just-developed
-        // ratings, so a prospect climbs BECAUSE he developed). Its only RNG is
-        // the §2.4 jitter, from a dedicated forked stream.
+        // (ages are post-aging) and BEFORE the pipeline (develop-before-sort,
+        // development doc §5: the pipeline's values read the just-developed
+        // ratings, so a prospect is recruited and drafted BECAUSE he
+        // developed). Its only RNG is the §2.4 jitter, from a dedicated forked
+        // stream.
         Development = new DevelopmentManager(
             _database, Players, Baseball, GameState, Leagues, Micro,
             new RngState(rng.NextUInt64() | 1UL));
         Development.Career = Career;
         Development.AttachTo(Events);
 
-        // Phase 9c: the offseason promotion/relegation pass. Attached AFTER
-        // CareerManager so the promotion-doc §4 order holds on every season
-        // rollover (sims flush → world ages + succession → promotion sweep);
-        // its only RNG draws (HS intake generation) come from a dedicated
-        // forked stream so the six sims' and the career's streams are never
-        // perturbed. Career wired in so the avatar rides the same advancement
-        // ranking and moves via the careful ReactivateAvatar path (§6).
-        Promotions = new PromotionManager(
-            _database, Players, Baseball, GameState, Leagues, Micro,
-            new RngState(rng.NextUInt64() | 1UL));
-        Promotions.Career = Career;
-        Promotions.AttachTo(Events);
+        // Slice 13-6: the pipeline, in the retired PromotionManager's slot: the
+        // last SeasonRolledOverEvent handler (sims flush → world ages +
+        // succession → development → pipeline). Its boot draw stays HERE, at
+        // PromotionManager's position, so every later boot consumer (the Life
+        // sim's seed included) is unchanged; the draw is spent once, writing
+        // the persisted pipeline_seed every pipeline stream derives from (a
+        // save that already has one discards it). The boot ensure then
+        // backfills College class years and re-runs a calendar step a crash
+        // interrupted. The live game exposes the avatar's decisions to the
+        // phone; the clock never stops for them.
+        Pipeline.Micro = Micro;
+        Pipeline.Career = Career;
+        Pipeline.EnsureSeed(rng.NextUInt64() | 1UL);
+        Pipeline.AutopilotPipeline = false;
+        Pipeline.AttachTo(Events);
+        Pipeline.EnsureAtBoot(State.CurrentDay);
 
         // Life sim (Phase 5 remainder): needs/utility tracking, seeded once from
         // the same Players rows the baseball sims already loaded.
@@ -563,22 +736,6 @@ public sealed partial class GameManager : Node
         Persons.LoadAllItems(ownedItemsAudit);
         Items.ValidateOwnership(ownedItemsAudit);
 
-        // HS team branding (schools.json) — pure content like the item catalog
-        // above, then the loud boot-time cross-check against the live HS roster
-        // (seeded by EnsureTierLeagues earlier this boot): every HS team needs a
-        // school, abbreviations must agree, no orphan entries. A content edit
-        // that breaks the join fails here, never at the team picker.
-        string schoolsJson = FileAccess.GetFileAsString(SchoolsResourcePath);
-        if (string.IsNullOrWhiteSpace(schoolsJson))
-        {
-            throw new InvalidOperationException(
-                $"Could not read '{SchoolsResourcePath}' ({FileAccess.GetOpenError()}) — the school catalog is missing.");
-        }
-        Schools = SchoolCatalogJson.Parse(schoolsJson);
-        var hsRosterAudit = new List<TeamRow>();
-        Baseball.LoadTeamsByTier(LeagueTier.HS, hsRosterAudit);
-        Schools.ValidateAgainstRoster(hsRosterAudit);
-
         // HS-3: Marketplace purchase orchestration — the same request/response
         // shape as GearShop above, over Player_Items instead of
         // Player_Equipment.
@@ -626,6 +783,21 @@ public sealed partial class GameManager : Node
         }
         Contacts = ContactJson.Parse(contactsJson);
         NarrativeLog = new NarrativeLogQueries(_database);
+        // 13-5 (D5-A): the coach beats. Text resolves from the strings table
+        // at write time; the writer only reads Core events and the database.
+        RosterBeats = new RosterBeatWriter(_database, NarrativeLog, GameState, Players, State)
+        {
+            ResolveText = key => Tr(key),
+        };
+        RosterBeats.AttachTo(Events);
+        // 13-6 (D5-A): the pipeline's beats (offers, Signing Day, the
+        // declaration, Draft Night, the release), the same Core-events-only
+        // writer shape.
+        PipelineBeats = new DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter(_database, NarrativeLog, State)
+        {
+            ResolveText = key => Tr(key),
+        };
+        PipelineBeats.AttachTo(Events);
         GrittyEventChoices = new EventConsequenceApplier(
             _database, Players, Persons, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);
@@ -673,11 +845,48 @@ public sealed partial class GameManager : Node
             $"avatar {(avatarLoaded ? Career.AvatarPlayerId : "none")}, life-sim NPCs {LifeSim.NpcCount}, " +
             $"relationships {Relationships.EdgeCount}, gritty events {GrittyEvents.Count} (dispatcher polling), " +
             $"clock {TimeOfDay.MinuteOfDay} min @ {TimeOfDay.Speed}.");
+
+        // The boot completed: the bus and Steam may pump (off since a refusal,
+        // and still off if a post-confirm re-boot threw part-way).
+        SetProcess(true);
+    }
+
+    /// <summary>
+    /// The clean-break dialog's "Start a new career" intent. Only for an older
+    /// save (<see cref="SaveRefusal.OlderSave"/>): folds its WAL in, renames it
+    /// to <c>dirt_and_diamonds.v13.bak</c> (never deleted or overwritten; a
+    /// taken name moves on to <c>.v13.1.bak</c>, …) and re-runs the career boot
+    /// on the now-empty save path. A newer-build save is never renamed: this
+    /// throws instead.
+    /// </summary>
+    public void ConfirmCleanBreak()
+    {
+        if (PendingSaveRefusal != SaveRefusal.OlderSave)
+        {
+            throw new InvalidOperationException(
+                $"ConfirmCleanBreak needs a pending older-save refusal; the pending refusal is {PendingSaveRefusal}.");
+        }
+        string databasePath = ProjectSettings.GlobalizePath(SaveFilePath);
+        CleanBreakBackupPath = SaveCompatibility.ConfirmCleanBreak(databasePath);
+        GD.Print($"[GameManager] Older save moved to '{CleanBreakBackupPath}'; starting a new career.");
+        BootCareer();
     }
 
     public override void _Process(double delta)
     {
+        // 13-4 review S2: a champion crowned today gets its publication marker
+        // this frame, once its event has been dispatched, not on the next day
+        // tick (a quit on championship night would otherwise republish it at
+        // boot). Idleness is read BEFORE the pump: an attended game's worker
+        // publishes its events and then clears its volatile in-flight flag, so
+        // a game idle here had queued them before this dispatch, and no batch
+        // of its own can be open while the marker batch runs.
+        bool attendedGameIdle = !InteractiveGameInFlight && Career is { IsGameInFlight: false };
         Events.DispatchPending();
+        if (attendedGameIdle)
+        {
+            Playoffs?.WritePublicationMarkers();
+        }
         // Phase 11a: Facepunch runs with async callbacks off, so its callback
         // queue is pumped once per frame beside the bus — a bare branch no-op
         // whenever Steam is down.
@@ -982,25 +1191,37 @@ public sealed partial class GameManager : Node
     /// the projection both the ScheduleScreen (read-only rows) and the
     /// CalendarScreen (browsable week view) render, and the values
     /// <see cref="SubmitDaySchedule"/> enforces server-side. School follows
-    /// SchoolCalendar whenever the 9b school gate is open (HS/College);
-    /// Practice/Game are calendar-locked only in the HS tier
-    /// (HsSeasonCalendar's sparse spring season) — College/pro tiers keep the
-    /// legacy player-reserved sliders until they grow calendars of their own,
-    /// which <see cref="MandatoryBlocks.PracticeGameLocked"/> tells the UI.
+    /// SchoolCalendar whenever the 9b school gate is open (HS/College).
+    /// Practice/Game are calendar-locked inside the avatar tier's season
+    /// window (TierSeasonCalendar, every tier; league_restructure.md §3.2,
+    /// 13-3 brief D3) and free sliders outside it, so offseason training
+    /// exists — which <see cref="MandatoryBlocks.PracticeGameLocked"/> tells
+    /// the UI.
     /// </summary>
     public MandatoryBlocks GetMandatoryBlocksFor(long day)
     {
         int dayOfSeason = GlobalState.DayOfSeasonForDay(day);
         int schoolHours = LifeSim.AvatarSchoolAvailable ? SchoolCalendar.HoursForDayOfSeason(dayOfSeason) : 0;
-        if (!_avatarTierKnown || _avatarTier != LeagueTier.HS)
+        if (!_avatarTierKnown)
         {
             return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
         }
-        return new MandatoryBlocks(
-            schoolHours,
-            HsSeasonCalendar.IsPracticeDay(dayOfSeason) ? HsSeasonCalendar.PracticeHours : 0,
-            HsSeasonCalendar.IsGameDay(dayOfSeason) ? HsSeasonCalendar.GameHours : 0,
-            practiceGameLocked: true);
+        if (TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours)
+            // 13-4 (spec §3.2, §16-I10): locked through the team's postseason
+            // run, free from the day after elimination (non-qualifiers: from
+            // selection day).
+            || (Career.HasAvatar && Playoffs is not null && Playoffs.TryGetLockedPostseasonBlocks(
+                State.SeasonYearForDay(day), _avatarTier, Career.AvatarTeamId, dayOfSeason, out practiceHours, out gameHours)))
+        {
+            // 13-5 (spec §7): an inactive Pro avatar practices but has no
+            // Game block for the locked week.
+            if (gameHours > 0 && !Career.IsAvatarActiveOn(day))
+            {
+                gameHours = 0;
+            }
+            return new MandatoryBlocks(schoolHours, practiceHours, gameHours, practiceGameLocked: true);
+        }
+        return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
     }
 
     /// <summary>
@@ -1153,7 +1374,7 @@ public sealed partial class GameManager : Node
         int hours = _plannedPracticeHours;
         _plannedPracticeHours = 0;
 
-        // Calendar top-up: mandatory HS team practice happens whether or not
+        // Calendar top-up: mandatory team practice happens whether or not
         // the player planned the day — an unplanned (autopiloted/skipped)
         // practice day still banks the mandated hours, so multi-day skips no
         // longer zero the development lever now that Practice is
@@ -1447,9 +1668,9 @@ public sealed partial class GameManager : Node
 
 /// <summary>
 /// The calendar-mandated blocks of one day — <see cref="GameManager.GetMandatoryBlocksFor"/>'s
-/// projection. When <see cref="PracticeGameLocked"/> is false (non-HS tiers,
-/// this pass), Practice/Game stay legacy player-reserved sliders and only
-/// School is calendar-driven.
+/// projection. When <see cref="PracticeGameLocked"/> is false (outside the
+/// avatar tier's season window, 13-3 brief D3), Practice/Game are free
+/// player sliders and only School is calendar-driven.
 /// </summary>
 public readonly struct MandatoryBlocks
 {

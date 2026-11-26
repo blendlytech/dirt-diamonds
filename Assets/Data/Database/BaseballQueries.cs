@@ -15,23 +15,48 @@ namespace DirtAndDiamonds.Data;
 /// </summary>
 public sealed class BaseballQueries
 {
-    private const string SqlInsertTeam =
-        "INSERT INTO Teams (team_id, city, name, abbreviation, league, division) VALUES " +
-        "(@teamId, @city, @name, @abbreviation, @league, @division);";
+    /// <summary>
+    /// 13-6 (C1): the pipeline's retired flag, bound into the succession
+    /// free-agent read's exclusion. Its one home is here, so every tool that
+    /// compiles this file stands alone; <see cref="PipelineFlags.Retired"/>
+    /// aliases it.
+    /// </summary>
+    public const string PipelineRetiredFlagName = "pipeline_retired";
 
-    // Tier rides a LEFT JOIN + COALESCE(…, 5) so a Teams row missing its
-    // Team_Tiers row degrades to MLB (the v6→v7 backfill value) instead of
-    // silently vanishing from the load. Plan validated on a v7 scratch db:
-    // Teams scan + Team_Tiers PK probe (No Blind Queries).
+    private const string SqlInsertTeam =
+        "INSERT INTO Teams (team_id, city, name, abbreviation, league, division, conference_id, division_id, home_park) " +
+        "VALUES (@teamId, @city, @name, @abbreviation, @league, @division, @conferenceId, @divisionId, @homePark);";
+
+    // Schema v14 static structure (LeagueStructure). INSERT OR IGNORE: written
+    // once at world-gen, and idempotent when a fixture calls it again.
+    private const string SqlInsertConference =
+        "INSERT OR IGNORE INTO Conferences (conference_id, tier, name) VALUES (@conferenceId, @tier, @name);";
+
+    private const string SqlInsertDivision =
+        "INSERT OR IGNORE INTO Divisions (division_id, conference_id, name) VALUES (@divisionId, @conferenceId, @name);";
+
+    private const string SqlSelectConferences =
+        "SELECT conference_id, tier, name FROM Conferences ORDER BY conference_id;";
+
+    private const string SqlSelectDivisions =
+        "SELECT division_id, conference_id, name FROM Divisions ORDER BY division_id;";
+
+    // Tier rides a LEFT JOIN + COALESCE(…, 2) so a Teams row missing its
+    // Team_Tiers row degrades to Pro (league_restructure.md §13; the v6→v7
+    // backfill read it as MLB) instead of silently vanishing from the load.
+    // Plan validated on a v14 scratch db: Teams scan + Team_Tiers PK probe
+    // (No Blind Queries).
     private const string SqlSelectAllTeams =
-        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, COALESCE(tt.tier, 5) " +
+        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, COALESCE(tt.tier, 2), " +
+        "t.conference_id, t.division_id, t.home_park " +
         "FROM Teams AS t LEFT JOIN Team_Tiers AS tt ON tt.team_id = t.team_id ORDER BY t.team_id;";
 
     // Tier-scoped teams load (schema v7): one ladder tier's league, ordered by
     // team_id so team indexes stay deterministic within the tier. INNER JOIN —
     // a tier-scoped caller by definition wants only tiered teams.
     private const string SqlSelectTeamsByTier =
-        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, tt.tier " +
+        "SELECT t.team_id, t.city, t.name, t.abbreviation, t.league, t.division, tt.tier, " +
+        "t.conference_id, t.division_id, t.home_park " +
         "FROM Teams AS t JOIN Team_Tiers AS tt ON tt.team_id = t.team_id " +
         "WHERE tt.tier = @tier ORDER BY t.team_id;";
 
@@ -46,10 +71,36 @@ public sealed class BaseballQueries
         "ON CONFLICT (team_id) DO UPDATE SET tier = excluded.tier;";
 
     // One team's ladder tier; the COALESCE-through-Teams shape distinguishes a
-    // missing team (no row → null scalar) from a merely untiered one (→ MLB).
+    // missing team (no row → null scalar) from a merely untiered one (→ Pro).
     private const string SqlSelectTeamTier =
-        "SELECT COALESCE(tt.tier, 5) FROM Teams AS t " +
+        "SELECT COALESCE(tt.tier, 2) FROM Teams AS t " +
         "LEFT JOIN Team_Tiers AS tt ON tt.team_id = t.team_id WHERE t.team_id = @teamId;";
+
+    // Player_Fielding (schema v14, arcade §8.1): the world-gen writer and the
+    // loaders. Both ride the player_id PK (No Blind Queries: validated on a
+    // v14 scratch db). The full load is ordered so a dump is deterministic.
+    private const string SqlUpsertFielding =
+        "INSERT INTO Player_Fielding (player_id, defensive_position, secondary_position, speed, arm) " +
+        "VALUES (@playerId, @position, @secondary, @speed, @arm) " +
+        "ON CONFLICT (player_id) DO UPDATE SET defensive_position = excluded.defensive_position, " +
+        "secondary_position = excluded.secondary_position, speed = excluded.speed, arm = excluded.arm;";
+
+    private const string SqlSelectAllFielding =
+        "SELECT player_id, defensive_position, secondary_position, speed, arm " +
+        "FROM Player_Fielding ORDER BY player_id;";
+
+    // Pitcher_Rest (schema v14, slice 13-2): the rest ledger's persistence.
+    // Both ride the player_id PK (validated on a v14 scratch db).
+    private const string SqlUpsertPitcherRest =
+        "INSERT INTO Pitcher_Rest (player_id, last_start_day) VALUES (@playerId, @day) " +
+        "ON CONFLICT (player_id) DO UPDATE SET last_start_day = excluded.last_start_day;";
+
+    private const string SqlSelectAllPitcherRest =
+        "SELECT player_id, last_start_day FROM Pitcher_Rest ORDER BY player_id;";
+
+    private const string SqlSelectFieldingById =
+        "SELECT player_id, defensive_position, secondary_position, speed, arm " +
+        "FROM Player_Fielding WHERE player_id = @playerId;";
 
     private const string SqlUpsertRatings =
         "INSERT INTO Player_Ratings (player_id, is_pitcher, bat_power, bat_contact, bat_discipline, pit_stuff, pit_control, pit_stamina, fielding) VALUES " +
@@ -133,6 +184,16 @@ public sealed class BaseballQueries
     // Baseball layer's HeirGeneticsProfile, above this one. Plan validated via
     // the sqlite MCP (No Blind Queries): idx_players_team seeks the NULL
     // bucket, both PK autoindexes probe the joins.
+    //
+    // 13-6 (brief D3-A, Amendment 6, C1): two exclusions, because succession
+    // runs at the rollover BEFORE the pipeline moves anyone: a signed outside
+    // recruit (an accepted Recruiting_Offers row, team_id NULL until the
+    // pipeline's step 3) and a retired player (an active pipeline_retired
+    // flag) are never backfill candidates. The window stays otherwise
+    // unflagged (the heir pool's adult children, D3 sub-choice). The flag name
+    // is bound, never a literal. Re-validated on a scratch v14: idx_players_team
+    // search, two correlated subqueries (the Recruiting_Offers PK and the
+    // Entity_Flags UNIQUE (player_id, flag_name) probes), a temp B-tree.
     private const string SqlSelectFreeAgents =
         "SELECT p.player_id, p.first_name, p.last_name, 0, r.is_pitcher, COALESCE(pr.role, 0), " +
         "r.bat_power, r.bat_contact, r.bat_discipline, " +
@@ -140,6 +201,9 @@ public sealed class BaseballQueries
         "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
         "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
         "WHERE p.team_id IS NULL AND p.age >= @minAge AND p.age < @maxAge AND p.health_ceiling > @minHealth " +
+        "AND NOT EXISTS (SELECT 1 FROM Recruiting_Offers AS ro WHERE ro.player_id = p.player_id AND ro.status = 1) " +
+        "AND NOT EXISTS (SELECT 1 FROM Entity_Flags AS ef WHERE ef.player_id = p.player_id " +
+        "AND ef.flag_name = @retiredFlag AND ef.is_active = 1) " +
         "ORDER BY p.player_id;";
 
     // Schema v4: bullpen role + arsenal writes (world-gen / avatar creation) and
@@ -379,6 +443,15 @@ public sealed class BaseballQueries
 
     private readonly DatabaseManager _db;
     private readonly SqliteCommand _insertTeam;
+    private readonly SqliteCommand _insertConference;
+    private readonly SqliteCommand _insertDivision;
+    private readonly SqliteCommand _selectConferences;
+    private readonly SqliteCommand _selectDivisions;
+    private readonly SqliteCommand _upsertFielding;
+    private readonly SqliteCommand _selectAllFielding;
+    private readonly SqliteCommand _selectFieldingById;
+    private readonly SqliteCommand _upsertPitcherRest;
+    private readonly SqliteCommand _selectAllPitcherRest;
     private readonly SqliteCommand _selectAllTeams;
     private readonly SqliteCommand _selectTeamsByTier;
     private readonly SqliteCommand _countTeams;
@@ -428,7 +501,21 @@ public sealed class BaseballQueries
 
         _insertTeam = Acquire(SqlInsertTeam,
             ("@teamId", SqliteType.Integer), ("@city", SqliteType.Text), ("@name", SqliteType.Text),
-            ("@abbreviation", SqliteType.Text), ("@league", SqliteType.Text), ("@division", SqliteType.Text));
+            ("@abbreviation", SqliteType.Text), ("@league", SqliteType.Text), ("@division", SqliteType.Text),
+            ("@conferenceId", SqliteType.Integer), ("@divisionId", SqliteType.Integer), ("@homePark", SqliteType.Text));
+        _insertConference = Acquire(SqlInsertConference,
+            ("@conferenceId", SqliteType.Integer), ("@tier", SqliteType.Integer), ("@name", SqliteType.Text));
+        _insertDivision = Acquire(SqlInsertDivision,
+            ("@divisionId", SqliteType.Integer), ("@conferenceId", SqliteType.Integer), ("@name", SqliteType.Text));
+        _selectConferences = Acquire(SqlSelectConferences);
+        _selectDivisions = Acquire(SqlSelectDivisions);
+        _upsertFielding = Acquire(SqlUpsertFielding,
+            ("@playerId", SqliteType.Text), ("@position", SqliteType.Text), ("@secondary", SqliteType.Text),
+            ("@speed", SqliteType.Integer), ("@arm", SqliteType.Integer));
+        _selectAllFielding = Acquire(SqlSelectAllFielding);
+        _selectFieldingById = Acquire(SqlSelectFieldingById, ("@playerId", SqliteType.Text));
+        _upsertPitcherRest = Acquire(SqlUpsertPitcherRest, ("@playerId", SqliteType.Text), ("@day", SqliteType.Integer));
+        _selectAllPitcherRest = Acquire(SqlSelectAllPitcherRest);
 
         _selectAllTeams = Acquire(SqlSelectAllTeams);
         _selectTeamsByTier = Acquire(SqlSelectTeamsByTier, ("@tier", SqliteType.Integer));
@@ -467,7 +554,8 @@ public sealed class BaseballQueries
         _selectRoster = Acquire(SqlSelectRoster);
 
         _selectFreeAgents = Acquire(SqlSelectFreeAgents,
-            ("@minAge", SqliteType.Integer), ("@maxAge", SqliteType.Integer), ("@minHealth", SqliteType.Integer));
+            ("@minAge", SqliteType.Integer), ("@maxAge", SqliteType.Integer), ("@minHealth", SqliteType.Integer),
+            ("@retiredFlag", SqliteType.Text));
 
         _upsertPitcherRole = Acquire(SqlUpsertPitcherRole,
             ("@playerId", SqliteType.Text), ("@role", SqliteType.Integer));
@@ -564,7 +652,59 @@ public sealed class BaseballQueries
         p["@abbreviation"].Value = team.Abbreviation;
         p["@league"].Value = team.League is null ? DBNull.Value : team.League;
         p["@division"].Value = team.Division is null ? DBNull.Value : team.Division;
+        p["@conferenceId"].Value = team.ConferenceId;
+        p["@divisionId"].Value = team.DivisionId.HasValue ? team.DivisionId.Value : DBNull.Value;
+        p["@homePark"].Value = team.HomePark;
         _db.ExecuteNonQuery(_insertTeam);
+    }
+
+    /// <summary>
+    /// Writes the static v14 conference and division rows
+    /// (<see cref="LeagueStructure"/>) that every Teams row references.
+    /// Idempotent (INSERT OR IGNORE); joins the caller's open batch.
+    /// </summary>
+    public void EnsureLeagueStructure()
+    {
+        foreach (ConferenceRow c in LeagueStructure.Conferences)
+        {
+            SqliteParameterCollection p = _insertConference.Parameters;
+            p["@conferenceId"].Value = c.ConferenceId;
+            p["@tier"].Value = (int)c.Tier;
+            p["@name"].Value = c.Name;
+            _db.ExecuteNonQuery(_insertConference);
+        }
+        foreach (DivisionRow d in LeagueStructure.Divisions)
+        {
+            SqliteParameterCollection p = _insertDivision.Parameters;
+            p["@divisionId"].Value = d.DivisionId;
+            p["@conferenceId"].Value = d.ConferenceId;
+            p["@name"].Value = d.Name;
+            _db.ExecuteNonQuery(_insertDivision);
+        }
+    }
+
+    /// <summary>Loads every Conferences row, ordered by id (schema v14).</summary>
+    public int LoadConferences(List<ConferenceRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectConferences);
+        while (reader.Read())
+        {
+            destination.Add(new ConferenceRow(reader.GetInt32(0), (LeagueTier)reader.GetInt32(1), reader.GetString(2)));
+        }
+        return destination.Count;
+    }
+
+    /// <summary>Loads every Divisions row, ordered by id (schema v14).</summary>
+    public int LoadDivisions(List<DivisionRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectDivisions);
+        while (reader.Read())
+        {
+            destination.Add(new DivisionRow(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2)));
+        }
+        return destination.Count;
     }
 
     public int LoadAllTeams(List<TeamRow> destination)
@@ -601,6 +741,9 @@ public sealed class BaseballQueries
                 League = reader.IsDBNull(4) ? null : reader.GetString(4),
                 Division = reader.IsDBNull(5) ? null : reader.GetString(5),
                 Tier = (LeagueTier)reader.GetInt32(6),
+                ConferenceId = reader.GetInt32(7),
+                DivisionId = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                HomePark = reader.GetString(9),
             });
         }
     }
@@ -624,8 +767,8 @@ public sealed class BaseballQueries
 
     /// <summary>
     /// One team's ladder tier — false when the team itself does not exist. A
-    /// team missing only its Team_Tiers row reads as MLB, matching the v6→v7
-    /// backfill (and <see cref="LoadAllTeams"/>'s COALESCE).
+    /// team missing only its Team_Tiers row reads as Pro (league_restructure.md
+    /// §13, and <see cref="LoadAllTeams"/>'s COALESCE).
     /// </summary>
     public bool TryGetTeamTier(int teamId, out LeagueTier tier)
     {
@@ -638,6 +781,84 @@ public sealed class BaseballQueries
         }
         tier = (LeagueTier)Convert.ToInt32(result);
         return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Fielding (schema v14)
+    // ------------------------------------------------------------------
+
+    /// <summary>Writes one player's Player_Fielding row (world-gen); joins the caller's open batch.</summary>
+    public void UpsertFielding(in PlayerFieldingRow fielding)
+    {
+        SqliteParameterCollection p = _upsertFielding.Parameters;
+        p["@playerId"].Value = fielding.PlayerId;
+        p["@position"].Value = FieldingPositions.ToCode(fielding.DefensivePosition);
+        p["@secondary"].Value = fielding.SecondaryPosition is FieldingPosition secondary
+            ? FieldingPositions.ToCode(secondary)
+            : DBNull.Value;
+        p["@speed"].Value = fielding.Speed;
+        p["@arm"].Value = fielding.Arm;
+        _db.ExecuteNonQuery(_upsertFielding);
+    }
+
+    /// <summary>Loads every Player_Fielding row, ordered by player_id.</summary>
+    public int LoadAllFielding(List<PlayerFieldingRow> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllFielding);
+        while (reader.Read())
+        {
+            destination.Add(ReadFieldingRow(reader));
+        }
+        return destination.Count;
+    }
+
+    /// <summary>One player's fielding row; false when the player has none.</summary>
+    public bool TryGetFielding(string playerId, out PlayerFieldingRow fielding)
+    {
+        _selectFieldingById.Parameters["@playerId"].Value = playerId;
+        using SqliteDataReader reader = _db.ExecuteReader(_selectFieldingById);
+        if (!reader.Read())
+        {
+            fielding = default;
+            return false;
+        }
+        fielding = ReadFieldingRow(reader);
+        return true;
+    }
+
+    private static PlayerFieldingRow ReadFieldingRow(SqliteDataReader reader) => new()
+    {
+        PlayerId = reader.GetString(0),
+        DefensivePosition = FieldingPositions.Parse(reader.GetString(1)),
+        SecondaryPosition = reader.IsDBNull(2) ? null : FieldingPositions.Parse(reader.GetString(2)),
+        Speed = reader.GetInt32(3),
+        Arm = reader.GetInt32(4),
+    };
+
+    // ------------------------------------------------------------------
+    // Pitcher rest (schema v14, slice 13-2)
+    // ------------------------------------------------------------------
+
+    /// <summary>Records a pitcher's last start day; joins the caller's open batch (PitcherRestLedger.FlushDirty).</summary>
+    public void UpsertPitcherRest(string playerId, long lastStartDay)
+    {
+        SqliteParameterCollection p = _upsertPitcherRest.Parameters;
+        p["@playerId"].Value = playerId;
+        p["@day"].Value = lastStartDay;
+        _db.ExecuteNonQuery(_upsertPitcherRest);
+    }
+
+    /// <summary>Loads every Pitcher_Rest row, ordered by player_id (PitcherRestLedger.HydrateOnce).</summary>
+    public int LoadAllPitcherRest(List<(string PlayerId, long LastStartDay)> destination)
+    {
+        destination.Clear();
+        using SqliteDataReader reader = _db.ExecuteReader(_selectAllPitcherRest);
+        while (reader.Read())
+        {
+            destination.Add((reader.GetString(0), reader.GetInt64(1)));
+        }
+        return destination.Count;
     }
 
     // ------------------------------------------------------------------
@@ -814,6 +1035,7 @@ public sealed class BaseballQueries
         p["@minAge"].Value = minAge;
         p["@maxAge"].Value = maxAge;
         p["@minHealth"].Value = minHealth;
+        p["@retiredFlag"].Value = PipelineRetiredFlagName;
         destination.Clear();
         using SqliteDataReader reader = _db.ExecuteReader(_selectFreeAgents);
         ReadRosterRows(reader, destination);

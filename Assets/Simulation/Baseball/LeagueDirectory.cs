@@ -4,7 +4,8 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 
 /// <summary>
 /// The tier → <see cref="LeagueSimulator"/> map (Phase 9a): one macro-sim
-/// instance per ladder tier, each bulk-loading only its own 8-team league.
+/// instance per ladder tier, each bulk-loading only its own league (schema
+/// v14: HS, College and Pro).
 /// <see cref="CareerManager"/> resolves the avatar's sim through this instead
 /// of holding a single simulator, so the attended-team handoff lands on the
 /// correct tier's sim (and 9c's promotion handoff has a seam to move across).
@@ -15,7 +16,7 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// </summary>
 public sealed class LeagueDirectory
 {
-    public const int TierCount = 6;
+    public const int TierCount = 3;
 
     private readonly LeagueSimulator?[] _byTier = new LeagueSimulator?[TierCount];
 

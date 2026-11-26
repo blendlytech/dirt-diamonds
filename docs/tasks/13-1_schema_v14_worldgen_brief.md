@@ -4,7 +4,7 @@
 **Recommended model:** Claude Opus 5.5 (TEAM.md §2), with Gemini 3.8 Flash for the seed data in §3.3
 **Reviewer:** GPT 6 Astra Pro (independent review of Claude's sim diffs, TEAM.md §1a)
 **Owner gate:** team names (TEAM.md §2), still open. The Appendix A names are placeholders that a later data edit can rename, so they don't block the build. The §5.3 expected-red list was approved on 2026-10-18.
-**Spec:** [league_restructure.md](../design/league_restructure.md) §1, §2, §5.1, §5.3, §12, §13, §14, §15 (13-1 row), §16-I1, Appendix A; [arcade_baseball_overhaul.md](../design/arcade_baseball_overhaul.md) §8.1 (`Player_Fielding`)
+**Spec:** [league_restructure.md](../design/league_restructure.md) §1, §2, §5.1, §5.3, §12, §13, §14, §15 (13-1 row), §16-I1, Appendix A; [arcade_baseball_overhaul.md](../archive/arcade_baseball_overhaul.md) §8.1 (`Player_Fielding`)
 **Branch / worktree:** `p13/13-1-opus`, branched from **`p13/integration`**, in your own worktree (`git worktree add ..\dnd-opus-131 -b p13/13-1-opus origin/p13/integration`). Merges into `p13/integration`, **never `main`** (§15).
 
 ## 0. Preconditions (check first; stop and report if any fails)
@@ -83,7 +83,7 @@ Shipped facts this brief relies on (verified at `ebaee21`):
 
 - **4 new `schools.json` entries** for Brookhaven Bulldogs (BRK), Cedar Grove Comets (CDG), Granite Falls Gators (GRF) and Hillcrest Hurricanes (HLC), following the file's entry contract (team_id, abbreviation, school_name, mascot, colors). Team ids follow Appendix A order: North 101–106 (the six North schools in table order), South 107–112. **That renumbers 4 of the 8 shipped schools** (shipped HS ids 101–108 were East/West blocks of 4). Re-key every entry, not just the new ones, and boot's cross-check will catch a miss.
 - **`home_park` for all 68 teams**: fictional, trademark-safe park names. If Flash's list isn't ready, 13-1 ships the placeholder `"{City} Ballpark"` (HS: `"{School} Field"`), each marked as a placeholder in a code comment. G-7's venue catalog replaces them later.
-- Flash writes into a data table that 13-1 consumes, never into C# logic. **Brief: [13-1a_seed_data_flash_brief.md](13-1a_seed_data_flash_brief.md)**, which delivers `schools.json` (12 entries) and `Assets/Data/League/home_parks.json` (68 rows) on `p13/13-1a-flash`. 13-1 reads `home_parks.json` with the same load-and-validate pattern as `schools.json` (loud failure on a missing or mismatched row), and its allowed paths include that file and `Assets/Data/League/`. The 4 new schools' image files don't exist yet: the career boot is expected-red anyway (§5.3), and the team picker showing missing art for them is listed as open for the art pipeline.
+- Flash writes into a data table that 13-1 consumes, never into C# logic. **Brief: [13-1a_seed_data_flash_brief.md](../archive/13-1a_seed_data_flash_brief.md)**, which delivers `schools.json` (12 entries) and `Assets/Data/League/home_parks.json` (68 rows) on `p13/13-1a-flash`. 13-1 reads `home_parks.json` with the same load-and-validate pattern as `schools.json` (loud failure on a missing or mismatched row), and its allowed paths include that file and `Assets/Data/League/`. The 4 new schools' image files don't exist yet: the career boot is expected-red anyway (§5.3), and the team picker showing missing art for them is listed as open for the art pipeline.
 
 ## 4. Outputs
 
@@ -134,16 +134,18 @@ A clean break makes some checks meaningless: the v3→v4 and v6→v7 migration f
 
 ## 6. Definition of done
 
-- [ ] Preconditions §0 recorded (base sha, baseline numbers).
-- [ ] v14 DDL complete; `validate_sqlite_schema` run on a scratch DB; `user_version = 14`.
-- [ ] Three-value `LeagueTier`; `TierCount = 3`; three `TierEffects` rows; no `MinorA`/`MinorAA`/`MinorAAA`/`MLB` identifier left in `Assets/` or `Tools/` (`git grep -n -E "LeagueTier\.(Minor|MLB)"` → none).
-- [ ] No `COALESCE(tt.tier, 5)` left (`git grep -n "tt.tier, 5"` → none).
-- [ ] World-gen produces Appendix A exactly, deterministically, in one transaction, with `Player_Fielding` for every player.
-- [ ] `schools.json` has 12 entries keyed 101–112; boot's cross-check passes.
-- [ ] Clean-break boot + dialog behave per §3.2.5; the `.bak` is never deleted or overwritten.
-- [ ] §5.1 all green; §5.2 unchanged; §5.3 actual list recorded; §5.4 retirements listed.
-- [ ] Committed on `p13/13-1-opus` and pushed. Not merged.
-- [ ] Handoff note + one `progress.md` line. **Then stop.**
+*Ticked by Claude Opus 5.5 on 2026-10-18 at `0db094d`; evidence in §8.1.*
+
+- [x] Preconditions §0 recorded (base sha, baseline numbers).
+- [x] v14 DDL complete; `validate_sqlite_schema` run on a scratch DB; `user_version = 14`.
+- [x] Three-value `LeagueTier`; `TierCount = 3`; three `TierEffects` rows; no `MinorA`/`MinorAA`/`MinorAAA`/`MLB` identifier left in `Assets/` or `Tools/` (`git grep -n -E "LeagueTier\.(Minor|MLB)"` → none).
+- [x] No `COALESCE(tt.tier, 5)` left (`git grep -n "tt.tier, 5"` → none).
+- [x] World-gen produces Appendix A exactly, deterministically, in one transaction, with `Player_Fielding` for every player.
+- [x] `schools.json` has 12 entries keyed 101–112; boot's cross-check passes (run headless through the same `ValidateAgainstRoster`; not run in a live Godot boot).
+- [x] Clean-break boot + dialog behave per §3.2.5; the `.bak` is never deleted or overwritten (the flow is proven headless through `SaveCompatibility`; the dialog itself is not exercised in a live Godot boot).
+- [x] §5.1 all green; §5.2 unchanged; §5.3 actual list recorded; §5.4 retirements listed.
+- [x] Committed on `p13/13-1-opus` and pushed. Not merged.
+- [x] Handoff + one `progress.md` line. **Then stop.**
 
 ## 7. Out of scope
 
@@ -172,6 +174,122 @@ Recommended next: 13-1 review by GPT 6 Astra Pro; then 13-2 by Claude Opus (revi
 
 Then add one compact line to [progress.md](../progress.md). Don't start 13-2.
 
+### 8.1 Handoff as delivered (Claude Opus 5.5, 2026-10-18)
+
+```text
+Done: schema v14 (§12 + Player_Fielding), LeagueTier HS/College/Pro, Appendix A world-gen (68 teams,
+      one deterministic transaction), consent-based clean-break boot + dialog
+      · Base: p13/integration @ 4e6002d (+ fold of p13/13-1a-review-opus @ 1a2c749) · Commit: 0db094d
+Gates: build → 0 warnings / 0 errors; SchemaValidator → 167/167; worldgen-v14 → 23/23;
+       determinism → same (seed → byte-identical dumps, sha A4B89F1135D8; other seed → same structure,
+       new ratings); resolver guard → byte-exact (13/13, every line identical to the baseline incl.
+       the allocation sink); isolation → no forbidden path (one out-of-list file: Assets/UI/Main.cs)
+Expected red (actual): MonteCarlo default 154/180. Green: resolver 13/13, worldgen-v14 23/23,
+       micro-analytic, read-model-a0, development-curve, scouting-grade, portrait-tile. RED (25 suites):
+       season-pipeline 2/4, micro-game 0/1, career-ids 0/1, career-wiring 0/1, v4-bullpen-arsenal 1/2,
+       rivalry 3/4, heir-genetics 9/10, lineage-succession 0/1, lineage-failure 0/1, succession-edge 0/1,
+       nurture-blend 8/9, conception-request 0/1, backstory-person 9/10, person-effects 15/16,
+       tier-ladder 2/3, availability 3/4, equipment 5/6, promotion-sweep 3/4, promotion-stream 0/1,
+       promotion-avatar 0/1, promotion-record 0/1, development-arc 3/4, development-stream 0/1,
+       practice-seam 5/6, development-equilibrium 0/1. Causes: LeagueSimulator "requires exactly 8
+       teams" (19), PromotionManager 6-tier check (2), MicroGame 9+5+3 attended-team check (2),
+       fixtures hard-coding team ids 1–8 (2), season-pipeline 8-team roster shape (1).
+       GrittyEvents 363/363, CoreLoop 22/22 (pins + tier assertions moved to the v14 meaning).
+       Live career boot: stops at LeagueSimulator.Initialize as approved (not run in Godot).
+Retired checks: SchemaValidator "v4 backfill: pitcher role defaults to Starter", "v4 backfill: three
+       arsenal rows, usage sums to 100", "v4 backfill: stuff-derived ratings (80 → FB 80/40, BRK 60/80,
+       OFF 55/85)", "v4 backfill is OR IGNORE (re-apply never clobbers existing rows)" → the v3→v4
+       backfill is gone (clean break) → "v14 clean break: re-apply backfills no role, arsenal or
+       potential". MC "EnsureV4 tops a short bullpen back up and is then a no-op" → v3→v4 top-up gone
+       → worldgen-v14 "every pitcher has a role and a 3-pitch arsenal…". MC "EnsureTierLeagues seeds 5
+       missing tiers once (idempotent): 48 teams…" → v6→v7 top-up gone → worldgen-v14 "68 teams,
+       12 HS / 24 College / 32 Pro" + per-team rosters. The pre-v7 "missing tier reads as MLB" readings
+       became "missing tier reads as Pro" (SchemaValidator + Gritty).
+Season guard moved to: not computable in 13-1 — the guard's suite (tier-ladder) stops at the HS
+       sim's 8-team check before any season runs. 13-3 records the new Pro guard.
+Interpretations used: §3.2.1–5 kept as written. Details: backup tag is always ".v13.bak" (spec name)
+       whatever the pre-v14 version; the Player_Person standing heal is the one DDL backfill kept (intake,
+       fillers and newborns rely on it); RichPresence keeps emitting the minted #Tier_MLB for Pro until
+       17a; fielding depth weights / secondary rate / neighbours are Math PROPOSALs on their own stream.
+```
+
+### 8.2 Review condition resolved (Claude Opus 5.5, 2026-10-18; owner chose the strings table)
+
+GPT's §9.1 condition (the dialog's copy was scene source text, not strings-table keys) is resolved:
+
+- New project strings table `Assets/Localization/strings.csv` (Godot CSV translation, `keys,en`; dotted lowercase keys, the `league.college.final.name` style). Six keys `ui.clean_break.{title, older.body, older.subtitle, newer.body, quit, start}`; the English text is unchanged.
+- `CleanBreakDialog.tscn` texts are now those keys (Godot auto-translate renders them); `project.godot` gains `[internationalization] locale/translations` → `res://Assets/Localization/strings.en.translation`. The importer output (`strings.csv.import`, `strings.en.translation`) and the `.uid` files of the four new 13-1 scripts are committed, the repo's `*.import` policy.
+- Gates: build 0/0; SchemaValidator 167/167; new MC suite `--only ui-strings` 3/3 (table well-formed, every keyed-scene text has a row, project registration and import target exist; a mutated key fails it); MC default **157/183** (= 154/180 + 3, the same 25 approved red suites); resolver lines identical to the baseline; Gritty 363/363. Headless Godot 4.7 with `APPDATA` redirected to scratch: locale `en_US`, all six keys resolve to their English text.
+- Correction to the progress line: **six** checks were retired (four SchemaValidator, two MC), as §8.1 and §9.3 list, not five.
+- Not re-reviewed by GPT: this follow-up landed after the §9 verdict. The owner directed the merge into `p13/integration` after it.
+
 ## 9. Review (GPT 6 Astra Pro)
 
-*Reserved for the reviewer: verdict, findings, gate re-runs.*
+### 9.1 Verdict and scope (2026-10-18)
+
+**Approve with conditions** for `p13/integration` only. Reviewed `bff655e` (implementation `0db094d`) against `4e6002d`; fetched refs resolve to those exact commits. No merge performed. The owner-approved §3.2 interpretations and §5.3 expected reds stand. No blocking sim/schema defect found. Before merge, resolve the localization condition below by implementing the brief's strings-table requirement or obtaining an explicit owner exception for source-text translation keys. This is not approval to ship the currently expected-red career build.
+
+**Findings / conditions:**
+
+- **[P2, brief compliance] Dialog localization:** `Assets/UI/CleanBreakDialog.tscn:34` and the other five `text` properties contain English source text; the change supplies no strings-table entries. `CleanBreakDialog.cs:19` explicitly substitutes “translation-ready scene text” for §3.2.5's strings-table keys. Godot can translate scene source strings, so this is not a broken English dialog, but it is an undisclosed departure from the approved delivery requirement. Opus should supply the requested keys/catalog, or the owner should explicitly accept the source-string-key convention for this slice. No localization files were added by this review.
+- **Main.cs exception accepted:** `Assets/UI/Main.cs:115` hosts the refusal dialog, parks UI overlay processing, and restores it after confirmation. It only reads refusal state and changes presentation nodes; it writes no DB/file/sim state and consumes no RNG. `CleanBreakDialog` sends the confirmation intent to Core. This small out-of-list edit is necessary to make the new dialog reachable and prevent overlays polling an unconstructed career. The folded 13-1a brief/data changes are provenance from the approved seed-data fold, not a hidden sim expansion.
+- **RichPresence exception accepted for integration, due in 17a before release:** `Assets/Platform/Steam/RichPresenceWriter.cs:48` retains the minted `#Tier_MLB` wire token for Pro. Keeping an existing partner-site key avoids emitting an unregistered token. It differs from §4.6's Pro-token wording, so 17a must coordinate `#Tier_Pro` and its partner localization; this review does not authorize shipping the old league branding. The achievement double-fire remains the disclosed 13-7 item.
+- **Math sign-off is provisional, limited to 13-1:** accept the labelled depth weights `3/1/2/1/2/1/2/1`, secondary rate `0.35`, and neighbour rows in `LeagueGenerator.cs:67–98` as schema/world-gen proposals, not calibrated arcade/lineup policy. All weights are positive (sum 13); neighbours are legal, distinct from the primary, and pitchers have no secondary. Guaranteed first-eight coverage is independent of those draws. Seven Pro depth draws yield a second primary catcher with probability `1-(10/13)^7`, about 84%; they do **not** guarantee two catchers. G-4 must address arcade §8.2's two-catcher target and validate utility/position suitability before these proposals become final. This does not reopen the owner's §3.2.4 decision that 13-1 guarantees only all-eight coverage.
+
+### 9.2 Independent gate re-runs
+
+| Gate | Reviewer result |
+| :-- | :-- |
+| `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** |
+| `dotnet run --project Tools/SchemaValidator -c Release` | **167/167** |
+| `dotnet run --project Tools/MonteCarloHarness -c Release -- --only worldgen-v14`, two separate invocations | **23/23 each**; both same-seed dump pairs hash **A4B89F1135D8**, 653,924 characters; different-seed structure hash **A8DE3B874F17**, ratings differ |
+| `dotnet run --project Tools/MonteCarloHarness -c Release -- --only resolver` | **13/13**; all 13 PASS/result lines exactly equal the untouched base harness's first 13 results, including allocation sink **73839**; league line `.247/.316/.412`, OPS `.728`, K `22.4%`, BB `9.2%`, HR/PA `3.2%` |
+| `dotnet run --project Tools/MonteCarloHarness -c Release` | **154/180**, exact §8.1 red suite names/counts and causes reproduced (below) |
+| `dotnet run --project Tools/GrittyEventsHarness -c Release` | **363/363** |
+| `dotnet run --project Tools/CoreLoopHarness -c Release` | **22/22** |
+| `git diff --stat origin/p13/integration...origin/p13/13-1-opus` | 32 files, +3115/-625 including folded seed-data/docs; Main.cs exception assessed above; zero diff in resolver, BaseOutMatrices, MicroGame, Arcade or Life |
+
+The base resolver comparison used an untouched `git archive` extraction of `4e6002d` inside this clone's `.git/review-scratch`. Its default harness reached and passed all 13 resolver checks before a later missing `Assets/Data/Items/items.json` in the deliberately limited extraction stopped unrelated suites (161/162 overall). That extraction run is **not** claimed as a full baseline gate. Only its completed resolver output is used for the comparison. The head's full default gate did run normally against the complete clone.
+
+Actual reds: `season-pipeline 2/4`; `micro-game 0/1`; `career-ids 0/1`; `career-wiring 0/1`; `v4-bullpen-arsenal 1/2`; `rivalry 3/4`; `heir-genetics 9/10`; `lineage-succession 0/1`; `lineage-failure 0/1`; `succession-edge 0/1`; `nurture-blend 8/9`; `conception-request 0/1`; `backstory-person 9/10`; `person-effects 15/16`; `tier-ladder 2/3`; `availability 3/4`; `equipment 5/6`; `promotion-sweep 3/4`; `promotion-stream 0/1`; `promotion-avatar 0/1`; `promotion-record 0/1`; `development-arc 3/4`; `development-stream 0/1`; `practice-seam 5/6`; `development-equilibrium 0/1`. These are 25 red suites / 26 failed checks: 19 eight-team simulator guards, two promotion-ladder guards, two attended-team shape guards, two old-team-id fixtures, and one old roster-count assertion. No new failure cause. The season guard remains unreachable, not re-baselined.
+
+### 9.3 Schema, generation and retirement audit
+
+- Compared v14 DDL with league_restructure §12 and arcade §8.1: all required tables/columns, STRICT declarations, FKs, tier/rating/position/phase/status/best-of checks and `ix_sched_day` are present. HS division NULL is generated correctly; missing tier reads Pro. Existing unrelated v13 table shapes carry forward. Removed role/arsenal, tier-5 and potential migration fills and both generator top-ups are appropriate to the approved clean break; only the idempotent `Player_Person` standing heal remains.
+- Read all 68 `LeagueStructure.Teams` entries and conference/division definitions against Appendix A; the rerun harness also parses the design document independently and compares each persisted cell, rather than merely comparing the generator with itself. IDs 101–112 / 201–224 / 301–332, names, abbreviations, conference/division membership and labels match. Schools/parks validation passes.
+- HS generates 3–4 SP, 2–4 RP, 11–14 position players; College and Pro generate 4/5/15. Ages are HS 15–18, College 18–22, Pro 21–36. Every generated player has the required rows, exactly one fielding row, and every team covers all eight non-pitcher positions; pitchers are P. Later-slice tables remain unpopulated.
+- Draw order is explicit: two substream seeds, ascending HS/College/Pro team IDs, position/SP/RP slots; the per-player discount/person fork remains. Fielding and arsenal streams are separate from rating draws. Fixed-count tiers consume no count draw. One BeginBatch/CommitBatch covers structure and players; the late missing-park rollback gate passes. Query additions use bound parameters and cached commands. HS/College/Pro deltas remain -20/-16/0. Protected engines have no diff.
+- Retirement count clarification: there are **six named removals** in §8.1 (four SchemaValidator checks plus two MC checks), not five. Each is justified below; the old missing-tier expectation is updated, not silently dropped.
+
+| Retired check | Reason | Replacement checked |
+| :-- | :-- | :-- |
+| `v4 backfill: pitcher role defaults to Starter` | No v3 migration under the v14 clean break | `v14 clean break: re-apply backfills no role, arsenal or potential`; generated pitcher-role invariant |
+| `v4 backfill: three arsenal rows, usage sums to 100` | Removed migration-only arsenal fill | Same negative re-apply check; worldgen pitcher three-pitch/usage invariant |
+| `v4 backfill: stuff-derived ratings (80 → FB 80/40, BRK 60/80, OFF 55/85)` | Those deterministic migrated values are no longer produced | Negative re-apply check and generated arsenal validity; no claim that fresh arsenals use the retired values |
+| `v4 backfill is OR IGNORE (re-apply never clobbers existing rows)` | There is no role/arsenal backfill to re-apply | Negative re-apply check plus world-gen idempotence/dump checks |
+| `EnsureV4 tops a short bullpen back up and is then a no-op` | Approved removal of the v3 world top-up | Per-tier roster counts and every-pitcher role/arsenal worldgen checks |
+| `EnsureTierLeagues seeds 5 missing tiers once (idempotent): 48 teams…` | Approved replacement of six-tier migration with fresh 68-team generation | 12/24/32 shape, Appendix A membership, complete roster and idempotence checks |
+
+The former missing-tier-as-MLB expectations now assert Pro in SchemaValidator/GrittyEvents, consistent with the changed enum and default. No retirement is being used to hide one of the approved season/promotion failures.
+
+### 9.4 Godot scratch-save exercise
+
+Godot **4.7.stable.mono.official.5b4e0cb0f** is available and was exercised headlessly with the actual GameManager, Main scene and CleanBreakDialog. A small temporary SceneTree driver instantiated Main and emitted the real Start button's `pressed` signal. APPDATA was redirected to this clone's `.git/review-scratch/appdata`; a separate probe verified `OS.get_user_data_dir()` there before the game ran. No live save was read or written. This verifies scene/control behavior, not a visual/manual accessibility pass.
+
+- Synthetic v13 fixture made from the base's full schema plus a sentinel: dialog present, Start visible, refusal occurs before schema/world writes; pre-consent bytes unchanged.
+- A first fixture used SQLite's DELETE journal mode; confirmation changed its header when DatabaseManager enabled WAL, so its backup was logically preserved but not byte-identical. This limits the literal byte-preservation claim for arbitrary external SQLite files. The shipped manager already uses WAL, so the fixture was corrected to the actual game save format and rerun; no product code was changed.
+- WAL v13 fixture SHA-256 `dcb9750a804dc2d5b4d5d563d7d28e2c0ec5d791af2b590278d3616a394812bc`: confirmation produced a **byte-identical** `.v13.1.bak`, left the existing `.v13.bak` unchanged, and created a **v14** file. The first run also verified **68 teams**. Boot then hit exactly the approved HS “requires exactly 8 teams; found 12” guard, after world generation and school validation.
+- Synthetic WAL v15 fixture: dialog present, Start hidden, bytes unchanged, original filename retained, no new backup. Core's reinspection/rejection of a direct newer-save confirmation and sidecar/backup collision cases also passed in SchemaValidator.
+- Steam initialized in its existing unavailable/offline fallback because the native DLL was unavailable; no Steam write was attempted. Temporary Godot import metadata was removed from the review diff.
+
+### 9.5 Owner handoff
+
+Review records only: this §9 and one progress line, committed on `p13/13-1-review-gpt` (the commit containing this section identifies the review). No source fixes, no merges. **Recommended next: resolve/accept the localization condition, then Claude Opus merges 13-1 into `p13/integration` with owner approval (never main), then 13-2 by Claude Opus, independently reviewed by GPT 6 Astra Pro.** Keep the 17a presence-token and G-4 Math follow-ups explicit; team-name/art gates remain open as already documented. Stop here.
+
+### 9.6 Independent localization follow-up review (2026-10-25)
+
+**APPROVED: the section 9.1 localization condition is closed.** Separate reviewer session under current TEAM sections 1a/3, isolated branch `p13/13-1-loc-review-astra` at `14662e4`; reviewed only `8aa12a1..14662e4`, not the earlier core implementation or subsequent integration changes. No blocking findings. The six scene keys exactly cover the six unique English CSV entries and preserve the former copy; project registration and CSV import destination agree with the committed translation resource. All four script UIDs are unique in tracked content and have corresponding scripts. No simulation or save-path behavior changed.
+
+Independent gates: `dotnet build --nologo` **passed, 0 errors / 2 NU1900 warnings** (NuGet vulnerability feed unavailable); the first sandbox invocation exited 1 without diagnostics, so the successful run used escalation. `dotnet run --project Tools/MonteCarloHarness -c Release -- --only ui-strings` **3/3 passed** (same feed warning). A temporary minimal Godot 4.7 project loaded the committed binary translation through project registration: at `en_US`, **6/6 values matched the CSV exactly**, exit 0; APPDATA was redirected to scratch, and no game/autoload/live save ran. Godot reported an incidental root-certificate-store warning. Four UID/companion checks and `git diff --check 8aa12a1 14662e4` passed. This is a resource-resolution check, not a new visual/accessibility or full-slice gate run.
+
+The original integration-only verdict and its expected-red limitations remain; this review adds no release approval and waives no owner gate. The 17a presence-token, G-4 Math, team-name/art and later-slice items remain outside scope. Only this existing brief and the compact progress log changed; no runtime edits, merge or push. **Recommended next: GPT 6.1 Sol completes the existing 13-1 recovery/integration gate using this independent review; any new implementation requires its assigned independent reviewer.**

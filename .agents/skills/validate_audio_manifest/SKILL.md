@@ -17,10 +17,10 @@ dotnet run --project Tools/AudioManifestHarness -c Release
 **What it proves (exit code 0 = all pass):**
 
 1. **Manifest integrity:** `Assets/Audio/Voice/voice_manifest.json` parses; `clip_id`s are unique; every `file` exists; no `.ogg` under `Assets/Audio/Voice/` is missing from the manifest.
-2. **Announcer coverage:** every College and Pro team (56) has a persona and every clip category at ≥ its minimum count (spec §6); each signature tagline appears verbatim in its category; every HS radio-pool voice has all 24 school stingers.
+2. **Announcer coverage:** six conference personas (two per tier including HS — HS, College, Pro), one booth per conference (GEMINI §5), each with all clip categories at ≥ its minimum count (spec §6); each signature tagline appears verbatim in its category; no per-team voice generation.
 3. **Durations:** announcer ≤ 6 s.
 4. **Loudness:** measured integrated loudness within ±1 LU of −18 LUFS; true peak ≤ −1 dBTP.
 5. **References:** every cutscene `voice` clip is an announcer-bank clip, every `announcer_of` + category and every persona `voice_profile` resolves, and **no** event content carries a `voice_note`. Every `clip_id` has a strings-table subtitle.
-6. **Persona rules:** no archetype used more than 5 times; no two teams in the same division share an archetype.
+6. **Persona rules:** six-conference-persona rule — no two conference personas in the same tier share an archetype; distinct archetypes across the six conference booths.
 7. **Secrets:** no ElevenLabs API key pattern anywhere in the repo.
 8. **Licensing log:** `docs/legal/elevenlabs_generation_log.md` has an entry covering every manifest `content_hash` generation batch.

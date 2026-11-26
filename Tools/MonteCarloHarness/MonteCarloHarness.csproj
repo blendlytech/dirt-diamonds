@@ -19,8 +19,15 @@
       stops building.
     -->
     <Compile Include="..\..\Assets\Data\Database\*.cs" Link="Data\%(Filename)%(Extension)" />
+    <!-- 13-1: the world-gen suite reads the 13-1a content through the game's own loaders. -->
+    <Compile Include="..\..\Assets\Data\League\*.cs" Link="Data\League\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Data\Schools\*.cs" Link="Data\Schools\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
+    <!-- 13-5: the coach-beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
+    <Compile Include="..\..\Assets\Narrative\Roster\*.cs" Link="Narrative\Roster\%(Filename)%(Extension)" />
+    <!-- 13-6: the pipeline's beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
+    <Compile Include="..\..\Assets\Narrative\Pipeline\*.cs" Link="Narrative\Pipeline\%(Filename)%(Extension)" />
     <!--
       Phase 10c (presentation_layer_narrative.md §5, acceptance check 4): the
       scouting grade curve is pure/Godot-free UI math but reads

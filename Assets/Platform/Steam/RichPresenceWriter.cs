@@ -40,11 +40,11 @@ public sealed class RichPresenceWriter
     // that starts with '#'), so tier names localize on the partner site too.
     // Pinned as consts, not derived from LeagueTier.ToString(): an enum rename
     // must never silently change the wire token.
+    // Schema v14 dropped the minor-league tiers and their tokens. Pro keeps
+    // emitting the pinned, already-minted #Tier_MLB until slice 17a retires it
+    // for #Tier_Pro (README.md "Shipped tokens", steam_commercial_release.md §3).
     private const string TierTokenHS = "#Tier_HS";
     private const string TierTokenCollege = "#Tier_College";
-    private const string TierTokenMinorA = "#Tier_MinorA";
-    private const string TierTokenMinorAA = "#Tier_MinorAA";
-    private const string TierTokenMinorAAA = "#Tier_MinorAAA";
     private const string TierTokenMLB = "#Tier_MLB";
 
     private readonly SteamIntegration _steam;
@@ -171,9 +171,6 @@ public sealed class RichPresenceWriter
     {
         LeagueTier.HS => TierTokenHS,
         LeagueTier.College => TierTokenCollege,
-        LeagueTier.MinorA => TierTokenMinorA,
-        LeagueTier.MinorAA => TierTokenMinorAA,
-        LeagueTier.MinorAAA => TierTokenMinorAAA,
-        _ => TierTokenMLB,
+        _ => TierTokenMLB, // Pro
     };
 }

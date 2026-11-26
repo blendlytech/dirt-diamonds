@@ -23,24 +23,24 @@ public enum PitchType : byte
 }
 
 /// <summary>
-/// Team_Tiers.tier values (schema v7) — the career-ladder dimension. The
-/// numeric order IS the ladder order (Phase 9c's promotion gates climb it),
-/// and arrays index by (int)tier, so the order is load-bearing.
+/// Team_Tiers.tier values — the career-ladder dimension. Schema v14 collapses
+/// the shipped six-rung ladder to three tiers, HS → College → Draft → Pro, with
+/// no minor leagues (league_restructure.md §2.1). Pro stays 2, so every shipped
+/// content gate written as <c>tier &gt;= 2</c> ("pro ball") keeps its meaning.
+/// The numeric order IS the ladder order and arrays index by (int)tier, so the
+/// order is load-bearing.
 /// </summary>
 public enum LeagueTier : byte
 {
     HS = 0,
     College = 1,
-    MinorA = 2,
-    MinorAA = 3,
-    MinorAAA = 4,
-    MLB = 5,
+    Pro = 2,
 }
 
 /// <summary>
-/// Row DTO for the Teams table (schema v3) plus the team's ladder tier
-/// (schema v7, joined from Team_Tiers; a missing tier row reads as MLB,
-/// matching the v6→v7 backfill).
+/// Row DTO for the Teams table (schema v3; v14 adds the conference, division
+/// and home park) plus the team's ladder tier (joined from Team_Tiers; a
+/// missing tier row reads as Pro, league_restructure.md §13).
 /// </summary>
 public struct TeamRow
 {
@@ -50,7 +50,82 @@ public struct TeamRow
     public string Abbreviation;
     public string? League;
     public string? Division;
+
+    /// <summary>Schema v14: the team's conference (NOT NULL, FK to Conferences).</summary>
+    public int ConferenceId;
+
+    /// <summary>Schema v14: the team's division; null for HS, which has none (§2.3).</summary>
+    public int? DivisionId;
+
+    /// <summary>Schema v14: the home park's name (announcer intros, UI).</summary>
+    public string HomePark;
+
     public LeagueTier Tier;
+}
+
+/// <summary>Row DTO for Conferences (schema v14): two per tier (league_restructure.md §2.3).</summary>
+public readonly record struct ConferenceRow(int ConferenceId, LeagueTier Tier, string Name);
+
+/// <summary>Row DTO for Divisions (schema v14): College 3 and Pro 4 per conference; HS has none.</summary>
+public readonly record struct DivisionRow(int DivisionId, int ConferenceId, string Name);
+
+/// <summary>
+/// Player_Fielding.defensive_position / secondary_position values (schema v14,
+/// arcade_baseball_overhaul.md §8.1), stored as the scorebook text ('P', 'C',
+/// '1B', …) through <see cref="FieldingPositions"/>. This is the sim's
+/// position and the only one: the story-only listed position is v15's
+/// Player_Identity, which no sim path reads (GEMINI.md §10/§11).
+/// </summary>
+public enum FieldingPosition : byte
+{
+    P = 0,
+    C = 1,
+    FirstBase = 2,
+    SecondBase = 3,
+    ThirdBase = 4,
+    Shortstop = 5,
+    LeftField = 6,
+    CenterField = 7,
+    RightField = 8,
+}
+
+/// <summary>The <see cref="FieldingPosition"/> ↔ stored-text mapping; the text set is the DDL CHECK's.</summary>
+public static class FieldingPositions
+{
+    /// <summary>Stored text, indexed by (int)<see cref="FieldingPosition"/>.</summary>
+    private static readonly string[] Codes = { "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF" };
+
+    /// <summary>The eight field positions every team must cover (13-1 world-gen invariant).</summary>
+    public static readonly FieldingPosition[] Field =
+    {
+        FieldingPosition.C, FieldingPosition.FirstBase, FieldingPosition.SecondBase, FieldingPosition.ThirdBase,
+        FieldingPosition.Shortstop, FieldingPosition.LeftField, FieldingPosition.CenterField, FieldingPosition.RightField,
+    };
+
+    public static string ToCode(FieldingPosition position) => Codes[(int)position];
+
+    public static FieldingPosition Parse(string code)
+    {
+        int index = Array.IndexOf(Codes, code);
+        return index >= 0
+            ? (FieldingPosition)index
+            : throw new FormatException($"Unknown fielding position '{code}'.");
+    }
+}
+
+/// <summary>
+/// Row DTO for Player_Fielding (schema v14, arcade_baseball_overhaul.md §8.1):
+/// one row per player, pitchers included (<see cref="FieldingPosition.P"/>).
+/// Speed and arm are 0–100, 50 = league average. What they mean to the arcade
+/// engine is G-4's to define.
+/// </summary>
+public struct PlayerFieldingRow
+{
+    public string PlayerId;
+    public FieldingPosition DefensivePosition;
+    public FieldingPosition? SecondaryPosition;
+    public int Speed;
+    public int Arm;
 }
 
 /// <summary>Row DTO for Player_Ratings (schema v3). 0–100 scale, 50 = league average.</summary>

@@ -31,7 +31,7 @@
 ## Visual Redesign (Phase 15 — `docs/design/visual_redesign.md`)
 
 - The shipped thin-slice look is not the shipping look. All styling comes from the Theme family in `Assets/UI/Theme/` (tokens + components). Per-scene style overrides are a review-blocking defect.
-- Team colors come from `Assets/Data/Teams/team_colors.json` through theme variations.
+- HS team colors come from `Assets/Data/Schools/schools.json` (`colors`); College/Pro palette source is defined in 15b. All styling flows through the Theme family (GEMINI §7).
 - Every interactive control has focus neighbors and a visible focus state (keyboard, controller and Steam Deck reachability).
 - Layouts must work at 16:9 and 16:10 (1280×800 minimum).
 - Accessibility settings are honored everywhere: text size, reduce motion, subtitles, a colorblind-safe semantic palette.

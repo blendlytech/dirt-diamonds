@@ -1,9 +1,9 @@
-# Task Brief: <slice id> — <title>
+# Task Brief: `<slice id>` — `<title>`
 
-**Recommended model:** <model, from TEAM.md §2>
-**Reviewer:** <model>
-**Owner gate:** <what the owner must approve, or "none">
-**Spec:** <docs/design/... §n>
+**Recommended model:** `<model, from TEAM.md §2>`
+**Reviewer:** `<model>`
+**Owner gate:** `<what the owner must approve, or "none">`
+**Spec:** `<docs/design/... §n>`
 **Branch / worktree:** `p<phase>/<slice>-<model>` in your own worktree (TEAM.md §3)
 
 ## 1. Context

@@ -222,13 +222,16 @@ public sealed class AchievementManager
         {
             return;
         }
-        // Went Pro covers every professional rung; The Show is the MLB rung —
+        // Went Pro covers every professional rung; The Show was the MLB rung —
         // both re-assertable, so a promotion republish or a reload just re-sets.
-        if (tier >= LeagueTier.MinorA)
+        // Schema v14 has one professional tier, so both now fire on the same
+        // event (compile-only mapping, 13-1 brief §4.6); slice 13-7 redesigns
+        // the achievement set (steam_commercial_release.md §3).
+        if (tier >= LeagueTier.Pro)
         {
             _steam.TrySetAchievement(AchWentPro);
         }
-        if (tier == LeagueTier.MLB)
+        if (tier == LeagueTier.Pro)
         {
             _steam.TrySetAchievement(AchTheShow);
         }
