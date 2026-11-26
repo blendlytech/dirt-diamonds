@@ -2,7 +2,7 @@
 
 **Author:** Claude Opus 5.5 (integration lead), 2026-11-26. **Recommended model:** Claude Sonnet 5.5 (UI and feature engineer; TEAM.md §2 row 13-7). **Reviewer:** Gemini 4 Carbon. The diff has one small read-only `Assets/Simulation/` view and one `Assets/Data/` DTO (§2), which are Carbon's jurisdiction (TEAM.md §1a). **Owner gate:** D1–D6 (§3) before the build. **Spec:** [league_restructure.md](../design/league_restructure.md) §15 row 13-7 ("Ripple: achievements/rich presence, content tier docs, Steam README tokens, dashboard/standings/leaders cards"; gates GrittyEvents, full suite, live boot), §2.3, §8, §13; [steam_commercial_release.md](../design/steam_commercial_release.md) §3. **Branch / worktree:** `p13/13-7-sonnet` in your own worktree (`C:\Users\DELL\dnd-sonnet-137`), from `origin/p13/integration`. **Base:** `1d86e6f` (= `origin/main`; schema v14 has been on `main` since `3d0eaa5`). Every citation below was verified at `1d86e6f`.
 
-**Status:** DRAFT, awaiting the owner's D1–D6.
+**Status:** READY TO BUILD. The owner decided **D1–D6 = all A** on 2026-11-26 (§3), including D2's confirmation that no real Steamworks app or partner-site entry exists.
 
 ## 0. Preconditions (check first; stop and report if any fails)
 
@@ -61,7 +61,7 @@ Already correct, so no change is needed: `PlayerScreen` tier names (`"High Schoo
 
 ## 3. Owner decisions (D1–D6)
 
-Recommendations first. **Status: awaiting the owner.**
+Recommendations first. **Status: DECIDED by the owner, 2026-11-26: D1 A, D2 A, D3 A, D4 A, D5 A, D6 A ("All A").** For D2 the owner confirms there is no real Steamworks app yet: no partner-site rich-presence localization and no achievement entries exist, so retiring `#Tier_MLB` costs nothing. Build only the A options below; B and C stay here as the record of what was weighed.
 
 **D1 — The achievement double-fire (F1).**
 - **A (recommended):** stop firing `ACH_WENT_PRO` and delete its const. §3 of the commercial spec already removes "Went Pro" (no minors). `ACH_THE_SHOW` keeps firing on reaching Pro until 17a redefines it as "play your first Pro game". README: mark `ACH_WENT_PRO` retired, and change The Show's copy to "Reach the Pro league."
