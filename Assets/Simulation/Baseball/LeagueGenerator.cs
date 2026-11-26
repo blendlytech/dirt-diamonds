@@ -305,13 +305,14 @@ public static class LeagueGenerator
     /// Invents one player (Players + ratings + role row when a pitcher) on
     /// <paramref name="teamId"/>, joining the caller's open batch. Internal
     /// because it is a building block, not a lifecycle: world-gen and the
-    /// promotion pass's HS intake call it in bulk, and the succession handoff
+    /// pipeline's HS intake call it in bulk, and the succession handoff
     /// (heir mechanics §5.4) calls
     /// it for a replacement-level backfill filler when the free-agent pool has
     /// nobody of the vacated role. A pitcher still needs
     /// <see cref="GenerateArsenal"/> called after. It writes no Player_Fielding
     /// row: world-gen writes those per team (the all-eight-positions invariant
-    /// is a team property); intake and fillers get theirs in 13-6/G-4.
+    /// is a team property), and the 13-6 pipeline writes its intake's through
+    /// <see cref="RollFielding"/> (the succession filler's is G-4's).
     /// </summary>
     /// <param name="minAge">Low end of the generated-age roll. The defaults are
     /// the frozen v3 roll (21 + NextInt(16)); world-gen passes each tier's §5.3
@@ -430,6 +431,26 @@ public static class LeagueGenerator
     public static void GenerateArsenal(
         BaseballQueries baseball, string playerId, int pitStuff, int ratingSpread, ref RngState rng)
     {
+        // Load-time path (world-gen, creation, succession, intake): a tiny array is fine.
+        var pitches = new PitchArsenalRow[ArsenalSize];
+        RollArsenal(playerId, pitStuff, ratingSpread, ref rng, pitches);
+        foreach (PitchArsenalRow pitch in pitches)
+        {
+            baseball.UpsertArsenalPitch(in pitch);
+        }
+    }
+
+    /// <summary>Pitches in a generated arsenal (fastball, breaking, offspeed).</summary>
+    public const int ArsenalSize = 3;
+
+    /// <summary>
+    /// <see cref="GenerateArsenal"/>'s rolls without the writes, in the exact
+    /// same draw order (usage, then each pitch's velocity and movement), so
+    /// the 13-6 outside recruits can be rolled in memory and written only if
+    /// they sign. World-gen's stream is unchanged.
+    /// </summary>
+    public static void RollArsenal(string playerId, int pitStuff, int ratingSpread, ref RngState rng, Span<PitchArsenalRow> destination)
+    {
         static int Jitter(int halfWidth, int spread, ref RngState rng) =>
             spread == 0 || halfWidth == 0 ? 0 : rng.NextInt(2 * halfWidth + 1) - halfWidth;
 
@@ -437,31 +458,176 @@ public static class LeagueGenerator
         int breakingUsage = ratingSpread == 0 ? 25 : 15 + rng.NextInt(16);       // 15–30
         int offspeedUsage = 100 - fastballUsage - breakingUsage;                 // ≥ 0 by bounds
 
-        baseball.UpsertArsenalPitch(new PitchArsenalRow
+        int fastVelocity = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100);
+        int fastMovement = Math.Clamp(40 + Jitter(10, ratingSpread, ref rng), 0, 100);
+        destination[0] = new PitchArsenalRow
         {
-            PlayerId = playerId,
-            Type = PitchType.Fastball,
-            Velocity = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100),
-            Movement = Math.Clamp(40 + Jitter(10, ratingSpread, ref rng), 0, 100),
-            UsageWeight = fastballUsage,
-        });
-        baseball.UpsertArsenalPitch(new PitchArsenalRow
+            PlayerId = playerId, Type = PitchType.Fastball,
+            Velocity = fastVelocity, Movement = fastMovement, UsageWeight = fastballUsage,
+        };
+        int breakVelocity = Math.Clamp(pitStuff - 20 + Jitter(8, ratingSpread, ref rng), 0, 100);
+        int breakMovement = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100);
+        destination[1] = new PitchArsenalRow
         {
-            PlayerId = playerId,
-            Type = PitchType.Breaking,
-            Velocity = Math.Clamp(pitStuff - 20 + Jitter(8, ratingSpread, ref rng), 0, 100),
-            Movement = Math.Clamp(pitStuff + Jitter(10, ratingSpread, ref rng), 0, 100),
-            UsageWeight = breakingUsage,
-        });
-        baseball.UpsertArsenalPitch(new PitchArsenalRow
+            PlayerId = playerId, Type = PitchType.Breaking,
+            Velocity = breakVelocity, Movement = breakMovement, UsageWeight = breakingUsage,
+        };
+        int offVelocity = Math.Clamp(pitStuff - 25 + Jitter(8, ratingSpread, ref rng), 0, 100);
+        int offMovement = Math.Clamp(pitStuff + 5 + Jitter(10, ratingSpread, ref rng), 0, 100);
+        destination[2] = new PitchArsenalRow
         {
-            PlayerId = playerId,
-            Type = PitchType.Offspeed,
-            Velocity = Math.Clamp(pitStuff - 25 + Jitter(8, ratingSpread, ref rng), 0, 100),
-            Movement = Math.Clamp(pitStuff + 5 + Jitter(10, ratingSpread, ref rng), 0, 100),
-            UsageWeight = offspeedUsage,
-        });
+            PlayerId = playerId, Type = PitchType.Offspeed,
+            Velocity = offVelocity, Movement = offMovement, UsageWeight = offspeedUsage,
+        };
     }
+
+    // ------------------------------------------------------------------
+    // Slice 13-6: pipeline-generated players (intake, outside recruits)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// One player rolled in memory (13-6 Amendment 2): every row he would
+    /// write, written only by <see cref="WriteGeneratedPlayer"/> (an outside
+    /// recruit who signs). Never touches world-gen's stream.
+    /// </summary>
+    public sealed class GeneratedPlayer
+    {
+        public PlayerRow Player;
+        public PlayerRatingsRow Ratings;
+        public PlayerPotentialRow Potential;
+        public PitcherRole Role;
+        public PlayerFieldingRow Fielding;
+        public readonly PitchArsenalRow[] Arsenal = new PitchArsenalRow[ArsenalSize];
+
+        public string PlayerId => Player.PlayerId;
+    }
+
+    /// <summary>
+    /// Rolls an outside recruit in memory (13-6 brief §4 item 6): the same
+    /// draw shape as <see cref="GeneratePlayer"/> (guid, names, recklessness,
+    /// the seven potential bells, a Split() fork for the discount), with the
+    /// potential bell centred <paramref name="meanOffset"/> off 50 and the
+    /// current ratings discounted at <paramref name="discountAge"/> while
+    /// Players.age stays <paramref name="age"/>; the fielding row (a depth
+    /// primary for position players) and the arsenal from their own streams.
+    /// </summary>
+    public static GeneratedPlayer RollOutsideRecruit(
+        PitcherRole role, int ratingSpread, int age, int meanOffset, int discountAge,
+        ref RngState rng, ref RngState fieldingRng)
+    {
+        var g = new GeneratedPlayer { Role = role };
+        string playerId = NextGuid(ref rng);
+        string firstName = FirstNames[rng.NextInt(FirstNames.Length)];
+        string lastName = LastNames[rng.NextInt(LastNames.Length)];
+        g.Player = new PlayerRow
+        {
+            PlayerId = playerId,
+            FirstName = firstName,
+            LastName = lastName,
+            Age = age,
+            TeamId = null,
+            Funds = 0,
+            HealthCeiling = 100,
+            Recklessness = RollRating(ratingSpread, ref rng),
+            BaseballInterest = 0,
+            DetectionRisk = 0,
+        };
+        bool isPitcher = role != PitcherRole.None;
+        int mean = 50 + meanOffset;
+        g.Potential = new PlayerPotentialRow
+        {
+            PlayerId = playerId,
+            BatPower = RollRating(ratingSpread, mean, ref rng),
+            BatContact = RollRating(ratingSpread, mean, ref rng),
+            BatDiscipline = RollRating(ratingSpread, mean, ref rng),
+            PitStuff = RollRating(ratingSpread, mean, ref rng),
+            PitControl = RollRating(ratingSpread, mean, ref rng),
+            PitStamina = RollRating(ratingSpread, mean, ref rng),
+            Fielding = RollRating(ratingSpread, mean, ref rng),
+        };
+        if (role == PitcherRole.Reliever)
+        {
+            g.Potential.PitStamina = Math.Max(0, g.Potential.PitStamina - RelieverStaminaPenalty);
+        }
+        PlayerPotentialRow pot = g.Potential;
+        var ratings = new PlayerRatingsRow { PlayerId = playerId, IsPitcher = isPitcher };
+        if (ratingSpread == 0)
+        {
+            ratings.BatPower = pot.BatPower;
+            ratings.BatContact = pot.BatContact;
+            ratings.BatDiscipline = pot.BatDiscipline;
+            ratings.PitStuff = pot.PitStuff;
+            ratings.PitControl = pot.PitControl;
+            ratings.PitStamina = pot.PitStamina;
+            ratings.Fielding = pot.Fielding;
+        }
+        else
+        {
+            RngState discountRng = rng.Split();
+            ratings.BatPower = DevelopmentCurve.RawCurrent(pot.BatPower, discountAge, ref discountRng);
+            ratings.BatContact = DevelopmentCurve.RawCurrent(pot.BatContact, discountAge, ref discountRng);
+            ratings.BatDiscipline = DevelopmentCurve.RawCurrent(pot.BatDiscipline, discountAge, ref discountRng);
+            ratings.PitStuff = DevelopmentCurve.RawCurrent(pot.PitStuff, discountAge, ref discountRng);
+            ratings.PitControl = DevelopmentCurve.RawCurrent(pot.PitControl, discountAge, ref discountRng);
+            ratings.PitStamina = DevelopmentCurve.RawCurrent(pot.PitStamina, discountAge, ref discountRng);
+            ratings.Fielding = DevelopmentCurve.RawCurrent(pot.Fielding, discountAge, ref discountRng);
+        }
+        g.Ratings = ratings;
+        g.Fielding = RollFielding(playerId,
+            isPitcher ? FieldingPosition.P : DrawDepthPosition(ref fieldingRng), ratingSpread, ref fieldingRng);
+        if (isPitcher)
+        {
+            RollArsenal(playerId, ratings.PitStuff, ratingSpread, ref rng, g.Arsenal);
+        }
+        return g;
+    }
+
+    /// <summary>Writes every row of a rolled player (joins the caller's open batch); <paramref name="teamId"/> null leaves him unrostered.</summary>
+    public static void WriteGeneratedPlayer(PlayerQueries players, BaseballQueries baseball, GeneratedPlayer g, int? teamId)
+    {
+        PlayerRow row = g.Player;
+        row.TeamId = teamId;
+        players.Insert(in row);
+        baseball.UpsertRatings(in g.Ratings);
+        baseball.UpsertPotential(in g.Potential);
+        baseball.UpsertFielding(in g.Fielding);
+        if (g.Role != PitcherRole.None)
+        {
+            baseball.UpsertPitcherRole(g.PlayerId, g.Role);
+            foreach (PitchArsenalRow pitch in g.Arsenal)
+            {
+                baseball.UpsertArsenalPitch(in pitch);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One Player_Fielding row for a pipeline-generated player (13-6 brief §4
+    /// item 6): the given primary (an HS intake inherits the departed
+    /// player's, so every HS team keeps its field covered; pitchers are P),
+    /// then the same secondary / speed / arm rolls world-gen makes, from the
+    /// caller's stream.
+    /// </summary>
+    public static PlayerFieldingRow RollFielding(string playerId, FieldingPosition primary, int ratingSpread, ref RngState rng)
+    {
+        FieldingPosition? secondary = null;
+        if (primary != FieldingPosition.P && rng.NextDouble() < SecondaryPositionRate)
+        {
+            FieldingPosition[] neighbours = SecondaryNeighbours[(int)primary];
+            secondary = neighbours[rng.NextInt(neighbours.Length)];
+        }
+        return new PlayerFieldingRow
+        {
+            PlayerId = playerId,
+            DefensivePosition = primary,
+            SecondaryPosition = secondary,
+            Speed = RollRating(ratingSpread, ref rng),
+            Arm = RollRating(ratingSpread, ref rng),
+        };
+    }
+
+    /// <summary>A primary position from <see cref="DepthPositionWeights"/> (fillers and outside recruits; 13-6).</summary>
+    public static FieldingPosition RollDepthPosition(ref RngState rng) => DrawDepthPosition(ref rng);
 
     /// <summary>
     /// One draw from the same first-name pool world-gen uses — for callers
@@ -525,5 +691,16 @@ public static class LeagueGenerator
         }
         double bell = (rng.NextDouble() + rng.NextDouble() + rng.NextDouble() - 1.5) / 1.5;
         return Math.Clamp((int)Math.Round(50 + spread * bell), 0, 100);
+    }
+
+    /// <summary>The same bell centred on <paramref name="mean"/> (13-6 outside recruits); spread 0 reads the mean.</summary>
+    private static int RollRating(int spread, int mean, ref RngState rng)
+    {
+        if (spread == 0)
+        {
+            return mean;
+        }
+        double bell = (rng.NextDouble() + rng.NextDouble() + rng.NextDouble() - 1.5) / 1.5;
+        return Math.Clamp((int)Math.Round(mean + spread * bell), 0, 100);
     }
 }

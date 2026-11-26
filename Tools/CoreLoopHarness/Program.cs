@@ -14,7 +14,7 @@ namespace DirtAndDiamonds.Tools.CoreLoopHarness;
 /// Usage: dotnet run --project Tools/CoreLoopHarness [-c Release] [-- --repo &lt;path&gt;]
 /// (repo root is auto-detected by walking up to project.godot when omitted).
 /// </summary>
-internal static class Program
+internal static partial class Program
 {
     private static readonly List<(string Name, bool Pass, string Detail)> Results = new();
 
@@ -39,6 +39,8 @@ internal static class Program
         string scratchPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_{Guid.NewGuid():N}.db");
         string postseasonPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_post_{Guid.NewGuid():N}.db");
         string rosterPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_roster_{Guid.NewGuid():N}.db");
+        string pipelinePath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_pipeline_{Guid.NewGuid():N}.db");
+        string parentPath = Path.Combine(Path.GetTempPath(), $"dnd_coreloop_parent_{Guid.NewGuid():N}.db");
 
         try
         {
@@ -46,6 +48,7 @@ internal static class Program
             RunCalendarChecks(schemaPath, scratchPath);
             RunPostseasonClockChecks(schemaPath, postseasonPath);
             RunRosterClockChecks(schemaPath, rosterPath);
+            RunPipelineClockChecks(schemaPath, pipelinePath, parentPath);
             RunBoundaryScan(repoRoot);
         }
         catch (Exception ex)
@@ -57,6 +60,12 @@ internal static class Program
             TryDelete(scratchPath);
             TryDelete(scratchPath + "-wal");
             TryDelete(scratchPath + "-shm");
+            foreach (string path in new[] { pipelinePath, parentPath })
+            {
+                TryDelete(path);
+                TryDelete(path + "-wal");
+                TryDelete(path + "-shm");
+            }
             TryDelete(postseasonPath);
             TryDelete(postseasonPath + "-wal");
             TryDelete(postseasonPath + "-shm");

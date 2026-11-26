@@ -3222,8 +3222,9 @@ internal static class Program
     // ------------------------------------------------------------------
     // 4h8. DIRT-4 "The Bust & The Door Out" -- content half only
     // (criminal_underworld_dirt4_the_bust_and_the_door_out.md §5-7.A). The
-    // engine half (PromotionManager reading record_arrest/banned_for_life)
-    // is Fable 5's separate MonteCarloHarness slice, not this file.
+    // engine half (the 13-6 PipelineManager reading record_arrest through
+    // CareerRecordFlags; banned_for_life has no 13-6 effect, D6-A)
+    // is the MonteCarloHarness pipeline-record suite, not this file.
     // ------------------------------------------------------------------
 
     private static readonly string[] DirtTheBustEventIds =
@@ -3318,7 +3319,7 @@ internal static class Program
             busted.Choices.All(c => SetsFlag(c, "record_arrest")) && robberyFallout.Choices.All(c => SetsFlag(c, "record_arrest")));
         Check("both dirt_the_indictment_* events set_flag record_arrest on EVERY branch",
             indictmentA.Choices.All(c => SetsFlag(c, "record_arrest")) && indictmentB.Choices.All(c => SetsFlag(c, "record_arrest")));
-        Check("record_arrest is READ by dirt_the_record_follows (the narrative face of the engine teeth, which reads it separately in PromotionManager)",
+        Check("record_arrest is READ by dirt_the_record_follows (the narrative face of the engine teeth, which the pipeline reads separately through CareerRecordFlags)",
             ReadsFlagActive(recordFollows, "record_arrest"));
 
         // §4 item 2: record_arrest and banned_for_life are terminal -- never

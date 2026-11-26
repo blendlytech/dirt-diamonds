@@ -347,6 +347,60 @@ internal static partial class Program
         Check($"C3: the active SP and RP are the top 3 by the sims' baked CompareQuality (person-baked world; raw ratings would pick a different SP trio on {rawOrderDiffers} teams)",
             pitchersBaked);
 
+        // ---- 13-5 Nit N1 (13-6 brief §4 item 12): C3 with teeth. One team's raw
+        // #3/#4 starters are swapped through Confidence/Happiness (±2 stuff, ±2
+        // control) before Initialize, so the baked trio provably differs from
+        // the raw one; the person rows are restored after. ----
+        if (w.Persons is not null)
+        {
+            int n1Team = 0;
+            string third = "", fourth = "";
+            foreach (int teamId in teamIds)
+            {
+                var raw = rawRoster.Where(r => r.TeamId == teamId && r.IsPitcher && r.Role == PitcherRole.Starter)
+                    .OrderByDescending(r => r.PitStuff + r.PitControl).ThenByDescending(r => r.PitStamina)
+                    .ThenBy(r => r.PlayerId, StringComparer.Ordinal).ToList();
+                if (raw.Count == 4 && raw[2].PitStuff + raw[2].PitControl - raw[3].PitStuff - raw[3].PitControl < 8)
+                {
+                    n1Team = teamId;
+                    third = raw[2].PlayerId;
+                    fourth = raw[3].PlayerId;
+                    break;
+                }
+            }
+            w.Persons.TryGet(third, out PersonRow thirdBefore);
+            w.Persons.TryGet(fourth, out PersonRow fourthBefore);
+            PersonRow cold = thirdBefore;
+            cold.Confidence = 0;
+            cold.Happiness = 0;
+            PersonRow hot = fourthBefore;
+            hot.Confidence = 100;
+            hot.Happiness = 100;
+            w.Db.RunInBatch(() =>
+            {
+                w.Persons.Upsert(in cold);
+                w.Persons.Upsert(in hot);
+            });
+            LeagueSimulator n1Sim = w.NewSim(LeagueTier.Pro, 0x1350_0A01UL);
+            var n1Lock = new RosterManager(w.Db, w.Baseball, w.Leagues(n1Sim)) { Availability = new AvailabilityLedger(), Persons = w.Persons };
+            n1Lock.Lock(year, Abs135(year, 105), 105);
+            string[] n1Baked = StarterIds(n1Sim, n1Team);
+            var n1RawTop = rawRoster.Where(r => r.TeamId == n1Team && r.IsPitcher && r.Role == PitcherRole.Starter)
+                .OrderByDescending(r => r.PitStuff + r.PitControl).ThenByDescending(r => r.PitStamina)
+                .ThenBy(r => r.PlayerId, StringComparer.Ordinal).Take(3).Select(r => r.PlayerId).ToHashSet();
+            int n1Differs = n1RawTop.SetEquals(n1Baked.Take(3)) ? 0 : 1;
+            long n1Day = Abs135(year, 105) + 2;
+            bool n1ActiveBaked = n1Baked.Take(3).All(id => n1Lock.IsActive(id, n1Day)) && !n1Lock.IsActive(n1Baked[3], n1Day);
+            w.Db.RunInBatch(() =>
+            {
+                w.Persons.Upsert(in thirdBefore);
+                w.Persons.Upsert(in fourthBefore);
+            });
+            Check("13-5 N1: swapping one team's raw #3/#4 SP through Confidence/Happiness before Initialize makes the baked trio differ from the raw one (rawOrderDiffers > 0), and the lock activates the baked trio",
+                n1Team != 0 && n1Differs > 0 && n1Baked.Take(3).Contains(fourth) && n1ActiveBaked,
+                $"team {n1Team}, rawOrderDiffers {n1Differs}, baked #3/#4 {Array.IndexOf(n1Baked, fourth) + 1}/{Array.IndexOf(n1Baked, third) + 1}");
+        }
+
         // ---- Q2 bench score (every weight, the catcher-bucket clear, the PlayerId tie) ----
         {
             var benchA = new List<DesignationCandidate>

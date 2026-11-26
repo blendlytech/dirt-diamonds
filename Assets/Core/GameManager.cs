@@ -75,11 +75,20 @@ public sealed partial class GameManager : Node
     public MicroGame Micro { get; private set; } = null!;
     public CareerManager Career { get; private set; } = null!;
 
-    /// <summary>Phase 9d offseason development pass — public like Promotions so a player-development UI card can read <see cref="DevelopmentManager.LastRun"/>.</summary>
+    /// <summary>Phase 9d offseason development pass — public like Pipeline so a player-development UI card can read <see cref="DevelopmentManager.LastRun"/>.</summary>
     public DevelopmentManager Development { get; private set; } = null!;
 
-    /// <summary>Phase 9c offseason promotion/relegation — public like Career so a ladder/news UI can read <see cref="PromotionManager.LastRun"/>.</summary>
-    public PromotionManager Promotions { get; private set; } = null!;
+    /// <summary>
+    /// Slice 13-6: the pipeline (graduation, recruiting, class years, the
+    /// July Draft, Pro releases, Sunday-lock free agency) — public like
+    /// Career so the 13-6b phone cards and Draft board read
+    /// <see cref="PipelineManager.GetStatusView"/> and send intent through
+    /// its Resolve… calls.
+    /// </summary>
+    public PipelineManager Pipeline { get; private set; } = null!;
+
+    /// <summary>13-6 (D5-A): the pipeline's phone texts.</summary>
+    public DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter PipelineBeats { get; private set; } = null!;
 
     /// <summary>
     /// The postseason (slice 13-4): selection, brackets, series, the National
@@ -494,6 +503,12 @@ public sealed partial class GameManager : Node
             Leagues.Get((LeagueTier)t).PrepareSeason(State.SeasonYear);
         }
 
+        // 13-6: the pipeline exists before the boot lock reconcile below, so a
+        // missed lock's free-agency signings are the same ones an uninterrupted
+        // run made (the lock calls the pipeline first). Its boot draw and bus
+        // subscription stay in PromotionManager's old slot further down.
+        Pipeline = new PipelineManager(_database, Players, Baseball, GameState, State, Leagues);
+
         // 13-5 (brief D6-A): the Pro Sunday lock, subscribed AFTER the tier
         // sims (the Pro sim's Sunday flush runs first, so the lock sees the
         // week's stats) and BEFORE the career. Every sim reads its
@@ -503,6 +518,7 @@ public sealed partial class GameManager : Node
         {
             Availability = Absences,
             Persons = Persons,
+            Market = Pipeline,
         };
         Roster.AttachTo(Events);
         for (int t = 0; t < LeagueDirectory.TierCount; t++)
@@ -566,28 +582,33 @@ public sealed partial class GameManager : Node
         }
 
         // Phase 9d: the offseason development pass. Attached AFTER CareerManager
-        // (ages are post-aging) and BEFORE PromotionManager (develop-before-sort,
-        // development doc §5: the sweep's scouting reads the just-developed
-        // ratings, so a prospect climbs BECAUSE he developed). Its only RNG is
-        // the §2.4 jitter, from a dedicated forked stream.
+        // (ages are post-aging) and BEFORE the pipeline (develop-before-sort,
+        // development doc §5: the pipeline's values read the just-developed
+        // ratings, so a prospect is recruited and drafted BECAUSE he
+        // developed). Its only RNG is the §2.4 jitter, from a dedicated forked
+        // stream.
         Development = new DevelopmentManager(
             _database, Players, Baseball, GameState, Leagues, Micro,
             new RngState(rng.NextUInt64() | 1UL));
         Development.Career = Career;
         Development.AttachTo(Events);
 
-        // Phase 9c: the offseason promotion/relegation pass. Attached AFTER
-        // CareerManager so the promotion-doc §4 order holds on every season
-        // rollover (sims flush → world ages + succession → promotion sweep);
-        // its only RNG draws (HS intake generation) come from a dedicated
-        // forked stream so the six sims' and the career's streams are never
-        // perturbed. Career wired in so the avatar rides the same advancement
-        // ranking and moves via the careful ReactivateAvatar path (§6).
-        Promotions = new PromotionManager(
-            _database, Players, Baseball, GameState, Leagues, Micro,
-            new RngState(rng.NextUInt64() | 1UL));
-        Promotions.Career = Career;
-        Promotions.AttachTo(Events);
+        // Slice 13-6: the pipeline, in the retired PromotionManager's slot: the
+        // last SeasonRolledOverEvent handler (sims flush → world ages +
+        // succession → development → pipeline). Its boot draw stays HERE, at
+        // PromotionManager's position, so every later boot consumer (the Life
+        // sim's seed included) is unchanged; the draw is spent once, writing
+        // the persisted pipeline_seed every pipeline stream derives from (a
+        // save that already has one discards it). The boot ensure then
+        // backfills College class years and re-runs a calendar step a crash
+        // interrupted. The live game exposes the avatar's decisions to the
+        // phone; the clock never stops for them.
+        Pipeline.Micro = Micro;
+        Pipeline.Career = Career;
+        Pipeline.EnsureSeed(rng.NextUInt64() | 1UL);
+        Pipeline.AutopilotPipeline = false;
+        Pipeline.AttachTo(Events);
+        Pipeline.EnsureAtBoot(State.CurrentDay);
 
         // Life sim (Phase 5 remainder): needs/utility tracking, seeded once from
         // the same Players rows the baseball sims already loaded.
@@ -769,6 +790,14 @@ public sealed partial class GameManager : Node
             ResolveText = key => Tr(key),
         };
         RosterBeats.AttachTo(Events);
+        // 13-6 (D5-A): the pipeline's beats (offers, Signing Day, the
+        // declaration, Draft Night, the release), the same Core-events-only
+        // writer shape.
+        PipelineBeats = new DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter(_database, NarrativeLog, State)
+        {
+            ResolveText = key => Tr(key),
+        };
+        PipelineBeats.AttachTo(Events);
         GrittyEventChoices = new EventConsequenceApplier(
             _database, Players, Persons, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);

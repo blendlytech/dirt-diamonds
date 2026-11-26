@@ -4,10 +4,10 @@ namespace DirtAndDiamonds.Simulation.Baseball;
 /// A High-School amateur's academic year. The avatar enters as a
 /// <see cref="Freshman"/> at <see cref="CareerManager.StartingAge"/> (16) and
 /// advances one grade per aged season until <see cref="Senior"/>, after which
-/// it competes to graduate up to College on merit through the
-/// <see cref="PromotionManager"/> grade gate — earn the promotion and move on,
-/// or be held back another year (a below-cut senior does not reach college
-/// baseball). Display + gating flavor only — grade is DERIVED from age, never
+/// the 13-6 <see cref="PipelineManager"/> graduates it to College at the
+/// rollover: recruited (offers on the first Monday of October, Signing Day in
+/// November) or, for the avatar, a guaranteed walk-on (D4a-A); an
+/// unrecruited NPC senior retires from baseball. Display + gating flavor only — grade is DERIVED from age, never
 /// stored, so there is no schema surface and nothing to migrate.
 /// </summary>
 public enum SchoolGrade : byte
@@ -25,9 +25,9 @@ public enum SchoolGrade : byte
 /// fixture against it. Grade is anchored on the two existing career constants
 /// so it can never drift out of step with them: the freshman year is
 /// <see cref="CareerManager.StartingAge"/> (the avatar's creation age) and the
-/// senior year is <see cref="PromotionProfile.HighSchoolAgeCap"/> (the amateur
-/// age cap the promotion pass already washes NPCs out at). Retuning either
-/// constant reshapes the grade ladder automatically.
+/// senior year is <see cref="PromotionProfile.HighSchoolAgeCap"/> (the senior
+/// age the pipeline graduates at). Retuning either constant reshapes the
+/// four grades automatically.
 /// </summary>
 public static class SchoolGrades
 {

@@ -15,6 +15,14 @@ namespace DirtAndDiamonds.Data;
 /// </summary>
 public sealed class BaseballQueries
 {
+    /// <summary>
+    /// 13-6 (C1): the pipeline's retired flag, bound into the succession
+    /// free-agent read's exclusion. Its one home is here, so every tool that
+    /// compiles this file stands alone; <see cref="PipelineFlags.Retired"/>
+    /// aliases it.
+    /// </summary>
+    public const string PipelineRetiredFlagName = "pipeline_retired";
+
     private const string SqlInsertTeam =
         "INSERT INTO Teams (team_id, city, name, abbreviation, league, division, conference_id, division_id, home_park) " +
         "VALUES (@teamId, @city, @name, @abbreviation, @league, @division, @conferenceId, @divisionId, @homePark);";
@@ -176,6 +184,16 @@ public sealed class BaseballQueries
     // Baseball layer's HeirGeneticsProfile, above this one. Plan validated via
     // the sqlite MCP (No Blind Queries): idx_players_team seeks the NULL
     // bucket, both PK autoindexes probe the joins.
+    //
+    // 13-6 (brief D3-A, Amendment 6, C1): two exclusions, because succession
+    // runs at the rollover BEFORE the pipeline moves anyone: a signed outside
+    // recruit (an accepted Recruiting_Offers row, team_id NULL until the
+    // pipeline's step 3) and a retired player (an active pipeline_retired
+    // flag) are never backfill candidates. The window stays otherwise
+    // unflagged (the heir pool's adult children, D3 sub-choice). The flag name
+    // is bound, never a literal. Re-validated on a scratch v14: idx_players_team
+    // search, two correlated subqueries (the Recruiting_Offers PK and the
+    // Entity_Flags UNIQUE (player_id, flag_name) probes), a temp B-tree.
     private const string SqlSelectFreeAgents =
         "SELECT p.player_id, p.first_name, p.last_name, 0, r.is_pitcher, COALESCE(pr.role, 0), " +
         "r.bat_power, r.bat_contact, r.bat_discipline, " +
@@ -183,6 +201,9 @@ public sealed class BaseballQueries
         "FROM Players AS p JOIN Player_Ratings AS r ON r.player_id = p.player_id " +
         "LEFT JOIN Pitcher_Roles AS pr ON pr.player_id = p.player_id " +
         "WHERE p.team_id IS NULL AND p.age >= @minAge AND p.age < @maxAge AND p.health_ceiling > @minHealth " +
+        "AND NOT EXISTS (SELECT 1 FROM Recruiting_Offers AS ro WHERE ro.player_id = p.player_id AND ro.status = 1) " +
+        "AND NOT EXISTS (SELECT 1 FROM Entity_Flags AS ef WHERE ef.player_id = p.player_id " +
+        "AND ef.flag_name = @retiredFlag AND ef.is_active = 1) " +
         "ORDER BY p.player_id;";
 
     // Schema v4: bullpen role + arsenal writes (world-gen / avatar creation) and
@@ -533,7 +554,8 @@ public sealed class BaseballQueries
         _selectRoster = Acquire(SqlSelectRoster);
 
         _selectFreeAgents = Acquire(SqlSelectFreeAgents,
-            ("@minAge", SqliteType.Integer), ("@maxAge", SqliteType.Integer), ("@minHealth", SqliteType.Integer));
+            ("@minAge", SqliteType.Integer), ("@maxAge", SqliteType.Integer), ("@minHealth", SqliteType.Integer),
+            ("@retiredFlag", SqliteType.Text));
 
         _upsertPitcherRole = Acquire(SqlUpsertPitcherRole,
             ("@playerId", SqliteType.Text), ("@role", SqliteType.Integer));
@@ -1013,6 +1035,7 @@ public sealed class BaseballQueries
         p["@minAge"].Value = minAge;
         p["@maxAge"].Value = maxAge;
         p["@minHealth"].Value = minHealth;
+        p["@retiredFlag"].Value = PipelineRetiredFlagName;
         destination.Clear();
         using SqliteDataReader reader = _db.ExecuteReader(_selectFreeAgents);
         ReadRosterRows(reader, destination);

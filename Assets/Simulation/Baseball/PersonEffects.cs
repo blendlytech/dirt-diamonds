@@ -52,8 +52,8 @@ public readonly struct PersonRatingDeltas
 /// bat_discipline / pit_stamina are untouched (the equipment-doc precedent:
 /// plate judgment belongs to the discipline rating, endurance to the fatigue
 /// model); the person-stat `discipline` → command lever is reserved and
-/// deferred past this first band. Replacement-level call-ups carry no person
-/// delta — the same rule rivalry/gear already follow.
+/// deferred past this first band. A player with no person row carries no
+/// person delta — the same rule rivalry/gear already follow.
 /// </summary>
 public static class PersonEffects
 {
@@ -108,8 +108,8 @@ public static class PersonEffects
     /// lineup's individual teamwork points (each a <see cref="PointsFor"/>
     /// result, so the team shift is itself bounded by ±<see cref="TeamworkCap"/>).
     /// A zero points sum reproduces the pre-HS-6 defense byte bit-exactly.
-    /// Season-stable roster-load bake, never a per-PA move; a shadowed
-    /// replacement call-up contributes nothing.
+    /// Season-stable roster-load bake, never a per-PA move; a player with no
+    /// person row contributes nothing.
     /// </summary>
     public static byte BakeTeamDefense(int fieldingSum, int lineupSize, int tierDefenseDelta, int teamworkPointsSum)
     {
