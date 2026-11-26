@@ -166,6 +166,8 @@ public sealed partial class BurnerPhone
         _pipelineHeadingLabel.Text = Tr("ui.pipeline.recruit.heading");
         _pipelineBodyLabel.Text = Tr(pending.IsWalkOn ? "ui.pipeline.recruit.walk_on.body" : "ui.pipeline.recruit.body");
         _pipelineBodyLabel.Visible = true;
+        _pipelineDeadlineLabel.Visible = true;
+        _pipelineChoicesBox.Visible = true;
         _pipelineDeadlineLabel.Text = Tr("ui.pipeline.recruit.deadline") + " " + DaysLeftText(PipelineCalendar.SigningDay - gm.State.DayOfSeason);
 
         // Program names come from the existing team read; ranks from the
@@ -219,6 +221,8 @@ public sealed partial class BurnerPhone
             : Tr("ui.pipeline.declare.undrafted");
         _pipelineBodyLabel.Text = projection + "\n" + Tr("ui.pipeline.declare.body");
         _pipelineBodyLabel.Visible = true;
+        _pipelineDeadlineLabel.Visible = true;
+        _pipelineChoicesBox.Visible = true;
         _pipelineDeadlineLabel.Text = Tr("ui.pipeline.declare.deadline") + " "
             + DaysLeftText(PipelineCalendar.DeclarationDeadlineDay - gm.State.DayOfSeason);
 
@@ -233,6 +237,10 @@ public sealed partial class BurnerPhone
         _pipelineHeadingLabel.Text = _pipelineAnsweredHeading;
         _pipelineBodyLabel.Visible = false;
         _pipelineDeadlineLabel.Text = string.Empty;
+        // Hidden, not just emptied: a visible empty node still reserves a line
+        // plus the layout's separation (review N3).
+        _pipelineDeadlineLabel.Visible = false;
+        _pipelineChoicesBox.Visible = false;
         _pipelineAnsweredLabel.Text = _pipelineAnsweredText;
         _pipelineAnsweredLabel.Visible = true;
     }
@@ -244,6 +252,7 @@ public sealed partial class BurnerPhone
             Text = text,
             ThemeTypeVariation = "ReplyChip",
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
         };
         button.Pressed += onPressed;
         _pipelineChoicesBox.AddChild(button);

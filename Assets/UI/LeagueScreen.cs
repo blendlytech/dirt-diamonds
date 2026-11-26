@@ -78,9 +78,12 @@ public sealed partial class LeagueScreen : PanelContainer
     private const int MinPaForRateLeaders = 10;
     private const int MinOutsForEraLeaders = 15;
 
-    // Dirty-flag identity (ui_conventions.md) — refresh once per day, exactly
-    // when the day's deferred events have finished draining.
+    // Dirty-flag identity (ui_conventions.md) — refresh once per (day, avatar),
+    // exactly when the day's deferred events have finished draining. The avatar
+    // is part of the identity because an interactive succession takeover swaps
+    // the avatar without advancing the day (13-6b review S1).
     private long _shownDay = -1;
+    private string? _shownAvatarId;
 
     // 13-6b parent-phase smoke finding: Refresh hid the screen for a team-less
     // (unrostered) avatar, but _Process re-showed it every frame. The tier
@@ -105,15 +108,19 @@ public sealed partial class LeagueScreen : PanelContainer
             return;
         }
 
-        RefreshDraftCard(gm, career);
-
+        // The tier refresh runs first: it settles Visible, which the Draft
+        // card's IsVisibleInTree() gate reads in the same frame.
         long day = gm.State.CurrentDay;
-        if (day == _shownDay || gm.Events.PendingCount > 0)
+        string avatarId = career.AvatarPlayerId;
+        if (gm.Events.PendingCount == 0
+            && (day != _shownDay || !string.Equals(avatarId, _shownAvatarId, StringComparison.Ordinal)))
         {
-            return;
+            _shownDay = day;
+            _shownAvatarId = avatarId;
+            Refresh(gm, career);
         }
-        _shownDay = day;
-        Refresh(gm, career);
+
+        RefreshDraftCard(gm, career);
     }
 
     private void Refresh(GameManager gm, CareerManager career)

@@ -41,8 +41,10 @@ public sealed partial class LeagueScreen
     private readonly Dictionary<int, TeamRow> _draftTeams = new();
     private readonly List<TeamRow> _draftTeamsScratch = new();
 
-    // Dirty-flag identity: the day the card was last built for.
+    // Dirty-flag identity: the (day, avatar) the card was last built for. A
+    // same-day succession takeover changes the avatar, not the day (review S1).
     private long _draftShownDay = long.MinValue;
+    private string? _draftShownAvatarId;
 
     private void InitDraftCard()
     {
@@ -62,11 +64,13 @@ public sealed partial class LeagueScreen
             return;
         }
         long day = gm.State.CurrentDay;
-        if (day == _draftShownDay)
+        string avatarId = career.AvatarPlayerId;
+        if (day == _draftShownDay && string.Equals(avatarId, _draftShownAvatarId, StringComparison.Ordinal))
         {
             return;
         }
         _draftShownDay = day;
+        _draftShownAvatarId = avatarId;
         RenderDraftCard(gm, career);
     }
 
@@ -194,7 +198,7 @@ public sealed partial class LeagueScreen
     {
         if (_draftRowsUsed == _draftRowPool.Count)
         {
-            var label = new Label();
+            var label = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
             _draftRows.AddChild(label);
             _draftRowPool.Add(label);
         }
