@@ -82,10 +82,16 @@ public sealed partial class LeagueScreen : PanelContainer
     // when the day's deferred events have finished draining.
     private long _shownDay = -1;
 
+    // 13-6b parent-phase smoke finding: Refresh hid the screen for a team-less
+    // (unrostered) avatar, but _Process re-showed it every frame. The tier
+    // verdict is remembered so the hide sticks until a rostered avatar returns.
+    private bool _tierKnown = true;
+
     public override void _Ready()
     {
         _standingsLabel = GetNode<Label>("Layout/StandingsCard/StandingsLayout/StandingsLabel");
         _leadersLabel = GetNode<Label>("Layout/LeadersCard/LeadersLayout/LeadersLabel");
+        InitDraftCard();
     }
 
     public override void _Process(double delta)
@@ -93,11 +99,13 @@ public sealed partial class LeagueScreen : PanelContainer
         GameManager gm = GameManager.Instance!;
         CareerManager career = gm.Career;
         bool hasAvatar = career.HasAvatar;
-        Visible = hasAvatar;
+        Visible = hasAvatar && _tierKnown;
         if (!hasAvatar)
         {
             return;
         }
+
+        RefreshDraftCard(gm, career);
 
         long day = gm.State.CurrentDay;
         if (day == _shownDay || gm.Events.PendingCount > 0)
@@ -120,6 +128,7 @@ public sealed partial class LeagueScreen : PanelContainer
         // A team-less avatar (retired to FA at lineage game-over) must not
         // fall back to default(LeagueTier), which is High School's standings.
         bool tierKnown = gm.Baseball.TryGetTeamTier(player.TeamId ?? 0, out LeagueTier tier);
+        _tierKnown = tierKnown;
         Visible = tierKnown;
         if (!tierKnown)
         {

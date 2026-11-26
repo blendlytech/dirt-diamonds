@@ -55,6 +55,12 @@ layout_mode = 2
 theme_type_variation = &"AccentButton"
 text = ""
 
+[node name="PipelineBanner" type="Button" parent="Screen/ScreenLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = ""
+
 [node name="PhoneTabs" type="TabContainer" parent="Screen/ScreenLayout"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -138,6 +144,40 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 6
+
+[node name="PipelineCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="PipelineCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/PipelineCard"]
+layout_mode = 2
+
+[node name="PipelineHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/PipelineCard/PipelineCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = ""
+
+[node name="PipelineBodyLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/PipelineCard/PipelineCardLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="PipelineDeadlineLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/PipelineCard/PipelineCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
+
+[node name="PipelineChoicesBox" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/PipelineCard/PipelineCardLayout"]
+layout_mode = 2
+
+[node name="PipelineAnsweredLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout/PipelineCard/PipelineCardLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
 
 [node name="EventsScroll" type="ScrollContainer" parent="Screen/ScreenLayout/PhoneTabs/Events/EventsLayout"]
 layout_mode = 2

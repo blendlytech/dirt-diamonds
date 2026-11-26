@@ -5563,6 +5563,67 @@ internal static partial class Program
             && project.Contains($"locale/translations=PackedStringArray(\"{translationRes}\")", StringComparison.Ordinal)
             && import.Contains($"dest_files=[\"{translationRes}\"]", StringComparison.Ordinal)
             && File.Exists(Path.Combine(repoRoot, "Assets", "Localization", "strings.en.translation")));
+
+        // 13-6b: the pipeline phone cards and Draft board read their copy through Tr("ui.pipeline.…").
+        // Every key those scripts name must have an English row, no ui.pipeline.* row may sit unused,
+        // and none may use an avatar pronoun (the avatar can be male or female).
+        string[] pipelineUiScripts = { "Assets/UI/BurnerPhone.Pipeline.cs", "Assets/UI/LeagueScreen.Draft.cs" };
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+        var prefixes = new List<string>();
+        var literal = new System.Text.RegularExpressions.Regex("\"(ui\\.pipeline\\.[a-z0-9_.]*)\"");
+        foreach (string script in pipelineUiScripts)
+        {
+            foreach (System.Text.RegularExpressions.Match m in literal.Matches(File.ReadAllText(Path.Combine(repoRoot, script))))
+            {
+                string key = m.Groups[1].Value;
+                if (key.EndsWith('.'))
+                {
+                    prefixes.Add(key); // a key built at runtime ("ui.pipeline.class." + n): every row under it counts as used
+                }
+                else
+                {
+                    referenced.Add(key);
+                }
+            }
+        }
+        var pipelineKeys = new List<string>();
+        foreach (string key in table.Keys)
+        {
+            if (key.StartsWith("ui.pipeline.", StringComparison.Ordinal))
+            {
+                pipelineKeys.Add(key);
+            }
+        }
+        var unknown = new List<string>();
+        foreach (string key in referenced)
+        {
+            if (!table.ContainsKey(key))
+            {
+                unknown.Add(key);
+            }
+        }
+        var unused = new List<string>();
+        foreach (string key in pipelineKeys)
+        {
+            if (!referenced.Contains(key) && !prefixes.Exists(p => key.StartsWith(p, StringComparison.Ordinal)))
+            {
+                unused.Add(key);
+            }
+        }
+        Check("13-6b: every ui.pipeline.* key the phone card and Draft board scripts name has an English row",
+            referenced.Count > 0 && unknown.Count == 0, unknown.Count == 0 ? $"{referenced.Count} keys referenced" : string.Join(", ", unknown));
+        Check("13-6b: no ui.pipeline.* row sits unused by those scripts",
+            pipelineKeys.Count > 0 && unused.Count == 0, unused.Count == 0 ? $"{pipelineKeys.Count} rows" : string.Join(", ", unused));
+        var pronoun = new System.Text.RegularExpressions.Regex(@"\b(he|she|him|his|hers?|himself|herself)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var pronounRows = new List<string>();
+        foreach (string key in pipelineKeys)
+        {
+            if (pronoun.IsMatch(table[key]))
+            {
+                pronounRows.Add(key);
+            }
+        }
+        Check("13-6b: no ui.pipeline.* text uses an avatar pronoun", pronounRows.Count == 0, string.Join(", ", pronounRows));
     }
 
     /// <summary>Minimal RFC 4180 reader for the strings table: quoted fields, doubled quotes, CRLF or LF.</summary>

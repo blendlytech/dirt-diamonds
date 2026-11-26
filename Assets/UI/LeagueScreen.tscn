@@ -46,3 +46,29 @@ text = "League Leaders"
 layout_mode = 2
 autowrap_mode = 2
 text = ""
+
+[node name="DraftCard" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="DraftLayout" type="VBoxContainer" parent="Layout/DraftCard"]
+layout_mode = 2
+
+[node name="DraftHeading" type="Label" parent="Layout/DraftCard/DraftLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = ""
+
+[node name="DraftSummaryLabel" type="Label" parent="Layout/DraftCard/DraftLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="DraftNoteLabel" type="Label" parent="Layout/DraftCard/DraftLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
+
+[node name="DraftRows" type="VBoxContainer" parent="Layout/DraftCard/DraftLayout"]
+layout_mode = 2
