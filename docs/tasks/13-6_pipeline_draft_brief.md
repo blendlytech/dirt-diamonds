@@ -334,7 +334,7 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
 - [x] §4 built; `PromotionManager` deleted; no ladder code or "call-up" comment left in `Assets/`. *(13-6a; the remaining "no call-up" lines are 13-5's, outside 13-6a's paths, §11.3 #19)*
 - [x] §5 gates green: MC default all green, the Pro guard byte-exact; the PipelineHarness green; 20× replays 20/20; D7 met. *(13-6a §11.4; D7 by the isolated-suite median, +9.21 s)*
 - [x] Argon's independent review of the sim/persistence diff passed. *(Gemini 4 Carbon §12 + §14 delta review PASS, 2026-11-26)*
-- [ ] Committed and pushed; merged into `p13/integration` by Opus after the review. Then `p13/integration` → `main` per D8, **with the owner's go-ahead** (it changes `main`'s save version to v14).
+- [x] Committed and pushed; merged into `p13/integration` by Opus after the review. *(`b7de24a` + Carbon's §14 PASS `d6f1003`, merged `--no-ff` into `p13/integration` 2026-11-26.)* Then `p13/integration` → `main` per D8, **with the owner's go-ahead** (it changes `main`'s save version to v14). *(Pending: awaits the owner's go-ahead.)*
 - [ ] Handoff (§8) + one `progress.md` line per author. **Then stop.**
 
 ## 7. Out of scope
