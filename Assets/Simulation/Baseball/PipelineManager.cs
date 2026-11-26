@@ -890,6 +890,15 @@ public sealed class PipelineManager : IFreeAgencyMarket
 
         int avatarPick = 0;
         int avatarTeam = 0;
+        // S1: the event names a draft-eligible avatar from the pre-draft enrollment, so Draft Night's text is reload-safe.
+        string? eligibleAvatar = null;
+        bool automaticSenior = false;
+        if (avatarId is not null && s.Enrollment.TryGetValue(avatarId, out CollegeEnrollmentRow avatarEn)
+            && avatarEn.ClassYear >= PipelineProfile.DraftEligibleClassYear)
+        {
+            eligibleAvatar = avatarId;
+            automaticSenior = avatarEn.ClassYear >= PipelineProfile.FinalClassYear;
+        }
         foreach (DraftPickRow p in picks)
         {
             if (string.Equals(p.PlayerId, avatarId, StringComparison.Ordinal))
@@ -940,7 +949,7 @@ public sealed class PipelineManager : IFreeAgencyMarket
         {
             _bus?.Publish(new ProContractSignedEvent(p.PlayerId, p.TeamId, day, wasDrafted: true));
         }
-        _bus?.Publish(new DraftCompletedEvent(seasonYear, day, avatarPick, avatarTeam));
+        _bus?.Publish(new DraftCompletedEvent(seasonYear, day, avatarPick, avatarTeam, eligibleAvatar, automaticSenior));
     }
 
     // ------------------------------------------------------------------
@@ -1376,7 +1385,9 @@ public sealed class PipelineManager : IFreeAgencyMarket
         {
             if (row.Role == PitcherRole.None && covered.TryGetValue(row.TeamId, out bool[]? cov)
                 && s.Enrollment.TryGetValue(row.PlayerId, out CollegeEnrollmentRow en)
-                && en.ClassYear < PipelineProfile.FinalClassYear && !drafted.Contains(row.PlayerId))
+                && en.ClassYear < PipelineProfile.FinalClassYear && !drafted.Contains(row.PlayerId)
+                && s.Players.TryGetValue(row.PlayerId, out PlayerRow p)
+                && !PipelineRules.RetiresAtNextRollover(p.Age, p.HealthCeiling)) // N1: the same returning test as OpenSpots
             {
                 cov[(int)s.PositionOf(row.PlayerId, row.Role)] = true;
             }
@@ -1709,7 +1720,8 @@ public sealed class PipelineManager : IFreeAgencyMarket
             }
         }
 
-        // ---- 5. Pro releases to exactly 15/4/5, lowest value first per role (the avatar included, D4b-C) ----
+        // ---- 5. Pro releases to exactly 15/4/5, lowest value first per role (the avatar included, D4b-C);
+        //         this rollover's draftees are exempt as they report (R-A, owner 2026-11-25) ----
         var proGroups = new Dictionary<(int, int), List<PipelineChoice>>();
         foreach (RosterPlayerRow row in s.Roster)
         {
@@ -1725,7 +1737,8 @@ public sealed class PipelineManager : IFreeAgencyMarket
                 group = new List<PipelineChoice>();
                 proGroups[key] = group;
             }
-            // A draftee has no Pro line yet: neutral P (Argon Q6), so a new pick isn't cut before he plays.
+            // A draftee has no Pro line yet: neutral P (Argon Q6). R-A exempts him at this rollover; P orders
+            // the rookies only in the overflow guard.
             bool neutral = newDraftees.Contains(row.PlayerId);
             group.Add(new PipelineChoice
             {
@@ -1739,7 +1752,9 @@ public sealed class PipelineManager : IFreeAgencyMarket
         {
             int frozenHere = frozen is not null && teamOf.TryGetValue(frozen, out int ft) && ft == entry.Key.TeamId
                 && RoleOfRostered(s, frozen) == entry.Key.Role ? 1 : 0;
-            PipelineRules.SelectReleases(entry.Value, PipelineProfile.ProCapFor(PipelineRules.Roles[entry.Key.Role]) - frozenHere, released);
+            // R-A: this rollover's draftees are exempt as they report; incumbents compete for the rest.
+            PipelineRules.SelectProReleases(entry.Value, newDraftees,
+                PipelineProfile.ProCapFor(PipelineRules.Roles[entry.Key.Role]) - frozenHere, released);
         }
         foreach (string id in released)
         {

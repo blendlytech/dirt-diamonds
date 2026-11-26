@@ -201,6 +201,8 @@ internal static partial class Program
                 failure?.Message ?? $"team {w.TeamOf(avatarId)} (chose {chosen})");
         }
 
+        RunDraftNightReloadChecks(schemaPath, scratchPath);
+
         // ---- D4b-C: the parent phase survives a reload; the takeover at 16 ----
         string parent;
         string child;
@@ -235,6 +237,80 @@ internal static partial class Program
             Check("13-6 D4b-C: a child's takeover at 16 lands him on the right HS team (the family key is missing → the lowest-id HS team) as the avatar",
                 w.Career.AvatarPlayerId == child && w.TeamOf(child) == 101 && w.Career.AvatarTeamId == 101 && !w.Career.InParentPhase,
                 $"avatar {(w.Career.AvatarPlayerId == child ? "child" : "parent")}, team {w.TeamOf(child)}");
+        }
+    }
+
+    /// <summary>
+    /// 13-6a S1: a save and reload between day 176 (the declaration window)
+    /// and day 195 (the Draft) still gets Draft Night right, because the
+    /// reloaded <see cref="PipelineBeatWriter"/> reads everything from
+    /// <see cref="DraftCompletedEvent"/>: drafted → <c>pipeline.draft.picked</c>;
+    /// an automatic senior undrafted → <c>pipeline.draft.undrafted</c>; a
+    /// declared underclassman undrafted → no Draft Night text (he returns).
+    /// </summary>
+    private static void RunDraftNightReloadChecks(string schemaPath, string basePath)
+    {
+        long Day(int dayOfSeason) => dayOfSeason; // season 2026
+        var paths = new List<string>();
+        try
+        {
+            (int Drafted, int Undrafted, int Pick) Scenario(string tag, int bat, int age, int classYear, bool declareOnPhone)
+            {
+                string path = basePath + "." + tag + ".db";
+                paths.Add(path);
+                string id;
+                {
+                    using var w = new LiveWorld(schemaPath, path, startDay: 170);
+                    w.Career.CreateAvatar("Draft", "Night", 201, new PlayerRatingsRow
+                    {
+                        IsPitcher = false, BatPower = bat, BatContact = bat, BatDiscipline = bat,
+                        PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+                    });
+                    id = w.Career.AvatarPlayerId;
+                    w.Players.SetAge(id, age);
+                    w.Queries.UpsertEnrollment(new CollegeEnrollmentRow
+                    {
+                        PlayerId = id, TeamId = 201, EntrySeason = 2026 - (classYear - 1), ClassYear = classYear,
+                    });
+                    w.AdvanceTo(Day(PipelineCalendar.DeclarationOpenDay + 2)); // day 178: the window is open
+                    if (declareOnPhone)
+                    {
+                        w.Pipeline.ResolveDeclaration(true);
+                    }
+                } // saved mid-window; the next world is a fresh boot with a fresh beat writer
+                using var reloaded = new LiveWorld(schemaPath, path, startDay: 170);
+                reloaded.AdvanceTo(Day(PipelineCalendar.DraftDay + 1));
+                var picks = new List<DraftPickRow>();
+                reloaded.Queries.LoadDraftPicks(2026, picks);
+                List<NarrativeMessageRow> texts = reloaded.Texts(id);
+                bool OnDraftNight(NarrativeMessageRow t, string key) =>
+                    t.ContactId == PipelineBeatWriter.AgentContact && t.Body == key && t.GameDay == Day(PipelineCalendar.DraftDay);
+                return (texts.Count(t => OnDraftNight(t, PipelineBeatWriter.DraftedKey)),
+                    texts.Count(t => OnDraftNight(t, PipelineBeatWriter.UndraftedKey)),
+                    picks.FirstOrDefault(p => p.PlayerId == id).OverallPick);
+            }
+
+            var drafted = Scenario("s1_drafted", bat: 95, age: 20, classYear: 2, declareOnPhone: true);
+            Check("13-6a S1: a sophomore who declares on day 178 and reloads before day 195 still gets the Draft Night 'picked' text from his agent, once",
+                drafted.Pick > 0 && drafted.Drafted == 1 && drafted.Undrafted == 0,
+                $"pick {drafted.Pick}, picked {drafted.Drafted}, undrafted {drafted.Undrafted}");
+            var senior = Scenario("s1_senior", bat: 10, age: 22, classYear: 4, declareOnPhone: false);
+            Check("13-6a S1: an automatic senior who reloads mid-window and goes undrafted gets the Draft Night 'undrafted' text, once",
+                senior.Pick == 0 && senior.Undrafted == 1 && senior.Drafted == 0,
+                $"pick {senior.Pick}, picked {senior.Drafted}, undrafted {senior.Undrafted}");
+            var junior = Scenario("s1_junior", bat: 10, age: 21, classYear: 3, declareOnPhone: true);
+            Check("13-6a S1: a declared underclassman who reloads mid-window and goes undrafted gets no Draft Night text (he returns to his program)",
+                junior.Pick == 0 && junior.Undrafted == 0 && junior.Drafted == 0,
+                $"pick {junior.Pick}, picked {junior.Drafted}, undrafted {junior.Undrafted}");
+        }
+        finally
+        {
+            foreach (string path in paths)
+            {
+                TryDelete(path);
+                TryDelete(path + "-wal");
+                TryDelete(path + "-shm");
+            }
         }
     }
 }

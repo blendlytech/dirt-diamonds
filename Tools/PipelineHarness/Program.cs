@@ -206,7 +206,8 @@ internal static class Program
         // ---- reported flows (not gated) ----
         double arrivals = m.TotalProArrivals / (double)(Seasons - burn);
         double cutRate = m.DrafteesCutOnArrival / (double)(Seasons - burn);
-        Console.WriteLine($"  draftees released at the rollover they arrive (reported; the release order ranks them like everyone, D4b-C): {cutRate:F1} a season of 128");
+        Check($"R-A rookie protection: no draftee is released at the rollover he reports (seasons {burn + 1}–{Seasons})",
+            m.DrafteesCutOnArrival == 0, $"{cutRate:F1} a season of 128 cut on arrival");
         int[] lastPool = m.FreeAgentPools.Count > 0 ? m.FreeAgentPools[^1] : new int[3];
         Console.WriteLine($"  flows (reported): {arrivals:F1} Pro arrivals a season (draftees who stay + {m.TotalSignings} lock signings over {Seasons} seasons), " +
             $"Little's-law career {768.0 / Math.Max(1.0, arrivals):F2} seasons (draftees who stay); the season-{Seasons} day-91 pool {lastPool[0]} Pos / {lastPool[1]} SP / {lastPool[2]} RP");

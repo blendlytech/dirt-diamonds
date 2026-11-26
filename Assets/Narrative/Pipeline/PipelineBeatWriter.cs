@@ -58,12 +58,6 @@ public sealed class PipelineBeatWriter
     private readonly Action<DraftCompletedEvent> _onDraftCompleted;
     private readonly Action<AvatarReleasedEvent> _onReleased;
 
-    // The season whose declaration window the avatar saw, and who he is:
-    // Draft Night's "undrafted" text goes only to an avatar who was in the pool.
-    private int _declarationSeason;
-    private string? _declarationPlayerId;
-    private bool _declarationAutomatic;
-
     /// <summary>Resolves a strings-table key to its text at write time; null writes the key.</summary>
     public Func<string, string>? ResolveText;
 
@@ -111,27 +105,26 @@ public sealed class PipelineBeatWriter
 
     private void OnDeclarationOpened(DraftDeclarationOpenedEvent e)
     {
-        _declarationSeason = e.SeasonYear;
-        _declarationPlayerId = e.PlayerId;
-        _declarationAutomatic = e.IsAutomatic;
         string key = e.IsAutomatic ? DeclareAutomaticKey : e.ProjectedRound > 0 ? DeclareProjectedKey : DeclareUndraftedKey;
         WriteText(e.PlayerId, AgentContact, key);
     }
 
+    // Stateless (13-6a S1): everything Draft Night needs rides on the event,
+    // so a save and reload between day 176 and day 195 still gets its text.
     private void OnDraftCompleted(DraftCompletedEvent e)
     {
-        if (_declarationPlayerId is null || _declarationSeason != e.SeasonYear)
+        if (e.AvatarPlayerId is not string avatarId)
         {
-            return; // the avatar wasn't in this draft's window
+            return; // the avatar wasn't draft-eligible this season
         }
         if (e.AvatarOverallPick > 0)
         {
-            WriteText(_declarationPlayerId, AgentContact, DraftedKey);
+            WriteText(avatarId, AgentContact, DraftedKey);
         }
-        else if (_declarationAutomatic)
+        else if (e.AvatarWasAutomaticSenior)
         {
             // Only a senior is certainly in the pool; an undrafted underclassman simply returns.
-            WriteText(_declarationPlayerId, AgentContact, UndraftedKey);
+            WriteText(avatarId, AgentContact, UndraftedKey);
         }
     }
 

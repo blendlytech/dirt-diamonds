@@ -598,6 +598,11 @@ public readonly struct RecruitSignedEvent : IGameEvent
 /// <summary>
 /// The July Draft committed (128 picks). <see cref="AvatarOverallPick"/> and
 /// <see cref="AvatarTeamId"/> are 0 when the avatar wasn't picked.
+/// <see cref="AvatarPlayerId"/> names the avatar when he was draft-eligible
+/// (a College class ≥ 2 before the picks; null otherwise), and
+/// <see cref="AvatarWasAutomaticSenior"/> says he was a class-4 senior, so
+/// certainly in the pool. Both come from the pre-draft enrollment, so Draft
+/// Night's text needs no state from day 176 (13-6a S1: reload-safe).
 /// </summary>
 public readonly struct DraftCompletedEvent : IGameEvent
 {
@@ -605,13 +610,18 @@ public readonly struct DraftCompletedEvent : IGameEvent
     public readonly long Day;
     public readonly int AvatarOverallPick;
     public readonly int AvatarTeamId;
+    public readonly string? AvatarPlayerId;
+    public readonly bool AvatarWasAutomaticSenior;
 
-    public DraftCompletedEvent(int seasonYear, long day, int avatarOverallPick, int avatarTeamId)
+    public DraftCompletedEvent(int seasonYear, long day, int avatarOverallPick, int avatarTeamId,
+        string? avatarPlayerId, bool avatarWasAutomaticSenior)
     {
         SeasonYear = seasonYear;
         Day = day;
         AvatarOverallPick = avatarOverallPick;
         AvatarTeamId = avatarTeamId;
+        AvatarPlayerId = avatarPlayerId;
+        AvatarWasAutomaticSenior = avatarWasAutomaticSenior;
     }
 }
 

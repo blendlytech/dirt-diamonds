@@ -54,6 +54,19 @@ internal static partial class Program
         return path;
     }
 
+    /// <summary>
+    /// N2: applies the DDL only to a database that isn't already v14. A
+    /// Slice136Copy is a copied, initialized world, and the connection pragmas
+    /// (WAL, foreign_keys) are DatabaseManager's constructor's, not the DDL's.
+    /// </summary>
+    private static void InitializeIfFresh(DatabaseManager db, string schemaPath)
+    {
+        if (db.GetSchemaVersion() != SaveCompatibility.CurrentSchemaVersion)
+        {
+            db.InitializeSchema(schemaPath);
+        }
+    }
+
     private static void CleanupSlice136()
     {
         foreach (string path in Slice136Paths)
@@ -101,7 +114,7 @@ internal static partial class Program
             Action<PWorld>? setup = null, bool development = true, LeagueTier[]? simTiers = null)
         {
             Db = new DatabaseManager(path);
-            Db.InitializeSchema(schemaPath);
+            InitializeIfFresh(Db, schemaPath); // N2: a Slice136Copy is already a v14 world
             Players = new PlayerQueries(Db);
             Baseball = new BaseballQueries(Db);
             GameState = new GameStateQueries(Db);
@@ -132,7 +145,11 @@ internal static partial class Program
                 }
             }
             Micro = new MicroGame(Db, Baseball);
-            Micro.Initialize();
+            if (career || withSims)
+            {
+                // N2: with no career and no sims nothing reads the micro-sim before a rollover re-initializes it.
+                Micro.Initialize();
+            }
             if (career)
             {
                 Career = new CareerManager(Db, Players, Baseball, GameState, State, Leagues, Micro, new RngState(0x1360CA2EUL));
@@ -211,6 +228,21 @@ internal static partial class Program
                 });
             }
             return id;
+        }
+
+        /// <summary>Sets a batter's flat batting tools, potential with them (headroom 0): a fixture's "below the cutline".</summary>
+        public void SetFlatBatting(string id, int bat)
+        {
+            Baseball.UpsertRatings(new PlayerRatingsRow
+            {
+                PlayerId = id, BatPower = bat, BatContact = bat, BatDiscipline = bat,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+            Baseball.UpsertPotential(new PlayerPotentialRow
+            {
+                PlayerId = id, BatPower = bat, BatContact = bat, BatDiscipline = bat,
+                PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
         }
 
         public int TeamOf(string id) => Players.TryGetById(id, out PlayerRow row) && row.TeamId is int t ? t : 0;
@@ -464,6 +496,27 @@ internal static partial class Program
         PipelineRules.SelectReleases(group, 4, released);
         Check("release order: keep the cap by value (ties by player_id), release the rest lowest first",
             released.SequenceEqual(new[] { "e", "f" }), string.Join(",", released));
+
+        // ---- R-A: 1-rollover rookie protection (owner, 2026-11-25) ----
+        var rookies = new HashSet<string>(StringComparer.Ordinal) { "r1", "r2", "r3" };
+        var mixed = Board(("a", PitcherRole.None, 100), ("b", PitcherRole.None, 95), ("c", PitcherRole.None, 90),
+            ("r1", PitcherRole.None, 80), ("r2", PitcherRole.None, 70));
+        var protectedCut = new List<string>();
+        PipelineRules.SelectProReleases(mixed, rookies, 4, protectedCut);
+        var noRookies = new List<string>();
+        PipelineRules.SelectProReleases(Board(("a", PitcherRole.None, 100), ("c", PitcherRole.None, 95), ("b", PitcherRole.None, 95),
+            ("d", PitcherRole.None, 90), ("e", PitcherRole.None, 80), ("f", PitcherRole.None, 85)), rookies, 4, noRookies);
+        Check("R-A: this rollover's draftees are exempt as they report — two rookies (80, 70) hold their places and the incumbents (100/95/90) compete for cap − 2, so the 90 goes, not a rookie; with no rookies it is the plain release order",
+            protectedCut.SequenceEqual(new[] { "c" }) && noRookies.SequenceEqual(released),
+            $"{string.Join(",", protectedCut)} / {string.Join(",", noRookies)}");
+        var overflow = Board(("a", PitcherRole.None, 100), ("r1", PitcherRole.None, 80), ("r2", PitcherRole.None, 70), ("r3", PitcherRole.None, 60));
+        var overflowCut = new List<string>();
+        PipelineRules.SelectProReleases(overflow, rookies, 2, overflowCut);
+        var zeroCap = new List<string>();
+        PipelineRules.SelectProReleases(Board(("r1", PitcherRole.None, 80), ("a", PitcherRole.None, 100)), rookies, 0, zeroCap);
+        Check("R-A overflow guard: three rookies over a cap of 2 → every incumbent goes (keep max(0, 2 − 3) = 0) and the rookies rank among themselves (the 60 goes); a cap of 0 releases everyone",
+            overflowCut.SequenceEqual(new[] { "a", "r3" }) && zeroCap.Count == 2 && zeroCap.Contains("a") && zeroCap.Contains("r1"),
+            $"{string.Join(",", overflowCut)} / {string.Join(",", zeroCap)}");
 
         // ---- the free-agent retirement test (Amendment 6) ----
         Check("free-agent retirement: released into Y is kept at the rollover into Y+1 and retired at Y+2; age 30 or health 40 retires at once",

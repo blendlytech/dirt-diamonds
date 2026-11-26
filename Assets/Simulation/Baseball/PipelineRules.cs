@@ -683,6 +683,31 @@ public static class PipelineRules
     }
 
     /// <summary>
+    /// One (Pro team, role)'s release set with 1-rollover rookie protection
+    /// (R-A, owner 2026-11-25): a player drafted in the season just completed
+    /// (<paramref name="rookies"/>) is exempt at the rollover he reports. The
+    /// rookies hold their places and the incumbents compete for
+    /// <c>cap − rookies</c> by value; only if the rookies alone overflow the
+    /// cap (unreachable with a 3/1/1 quota and a 4-man minimum role cap) are
+    /// they ranked among themselves. From the next rollover on he's an
+    /// ordinary incumbent. Appends the released ids, incumbents first.
+    /// </summary>
+    public static void SelectProReleases(List<PipelineChoice> group, HashSet<string> rookies, int cap, List<string> released)
+    {
+        var incumbents = new List<PipelineChoice>(group.Count);
+        var drafted = new List<PipelineChoice>();
+        foreach (PipelineChoice c in group)
+        {
+            (rookies.Contains(c.PlayerId) ? drafted : incumbents).Add(c);
+        }
+        SelectReleases(incumbents, Math.Max(0, cap - drafted.Count), released);
+        if (drafted.Count > cap)
+        {
+            SelectReleases(drafted, Math.Max(0, cap), released); // the defensive overflow guard
+        }
+    }
+
+    /// <summary>
     /// The free-agent retirement test at the rollover into
     /// <paramref name="newSeasonYear"/> (Amendment 6): 30 or older, health
     /// at the floor, or two full seasons unsigned (released into Y: kept at

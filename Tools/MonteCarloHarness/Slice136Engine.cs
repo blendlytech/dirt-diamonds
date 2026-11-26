@@ -28,7 +28,7 @@ internal static partial class Program
             bool attached = variant == 1;
             string path = Slice136Copy(schemaPath, 0, attached ? "noop_on" : "noop_off");
             using var db = new DatabaseManager(path);
-            db.InitializeSchema(schemaPath);
+            InitializeIfFresh(db, schemaPath); // N2: a Slice136Copy is already a v14 world
             var players = new PlayerQueries(db);
             var baseball = new BaseballQueries(db);
             var gameState = new GameStateQueries(db);
@@ -155,7 +155,7 @@ internal static partial class Program
         {
             string path = Slice136Copy(schemaPath, 0, "seed");
             using var db = new DatabaseManager(path);
-            db.InitializeSchema(schemaPath);
+            InitializeIfFresh(db, schemaPath); // N2: a Slice136Copy is already a v14 world
             var gameState = new GameStateQueries(db);
             var state = new GlobalState();
             var pipeline = new PipelineManager(db, new PlayerQueries(db), new BaseballQueries(db), gameState, state, new LeagueDirectory());
@@ -172,6 +172,12 @@ internal static partial class Program
     // ------------------------------------------------------------------
     // pipeline-avatar (from promotion-avatar): D4a-A, D5-A, D4b-C
     // ------------------------------------------------------------------
+
+    /// <summary>G2's avatar (R-A): a class-4 senior whose flat batting tools land him in round 4 on the spread-25 board (pick 115).</summary>
+    private const int LateRoundAvatarBat = 48;
+
+    /// <summary>G2's tools after the Draft: role sum 105, below every Pro batter's in that world (weakest 129).</summary>
+    private const int BelowCutlineBat = 35;
 
     private static void RunPipelineAvatarSuite(string schemaPath)
     {
@@ -380,6 +386,37 @@ internal static partial class Program
                 w.Released.Count == 1 && w.Released[0].Tier == (byte)LeagueTier.Pro && !w.Released[0].EnteredParentPhase
                 && w.Career!.LineageOverReason == LineageFailure.NoHeirs && w.TeamOf(id) == 0,
                 $"released {w.Released.Count}");
+        }
+
+        // ---- G2. R-A: a late-round avatar is protected as he reports, then cut on merit a season later ----
+        {
+            using var w = new PWorld(schemaPath, Slice136Copy(schemaPath, Spread, "av_rookie"), career: true,
+                development: false, simTiers: new[] { LeagueTier.College, LeagueTier.Pro });
+            string id = w.Avatar(201, LateRoundAvatarBat, 22, classYear: 4);
+            w.AdvanceTo(Abs136(StartYear, PipelineCalendar.DraftDay + 1));
+            var picks = new List<DraftPickRow>();
+            w.Queries.LoadDraftPicks(StartYear, picks);
+            DraftPickRow mine = picks.FirstOrDefault(p => p.PlayerId == id);
+            // After the Draft his tools fall below every Pro batter's: the release order alone would cut him first.
+            w.SetFlatBatting(id, BelowCutlineBat);
+            w.AdvanceTo(NewSeasonDay(1));
+            int releasedOnArrival = w.Released.Count;
+            int arrivalTeam = w.TeamOf(id);
+            int arrivalCareerTeam = w.Career!.AvatarTeamId;
+            var pro = new List<RosterPlayerRow>();
+            w.Baseball.LoadRosterByTier(LeagueTier.Pro, pro);
+            List<RosterPlayerRow> clubBats = pro.Where(r => r.TeamId == mine.TeamId && r.Role == PitcherRole.None).ToList();
+            int mySum = clubBats.Where(r => r.PlayerId == id).Select(r => PipelineRules.RoleRatingSum(in r)).FirstOrDefault();
+            int weakestOther = clubBats.Where(r => r.PlayerId != id).Select(r => PipelineRules.RoleRatingSum(in r)).DefaultIfEmpty(0).Min();
+            w.AdvanceTo(NewSeasonDay(2));
+            Check("R-A: a senior drafted in round 3 or 4 whose tools then fall below every Pro batter's is NOT cut at the rollover he reports (0 AvatarReleasedEvent; he joins the drafting club, its weakest batter)",
+                mine.PlayerId == id && mine.Round >= 3 && releasedOnArrival == 0 && arrivalTeam == mine.TeamId
+                && arrivalCareerTeam == mine.TeamId && clubBats.Count == PipelineProfile.ProCapFor(PitcherRole.None) && mySum < weakestOther,
+                $"pick {mine.OverallPick} (round {mine.Round}) → {mine.TeamId}; on arrival team {arrivalTeam}, released {releasedOnArrival}, role sum {mySum} vs the club's next-weakest {weakestOther}");
+            Check("…and at the next rollover, still below the cutline after his rookie season, he's an ordinary incumbent and D4b-C releases him (Pro tier, no children → NoHeirs)",
+                w.Released.Count == 1 && w.Released[0].Tier == (byte)LeagueTier.Pro && !w.Released[0].EnteredParentPhase
+                && w.Released[0].SeasonYear == StartYear + 2 && w.Career.LineageOverReason == LineageFailure.NoHeirs && w.TeamOf(id) == 0,
+                $"released {w.Released.Count} (season {(w.Released.Count > 0 ? w.Released[0].SeasonYear : 0)}), team {w.TeamOf(id)}, reason {w.Career.LineageOverReason}");
         }
 
         // ---- H. succession precedence ----

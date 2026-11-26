@@ -120,7 +120,7 @@
     2. Rostered retirements (age ≥ 42 or health ≤ 40, the shipped triggers), flagged `pipeline_retired`.
     3. HS players with `age > 19` (seniors who just aged) graduate. Those with an accepted offer go to their College team as class 1; unrecruited NPCs are `pipeline_retired`. Signed outside recruits join their College team as class 1.
     4. College class years go up by 1. Draftees go to their Pro team (enrollment row deleted). Finished class-4 NPCs go undrafted to free agency. An undrafted class-4 **avatar is released** (D4b-C): game over without children, the parent phase with them.
-    5. Pro releases bring each team to exactly 15/4/5, lowest value first per role, **the avatar included** (D4b-C). Released NPCs get `pipeline_free_agent`; a released avatar takes the D4b-C path instead.
+    5. Pro releases bring each team to exactly 15/4/5, lowest value first per role, **the avatar included** (D4b-C). Released NPCs get `pipeline_free_agent`; a released avatar takes the D4b-C path instead. **R-A (owner, 2026-11-25; §12.5, §13):** this rollover's draftees are exempt as they report. Per (team, role), with `cap = ProCapFor(role) − frozenHere`, the incumbents compete for `max(0, cap − rookies)`; only if `rookies > cap` (unreachable with the 3/1/1 quota) are the rookies ranked among themselves. From the next rollover on he's an ordinary incumbent.
     6. HS intake at **age 16** per (team, role, defensive position) refills the graduates.
     7. An unplanned College departure (a health retirement) isn't backfilled. That team runs one role short until the next Signing Day refills it.
 
@@ -149,7 +149,7 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
   - **A (recommended).** The walk-on guarantee replaces "held back": a senior always moves to College at the rollover after his senior season, by an offer he chose or by a walk-on. The walk-on offer comes from the **lowest-ranked program with an open spot in his role** (Amendment 4), so it costs nobody a place. Only if no program has one does it come from the rank-24 program, where he displaces its weakest same-role returning player (the succession displacement rule), who retires from baseball. The four-year HS grade gate is unchanged.
   - *B.* Keep held-back: a senior below every program's band repeats his senior year (no offers, no walk-on) and is recruited again next fall; the walk-on applies only after a second failed fall.
 - **b. College → Pro and release.**
-  - **C (owner, 2026-11-24: decided).** **An undrafted senior is released, and so is an avatar the Pro release order cuts**: Pro gives the avatar no protection.
+  - **C (owner, 2026-11-24: decided).** **An undrafted senior is released, and so is an avatar the Pro release order cuts**: Pro gives the avatar no protection beyond every draftee's (R-A, owner 2026-11-25: a draftee isn't cut at the rollover he reports; from his second rollover he's ranked like anyone).
     - **No children → game over:** `NoHeirs`, through the shipped `PersistGameOver`.
     - **Children → the parent phase.** The avatar leaves baseball (`team_id NULL`, `pipeline_retired`, so no free-agent read can pick him up), chooses one of **three jobs**, each with its own benefits and pitfalls, and spends his free time **training his children**. The training is a mini-game that can succeed or fail.
     - **The takeover:** a willing child (`baseball_interest ≥` threshold) takes over **at 16 as an HS freshman** and enters the pipeline as the avatar did. If every child is 16 or older and unwilling, it's game over (`NoWillingHeir`).
@@ -193,7 +193,7 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
    - projected slot (rank among `class_year ≥ 2` players), projected round, the declaration rule, the draft pick with its role-need tiebreak (Amendment 5), and draft order:
      - the prior-season order is reverse elimination round, then reverse `Standings.Order` within a round;
      - the inaugural order is keyed by `MixCombine(MixCombine(seed, "DRAFTORD"), MixCombine(year, teamId))` (Argon Q5);
-   - release order (Pro value; the avatar is ranked like anyone else, D4b-C) and signing order (most short-handed team first, neutral-P value);
+   - release order (Pro value; the avatar is ranked like anyone else, D4b-C), with R-A's 1-rollover rookie protection (`SelectProReleases`), and signing order (most short-handed team first, neutral-P value);
    - the free-agent retirement test (Amendment 6) and `SigningBonusForPick` (Amendment 5).
 
    Every constant is a named `PipelineProfile` data value. The values from Argon's §10:
@@ -203,7 +203,7 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
    - free agency: `FreeAgentRetireAge 30`, `FreeAgentMaxUnsignedSeasons 2`;
    - stream tags: the four stream tags and `InauguralDraftOrderTag` (Q8, table below);
    - `DefaultPipelineSeed 0x136D_5EED_0000_0001` (harness fixtures only).
-2. **`PipelineManager`:** the D2 handlers; the boot ensure; the rollover pass (one batch, flush before, re-init once after, `ReactivateAvatar` last, as `PromotionManager` did); the pre-lock free-agency hook `RosterManager` calls (`IFreeAgencyMarket`); the D5 pending choices; `PipelineStatusView` (this season's class, offers, projected round, draft board, free agents); a `LastRun` summary for UI and harnesses (removals, graduates, recruits, outside recruits, draftees, releases, signings, intake, retirements).
+2. **`PipelineManager`:** the D2 handlers; the boot ensure; the rollover pass (one batch, flush before, re-init once after, `ReactivateAvatar` last, as `PromotionManager` did; step 5 exempts this rollover's draftees, R-A); the pre-lock free-agency hook `RosterManager` calls (`IFreeAgencyMarket`); the D5 pending choices; `PipelineStatusView` (this season's class, offers, projected round, draft board, free agents); a `LastRun` summary for UI and harnesses (removals, graduates, recruits, outside recruits, draftees, releases, signings, intake, retirements).
 3. **`PipelineQueries`** + DTOs. Validated on a scratch v14 (§0.4) with these results:
    - enrollment upsert `INSERT INTO College_Enrollment (player_id, team_id, entry_season, class_year, declared_season) VALUES (…) ON CONFLICT (player_id) DO UPDATE SET team_id = excluded.team_id, class_year = excluded.class_year, declared_season = excluded.declared_season` (insert and update paths executed);
    - class advance `UPDATE College_Enrollment SET class_year = class_year + 1` and departure `DELETE FROM College_Enrollment WHERE player_id = @playerId`;
@@ -306,7 +306,7 @@ Both parts keep the avatar rostered at every moment, which `CareerManager` requi
   - **Window:** 5 burn-in seasons, then a 15-season window.
   - **Monotonicity:** HS < College < Pro, strict, with minimum gaps of batters +3.0 / +10.0 and pitchers +2.0 / +10.0. Observed: batters +6.8 / +18.3, pitchers +5.9 / +17.8.
   - **Stationarity:** the second half of the window is within 10.0 of the first for every tier (observed 1.7–2.5).
-  - **Flows:** about 128 Pro arrivals a year, a Little's-law career of 6.0 seasons (spec §9.3), and a free-agent pool at the day-91 lock with every role stocked. These are reported, not gated.
+  - **Flows:** about 128 Pro arrivals a year, a Little's-law career of 6.0 seasons (spec §9.3), and a free-agent pool at the day-91 lock with every role stocked. These are reported, not gated. **R-A (13-6a reconciliation):** 0 draftees cut at the rollover they report (seasons 6–20) is gated.
 - **Hygiene and determinism:** no unflagged player ever signed; no player in two tiers; enrollment rows only for College-rostered players; FK clean; no open batch; two same-seed runs byte-identical.
 
 **`PipelineHarness --full` (1,193 days, all sims):**
@@ -1179,3 +1179,63 @@ Every tier mean in 13-6a sits within **`0.11–1.03` role-sum points (`< 0.8%`)*
 | Max stationarity drift `\|W2 − W1\|` (`20261603 / 0703 / 0704`) | `2.33 / 2.21 / 2.63` | **`2.07 / 1.68 / 2.29`** (tighter on all 3 seeds) | `< 10.0` |
 | `--full` post-rollover-3 snapshot (`Bat` / `Pit`) | `137.81 < 140.83 < 153.49` / `125.42 < 130.66 < 141.29` | Monotone on both batters and pitchers (`0/384` cuts) | Strict `HS < Col < Pro` |
 
+---
+
+## 13. 13-6a reconciliation — Claude Opus 5.5, 2026-11-25
+
+**Branch** `p13/13-6a-opus`, fast-forwarded to Carbon's `b244014`, worktree `C:\Users\DELL\dnd-opus-136a`. **Folded in:** the owner's **R-A** (1-rollover rookie protection, approved 2026-11-25), **S1**, **N1** and **N2**. The diff `b244014..HEAD` stays inside §2's paths plus §4 item 11's docs. No DDL, no SQL text changed. **It needs Carbon's targeted delta review (`b244014..HEAD`)** before Opus merges into `p13/integration`, because R-A changes `Assets/Simulation/Baseball/`.
+
+### 13.1 §0 spot-check (on `3239a41`, before the fast-forward)
+
+Clean tree, write check passed, 5.2 GB free on `C:`. Every §12.3 citation matched:
+
+- **S1:** `PipelineBeatWriter.cs:63–65` (the three fields) and `:112–136` (the two handlers); `PipelineManager.cs:212–237` (`EnsureAtBoot`, no republish), `:535–545` (`OpenDeclaration`) and `:943` (the publish); `CoreEvents.cs:602–616` (the four-field event).
+- **N1:** `:1375–1383` lacks the `RetiresAtNextRollover` test that `:1009–1014` has.
+- **N2:** `Slice136Suites.cs:103–135` (the DDL re-run and `Micro.Initialize`); `Slice136Engine.cs:176–234` (pipeline-avatar A) and `:639–652` (the twin); `Slice136Twin.cs:59–188`.
+
+### 13.2 What changed
+
+| Item | Where | What |
+| :-- | :-- | :-- |
+| **R-A** | `PipelineRules.SelectProReleases`; `PipelineManager.RunRollover` step 5 | Per (Pro team, role), `cap = ProCapFor(role) − frozenHere`. Rookies (`newDraftees`) hold their places, and incumbents keep `max(0, cap − rookies)` by value. Only if `rookies > cap` are the rookies ranked among themselves. Released ids append incumbents first. From the next rollover the player is an ordinary incumbent |
+| R-A tests | `pipeline-score` +2; `pipeline-avatar` +2 (scenario G2); `PipelineHarness` default +1 gate | **Pure:** two rookies (80, 70) are kept while the 90 incumbent goes; with no rookies it's the plain order; overflow (3 rookies, cap 2) and cap 0. **G2:** a class-4 senior drafted at pick 115 (round 4) whose tools then fall to 35/35/35 (role sum 105, against his club's next-weakest 129). He joins his club with 0 `AvatarReleasedEvent`, then is cut at the next rollover (Pro, `NoHeirs`, season 2028). **Negative control:** with the rookie set emptied, G2's first check fails (cut on arrival, 2027). **PipelineHarness** gates 0 arrival cuts over seasons 6–20 |
+| **S1** | `DraftCompletedEvent` (+`AvatarPlayerId`, +`AvatarWasAutomaticSenior`); `PipelineManager.RunDraft`; `PipelineBeatWriter` | The fields come from the draft's own pre-pick `s.Enrollment` (the active avatar at class ≥ 2; class ≥ 4 means automatic). The writer keeps no state: drafted → `picked`; undrafted automatic senior → `undrafted`; undrafted underclassman → nothing (as before). CoreLoop +3: a save on day 178, reloaded before day 195, still gets each case right. **Negative control:** the pre-fix writer fails the drafted and senior cases (0 texts), reproducing S1 |
+| **N1** | `PipelineManager.RunSigningDay` coverage loop | Adds `&& s.Players.TryGetValue(…, out PlayerRow p) && !PipelineRules.RetiresAtNextRollover(p.Age, p.HealthCeiling)`, matching `OpenSpots`. No steady-state flow moved, as Carbon predicted |
+| **N2** | `Slice136Suites.InitializeIfFresh` (PWorld and the three `pipeline-stream` copies); `PWorld` skips `Micro.Initialize()` when `!career && !withSims` | A `Slice136Copy` is already v14, and the connection pragmas (WAL, `foreign_keys`) come from `DatabaseManager`'s constructor, not the DDL. Every rollover re-initializes the micro-sim before it's used. No assertion removed |
+| Docs | spec §9.4 + §16-I19; this brief §3 (D2-A step 5, D4b-C), §4 items 1–2, §5; the `run_pipeline_harness` and MC skills | R-A recorded; the arrival-cut open item closed |
+
+### 13.3 Gates (on the reconciled tree)
+
+| Gate | Result |
+| :-- | :-- |
+| Build (Debug sln) | 0 warnings / 0 errors |
+| Schema | 174/174 (no DDL; no SQL text changed) |
+| CoreLoop | **43/43** (40 + 3 S1 reload checks); Life ↔ Baseball boundary scan clean |
+| Gritty | 363/363 |
+| MC default | **605/605** (601 + 2 `pipeline-score` + 2 `pipeline-avatar`). `resolver` 13/13; the `--only resolver` LF SHA-256 is **`6d92422863f22d73…`**, byte-exact (the `dotnet run` recipe). `season-pipeline` 45/45: Pro guard **PA 81433 / H 18471 / ER 8803**, ledger **`932ACE26…8B84`**, D1-A ch.2–7 green (ch.3's twin ledger `0129DA4404F6` equals the guard's; ch.4: 27 no-op locks, 0 B). Every allocation line 0 B, the warm lock hook included; 0 leaked `%TEMP%\dnd_*` files |
+| PipelineHarness default | **10/10**, 25.1 s (budget 60 s). It reproduces §12.5's R-A projection **exactly** on `20261603`: **0** cut on arrival, **128.0** Pro arrivals a year, a **6.00**-season career, 0 shortfalls, **479** intake-to-Pro journeys, batters **135.64 < 141.83 < 159.32** (+6.19 / +17.49), pitchers **125.67 < 131.07 < 147.25** (+5.40 / +16.17), max drift **2.07**. Season-20 day-91 pool: 214 / 57 / 68 |
+| PipelineHarness `--full` | **7/7**, 7.8 s (budget 4 min). The journey: pick 1, Pro in 2029, PA 40 / 136 / 137 / 13. 2027 Draft `[303,319,322,316]`. Snapshot gradient: batters 137.81 < 140.83 < 153.29, pitchers 125.42 < 130.66 < 141.10 |
+| 20× replays (`--no-build`, normalized) | MC default **20/20** byte-identical (605/605 every run; `c34b1e3f01a35ca7…`; wall 67–88 s). PipelineHarness default **20/20** byte-identical on every line (`e93052154a78e8c4…`; budget-excluded `a25c4b67e14251ab…`), internal 21.1–27.6 s, 0 of 20 runs over 60 s. 0 leaked files |
+| **D7** (direct exe, interleaved, order flipped each pair, `Win32_Processor` load sampled before each run) | **At the line, not comfortably under it.** **Isolated suites vs `6b95671` (8 pairs):** +8.55 / +7.51 / +9.50 / +6.13 / +12.08 / +12.71 / +10.98 / +17.32 s, **median +10.24 s** (base 11.61 s, new 21.03 s; ambient load 8–76%, median 16%). The diffs rose across the run, consistent with the N5030 throttling after an hour of replays. **Whole run (4 pairs):** +11.70 / +18.07 / +9.89 / +8.70 s, **median +10.79 s** (base 75.52 s at 537/544, new 86.44 s at 605/605; ambient 14–50%). **Attribution:** the reconciled tree vs `3239a41` on the same suites (6 pairs, load 23–100%) is **median −1.11 s**, so N2 bought back about the cost of R-A's new G2 world, not more |
+
+### 13.4 D7: why it doesn't clear +10 s, and the question
+
+`6b95671`'s seven retired suites throw on entry ("requires the full 6-tier ladder"), so its isolated time is only `season-pipeline`, `designations` and startup. The ~9.4 s gap is the fixture work of the suites that replaced them. In-process profiling puts most of it in:
+
+- **22 rollovers** at ~190 ms each (aging, the snapshot, the batch, a re-init of the sims and the micro-sim);
+- **~110 calendar days** at ~33 ms each (one tier-scoped snapshot);
+- spread across pipeline-avatar (9.2 s), development-arc (3.4 s) and pipeline-stream's worlds. Plain days cost 0.2 ms.
+
+The remaining trims would cut coverage: the grade gate's three offseasons, development-arc's five developed rollovers, the twin's full 2026. Three options, for Carbon's ruling and the owner:
+
+1. **Accept D7 as met within noise.** The budget compares against a baseline that does no work, and the spread between pairs is ±4 s.
+2. **Re-anchor D7 for 13-6 onward** to a working head (`3239a41`, or this one). Against `3239a41` this reconciliation is −1.1 s.
+3. **Trim coverage** to buy ~2–3 s (for example, the grade gate over two offseasons instead of three). Opus doesn't recommend it.
+
+Opus recommends **1**, with **2** for later pipeline changes.
+
+### 13.5 Open
+
+- **D7** (§13.4): Carbon's ruling; the owner decides only if Carbon wants option 3.
+- **Carried forward unchanged** (Carbon §12.4): the rollover crash done-key (R1-SAVE); the degenerate zero-opening re-run; the parent-phase brief's items; succession filler fielding (G-4); the Godot parent-phase smoke check (13-6b or playtest).
+- **Carbon's two non-blocking observations** stay logged for their slices: the `RichPresenceWriter` tier latch in the parent phase, and the 13-5 `designations` warm-up path.
