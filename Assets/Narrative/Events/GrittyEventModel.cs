@@ -91,11 +91,12 @@ public enum PrerequisiteKind : byte
 ///
 /// Tier and Gpa (the HS onboarding arc, docs/reference/hs_onboarding_events.md
 /// §1) follow the exact same poll-join shape: Tier LEFT JOINs Team_Tiers
-/// (COALESCEd to MLB(5) for a rostered team missing its row, the v6→v7
-/// backfill convention — but a NULL team_id reads as sentinel −1). The
-/// sentinel defeats every ">=" and "==" gate real content authors (both
-/// shipped gates — onboarding's tier==0, the rookie batch's tier>=2 — hold
-/// for 0–5 only, never −1), so unrostered subjects like seeded parent NPCs
+/// (COALESCEd to Pro (2) for a rostered team missing its row — the v6→v7
+/// backfill convention, now COALESCE(tt.tier, 2) in NarrativePollQueries — but
+/// a NULL team_id reads as sentinel −1). The sentinel defeats every ">=" and
+/// "==" gate real content authors (both shipped gates — onboarding's tier==0,
+/// the rookie batch's tier>=2 — hold for 0–2 only (HS, College, Pro, schema
+/// v14), never −1), so unrostered subjects like seeded parent NPCs
 /// can never satisfy either. DISCLOSED CAVEAT: it does NOT defeat a "&lt;"
 /// gate — −1 &lt; N for any N ≥ 0, so a hypothetical future "tier &lt; 2" gate
 /// on a scope:any event would also match an unrostered subject. No shipped

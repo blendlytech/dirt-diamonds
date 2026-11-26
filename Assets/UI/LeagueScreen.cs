@@ -9,8 +9,11 @@ namespace DirtAndDiamonds.UI;
 
 /// <summary>
 /// UI-reorg: the "League" phone tab — the avatar's tier Standings and League
-/// Leaders cards, moved verbatim out of BaseballDashboard's retired
-/// LeagueRow (see BaseballDashboard.cs's UI-reorg note). Self-contained and
+/// Leaders cards, moved out of BaseballDashboard's retired LeagueRow (see
+/// BaseballDashboard.cs's UI-reorg note). 13-7 made both true to schema v14:
+/// the standings come from PlayoffManager.GetStandings (the avatar's conference
+/// grouped by division, ordered by the same function selection uses) and the
+/// leader qualifiers scale with games played. Self-contained and
 /// self-driving, the CalendarScreen/ScheduleScreen precedent: it polls
 /// GameManager.Instance directly rather than being pushed data by
 /// BurnerPhone.cs. Refreshes once per day-advance settle point, dirty-flagged
@@ -71,12 +74,24 @@ public sealed partial class LeagueScreen : PanelContainer
     // LoadRoster "destination" idiom, so the once-per-day-advance refresh
     // doesn't allocate a fresh list per category.
     private readonly List<TeamRow> _tierTeamsBuffer = new();
-    private readonly List<TeamRecordRow> _tierRecordsBuffer = new();
+    private readonly List<ConferenceRow> _conferencesBuffer = new();
+    private readonly List<DivisionRow> _divisionsBuffer = new();
+    private readonly List<string> _standingsLines = new();
     private readonly List<LeagueLeaderRow> _leadersBuffer = new();
 
     private const int LeaderRowCount = 5;
-    private const int MinPaForRateLeaders = 10;
-    private const int MinOutsForEraLeaders = 15;
+
+    // 13-7 D5: leader qualifiers scale with the avatar team's games played G. These
+    // are presentation thresholds, not calibration: nothing in the sim reads them.
+    //   rate leaders (AVG, OPS): PA   >= ceil(G x regulation innings x 0.344)
+    //   ERA leaders:             outs >= ceil(G x regulation innings / 3)
+    // 0.344 PA per regulation inning is the familiar 3.1 PA per nine-inning team
+    // game (about 2.4 per seven-inning game); 1 IP per nine-inning game is 3 outs.
+    // Integer arithmetic keeps the ceilings exact, and the floor of 1 keeps a
+    // 0-game season from "qualifying" players with no plate appearances at all.
+    private const int QualifyingPaPerThousandInnings = 344;
+    private const int OutsPerInning = 3;
+    private const int MinQualifier = 1;
 
     // Dirty-flag identity (ui_conventions.md) — refresh once per (day, avatar),
     // exactly when the day's deferred events have finished draining. The avatar
@@ -142,73 +157,136 @@ public sealed partial class LeagueScreen : PanelContainer
             return;
         }
 
-        RefreshStandings(gm, tier, player.TeamId);
-        RefreshLeaders(gm, tier, ratings.IsPitcher, avatarId);
+        int gamesPlayed = RefreshStandings(gm, tier, player.TeamId);
+        RefreshLeaders(gm, tier, gamesPlayed, ratings.IsPitcher, avatarId);
     }
 
     /// <summary>
-    /// The avatar's tier, teams ranked by win pct — a new aggregation query
-    /// (<see cref="BaseballQueries.LoadTeamRecords"/>) merged in C# with
-    /// <see cref="BaseballQueries.LoadTeamsByTier"/>'s names, GB computed here.
+    /// The avatar's conference from <see cref="PlayoffManager.GetStandings"/>:
+    /// HS one table of six, College and Pro one table per division, each ordered
+    /// by <see cref="Standings.Order"/> (the seeding's own tiebreakers), with
+    /// conference and division headers from the Conferences / Divisions rows. The
+    /// national rank (College) and postseason seed ride on the row once written.
+    /// Returns the avatar team's regular-season games completed (W + L), which
+    /// scales the leader qualifiers.
     /// </summary>
-    private void RefreshStandings(GameManager gm, LeagueTier tier, int? avatarTeamId)
+    private int RefreshStandings(GameManager gm, LeagueTier tier, int? avatarTeamId)
     {
         int seasonYear = gm.State.SeasonYear;
         gm.Baseball.LoadTeamsByTier(tier, _tierTeamsBuffer);
-        gm.Baseball.LoadTeamRecords(seasonYear, tier, _tierRecordsBuffer);
+        gm.Baseball.LoadConferences(_conferencesBuffer);
+        gm.Baseball.LoadDivisions(_divisionsBuffer);
+        StandingsView view = gm.Playoffs.GetStandings(seasonYear, tier);
 
-        var rows = new (TeamRow Team, int Wins, int Losses)[_tierTeamsBuffer.Count];
-        for (int i = 0; i < _tierTeamsBuffer.Count; i++)
+        int avatarConference = 0;
+        foreach (TeamRow team in _tierTeamsBuffer)
         {
-            TeamRow team = _tierTeamsBuffer[i];
-            int wins = 0, losses = 0;
-            foreach (TeamRecordRow record in _tierRecordsBuffer)
+            if (avatarTeamId.HasValue && team.TeamId == avatarTeamId.Value)
             {
-                if (record.TeamId == team.TeamId)
+                avatarConference = team.ConferenceId;
+                break;
+            }
+        }
+
+        int avatarGames = 0;
+        int shownConference = 0;
+        _standingsLines.Clear();
+        foreach (StandingsGroupView group in view.Groups)
+        {
+            // An avatar whose team isn't found shows every group rather than none.
+            bool shown = avatarConference == 0 || group.ConferenceId == avatarConference;
+            if (shown && group.ConferenceId != shownConference)
+            {
+                shownConference = group.ConferenceId;
+                AddHeader(string.Format(Tr("ui.league.standings.conference"), ConferenceName(group.ConferenceId)));
+            }
+            if (shown && group.DivisionId.HasValue)
+            {
+                AddHeader(string.Format(Tr("ui.league.standings.division"), DivisionName(group.DivisionId.Value)));
+            }
+            for (int i = 0; i < group.Rows.Count; i++)
+            {
+                StandingsRowView row = group.Rows[i];
+                if (avatarTeamId.HasValue && row.TeamId == avatarTeamId.Value)
                 {
-                    wins = record.Wins;
-                    losses = record.Losses;
-                    break;
+                    avatarGames = row.Wins + row.Losses;
+                }
+                if (shown)
+                {
+                    _standingsLines.Add(FormatStandingsRow(group.Rows, i, avatarTeamId));
                 }
             }
-            rows[i] = (team, wins, losses);
         }
-        // Pct ties break on games above .500 (so the GB anchor among tied
-        // teams is the one everyone else trails), then TeamId — Array.Sort is
-        // unstable, and without a total order tied rows can swap between
-        // refreshes.
-        Array.Sort(rows, (a, b) =>
+        _standingsLabel.Text = string.Join("\n", _standingsLines);
+        return avatarGames;
+    }
+
+    // A header after the first group is preceded by a blank line.
+    private void AddHeader(string text)
+    {
+        if (_standingsLines.Count > 0)
         {
-            int byPct = WinPct(b.Wins, b.Losses).CompareTo(WinPct(a.Wins, a.Losses));
-            if (byPct != 0)
+            _standingsLines.Add(string.Empty);
+        }
+        _standingsLines.Add(text);
+    }
+
+    private string FormatStandingsRow(IReadOnlyList<StandingsRowView> rows, int index, int? avatarTeamId)
+    {
+        StandingsRowView row = rows[index];
+        StandingsRowView leader = rows[0];
+        string gbText = index == 0
+            ? StandingsLeaderGamesBehindText
+            : FormatGamesBehind(GamesBehindNumerator(leader.Wins, leader.Losses, row.Wins, row.Losses));
+        string line = string.Format(
+            StandingRowFormat, index + 1, StandingsTeamAbbreviation(row.TeamId), row.Wins, row.Losses, WinPct(row.Wins, row.Losses), gbText);
+        if (row.NationalRank.HasValue)
+        {
+            line += "  " + string.Format(Tr("ui.league.standings.rank"), row.NationalRank.Value);
+        }
+        if (row.Seed.HasValue)
+        {
+            line += "  " + string.Format(Tr("ui.league.standings.seed"), row.Seed.Value);
+        }
+        return avatarTeamId.HasValue && row.TeamId == avatarTeamId.Value
+            ? string.Format(StandingsAvatarRowFormat, line)
+            : line;
+    }
+
+    private string StandingsTeamAbbreviation(int teamId)
+    {
+        foreach (TeamRow team in _tierTeamsBuffer)
+        {
+            if (team.TeamId == teamId)
             {
-                return byPct;
+                return team.Abbreviation;
             }
-            int byMargin = (b.Wins - b.Losses).CompareTo(a.Wins - a.Losses);
-            return byMargin != 0 ? byMargin : a.Team.TeamId.CompareTo(b.Team.TeamId);
-        });
-
-        if (rows.Length == 0)
-        {
-            _standingsLabel.Text = string.Empty;
-            return;
         }
+        return teamId.ToString();
+    }
 
-        (int leaderWins, int leaderLosses) = (rows[0].Wins, rows[0].Losses);
-        var lines = new string[rows.Length];
-        for (int i = 0; i < rows.Length; i++)
+    private string ConferenceName(int conferenceId)
+    {
+        foreach (ConferenceRow conference in _conferencesBuffer)
         {
-            (TeamRow team, int wins, int losses) = rows[i];
-            double pct = WinPct(wins, losses);
-            string gbText = i == 0
-                ? StandingsLeaderGamesBehindText
-                : FormatGamesBehind(GamesBehindNumerator(leaderWins, leaderLosses, wins, losses));
-            string line = string.Format(StandingRowFormat, i + 1, team.Abbreviation, wins, losses, pct, gbText);
-            lines[i] = avatarTeamId.HasValue && team.TeamId == avatarTeamId.Value
-                ? string.Format(StandingsAvatarRowFormat, line)
-                : line;
+            if (conference.ConferenceId == conferenceId)
+            {
+                return conference.Name;
+            }
         }
-        _standingsLabel.Text = string.Join("\n", lines);
+        return conferenceId.ToString();
+    }
+
+    private string DivisionName(int divisionId)
+    {
+        foreach (DivisionRow division in _divisionsBuffer)
+        {
+            if (division.DivisionId == divisionId)
+            {
+                return division.Name;
+            }
+        }
+        return divisionId.ToString();
     }
 
     private static double WinPct(int wins, int losses) => wins + losses > 0 ? (double)wins / (wins + losses) : 0.0;
@@ -235,15 +313,18 @@ public sealed partial class LeagueScreen : PanelContainer
     /// into one heading-plus-rows block per category and joined into the
     /// single label.
     /// </summary>
-    private void RefreshLeaders(GameManager gm, LeagueTier tier, bool isPitcher, string avatarId)
+    private void RefreshLeaders(GameManager gm, LeagueTier tier, int gamesPlayed, bool isPitcher, string avatarId)
     {
         int seasonYear = gm.State.SeasonYear;
+        int innings = TierRules.RegulationInnings(tier);
+        int minPa = Math.Max(MinQualifier, (gamesPlayed * innings * QualifyingPaPerThousandInnings + 999) / 1000);
+        int minOuts = Math.Max(MinQualifier, (gamesPlayed * innings + OutsPerInning - 1) / OutsPerInning);
         string[] categoryNames = (isPitcher ? LeadersPitchingCategoriesCsv : LeadersBattingCategoriesCsv).Split(',');
         string block0, block1, block2;
 
         if (isPitcher)
         {
-            gm.Baseball.LoadEraLeaders(seasonYear, tier, MinOutsForEraLeaders, LeaderRowCount, _leadersBuffer);
+            gm.Baseball.LoadEraLeaders(seasonYear, tier, minOuts, LeaderRowCount, _leadersBuffer);
             block0 = FormatLeaderBlock(categoryNames[0], _leadersBuffer, LeaderRowEraFormat, avatarId);
             gm.Baseball.LoadWinLeaders(seasonYear, tier, LeaderRowCount, _leadersBuffer);
             block1 = FormatLeaderBlock(categoryNames[1], _leadersBuffer, LeaderRowCountFormat, avatarId);
@@ -254,9 +335,9 @@ public sealed partial class LeagueScreen : PanelContainer
         {
             gm.Baseball.LoadHrLeaders(seasonYear, tier, LeaderRowCount, _leadersBuffer);
             block0 = FormatLeaderBlock(categoryNames[0], _leadersBuffer, LeaderRowCountFormat, avatarId);
-            gm.Baseball.LoadAvgLeaders(seasonYear, tier, MinPaForRateLeaders, LeaderRowCount, _leadersBuffer);
+            gm.Baseball.LoadAvgLeaders(seasonYear, tier, minPa, LeaderRowCount, _leadersBuffer);
             block1 = FormatLeaderBlock(categoryNames[1], _leadersBuffer, LeaderRowAvgFormat, avatarId);
-            gm.Baseball.LoadOpsLeaders(seasonYear, tier, MinPaForRateLeaders, LeaderRowCount, _leadersBuffer);
+            gm.Baseball.LoadOpsLeaders(seasonYear, tier, minPa, LeaderRowCount, _leadersBuffer);
             block2 = FormatLeaderBlock(categoryNames[2], _leadersBuffer, LeaderRowAvgFormat, avatarId);
         }
 

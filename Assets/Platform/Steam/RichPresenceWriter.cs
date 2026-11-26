@@ -11,8 +11,9 @@ namespace DirtAndDiamonds.Platform.Steam;
 /// <see cref="SteamIntegration"/> call, so the wiring runs identically with and
 /// without a Steam client (§2.2). Presence is a read over already-live state
 /// (season year, avatar tier, avatar name/age) — no new data, no writes.
-/// Event-driven only: it fires on AvatarChangedEvent (creation, succession, the
-/// 9c promotion republish) and SeasonRolledOverEvent (year tick, yearly aging),
+/// Event-driven only: it fires on AvatarChangedEvent (creation, succession, a
+/// pipeline move, the parent-phase release) and SeasonRolledOverEvent (year
+/// tick, yearly aging),
 /// never from a per-frame path (the ui_conventions no-per-frame-formatting rule
 /// generalizes to presence). Attached at the end of GameManager._Ready, after
 /// every publisher, so its rollover reads observe that same rollover's
@@ -25,10 +26,10 @@ public sealed class RichPresenceWriter
     // and raw values; the partner-site rich-presence localization file owns
     // the wording. Tokens are minted verbatim at 11e (the ACH_* precedent) and
     // recorded in Assets/Platform/Steam/README.md; against the 11a dev appid
-    // (Spacewar) they render nothing, the expected dev state.
+    // (Spacewar) they render nothing, the expected dev state. The token ids and
+    // the tier/status decisions live in SteamRules (13-7), the pure half that the
+    // MC harness proves; this class adds only the guarded SteamIntegration call.
     private const string SteamDisplayKey = "steam_display";
-    private const string StatusCareerToken = "#Status_Career";
-    private const string StatusBetweenCareersToken = "#Status_BetweenCareers";
 
     // Substitution keys the #Status_Career token references (%season% etc.).
     private const string SeasonKey = "season";
@@ -37,15 +38,8 @@ public sealed class RichPresenceWriter
     private const string AgeKey = "age";
 
     // Tier values are themselves localization tokens (Steam localizes a value
-    // that starts with '#'), so tier names localize on the partner site too.
-    // Pinned as consts, not derived from LeagueTier.ToString(): an enum rename
-    // must never silently change the wire token.
-    // Schema v14 dropped the minor-league tiers and their tokens. Pro keeps
-    // emitting the pinned, already-minted #Tier_MLB until slice 17a retires it
-    // for #Tier_Pro (README.md "Shipped tokens", steam_commercial_release.md §3).
-    private const string TierTokenHS = "#Tier_HS";
-    private const string TierTokenCollege = "#Tier_College";
-    private const string TierTokenMLB = "#Tier_MLB";
+    // that starts with '#'), so tier names localize on the partner site too:
+    // SteamRules.TierToken pins #Tier_HS / #Tier_College / #Tier_Pro.
 
     private readonly SteamIntegration _steam;
     private readonly BaseballQueries _baseball;
@@ -116,10 +110,14 @@ public sealed class RichPresenceWriter
     public void SetBetweenCareers()
     {
         _avatarId = null;
-        _steam.SetRichPresence(SteamDisplayKey, StatusBetweenCareersToken);
+        _steam.SetRichPresence(SteamDisplayKey, SteamRules.StatusBetweenCareersToken);
     }
 
-    /// <summary>Creation, succession, and the 9c promotion republish all land here — every one is an active career.</summary>
+    /// <summary>
+    /// Creation, succession, a pipeline move and the parent-phase release all
+    /// land here. A release publishes team id 0, which PublishCareerPresence
+    /// reads as no team: the family status, with the tier key cleared.
+    /// </summary>
     private void OnAvatarChanged(AvatarChangedEvent e)
     {
         _avatarId = e.AvatarPlayerId;
@@ -152,10 +150,12 @@ public sealed class RichPresenceWriter
         // GlobalState mirrors what TimeManager just committed (events publish
         // post-commit), so the year read is current on every path, boot included.
         _steam.SetRichPresence(SeasonKey, _state.SeasonYear.ToString(CultureInfo.InvariantCulture));
-        if (_baseball.TryGetTeamTier(_avatarTeamId, out LeagueTier tier))
-        {
-            _steam.SetRichPresence(TierKey, TierToken(tier));
-        }
+        // D3-A: a team-less avatar (released into the parent phase, team id 0) has
+        // no tier. An empty value deletes a Steamworks rich-presence key, so the
+        // previous tier cannot stay latched, and a boot into the parent phase
+        // never leaves %tier% unset-but-referenced either.
+        bool hasTeam = _baseball.TryGetTeamTier(_avatarTeamId, out LeagueTier tier);
+        _steam.SetRichPresence(TierKey, hasTeam ? SteamRules.TierToken(tier) : string.Empty);
         // Re-read on every publish: succession changes the name, the yearly
         // aging tick (which ran before this rollover handler) changes the age.
         // Rare events, so the row read + strings are nothing hot.
@@ -164,13 +164,8 @@ public sealed class RichPresenceWriter
             _steam.SetRichPresence(PlayerKey, row.FirstName + " " + row.LastName);
             _steam.SetRichPresence(AgeKey, row.Age.ToString(CultureInfo.InvariantCulture));
         }
-        _steam.SetRichPresence(SteamDisplayKey, StatusCareerToken);
+        // Only reached with a live bloodline (the callers route a lineage-over
+        // state to SetBetweenCareers), so the status is career or family.
+        _steam.SetRichPresence(SteamDisplayKey, SteamRules.StatusToken(hasTeam, lineageOver: false));
     }
-
-    private static string TierToken(LeagueTier tier) => tier switch
-    {
-        LeagueTier.HS => TierTokenHS,
-        LeagueTier.College => TierTokenCollege,
-        _ => TierTokenMLB, // Pro
-    };
 }

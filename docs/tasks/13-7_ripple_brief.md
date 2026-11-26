@@ -134,8 +134,8 @@ Recommendations first. **Status: DECIDED by the owner, 2026-11-26: D1 A, D2 A, D
 
 ## 6. Definition of done
 
-- [ ] §0 recorded; D1–D6 applied as decided; §4 items 1–7 built.
-- [ ] §5 gates green; both MC SHA-256s and the live-boot observations recorded in the handoff.
+- [x] §0 recorded; D1–D6 applied as decided; §4 items 1–7 built. (Sonnet 5.5, 2026-11-26)
+- [x] §5 gates green; both MC SHA-256s and the live-boot observations recorded in the handoff. (Sonnet 5.5, 2026-11-26)
 - [ ] Gemini 4 Carbon's review passed. Then Opus merges into `p13/integration`.
 - [ ] Handoff (§8) and one `progress.md` line. **Then stop.**
 

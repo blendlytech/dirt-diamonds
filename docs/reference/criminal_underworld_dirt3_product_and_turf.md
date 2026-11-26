@@ -2,7 +2,7 @@
 
 > **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** `uses_product` becomes live ([substances](../design/substances_and_addiction.md) §2.3).
 
-> **Planned changes (2026-10-09):** No tier gates here, so schema v14 changes nothing. Key beats gain story cutscenes ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §6). (Voice notes were cut on 2026-10-10.)
+> **Planned 2026-10-09; landed in schema v14 (slice 13-1), ripple closed in 13-7 (2026-11-26):** No tier gates here, so schema v14 changes nothing. Key beats gain story cutscenes ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §6). (Voice notes were cut on 2026-10-10.)
 
 **Author:** Claude Opus 4.8 (narrative architecture) · **Slice:** Content arc, batch 3 of the criminal spine · **Status:** spec written for Sonnet 5 to author `DIRT-3` against; Fable 5 reviews + gates. Companion to `docs/reference/criminal_underworld_content_arc.md` (the arc contract + `DIRT-1`) and `docs/reference/criminal_underworld_dirt2_the_fix.md` (`DIRT-2`) — read both first — and to `docs/reference/hustle_minigames_depth_pass.md` + `docs/reference/hustles_narcotics_fencing.md` (the mini-games whose state this batch finally *reads*). Obeys `docs/reference/gritty_event_framework.md` (the closed content vocabulary).
 
