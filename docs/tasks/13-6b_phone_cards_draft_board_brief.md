@@ -76,3 +76,57 @@ Recommended next: 13-6b review by Gemini 4 Neon (then Opus merges into p13/integ
 ```
 
 Then write the complete prompt for the next model (TEAM.md §3 step 8) and add one compact line to [progress.md](../progress.md). Don't start the next slice.
+
+---
+
+## 9. Independent review — Gemini 4 Neon, 2026-11-26
+
+**Reviewer:** Gemini 4 Neon (mid-tier engineer and UI/content reviewer, [TEAM.md](../TEAM.md) §1/§1a). **Branch / worktree:** `p13/13-6b-review-neon` in `.worktrees/13-6b-review-neon` at `2594700`, reviewing exact diff `90356ab..2594700` (`p13/13-6b-sonnet`, authored by Claude Sonnet 5.5). Docs only; no `Assets/` code edited.
+
+**Verdict: PASS WITH FIXES** — **0 blockers, 1 should-fix (S1), 3 nits (N1–N3).**
+
+### 9.1 Preconditions & scope (§0)
+
+- **Environment:** `git fetch` clean; HEAD `2594700`; clean tree; git write check (`git commit --allow-empty` + `git reset --soft HEAD~1`) passed; `C:` free space **2.76 GB** (≥ 2 GB).
+- **Diff scope (`git diff --stat 90356ab..2594700`):** 11 files, `779 insertions(+), 2 deletions(-)`, matching §2 exactly: `Assets/Localization/strings.csv`, `Assets/Localization/strings.en.translation`, `Assets/UI/BurnerPhone.Pipeline.cs`, `Assets/UI/BurnerPhone.cs`, `Assets/UI/BurnerPhone.tscn`, `Assets/UI/LeagueScreen.Draft.cs`, `Assets/UI/LeagueScreen.cs`, `Assets/UI/LeagueScreen.tscn`, `Assets/UI/Theme/DirtAndDiamonds.tres`, `Tools/MonteCarloHarness/Program.cs`, `docs/progress.md`. **Zero** paths under `Assets/Simulation/`, `Assets/Data/`, `Assets/Core/`, or `Assets/Narrative/`, and zero schema/persistence/`EffectiveRatings` changes (Neon review jurisdiction confirmed per TEAM §1a).
+
+### 9.2 Reproduced gates (§5)
+
+| Gate | Command | Result |
+| :-- | :-- | :-- |
+| Build | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** (10 projects) |
+| MC default | `dotnet run --project Tools/MonteCarloHarness -c Release` | **608/608** (`605 + 3` `ui-strings` checks). Normalized log (CRLF→LF, `\d+(\.\d+)? ms` → `N ms`) SHA-256: `646f3618f74e18cfbca80bf7ebc826c1b77a2e0f2050ca0a16765f7d5d88481e`. Reverting only the 3 new `13-6b:` PASS lines and the 3 `ui-strings`/total count lines (`67→23 keys`, `608→605`, `6/6→3/3`) reconstructs the exact `90356ab` baseline SHA-256 `c34b1e3f01a35ca76a5216f42592cb8ad6f9b11091c961beaef16555656ab968` (**byte-identical** outside `ui-strings`) |
+| `ui-strings` negative controls | `dotnet MonteCarloHarness.dll --only ui-strings --repo <scratch>` | Control: **6/6 PASS** (exit 0). Missing key (`ui.pipeline.banner.recruit` removed): **5/6 FAIL** on check #1 (exit 1). Unused key (`ui.pipeline.unused.probe` added): **5/6 FAIL** on check #2 (exit 1). Avatar pronoun (`"his"` in `ui.pipeline.declare.body`): **5/6 FAIL** on check #3 (exit 1) |
+| CoreLoop | `dotnet run --project Tools/CoreLoopHarness -c Release` | **43/43** (Life ↔ Baseball boundary scan clean) |
+| GrittyEvents | `dotnet run --project Tools/GrittyEventsHarness -c Release` | **363/363** |
+| Godot import & translation | `Godot_v4.7-stable_mono_win64_console.exe --headless --path . --import` (churn reverted) | Exit 0. `strings.en.translation` SHA-256 unchanged pre/post import (`E66DB1E7D79CB9B8D5BCDD1C9CF41423ACE4269039149DFFDBC56A0977513CA3`). Headless GDScript verification against scratch `APPDATA`: **67/67** `strings.csv` rows match `strings.en.translation` (`0` mismatches); `DirtAndDiamonds.tres` loads cleanly with `HighlightLabel` present; `BurnerPhone.tscn`, `LeagueScreen.tscn`, and `Main.tscn` load/instantiate with 0 errors; all 11 `GetNode` paths resolve live (`LIVE_NODE_PATHS_MISSING=0`) |
+| Live career driver check | Optional multi-year `Main.tscn` career walkthrough (days 175/273/parent-phase) | **Not run** by reviewer (only headless scene/translation/boot check above was run; full live career playback relies on the author's recorded run in `docs/progress.md`) |
+
+### 9.3 Findings
+
+#### Blockers
+None.
+
+#### Should-fix
+- **S1 — `Assets/UI/LeagueScreen.cs:83–117` (and `Assets/UI/LeagueScreen.Draft.cs:45, 57–71`): same-day interactive takeover from the parent phase leaves `LeagueScreen` hidden for the heir's entire first day.**
+  - **Scenario:** In the live game (`Career.AutopilotSuccession = false`, `Assets/Core/GameManager.cs:562`), an unrostered parent-phase avatar reaches day 1 of a new season (e.g. day 731) when a willing child turns 16. `PipelineManager.RunRollover` (`Assets/Simulation/Baseball/PipelineManager.cs:1990–1993`) calls `Career.ParkTakeoverChoice()` rather than completing the takeover inline. Once day 731's events drain (`gm.Events.PendingCount == 0`), `LeagueScreen._Process` (`LeagueScreen.cs:110–116`) sets `_shownDay = 731` and calls `Refresh(gm, career)` while the avatar is still the unrostered parent, latching `_tierKnown = false` and `Visible = false` (`:130–132`). Still on day 731, the player selects the heir on `SuccessionScreen` (`SuccessionScreen.cs:107` → `CareerManager.ResolvePendingSuccession` → `TakeOver`), making the rostered HS freshman the new avatar. On every remaining frame of day 731, `LeagueScreen._Process` sets `Visible = hasAvatar && _tierKnown` (`false`, `:102`) and hits `if (day == _shownDay || ...)` (`731 == 731`, `:111`), never calling `Refresh` — leaving the League tab completely blank until day 732. (Autopilot takeover is unaffected because `CompleteTakeover` runs inside `RunRollover` before `PendingCount` drains; `LeagueScreen.Draft.cs:65` shares the same day-only dirty flag for any same-day avatar swap.)
+  - **Fix:** Include `career.AvatarPlayerId` (`_shownAvatarId` / `_draftShownAvatarId`) in the dirty-flag check of `LeagueScreen._Process` (`:111`) and `LeagueScreen.RefreshDraftCard` (`:65`) so a same-day takeover or succession refreshes immediately.
+
+#### Nits
+- **N1 — `Assets/Localization/strings.csv:45` (`ui.pipeline.declare.deadline`):** Copy reads *"Decide by the first Monday of July. If you don't, your projection and age decide for you."* `PipelineRules.ShouldNpcDeclare` (`Assets/Simulation/Baseball/PipelineRules.cs:463–467`) is `classYear >= 2 && (classYear >= 3 || age >= 22 || (projectedSlot >= 1 && projectedSlot <= 64))`. In steady state (freshman HS start at 16 → College So at 21, Jr at 22), `classYear >= 3` and `age >= 22` coincide (Amendment 3), so the copy holds for standard careers; however, it omits `classYear >= 3` (an age-19 College succession heir reaching class 3 at age 20 auto-declares on class year, not age) and does not indicate which way the default goes (juniors / top-2-round projections declare; lower-projected sophomores stay).
+- **N2 — `Assets/UI/BurnerPhone.Pipeline.cs:242–247` & `Assets/UI/LeagueScreen.Draft.cs:197` (1280×800 wrapping):** Dynamic `ReplyChip` choice buttons and pooled Draft board/pick row `Label`s do not set `AutowrapMode = TextServer.AutowrapMode.WordSmart` (unlike `PipelineBodyLabel`, `PipelineDeadlineLabel`, `DraftSummaryLabel`, `DraftNoteLabel`, `StandingsLabel`, and `LeadersLabel`). At 1280×800 (`1600×1000` virtual canvas, `BurnerPhone` 1/3 width ≈ ~417 px inside a `Card`), the longest shipped offer (`"Saltmarsh State Stingrays - ranked #24 nationally"`, 49 chars) fits tightly near the card width, but a slightly longer player name or post-trademark team rename would widen the card or trigger horizontal scroll in `LeagueScroll`.
+- **N3 — `Assets/UI/BurnerPhone.Pipeline.cs:230–238` (`RenderAnsweredCard`):** Collapsing to the answered state hides `_pipelineBodyLabel` (`:234`), clears `_pipelineDeadlineLabel.Text = string.Empty` (`:235`), and empties `_pipelineChoicesBox`, but leaves both `_pipelineDeadlineLabel` and `_pipelineChoicesBox` `Visible = true`. Inside `PipelineCardLayout` (`VBoxContainer`, theme `separation = 10`), a visible empty `Label` reserves a line height plus separation. Toggling `.Visible` on `_pipelineDeadlineLabel` and `_pipelineChoicesBox` keeps the answered card compact.
+
+### 9.4 Checklist verification (all items checked in source)
+
+1. **Presentation never drives sim:** `BurnerPhone.Pipeline.cs` calls only `ResolveRecruiting` (`:297`) and `ResolveDeclaration` (`:309`); no DB writes, no `RngState`, clock never stops. Both handlers re-check `TryGetPending*` (`:292`, `:304`) and call `DisablePipelineChoices()` (`:296`, `:308`), and `PipelineManager` invalidates `_pendingCacheDay = -1` (`PipelineManager.cs:666, 1204`), so double-clicks and post-deadline presses never reach a second `Resolve*`.
+2. **Polling vs snapshot discipline:** `TryGetPending*` polling (`BurnerPhone.Pipeline.cs:99–106`) rides `PipelineManager`'s per-day cache (`PipelineManager.cs:586–615, 1127–1137`) behind the `(kind, day)` dirty flag (`:112–115`). `LeagueScreen.Draft.cs:57–71` gates `GetStatusView()` (`:90`) on `IsVisibleInTree()`, `Events.PendingCount == 0`, day change, and `inCollege` (`:79–88`); non-College avatars never call `GetStatusView()`.
+3. **Strings & `ui-strings`:** All 44 `ui.pipeline.*` keys cover every player-facing string; zero avatar pronouns; names in text only; all 3 negative controls fail as designed (§9.2).
+4. **Styling & focus:** Zero per-scene style overrides in new nodes; `DirtAndDiamonds.tres:660–662` adds only `HighlightLabel`. Interactive controls use themed focus styles (`sb_focus`), `LinkPipelineChoiceFocus()` (`BurnerPhone.Pipeline.cs:256–271`) links Up/Down neighbors, and `OnPipelineBannerPressed()` (`:335–342`) moves focus to choice 0. Layout works at 1280×800 (see Nit N2).
+5. **Existing-file behavior changes:** (a) `BurnerPhone.cs:855` → `ApplyEventsTabBadge()` (`BurnerPhone.Pipeline.cs:147–151`) preserves gritty-only behavior (`_shownHasPending` updates at `BurnerPhone.cs:686` before `RefreshDecisionAttentionCues` at `:691`) and handles simultaneous gritty + pipeline pending choices cleanly. (b) `LeagueScreen.cs` `_tierKnown` prevents unrostered flicker, with **S1** on same-day interactive takeover.
+6. **Inferred data correctness:** Offer ranking (`BurnerPhone.Pipeline.cs:175–208`) mirrors `PipelineManager.RankedPrograms` (`PipelineManager.cs:960–995`) and `PlayoffManager.GetNationalRanking` (`PlayoffManager.cs:1028–1043`); `RankingCalculator.Rank` (`Standings.cs:374–378`) always writes distinct 1..24 ranks, and incomplete rankings fall back to `TeamId` ascending — matching `RunSigningDay`'s auto-pick (`PipelineManager.cs:1281–1293`) in both ranked and unranked cases. Declaration deadline copy reviewed under **N1**.
+7. **Node paths (`godot_scene_mapper`):** All 11 `GetNode<T>` paths (7 in `BurnerPhone.Pipeline.cs:66–72`, 4 in `LeagueScreen.Draft.cs:49–52`) verified against `BurnerPhone.tscn` / `LeagueScreen.tscn` (exact path and type) and live headless Godot instantiation (`0` missing).
+
+### 9.5 Unverified items
+
+- Full multi-year interactive Godot live playthrough (advancing day-175 class-2 and day-273 HS-senior saves and exercising the parent-phase save live inside `Main.tscn`) was **not** reproduced in this review session; headless Godot verification covered `--import`, 67/67 translation lookup parity, theme load, scene instantiation, live `GetNode` path resolution, and clean scratch-`APPDATA` v14 boot.
