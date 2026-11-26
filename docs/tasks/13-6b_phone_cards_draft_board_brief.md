@@ -60,7 +60,7 @@ The 13-6 brief §3 D5-A and D8-A; `PipelineManager.cs` (the public API above); `
 
 - [x] §0 recorded; §4 items 1–5 built; every string keyed; focus navigation on every control.
 - [x] §5 gates green; the manual check and the parent-phase smoke check recorded.
-- [ ] Gemini 4 Neon's review passed (§9 PASS WITH FIXES; the §10 reconciliation delta awaits Neon's re-review, §10.4). Then Opus merges into `p13/integration`.
+- [x] Gemini 4 Neon's review passed (§9 PASS WITH FIXES; §10 reconciled; §11 PASS). Merged into p13/integration.
 - [x] Handoff (§8) and one `progress.md` line. **Then stop.**
 
 ## 7. Out of scope
