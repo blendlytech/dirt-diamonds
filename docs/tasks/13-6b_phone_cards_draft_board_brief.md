@@ -167,3 +167,52 @@ Every §9 citation was checked against the files before editing: `LeagueScreen.c
 ### 10.4 Merge decision (TEAM §1a)
 
 The patch is small and UI-only, but it is Opus-authored C# and player-facing copy, and no model approves its own code. It routes to **Gemini 4 Neon** (UI jurisdiction: no sim, schema, persistence or `EffectiveRatings` paths) for a delta re-review of `8a5e644..3157736` (plus this docs commit) on `p13/13-6b-rereview-neon` in `.worktrees/13-6b-rereview-neon`. On PASS, Opus fast-forwards to the re-review head, ticks §6 box 3, merges `--no-ff` into `p13/integration`, reruns the gates post-merge, and logs it. `main` stays untouched (the owner's D8-A go-ahead).
+
+---
+
+## 11. Delta re-review — Gemini 4 Neon, 2026-11-26
+
+**Reviewer:** Gemini 4 Neon (mid-tier engineer and UI/content reviewer, [TEAM.md](../TEAM.md) §1/§1a). **Branch / worktree:** `p13/13-6b-rereview-neon` in `.worktrees/13-6b-rereview-neon` at `e4dd7ff`, reviewing the targeted reconciliation delta `8a5e644..e4dd7ff` (code/assets `8a5e644..3157736`, docs `3157736..e4dd7ff`, authored by Claude Opus 5.5). Docs only; zero edits to `Assets/` or `Tools/`.
+
+**Verdict: PASS** — **0 blockers, 0 should-fixes, 0 nits.**
+
+### 11.1 Preconditions & scope (§0)
+
+- **Environment:** `git fetch` clean; `HEAD` = `origin/p13/13-6b-rereview-neon` = `origin/p13/13-6b-reconcile-opus` = `e4dd7fff2169ef6bdb0819e0af9e1b56e21648ad`; `8a5e644` is an ancestor; clean working tree; git write check (`git commit --allow-empty` + `git reset --soft HEAD~1`) passed after owner granted unsandboxed `git`/`dotnet`/Godot execution; `C:` free space **5.85 GB** (≥ 2 GB).
+- **Delta scope (`git diff --stat 8a5e644..e4dd7ff`):** 7 files (`+75 / −17`): `Assets/Localization/strings.csv`, `Assets/Localization/strings.en.translation`, `Assets/UI/BurnerPhone.Pipeline.cs`, `Assets/UI/LeagueScreen.Draft.cs`, `Assets/UI/LeagueScreen.cs` (code patch `3157736`: 5 files, `+32 / −12`), plus `docs/progress.md` and `docs/tasks/13-6b_phone_cards_draft_board_brief.md` (`e4dd7ff`). All within §2; **zero** paths under `Assets/Simulation/`, `Assets/Data/`, `Assets/Core/`, or `Assets/Narrative/`.
+
+### 11.2 Verification of §9 reconciliation items
+
+1. **S1 — Fixed (`Assets/UI/LeagueScreen.cs:85–86, 104–123, 137–139`; `Assets/UI/LeagueScreen.Draft.cs:46–47, 62–75, 83–94`):**
+   - Both dirty-flag identities are now `(day, career.AvatarPlayerId)` compared with `StringComparison.Ordinal` (`_shownDay`/`_shownAvatarId` at `LeagueScreen.cs:85–86, 113–121`; `_draftShownDay`/`_draftShownAvatarId` at `LeagueScreen.Draft.cs:46–47, 66–74`).
+   - `career.AvatarPlayerId` (`CareerManager.cs:321–322`, throws when `!HasAvatar`) is read only after the `if (!hasAvatar) return;` early return (`LeagueScreen.cs:104–109` → `:114`, `:120`, and `:123` → `LeagueScreen.Draft.cs:67`).
+   - The gated `Refresh(gm, career)` (`LeagueScreen.cs:115–121`) runs **before** `RefreshDraftCard(gm, career)` (`:123`), so `Refresh` settles `_tierKnown` and `Visible` (`:137–139`) in the same frame before `RefreshDraftCard`'s `IsVisibleInTree()` check (`LeagueScreen.Draft.cs:62`).
+   - **Same-day takeover walkthrough:** unrostered parent on season day 1 → `PipelineManager.RunRollover` (`PipelineManager.cs:1990–1993`) calls `Career.ParkTakeoverChoice()` (`CareerManager.cs:1475–1483`) → `LeagueScreen._Process` settles `(day, parentId)` with `_tierKnown = false`, `Visible = false` → player picks heir on `SuccessionScreen` (`SuccessionScreen.cs:107`) → `CareerManager.ResolvePendingSuccession` (`CareerManager.cs:1322–1346`) → `TakeOver` (`:1569–1593`) → `CompleteTakeover` (`:1556–1562`) → `ActivateAvatar` (`:878–903`) switches `_avatarPlayerId` to the rostered HS freshman and publishes `AvatarChangedEvent` → once `gm.Events.PendingCount == 0` on that same day, `!string.Equals(avatarId, _shownAvatarId, StringComparison.Ordinal)` triggers `Refresh` (`_tierKnown = true`, `Visible = true`, HS Standings/Leaders populated) and `RefreshDraftCard` immediately sees `IsVisibleInTree() == true` (when the League tab is open) and refreshes for `(day, heirId)` (or defers cleanly until tab open if hidden).
+   - **No regressions:** `GetStatusView()` remains gated behind `IsVisibleInTree()`, `PendingCount == 0`, `(day, avatarId)` change, and `inCollege` (`LeagueScreen.Draft.cs:62–94`); unrostered parent stays hidden without flicker (`LeagueScreen.cs:105, 138–139`).
+2. **N1 — Applied (`Assets/Localization/strings.csv:45`, `Assets/Localization/strings.en.translation`):**
+   - `ui.pipeline.declare.deadline`: *"Decide by the first Monday of July. Left unanswered, a junior declares; a sophomore declares only if projected in the first two rounds or 22 or older."*
+   - Matches `PipelineRules.ShouldNpcDeclare` (`PipelineRules.cs:463–467`) and its constants (`DraftEligibleClassYear = 2` `:39`, `AutoDeclareClassYear = 3` `:42`, `AutoDeclareAge = 22` `:45`, `DeclareProjectedSlotMax = 64` `:48`; `DraftRounds = 4` `:121` × 32 Pro teams ⇒ top 2 rounds = 64) for the declaration card's class 2–3 window (`PipelineManager.cs:628–629` excludes class 1 and class 4). Zero avatar pronouns. `strings.en.translation` regenerated (SHA-256 `568454827D550B11304FC59D6603C792C65C279EAC891589FE12CC741B6BDEFE`, unchanged across re-import); **67/67** CSV rows match via headless Godot lookup.
+3. **N2 — Applied (`Assets/UI/BurnerPhone.Pipeline.cs:250–258`; `Assets/UI/LeagueScreen.Draft.cs:199–204`):**
+   - Dynamic `ReplyChip` choice `Button`s (`BurnerPhone.Pipeline.cs:255`, `ExpandFill` inside `_pipelineChoicesBox` `VBoxContainer`) and pooled Draft row `Label`s (`LeagueScreen.Draft.cs:201`, inside `_draftRows` `VBoxContainer`) both set `AutowrapMode = TextServer.AutowrapMode.WordSmart` (matching the code-built precedent in `BurnerPhone.cs:981, 989, 1027, 1032, 1184`; §10.1's `.tscn` check that scene labels use `autowrap_mode = 2` = `Word` in `BurnerPhone.tscn:163, 169, 179` and `LeagueScreen.tscn:29, 47, 64, 70` is confirmed). `LinkPipelineChoiceFocus()` (`BurnerPhone.Pipeline.cs:265–280`) and themed `ReplyChip/styles/focus = sb_focus` (`DirtAndDiamonds.tres:729`) are unaffected.
+4. **N3 — Applied (`Assets/UI/BurnerPhone.Pipeline.cs:169–170, 224–225, 234–246, 344–351`):**
+   - `RenderAnsweredCard()` hides `_pipelineDeadlineLabel` (`:242`) and `_pipelineChoicesBox` (`:243`). Both `RenderRecruitingCard` (`:169–170`) and `RenderDeclarationCard` (`:224–225`) re-show both. `OnPipelineBannerPressed()` (`:344–351`) is reachable only when `_pipelineBanner.Visible == true`, which `RefreshPipelineCard` (`:136–137`) sets only after one of the two decision renders has re-shown `_pipelineChoicesBox` and added its choice buttons, so `GrabFocus()` on child 0 always targets a visible button.
+5. **§10 & `docs/progress.md` accuracy:** All SHAs, file counts/diff stats, dispositions, §6 checkbox states (1, 2, 4 ticked; 3 awaiting this re-review), gate totals, MC SHA-256 hashes, and `strings.en.translation` hash (`56845482…`) match the repository and reproduced runs.
+
+### 11.3 Reproduced gates on `e4dd7ff`
+
+| Gate | Command | Result |
+| :-- | :-- | :-- |
+| Build | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** (10 projects, exit 0) |
+| MC default | `dotnet run --project Tools/MonteCarloHarness -c Release` | **608/608** (`ui-strings`: 6/6, 67 keys, 40 referenced / 44 `ui.pipeline.*` rows, 0 pronouns). Normalized log (CRLF→LF, `\d+(\.\d+)? ms` → `N ms`) SHA-256: **`646f3618f74e18cfbca80bf7ebc826c1b77a2e0f2050ca0a16765f7d5d88481e`**. Reverting only the 6 `ui-strings` lines reproduces the post-13-6a baseline SHA-256 **`c34b1e3f01a35ca76a5216f42592cb8ad6f9b11091c961beaef16555656ab968`** exactly |
+| CoreLoop | `dotnet run --project Tools/CoreLoopHarness -c Release` | **43/43** (Life ↔ Baseball boundary scan clean, exit 0) |
+| GrittyEvents | `dotnet run --project Tools/GrittyEventsHarness -c Release` | **363/363** (exit 0) |
+| Godot import & headless check | `Godot_v4.7-stable_mono_win64_console.exe --headless --path . --import` + scratch GDScript on scratch `APPDATA` (all `.import`/`.uid` churn reverted) | `--import` exit 0 (expected fresh-worktree Barlow first-import cache-order noise only); `strings.en.translation` SHA-256 byte-identical pre/post import (`568454827D550B11304FC59D6603C792C65C279EAC891589FE12CC741B6BDEFE`); **67/67** `strings.csv` rows match translation (`ui.pipeline.declare.deadline` resolves to exact N1 text); `DirtAndDiamonds.tres`, `BurnerPhone.tscn`, and `LeagueScreen.tscn` load/instantiate with 0 errors |
+| Live same-day takeover in `Main.tscn` | Optional | **Not run**; S1 static frame-order proof in §11.2 accepted |
+
+### 11.4 Findings
+
+- **Blockers:** None.
+- **Should-fix:** None.
+- **Nits:** None.
+
+**Ready for merge:** Claude Opus 5.5 may fast-forward to this re-review head, tick §6 box 3, merge `--no-ff` into `p13/integration`, and run the post-merge gates. `main` remains untouched pending the owner's D8-A go-ahead.
