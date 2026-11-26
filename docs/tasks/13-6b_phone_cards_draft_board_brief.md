@@ -58,10 +58,10 @@ The 13-6 brief §3 D5-A and D8-A; `PipelineManager.cs` (the public API above); `
 
 ## 6. Definition of done
 
-- [ ] §0 recorded; §4 items 1–5 built; every string keyed; focus navigation on every control.
-- [ ] §5 gates green; the manual check and the parent-phase smoke check recorded.
-- [ ] Gemini 4 Neon's review passed. Then Opus merges into `p13/integration`.
-- [ ] Handoff (§8) and one `progress.md` line. **Then stop.**
+- [x] §0 recorded; §4 items 1–5 built; every string keyed; focus navigation on every control.
+- [x] §5 gates green; the manual check and the parent-phase smoke check recorded.
+- [ ] Gemini 4 Neon's review passed (§9 PASS WITH FIXES; the §10 reconciliation delta awaits Neon's re-review, §10.4). Then Opus merges into `p13/integration`.
+- [x] Handoff (§8) and one `progress.md` line. **Then stop.**
 
 ## 7. Out of scope
 
@@ -130,3 +130,40 @@ None.
 ### 9.5 Unverified items
 
 - Full multi-year interactive Godot live playthrough (advancing day-175 class-2 and day-273 HS-senior saves and exercising the parent-phase save live inside `Main.tscn`) was **not** reproduced in this review session; headless Godot verification covered `--import`, 67/67 translation lookup parity, theme load, scene instantiation, live `GetNode` path resolution, and clean scratch-`APPDATA` v14 boot.
+
+---
+
+## 10. Reconciliation of §9 — Claude Opus 5.5, 2026-11-26
+
+**Branch / worktree:** `p13/13-6b-reconcile-opus` in `C:\Users\DELL\dnd-opus-136b-merge`, fast-forwarded from Neon's `8a5e644` (itself a fast-forward of `2594700` = `p13/13-6b-sonnet`, base `90356ab` = `p13/integration`). **Patch commit:** `3157736`. **Not merged yet:** the patch is Opus-authored C# and copy, so per TEAM §1a it goes to Gemini 4 Neon for a targeted delta re-review before the `--no-ff` merge (§10.4).
+
+### 10.1 Citation check
+
+Every §9 citation was checked against the files before editing: `LeagueScreen.cs:83–117`, `LeagueScreen.Draft.cs:45, 57–71, 197`, `BurnerPhone.Pipeline.cs:230–247`, `strings.csv:45`, `GameManager.cs:562` (`AutopilotSuccession = false`), `PipelineManager.cs:1990–1993` (`ParkTakeoverChoice`), `SuccessionScreen.cs:107` and `PipelineRules.cs:463–467` are all accurate. One immaterial slip: N2 says the scene labels use `WordSmart`; the `.tscn` labels are `autowrap_mode = 2` (`Word`). The code-built precedent (`BurnerPhone.cs:981–1184`) is `WordSmart`, which the patch follows.
+
+### 10.2 Dispositions
+
+| Finding | Disposition | Change |
+| :-- | :-- | :-- |
+| **S1** same-day takeover leaves the League tab hidden | **Fixed** | `LeagueScreen.cs`: the dirty-flag identity is `(day, career.AvatarPlayerId)` (`_shownAvatarId`), and the gated tier `Refresh` now runs **before** `RefreshDraftCard`, so the Draft card's `IsVisibleInTree()` gate sees the settled `Visible` in the same frame (before, `Visible = hasAvatar && _tierKnown` used the stale verdict, so the card could not self-heal either). `LeagueScreen.Draft.cs`: identity `(day, avatar)` (`_draftShownAvatarId`). `AvatarPlayerId` is read only after the `HasAvatar` early return, so it never throws |
+| **N1** declaration deadline copy | **Applied** | `ui.pipeline.declare.deadline`: *"Decide by the first Monday of July. Left unanswered, a junior declares; a sophomore declares only if projected in the first two rounds or 22 or older."* Matches `ShouldNpcDeclare` for the card's class 2–3 window (`AutoDeclareClassYear = 3`, `AutoDeclareAge = 22`, `DeclareProjectedSlotMax = 64` = 2 rounds × 32 Pro picks; class 4 never sees the card). No pronoun; key set unchanged (44 rows) |
+| **N2** wrapping at 1280×800 | **Applied** | `AutowrapMode = WordSmart` on the dynamic `ReplyChip` choice buttons (`BurnerPhone.Pipeline.cs`) and the pooled Draft row labels (`LeagueScreen.Draft.cs`) |
+| **N3** answered card gap | **Applied** | `RenderAnsweredCard` hides `_pipelineDeadlineLabel` and `_pipelineChoicesBox`; `RenderRecruitingCard` / `RenderDeclarationCard` re-show both |
+
+**Diff `8a5e644..3157736`:** 5 files, +32 / −12: `Assets/Localization/strings.csv`, `Assets/Localization/strings.en.translation`, `Assets/UI/BurnerPhone.Pipeline.cs`, `Assets/UI/LeagueScreen.Draft.cs`, `Assets/UI/LeagueScreen.cs`. All within §2; zero `Assets/Simulation/`, `Assets/Data/`, `Assets/Core/` or `Assets/Narrative/` paths.
+
+### 10.3 Gates on `3157736`
+
+| Gate | Result |
+| :-- | :-- |
+| Build (`dotnet build DirtAndDiamonds.sln -c Debug`) | **0 warnings / 0 errors** |
+| MC default | **608/608**. Normalized log (CRLF→LF, `\d+(\.\d+)? ms` → `N ms`) SHA-256 **`646f3618f74e18cfbca80bf7ebc826c1b77a2e0f2050ca0a16765f7d5d88481e`**, identical to Neon's §9.2 run on `2594700`. Reverting only the 6 `ui-strings` lines (3 `13-6b:` PASS lines; `67→23 keys`; `608→605`; `6/6→3/3`) reproduces the post-13-6a anchor **`c34b1e3f01a35ca76a5216f42592cb8ad6f9b11091c961beaef16555656ab968`** exactly |
+| CoreLoop | **43/43** |
+| GrittyEvents | **363/363** |
+| Godot | `--headless --path . --import` exit 0; `strings.en.translation` `E66DB1E7…` → `56845482…`; every `.import` / `.uid` churn reverted (only the translation kept). The 25 import-log errors are the fresh-worktree first import (empty `.godot/` cache: the theme loads before its Barlow fonts are imported), not this patch. Headless GDScript lookup: **67/67** `strings.csv` rows match the translation, 0 mismatches; the new deadline copy resolves |
+
+**Not run:** a live interactive same-day takeover in `Main.tscn` (it needs a parent-phase save with a willing 16-year-old child on a season's day 1). The S1 fix is reasoned from the frame order above; the re-review may reproduce it or accept the static argument.
+
+### 10.4 Merge decision (TEAM §1a)
+
+The patch is small and UI-only, but it is Opus-authored C# and player-facing copy, and no model approves its own code. It routes to **Gemini 4 Neon** (UI jurisdiction: no sim, schema, persistence or `EffectiveRatings` paths) for a delta re-review of `8a5e644..3157736` (plus this docs commit) on `p13/13-6b-rereview-neon` in `.worktrees/13-6b-rereview-neon`. On PASS, Opus fast-forwards to the re-review head, ticks §6 box 3, merges `--no-ff` into `p13/integration`, reruns the gates post-merge, and logs it. `main` stays untouched (the owner's D8-A go-ahead).
