@@ -1,13 +1,13 @@
 # Task Brief: `13-6c` / `13-6d` — the parent phase: three jobs and backyard training
 
-**Author:** Claude Opus 5.5 (integration lead), 2026-11-27. **Status: PROPOSAL.** The owner decides D1–D11 (§3) after Gemini 4 Carbon's Math check (§9) and Opus's reconciliation. **Nothing is built from this brief until §3 records the owner's decisions.**
+**Author:** Claude Opus 5.5 (integration lead), 2026-11-27. **Status: PROPOSAL.** Gemini 4 Carbon's Math check (§9, PASS WITH AMENDMENTS) is reconciled in §10, and §§1–5 now carry one consistent set of signed numbers and contracts. The owner decides D1–D12 (§3). **Nothing is built from this brief until §3 records the owner's decisions.**
 
-**Recommended split (D11-A):** **13-6c, engine:** Claude Opus 5.5 authors it and Gemini 4 Carbon reviews. **13-6d, phone and content:** Claude Sonnet 5.5 builds it and Gemini 4 Neon reviews (Carbon reviews any part that touches a sim, schema or persistence path). This mirrors 13-6a/13-6b. D11-B keeps the owner's 2026-11-24 default instead: Sonnet builds everything and Carbon reviews. **Math:** Gemini 4 Carbon (every magnitude in §4 is a placeholder until §9 signs it). **Owner gates:** D1–D11 before the build; a playtest after 13-6d. **Spec:** [league_restructure.md](../design/league_restructure.md) §9.4 (`:246`, D4b-C); [13-6 brief](13-6_pipeline_draft_brief.md) §3 (`:80–84`), §4 item 8 (`:235–246`), §7 (`:343–350`); [heir_mechanics.md](../reference/heir_mechanics.md) §3, §4.2, §6; [high_school_person_layer.md](../reference/high_school_person_layer.md) §7 (nurture); [scope_realignment.md](../design/scope_realignment.md) §3.2 (stance). **Base:** `ac1a055` (`main` = `p13/integration`, schema v14). Every citation below was verified at `ac1a055`.
+**Recommended split (D11-A):** **13-6c, engine:** Claude Opus 5.5 authors it and Gemini 4 Carbon reviews. **13-6d, phone and content:** Claude Sonnet 5.5 builds it and Gemini 4 Neon reviews (Carbon reviews any part that touches a sim, schema or persistence path). This mirrors 13-6a/13-6b. D11-B keeps the owner's 2026-11-24 default instead: Sonnet builds everything and Carbon reviews. **Math:** Gemini 4 Carbon (every magnitude in §4 signed in §9, reconciled in §10). **Owner gates:** D1–D12 before the build; a playtest after 13-6d. **Spec:** [league_restructure.md](../design/league_restructure.md) §9.4 (`:246`, D4b-C); [13-6 brief](13-6_pipeline_draft_brief.md) §3 (`:80–84`), §4 item 8 (`:235–246`), §7 (`:343–350`); [heir_mechanics.md](../reference/heir_mechanics.md) §3, §4.2, §6; [high_school_person_layer.md](../reference/high_school_person_layer.md) §7 (nurture); [scope_realignment.md](../design/scope_realignment.md) §3.2 (stance). **Base:** `ac1a055` (`main` = `p13/integration`, schema v14). Every citation below was verified at `ac1a055`.
 
 ## 0. Preconditions for the build sessions
 
 1. Your own worktree (TEAM.md §3) from `origin/p13/integration` at or after the commit that records §3's decisions. Clean tree; the write check passes; at least 2 GB free on `C:`.
-2. §3 records the owner's D1–D11, and §9/§10 (Carbon's Math check and its reconciliation) are signed.
+2. §3 records the owner's D1–D12, and §9/§10 (Carbon's Math check and its reconciliation) are signed.
 3. Baseline on that head before any edit: build 0/0; MC default **623/623** with the normalized log SHA-256 **`c9f2caf8a972c0e64288c2fec9a1a28f0d6937cc3fba6eacab6a5cbf45c92aa2`** (the post-13-7 D7 anchor: CRLF→LF, `\d+(\.\d+)? ms` → `N ms`); CoreLoop 43/43; Gritty 363/363; NeedsDecay, Pipeline and Hustle harnesses green.
 4. 13-6d only: run `godot_scene_mapper` (or the Godot MCP) on `Assets/UI/BurnerPhone.tscn` before writing any `GetNode<T>()`.
 
@@ -27,13 +27,13 @@ The parent phase is where the game's "legacy" pillar ([GAME_VISION.md](../GAME_V
 | The release text | `PipelineBeatWriter.OnReleased` (`PipelineBeatWriter.cs:131–138`); `pipeline.release.{college,pro}.parent_phase` (`strings.csv:21, 23`: "Time to focus on your family.") | The phase's opening beat |
 | **Nurture axes** | `Child_Development` (`SchemaDefinitions.sql:511–527`): `care`, `coaching`, `funding` (0–100, neutral 50), `neglect` (from 0). `PersonQueries.AdjustChildAxis` (`:714`, clamped in SQL; axis order `:231–236`, coaching = 1) | **Training's natural output, with no DDL** |
 | The nurture fold | `NurtureBlend` (`NurtureBlend.cs`): `PotentialDelta` = 8 × (0.5 × coaching + 0.3 × funding − 0.5 × neglect terms), capped ±8 (`:33–39, 56–64`); `InterestDelta` from care and neglect, capped ±20 (`:45`). Folded **once** at takeover (`WriteHeirHandoffInBatch`, `CareerManager.cs:1189–1235`), then the axes reset to neutral. Neutral axes = no row, byte-identical (the §7.3 identity) | A calibrated, capped, identity-safe channel already wired to the takeover |
-| The weekly family tick | `ChildRearingService.ProcessDay` (`ChildRearingService.cs:97–150`): every 7 days, `care`/`funding`/`neglect` move from family hours and the funding commitment; child support is charged (`FundsImpulseEvent` after commit). **It never writes `coaching`**: only gritty events do (`EventConsequenceApplier.ApplyChildDevelopment`, `:492`) | Training can own `coaching` without fighting the tick |
+| The weekly family tick | `ChildRearingService.ProcessDay` (`ChildRearingService.cs:97–153`): every 7 days, `care`/`funding`/`neglect` move from family hours and the funding commitment; child support is charged (`FundsImpulseEvent` after commit, `:151`). Neutral: 3 family hours a week (`CareNeutralHoursPerWeek`, `:47`) and $50/wk funding (`:116–118`); 0 hours gives `care` −2/wk, and 0 hours with $0 funding gives `neglect` +3/wk (`:113–121`). `GameManager.OnChildRearingDayAdvanced` peeks the week's family hours and clears them in the same handler (`GameManager.cs:1425–1436`). **It never writes `coaching`**: only gritty events do (`EventConsequenceApplier.ApplyChildDevelopment`, `:492`) | Training can own `coaching` without fighting the tick |
 | The phone's Family tab | `BurnerPhone.RefreshFamilyTab` / `BuildChildCard` (`BurnerPhone.cs:1603–1651`): per-child Care/Coaching/Funding/Neglect bars and the weekly funding slider, refreshed once per day | The parent phase's home screen already exists |
 | Decision cards | 13-6b `BurnerPhone.Pipeline.cs`: the engine exposes `TryGetPending…` and `Resolve…`; the card shows a deadline; an unanswered choice resolves by the engine's rule; the clock never stops (`:1–30`, `:301–318`) | The job-choice card's pattern |
 | Presence and the League tab | 13-7: `#Status_Family` with the `tier` key cleared (`RichPresenceWriter.cs`); `LeagueScreen` hidden while the tier is unknown (`LeagueScreen.cs:106, 120, 153`) | Already correct for the phase |
-| Work and pay | `LegalWork` pays $25/hr (`ActionCatalog.cs:150`); `HustleWork` has the same needs drain and $0 pay (`:167`); `DaySchedule.WorkHours`/`FamilyHours`; `GameManager.GetMandatoryBlocksFor` forces School/Practice/Game (`GameManager.cs:1201–1229`), `SubmitDaySchedule` enforces them (`:1246–1279`) | A job is a forced Work block, like School |
+| Work and pay | `LegalWork` pays $25/hr (`ActionCatalog.cs:150`); `HustleWork` has the same needs drain and $0 pay (`:167`); `DaySchedule.WorkHours`/`FamilyHours`; `GameManager.GetMandatoryBlocksFor` forces School/Practice/Game (`GameManager.cs:1201–1225`), `SubmitDaySchedule` enforces them (`:1246–1279`) and picks the Work definition (`AvatarWorkIsHustle`, `:1275`; `LifeSimManager.cs:679`). **Only a planned day runs blocks:** an unplanned day ticks 24 free autopilot hours (`LifeSimManager.cs:575–587`), and family hours accrue only on planned days (`:709`) | A job is a forced Work block, like School, but only on a planned day; see A3 (§4.3) |
 | The stance seam | `StanceScheduleBuilder.Build(…, bool hasJob)` ([scope_realignment.md](../design/scope_realignment.md) `:130`, SR-2a, not built) | Jobs plug into the stance engine later through `hasJob` |
-| Seeded resolvers | Hustles: pure Layer 1 in `Assets/Simulation/Hustles/`, Layer 2 `HustleService` applies results in its own batch with its own RNG, seeded off the boot chain (`GameManager.cs:709–711`) | The resolver/applier split. A new boot draw would shift every later consumer (`GameManager.cs:597–608`), so the training seed must not take one |
+| Seeded resolvers | Hustles: pure Layer 1 in `Assets/Simulation/Hustles/`, Layer 2 `HustleService` applies results in its own batch with its own RNG, seeded from `TickCount64 ^ 0xD1A5…` outside the boot chain (`GameManager.cs:709–711`). The persisted-once seed precedent is `SeasonScheduler.ScheduleSeedKey` (`GameManager.cs:496–500`) and `PipelineManager.EnsureSeed` (`PipelineManager.cs:191`); derived streams are `PostseasonStreams.MixCombine` chains over ASCII tags (`PostseasonStreams.cs:19–35`, `PipelineRules.cs:164–168, 730–731`) | The resolver/applier split. A new boot draw would shift every later consumer (`GameManager.cs:597–608`), so the parent-phase seed must not take one |
 | Events for an unrostered subject | The poll reads a `NULL` team as tier **−1** (`NarrativePollQueries.cs:103`), which defeats every shipped `>=`/`==` tier gate (`GrittyEventModel.cs:92–100`) | Today the parent sees only tier-free events; job content must gate on flags |
 | Secrecy | A hidden child has **no `Child` edge** ([temptation_and_lineage.md](../design/temptation_and_lineage.md) `:121, :216`); every pool goes through `LineageQueries.IsKin` (`:288`) | Training lists `Child` edges only, so it is blind to hidden children by construction |
 | Current ratings of a child | Born at potential − `ProspectDiscount` (20) × youth weight (`DevelopmentManager.cs:78, 222`; `CareerManager.cs:743–758`). "Unrostered people never develop" (`DevelopmentManager.cs:284`); growth closes `GrowthRate` 0.5 of the gap a season once rostered (`:36`) | A potential bump becomes visible through the heir's first seasons |
@@ -45,7 +45,7 @@ The parent phase is where the game's "legacy" pillar ([GAME_VISION.md](../GAME_V
 2. No training: nothing a player does moves `coaching`, and nothing shows a child getting better.
 3. No pacing: an undrafted senior is about 22. With a child born in HS or College, the child is about 0–5 at the release, so the phase can run 11–16 seasons with no baseball.
 4. No content: at tier −1, almost no gritty event fires, so the phase is quiet.
-5. Two 13-6 §7 carry-overs: retirement-age succession still requires 19 (`HeirGeneticsProfile.MaturityAge`, `HeirGenetics.cs:61`; `EvaluateSuccession`, `CareerManager.cs:958–1029`), so a 42-year-old with a 15-year-old willing child gets `NoPlayableHeir` game over; and `banned_for_life` (`PipelineRules.cs:18`) has no pipeline effect (`PipelineManager.cs:348`).
+5. Two 13-6 §7 carry-overs: retirement-age succession still requires 19 (`HeirGeneticsProfile.MaturityAge`, `HeirGenetics.cs:61`; `EvaluateSuccession`, `CareerManager.cs:958–1029`), so a 42-year-old with a 15-year-old willing child gets `NoPlayableHeir` game over, and one whose only child is a young child with interest below 40 gets `NoWillingHeir` (the interest check runs before the age check, `:997–1004`), even though the parent phase's `care` could still win that child over; and `banned_for_life` (`PipelineRules.cs:18`) has no pipeline effect (`PipelineManager.cs:348`).
 6. [GAME_VISION.md](../GAME_VISION.md) `:32` still says only "any willing child aged 19+" succeeds. The takeover at 16 isn't in the vision doc.
 
 ## 2. Hard constraints
@@ -57,7 +57,8 @@ The parent phase is where the game's "legacy" pillar ([GAME_VISION.md](../GAME_V
     - new `Assets/Data/Family/parent_jobs.json` and its loader (job profiles as data);
     - `Assets/Data/Database/GameStateQueries.cs` (new keys only);
     - `Assets/Core/GameManager.cs` (wiring, the job's forced block, intent APIs, the D6 fast-forward), `Assets/Core/CoreEvents.cs` (only if D9 adds an event);
-    - `Assets/Simulation/Baseball/CareerManager.cs` **only** for D7-A;
+    - `Assets/Simulation/Baseball/CareerManager.cs` and `PipelineManager.cs` **only** for D7-A (the retirement-release hand-off, §4.3 item 4);
+    - `Assets/Simulation/Baseball/PipelineRules.cs` **only** for one additive pure overload of `RoleRatingSum` over a role and three tool values (the existing `RoleRatingSum(in RosterPlayerRow)` keeps byte-identical results), for `expertisePp` (§4.2);
     - `Tools/CoreLoopHarness`, `Tools/MonteCarloHarness`, `Tools/PipelineHarness` (new checks);
     - docs: this brief, `progress.md`, spec §9.4, heir_mechanics §6, GAME_VISION `:32`.
   - **13-6d (phone and content, Sonnet):**
@@ -66,28 +67,30 @@ The parent phase is where the game's "legacy" pillar ([GAME_VISION.md](../GAME_V
     - `Assets/UI/Theme/` (variations only);
     - `Assets/Localization/strings.csv` (`ui.family.*`, `ui.job.*`, `family.*` keys; re-import `strings.en.translation` and keep only the translation);
     - new `Assets/Narrative/Events/Content/parent_phase_events.json` (D10);
+    - D12-A only: `Assets/Narrative/Events/Content/marriage_and_family_events.json`, adding the subject `age <= 50` condition to the events whose choices `conceive_child` and nothing else;
     - `Tools/MonteCarloHarness` `ui-strings` extension;
     - docs: this brief and `progress.md`.
 - **No DDL under D9-A.** v14 stays; the new state is `Game_State` keys, existing `Child_Development` axes and engine-written `Entity_Flags`. Validate every key and column against a **scratch copy** (`validate_sqlite_schema`), never the live save. A D9-B table waits for the v15 freeze gate with L-1.
-- **Calibration (GEMINI.md §10):** every magnitude is a Gemini 4 Carbon Math value. With **no job, no training session and no parent phase**, every path is bit-identical. The guard world has no avatar, so MC default stays byte-identical outside the lines the slice adds (reconstruction recipe from `c9f2caf8…`). Pro guard PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`. `ActionCatalog`, `NeedsEngine`, `UtilityCalculator` and `NurtureBlend`'s constants stay byte-identical (NeedsDecay 117/117) unless §9 changes a `NurtureProfile` value with an explicit sanction.
+- **Calibration (GEMINI.md §10):** every magnitude is a Gemini 4 Carbon Math value (signed in §9, reconciled in §10; §4.1/§4.2 hold the final numbers). With **no job, no training session and no parent phase**, every path is bit-identical. The guard world has no avatar, so MC default stays byte-identical outside the lines the slice adds (reconstruction recipe from `c9f2caf8…`). Pro guard PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`. `ActionCatalog`, `NeedsEngine`, `UtilityCalculator` and `NurtureBlend`'s constants stay byte-identical (NeedsDecay 117/117) unless §9 changes a `NurtureProfile` value with an explicit sanction.
 - **Boundaries (GEMINI.md §1):** the job is Life/Economy-side (schedule, wage, stress, flags), and training is a pure rules file on the Baseball side applied by an Economy service, exactly like `ChildRearingService` → `Child_Development` → `NurtureBlend`. Life and Baseball exchange nothing but the bus and the DB; the CoreLoop boundary scan stays clean.
 - **Presentation never drives the sim** and never uses the sim's `RngState`. The drill scene renders, has its own RNG for its visuals, and sends one intent: a session with a drill score in [0, 1]. The resolver alone draws the result. Skipping the drill or autopilot sends the neutral score (no tilt). This is the Clutch Moment rule (GEMINI.md §11), applied here.
-- **No boot draw.** The training seed is a `Game_State` key written once on first use (from the tick count, the hustle precedent); every roll derives from it by (day, child id, session index). A reload replays the same result, so saving and reloading can't reroll a failure.
+- **No boot draw.** One parent-phase seed, `Game_State['parent_phase_seed']`, is written once on first use by either service (live: `unchecked((ulong)Environment.TickCount64) ^ 0x5452_4149_4E53_4544UL | 1UL`; harnesses: a fixed seed), the `ScheduleSeedKey`/`EnsureSeed` precedent. Every roll is a `MixCombine` stream over it (§4.2, A5): never plain XOR, never `string.GetHashCode()` (randomized per process in .NET). A reload replays the same result, so saving and reloading can't reroll a failed session or a tip week.
 - **Secrecy (GEMINI.md §10):** the trainable list is `PlayerQueries.LoadChildrenOf` over `Child` edges: born, adopted in, or reclaimed (L-6, when built). Never a `Biological_Parentage` read. No training UI, text or count may hint at a hidden child.
 - **Content lines:** no avatar pronouns (the avatar can be any gender); names in text only. Nothing explicit. Temptation or substance **boosts** stay out of this slice: the adults-only loader guard keys on tier ≥ College and the parent reads tier −1 (Phase L owns that guard). A child is never harmed in play: a failed hard session costs `care` (burnout), never an injury.
 - **Text:** every player-facing string is a strings-table key; phone texts resolve `{tokens}` at write time.
 - **Styling and focus:** Theme family only; focus navigation on every new control (GEMINI.md §7). The drill is playable by keyboard/controller and honors reduce-motion.
 - **Must not block Gate 2.** 13-6c's `GameManager` edits are additive and stay out of SR-2a's `SubmitWeeklyStance`/`AdvanceWeek` names. D6's fast-forward is written so that SR-2a's `AdvanceWeek` can call the same interrupt rules (§4 item 6).
 
-## 3. Owner decisions (D1–D11)
+## 3. Owner decisions (D1–D12)
 
-Recommendations first. **Status: OPEN.** Every number below is a placeholder that Carbon's §9 replaces.
+Recommendations first. **Status: OPEN.** The numbers below are Carbon's signed §9 values as reconciled in §10 (A1–A5 folded in); the owner decides the options, not the arithmetic.
 
 **D1 — The three jobs.**
 - **A (recommended): Coach, Steady, Nightlife** (profiles in §4.1).
-  - **Coach** (a youth and HS assistant coach): little money, the most training and the best drills.
-  - **Steady** (shift work): the most money, the least time and the most fatigue.
-  - **Nightlife** (a host at a sports bar that trades on your name): good, uneven money and free days, with nights of vice and absence.
+  - **Coach** (a youth and HS assistant coach): $650/wk for 20 hours, 3 training sessions a week with +10 pp drill odds, stress −5 and `care` +0.25 a week. The least money, the best training and the warmest household.
+  - **Steady** (shift work): $1,000/wk for 40 hours (the `LegalWork` rate), 2 sessions with −5 pp odds, stress +10 a week. The most money, the least time and the most fatigue.
+  - **Nightlife** (a host at a sports bar that trades on your name): $450 plus a seeded $0–$800 tip roll (expected $850; $450–$1,250 a week) for 24 night hours, 3 sessions with −5 pp odds, recklessness +1, stress −3 and `care` −0.25 a week, waived in any week with 5+ family hours. Uneven money, free days and nights away. **Its pitfall is real:** with no training, a child's `care` falls from 50 to 0 over about 4 years, and a child at `care` 0 is willing at 16 only half the time (§9 Q4). Easy training fully offsets it.
+  - All three stay solvent with 1–3 children and the $50/wk neutral funding over 12 seasons (§9 Q1); Steady out-earns Nightlife's expected wage by about $15–$30/wk net.
 - B: Coach, Steady, and **Own business** (a batting cage: capital up front, uneven income, debt risk) in place of Nightlife.
 - C: two jobs and "between jobs" (no wage, all the time in the world, funds pressure).
 
@@ -98,24 +101,26 @@ Recommendations first. **Status: OPEN.** Every number below is a placeholder tha
 
 **D3 — Job, schedule and stance.**
 - **A (recommended):**
-  - The job is a **forced Work block** on its days, added to `GetMandatoryBlocksFor` like School. Its hours tick the existing `HustleWork` drain ($0), so `ActionCatalog` stays byte-identical. `ParentJobService` settles the wage, stress and flags **weekly**, on the `ChildRearingService` cadence, after commit.
-  - The non-job days keep the shipped schedule, including the hustles.
+  - The job is a **forced Work block** on its shift days, added to `GetMandatoryBlocksFor` like School. Its hours tick the existing `HustleWork` drain ($0), so `ActionCatalog` stays byte-identical and the job never also earns `LegalWork`'s $25/h. `ParentJobService` settles the wage, stress, `care` and flags **weekly**, on the `ChildRearingService` cadence, after commit.
+  - **A standing day plan (A3):** while the phase is on, any day the player doesn't plan (including every fast-forwarded day) runs a standing plan: 8 h sleep, the job's shift on shift days, and 1 family hour on three days of each 7-day tick (3 h a week, `ChildRearingService`'s neutral). Without it, an unplanned day skips the job block and the family hours, so fast-forward alone would drain every child's `care` by 2 a week and pile on `neglect` (§9 B1).
+  - The non-job days keep the shipped schedule when the player plans them, including the hustles.
   - When SR-2a lands, the same profile feeds `StanceScheduleBuilder.Build(…, hasJob: true)`, and the stance multiplies upkeep on top. Grind + Steady compound fatigue; Party + Nightlife compound vice.
 - B: wait for SR-2a and build the jobs on the stance engine only.
 
 **D4 — The mini-game ("Backyard Drills").**
 - **A (recommended): a short timing drill.**
   - Three reps on a moving meter: hitting (a front-toss timing window), pitching (a release window) or fielding (a glove window), by the child's role.
-  - The drill's score in [0, 1] becomes a **capped, centered tilt** on a seeded success roll. 0.5 is no tilt; the cap is ±15 percentage points (placeholder). Skipping the drill and autopilot both play at 0.5.
+  - The drill's score in [0, 1] becomes a **capped, centered tilt** on a seeded success roll. 0.5 is no tilt; the cap is ±15 percentage points (Carbon: the right size). Skipping the drill and autopilot both play at 0.5. Good drills are what carry a Coach child from +3 to +4 potential (§9 Q5); autopilot is never punished.
   - About 20 seconds; skippable; reduce-motion swaps the meter for a three-choice prompt with the same scoring.
 - B: choice only (focus + intensity), no skill input.
 - C: wait for SR-3b's batting practice and reuse it (couples D4b to Gate 2 work).
 
 **D5 — What training changes.**
 - **A (recommended): the existing nurture axes only.**
-  - Success raises `coaching`, plus `care` on Easy and Normal (time together). A failed **Hard** session lowers `care` (pushed too hard).
-  - At takeover the shipped `NurtureBlend` folds them: coaching moves potential (max +4 a rating from coaching alone, +6 with funding; the cap is ±8), and care moves interest (cap ±20). That means a trained child is likelier to be **willing** as well as better.
-  - No DDL, the identity is already proven, and the fold is already harness-tested.
+  - Success raises `coaching`, plus `care` on Easy and Normal (time together). A failed **Hard** session lowers `care` (pushed too hard). Gains accrue in hundredths of a point (basis points), so progress is steady across the whole childhood, capped at +6 `coaching` a season per child, with a slow fade in weeks a child isn't trained (§4.2).
+  - At takeover the shipped `NurtureBlend` folds them: coaching moves potential, and care moves interest (cap ±20). That means a trained child is likelier to be **willing** as well as better.
+  - **What it's worth (§9 Q2–Q4):** about 10 seasons of Coach + Normal training ends near `coaching` 92: **+3 to every potential rating** on autopilot, **+4** with good drills, up to **+6** with $150/wk funding. Steady with one child: about +3; Steady split across three children: about +1 each. Easy or Normal training makes a child **certain to be willing** at 16 (baseline 97.9%); Hard-only training or untrained Nightlife leaves it a coin flip.
+  - No DDL, `NurtureProfile` stays byte-identical (no sanction needed), the identity is already proven, and the fold is already harness-tested. The 3-generation dynasty drift is bounded (fixed point 55–58 for a civilian partner, 65–68 for an elite one) and moves no league band (§9 Q3).
 - B: A plus a **readiness** head start: a share of each success also closes the child's current-to-potential gap at the takeover, so the 16-year-old plays better on day one. That needs a new column or table (v15 DDL with L-1) and new Math.
 
 **D6 — Cadence and pacing.**
@@ -126,13 +131,13 @@ Recommendations first. **Status: OPEN.** Every number below is a placeholder tha
     - a gritty event with choices;
     - stress at or above the threshold;
     - funds at or below 0;
-    - a decision card (the job, the takeover);
+    - a decision card (the job, a pending succession or takeover choice);
     - a child's birthday that opens or closes training (ages 5 and 16).
 - B: "Next week" only.
 - C: no fast-forward (Skip Day only). Not viable: about 4,000 presses for a 12-year phase.
 
 **D7 — Retirement-age succession (13-6 §7 carry-over).**
-- **A (recommended):** a rostered avatar who retires (age 42 or the health floor) with **no** eligible 19+ heir, but with at least one child under 19, **enters the parent phase** instead of `NoPlayableHeir` game over. The takeover at 16 (or the shipped 19+ succession, if a child is already of age and willing) follows. This is heir_mechanics §6's foreseen "wait for the kid to grow up" mode. `NoPlayableHeir` stays in the enum for saves and fixtures. It's a `CareerManager` change, so Opus authors it in 13-6c and Carbon reviews it.
+- **A (recommended):** a rostered avatar who retires (age 42 or the health floor) with **no** eligible 19+ heir **enters the parent phase** instead of game over (`NoPlayableHeir` or `NoWillingHeir`), when the takeover rule says the family still has a future: a child under 16 (whatever the child's interest today, since the phase's `care` can still win them over), or a willing, unrostered child of 16–18. A willing 16–18-year-old takes over in the same rollover (0 seasons in the phase); a child under 16 takes over at 16. The phase runs 0–15 seasons, and the parent is 42–57 at the takeover (§9 Q6; a health-floor retiree is younger). This is heir_mechanics §6's foreseen "wait for the kid to grow up" mode. Only a save with the pipeline attached gets it, so `NoPlayableHeir` and the `lineage-failure` MC fixtures stay exactly as they are. It's a `CareerManager`/`PipelineManager` change, so Opus authors it in 13-6c and Carbon reviews it.
 - B: status quo (`NoPlayableHeir` ends the game).
 
 **D8 — `banned_for_life`.**
@@ -144,12 +149,12 @@ Recommendations first. **Status: OPEN.** Every number below is a placeholder tha
   - `parent_job` (text id);
   - `parent_job_since_day`;
   - `parent_job_pending_since_day` (the card);
-  - `training_seed`;
+  - `parent_phase_seed` (one seed for training sessions and Nightlife tips, A5);
   - `training_week_start_day`;
   - `training_sessions_used`;
-  - the per-child standing plan as one key per child (`training_plan:<childId>`, text `focus/intensity`) **or** packed in one text key.
+  - one text key per child, `training_plan:<childId>` = `focus:intensity:coachBp:careBp:seasonYear:seasonCoachBp` (the standing plan, the signed sub-point carries and the season cap's running total, A2). It is written on first use only, so a child no one trains or no job touches has no key.
 
-  Outcomes go to `Child_Development` (existing). Engine-written `Entity_Flags`: `job_coach | job_steady | job_nightlife` and `parent_phase` (the stance-flag precedent), for content gating. No new bus event; the wage and stress ride `FundsImpulseEvent`/`StressImpulseEvent`.
+  Outcomes go to `Child_Development` (existing), in whole points. Engine-written `Entity_Flags`: `job_coach | job_steady | job_nightlife` and `parent_phase` (the stance-flag precedent), for content gating. No new bus event; the wage and stress ride `FundsImpulseEvent`/`StressImpulseEvent`.
 - B: new tables (`Parent_Job`, `Child_Training_Plan`, `Child_Training_Log`) in v15 with L-1, for history and achievements.
 
 **D10 — Content for a tier −1 parent.**
@@ -178,67 +183,127 @@ Recommendations first. **Status: OPEN.** Every number below is a placeholder tha
   13-6d starts after 13-6c merges. The same shape as 13-6a/13-6b.
 - B: the owner's 2026-11-24 default: Sonnet builds all of it from this brief; Carbon reviews the sim/persistence parts, Neon the UI; Opus integrates.
 
+**D12 — A conception age cap in the parent phase (new, from §9 Q6).** Nothing caps the parent's age for `conceive_child` (`CareerManager.OnChildConceptionRequested`, `:1710–1743`). If a marriage event conceives a child at 52 and the older child walks away at 16, the newborn stretches the phase until the parent is about 68. A playing avatar retires at 42, so in practice only the parent phase reaches these ages.
+- **A (recommended):** a content gate. 13-6d adds the subject `age <= 50` condition (event conditions already read `age`, `GrittyEventJson.cs:195`) to the shipped events whose choices `conceive_child` (`marriage_and_family_events.json`), and the new parent-phase events never conceive. No engine change; Phase L's fertility rules can replace it later.
+- B: no cap (long phases are rare and the player can still steer away).
+- C: leave it to Phase L's fertility rules.
+
 **Proposed TEAM.md §2 rows** (Opus adds them once D11 is decided):
 
 | Slice | Author | Reviewer | Owner gate |
 | :-- | :-- | :-- | :-- |
-| **13-6c** parent-phase engine (jobs, training rules, pacing, D7) | Claude Opus 5.5 (+ Gemini 4 Carbon: Math, §9) | Gemini 4 Carbon | D1–D11 |
+| **13-6c** parent-phase engine (jobs, training rules, pacing, D7) | Claude Opus 5.5 (+ Gemini 4 Carbon: Math, §9) | Gemini 4 Carbon | D1–D12 |
 | **13-6d** parent-phase phone, drill and content | Claude Sonnet 5.5 | Gemini 4 Neon (UI); Gemini 4 Carbon (content gates) | Playtest |
 
 ## 4. Outputs
 
-### 4.1 Job profiles (D1-A; data in `parent_jobs.json`; every number a Carbon placeholder)
+### 4.1 Job profiles (D1-A; data in `parent_jobs.json`; Carbon's signed values, §9 A1)
 
-| Job | Days and hours | Wage | Sessions/week | Drill odds | Weekly side effects | Flag | Gate |
-| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| **Coach** | Mon–Fri, 4 h (afternoon) | $15/h → $300 | 3 | +10 pp (you know how to teach) | stress −2; `care` +1 a week (the kid comes to practice) | `job_coach` | not `banned_for_life` (D8-A) |
-| **Steady** | Mon–Fri, 8 h | $25/h → $1,000 (the `LegalWork` rate) | 2 | −5 pp (tired) | stress +3; the full Work-block needs drain | `job_steady` | none |
-| **Nightlife** | Thu–Sun, 6 h (nights) | $600 + a seeded $0–900 tip roll | 3 | −5 pp the morning after a shift | recklessness +1; stress −1; `care` −1 a week unless family hours ≥ 3 | `job_nightlife` | none |
+| Job | Shift days and hours | Weekly wage | Sessions/week | Drill odds | Weekly side effects (`ParentJobService`) | Flag | Gate |
+| :-- | :-- | :-- | --: | --: | :-- | :-- | :-- |
+| **Coach** | Mon–Fri, 4 h (afternoon) | **$650** ($32.50/h: an HS stipend plus private lessons) | 3 | **+10 pp** (you know how to teach) | stress **−5**; `care` **+25 bp** (+0.25 a week: the kid comes to practice) | `job_coach` | not `banned_for_life` (D8-A) |
+| **Steady** | Mon–Fri, 8 h | **$1,000** ($25/h, the `LegalWork` rate) | 2 | **−5 pp** (tired) | stress **+10**; the full `HustleWork` needs drain | `job_steady` | none |
+| **Nightlife** | Thu–Sun, 6 h (nights) | **$450 + a seeded $0–$800 tip roll** (expected $850; the `NGHTTIPS` stream, §4.2) | 3 | **−5 pp** | recklessness **+1**; stress **−3**; `care` **−25 bp** (−0.25 a week), waived in a week with ≥ 5 family hours | `job_nightlife` | none |
 
-Reference: weekly child support is $20 a child, plus any funding commitment (`ChildRearingService.cs:37`).
+- **The wage is a fixed weekly amount**, settled on the 7-day tick whatever the calendar's shift count that week (weekdays restart each 365-day season, so one tick a year holds an extra Monday and no Sunday: 6 shifts for Coach/Steady, 3 for Nightlife).
+- **The side effects** are weekly: stress rides `StressImpulseEvent` (signed), the wage rides a funds write plus `FundsImpulseEvent` after commit, and recklessness uses the person-stat write `HustleService` already uses. `care` goes to **every** `Child`-edge child under 16 who is unrostered, through the child's basis-point carry (§4.2), including children aged 0–4.
+- **Why these numbers (§9 Q1):** an unrostered parent pays the whole $70/wk cost of living and all free-hour spending (board share 1.0), about $520 (Coach), $716 (Nightlife) and $802 (Steady) a week before children. The placeholder $300 Coach spiraled into `FundsDepleted` almost every week, and the placeholder Nightlife (expected $1,050) beat Steady on money and sessions alike. At the signed values every job stays solvent over 12 seasons with 1–3 children and $50/wk neutral funding.
+- **Stress (§9 Q5):** passive relief is about 13.6 a day, so a +3 vanished within hours. +10 nudges an already frayed Steady parent toward the ≥ 70 interrupt on payday without touching a calm week.
+
+Reference: weekly child support is $20 a child, plus any funding commitment (`ChildRearingService.cs:37`); $50/wk holds `funding` at its neutral 50, and $0/wk lets it drift down 1 a week.
 
 ### 4.2 Training rules (D4–D6-A; `ChildTraining.cs`, pure)
 
+Pure `int` arithmetic throughout (rounding: `MidpointRounding.AwayFromZero`, the `NurtureBlend` discipline). Carbon's signed values (§9 A2, A5).
+
 - **Trainable:** a `Child` edge of the avatar, age 5–15, unrostered.
-- **Budget:** sessions a week = the job's count; one session trains one child.
-- **Odds:** `p = clamp(base(intensity) + jobBonus + expertise(parent) + tilt(score) − fatigue(stress), 5%, 95%)`.
-  - `base`: Easy 80%, Normal 60%, Hard 40%.
-  - `expertise`: 0 to +10 pp from the parent's own role-rating sum. A former Pro teaches better.
-  - `tilt`: ±15 pp, linear and centered on a score of 0.5.
-  - `fatigue`: 0 to −10 pp above stress 60.
-- **Outcome:**
+- **Budget:** sessions a week = the job's count (Coach 3, Steady 2, Nightlife 3), shared by every trainable child; one session trains one child. Autopilot spreads unplayed sessions round-robin over the trainable children, ordered by `player_id`.
+- **Odds (integer percentage points, clamped to [5, 95]):** `pPp = clamp(basePp + jobBonusPp + expertisePp + tiltPp − fatiguePp, 5, 95)`.
+  - `basePp`: Easy 80, Normal 60, Hard 40.
+  - `jobBonusPp`: §4.1 (Coach +10, Steady −5, Nightlife −5).
+  - `expertisePp = clamp(round(10 × (peakRoleSum − 135) / 90), 0, 10)`, where `peakRoleSum = max(RoleRatingSum(current), RoleRatingSum(potential))` over the parent's role (`PipelineRules.RoleRatingSum`'s reliever stamina credit, through the pure overload in §2). The peak keeps a 42-year-old's age decline from erasing what they know: 135 or less gives 0, a league-average 150 gives +2, 180 gives +5, 225 or more gives +10.
+  - `tiltPp = round(30 × (clamp(score, 0, 1) − 0.5))`: −15 to +15, and exactly 0 at 0.5.
+  - `fatiguePp = clamp(round(10 × (stress − 60) / 40), 0, 10)`: 0 at stress ≤ 60, 10 at 100. It stacks with Steady's chronic −5 pp; this one is acute (event spikes), so they don't double-count.
+- **Outcome, in basis points (100 bp = 1 axis point):** `scale = clamp((100 − coaching) / 50, 0, 1)` reads the child's current whole `coaching`.
 
-  | Intensity | Success | Failure |
-  | :-- | :-- | :-- |
-  | Easy | `coaching` +1, `care` +1 | nothing |
-  | Normal | `coaching` +2, `care` +1 | nothing |
-  | Hard | `coaching` +4 | `care` −2 |
+  | Intensity | Success: `coaching` | Success: `care` | Failure |
+  | :-- | :-- | :-- | :-- |
+  | Easy | `+max(1, round(5 × scale))` bp | +18 bp | nothing |
+  | Normal | `+max(1, round(9 × scale))` bp | +12 bp | nothing |
+  | Hard | `+max(1, round(15 × scale))` bp | 0 | `care` −25 bp |
 
-  Gains scale by `(100 − coaching) / 50`, clamped to [0, 1] (diminishing returns). **Carbon decides** whether `coaching` also decays toward 50 in a week with no session (skills fade), and the per-season cap. At these placeholders, Normal training saturates `coaching` within about a season, so a cap or the decay is required.
-- **Roll:** `PipelineRules.Stream`-style: `RngState(training_seed ⊕ hash(childId) ⊕ day ⊕ sessionIndex)`, one draw per session.
-- **Autopilot:** the standing plan at a score of 0.5; the plan's default is Normal, the child's role.
+  The `max(1, …)` floor removes the integer stalls whole-point gains hit (Easy at 76, Normal at 88, Hard at 94; §9 Q2). No `coaching` gain once the axis is 100.
+- **The carry:** `coachBp` and `careBp` live in `training_plan:<childId>` (§3 D9) and are signed. Whenever a carry reaches ±100 or beyond, the whole points move to `Child_Development` through `PersonQueries.AdjustChildAxis` (truncating toward zero), and the remainder stays, so a carry is always within (−100, +100). This is `LifeSimManager.PersonRuntime.Unflushed`'s discipline (`LifeSimManager.cs:58–62`).
+- **The season cap:** `SeasonCoachingCapBp = 600` (+6 `coaching` a child a season). `seasonCoachBp` resets when `seasonYear` advances, and a gain is trimmed to what the cap still allows.
+- **The fade:** `IdleCoachingDecayBp = 6` (−0.06 a week, about −3 a season). At week's end, every trainable child who got **no** session that week loses 6 bp of `coaching`, never below 50 (no fade at `coaching` 50 with a zero carry).
+- **Streams (A5, replacing plain XOR, which repeats 727 of a season's 1,095 seeds, and `string.GetHashCode()`, which changes per process):**
+
+  ```csharp
+  public const ulong TrainingStreamTag = 0x4348_4C44_5452_4E47UL; // "CHLDTRNG"
+  public const ulong NightTipsStreamTag = 0x4E47_4854_5449_5053UL; // "NGHTTIPS"
+
+  public static ulong HashId64(string id) // FNV-1a 64 over UTF-16 code units
+  {
+      ulong h = 0xCBF2_9CE4_8422_2325UL;
+      for (int i = 0; i < id.Length; i++) { h = unchecked((h ^ id[i]) * 0x0000_0100_0000_01B3UL); }
+      return h;
+  }
+
+  public static RngState SessionStream(ulong seed, string childId, long day, int sessionIndex)
+  {
+      ulong h = PostseasonStreams.MixCombine(seed, TrainingStreamTag);
+      h = PostseasonStreams.MixCombine(h, HashId64(childId));
+      h = PostseasonStreams.MixCombine(h, unchecked((ulong)day));
+      h = PostseasonStreams.MixCombine(h, unchecked((ulong)sessionIndex));
+      return new RngState(h | 1UL);
+  }
+
+  // Tips: MixCombine(MixCombine(seed, NightTipsStreamTag), day) | 1UL, then NextInt(801) dollars.
+  ```
+
+  One draw per session (`NextInt(100) < pPp` succeeds). `sessionIndex` is the session's ordinal within its week (0..budget−1). Both tags are distinct from the five `PostseasonStreams` tags and the five `PipelineProfile` tags.
+- **Autopilot:** at week's end, each unplayed session resolves under the child's standing plan at a score of 0.5 (no tilt). The plan's default is Normal, in the child's role.
+
+**What the signed rules produce (§9 Q2/Q4; Opus re-ran the integer model and reproduced Coach + Normal exactly):**
+
+| Job and children | Plan | `coaching` after 10 seasons | Potential fold (`funding` 50) | `care` (one child) | Willing at 16 |
+| :-- | :-- | --: | :-- | --: | :-- |
+| Coach, 1 | Normal (autopilot) | 92.2 (70 at 3.3 seasons, 90 at 8.4) | +3; +4 with good drills | 100 | 100% |
+| Coach, 2 / 3 | Normal | 82.3 / 75.0 | +3 / +2 | 100 (each) | 100% |
+| Steady, 1 | Normal | 83.5 | +3 (up to +6 with $150/wk funding) | 100 | 100% |
+| Steady, 3 | Normal | about 57 | +1 | about 75 (each) | 100% |
+| Nightlife, 1 | Easy / Normal | 86.0 / 90.0 | +3 | 100 / about 32 | 100% / 89% |
+| Nightlife, 1 | no training | 50 | 0 | 0 | 50% |
+| Any job | Hard only | 86–94 | +3/+4 | near 0 | 50–57% |
 
 ### 4.3 The engine (13-6c)
 
 1. **`ParentJobService`** (Economy/Family):
    - It reads the job profile.
-   - Each week it settles the wage, stress and side effects in one batch, then publishes `FundsImpulseEvent`/`StressImpulseEvent`.
+   - Each week (the 7-day tick) it settles the wage (Nightlife's tips from the `NGHTTIPS` stream), stress, recklessness and the job's `care` bp in one batch, then publishes `FundsImpulseEvent`/`StressImpulseEvent`.
+   - **It receives the week's family hours as an argument** (for Nightlife's ≥ 5 h waiver): `GameManager.OnChildRearingDayAdvanced` peeks them once and passes the same value to `ChildRearingService.ProcessDay` and to `ParentJobService` before the clear (`GameManager.cs:1432–1435`). A separate subscriber after it would always read 0.
    - It keeps the `job_*` flags and `parent_phase` (set at the release, cleared at the takeover).
    - The 13-6b-style API: `TryGetPendingJobChoice` / `ResolveJobChoice(jobId)`. The deadline resolves to Steady (D2-A).
+   - On the takeover (`AvatarChangedEvent` to a rostered heir), it clears the job, its flags and any pending job card. This includes a card raised and taken over in the same rollover (D7-A with a willing 16–18-year-old).
 2. **`ChildTrainingService`** (Economy/Family):
    - The weekly budget, plus `PlayDrill(childId, score)`, which spends one session and resolves it now, and `SetPlan(childId, focus, intensity)`.
-   - At week's end, the plans auto-resolve the unplayed sessions (D6-A).
-   - Axis writes go through `PersonQueries.AdjustChildAxis`, one batch per resolution.
+   - `PlayDrill` commits the axis flush, `training_sessions_used` and `training_plan:<childId>` in **one batch** on the press, so a reload after a drill sees the result and the spent session, and a reload before it replays the same stream.
+   - At week's end, the plans auto-resolve the unplayed sessions (D6-A), and then the idle fade applies (§4.2).
+   - Axis writes go through `PersonQueries.AdjustChildAxis` in whole points, from the basis-point carry, one batch per resolution.
    - `TryGetLastResult(childId)` for the UI (in-memory; the text log persists it).
 3. **`GameManager`:**
-   - The job's hours go into `GetMandatoryBlocksFor` (as read-only rows on the schedule) while the phase is on.
-   - Wiring is subscribed after `ChildRearingService`, so its week reads the same week.
+   - The job's hours go into `GetMandatoryBlocksFor` (a new `WorkHours` on `MandatoryBlocks`, shown as read-only rows) on shift days while the phase is on.
+   - **The standing day plan (A3, fixing §9 B1):** while `Career.InParentPhase` and `!AvatarScheduleLocked`, whenever `!LifeSim.HasTodaySchedule`, `GameManager` queues the standing plan for `CurrentDay + 1` (the `SubmitDaySchedule` convention) at phase entry, at boot, after each day tick and after `ClearDaySchedule`. The plan is 8 h `Sleep` (`SleepProfile.OptimalHours`), the job's `WorkHours` on shift days, 1 h `FamilyHours` on the days where `day % 7 ∈ {1, 3, 5}`, and `TravelTime.ComputeHours(…)`. The family days follow the tick, not weekdays: weekdays restart each 365-day season, so three fixed weekdays would give 2 or 4 hours in one tick a year, and `RoundAwayFromZero(±0.5)` moves `care` by ±1. Coach and Steady also have only two off-days. The plan goes straight to `LifeSim.SetTodaySchedule` and sets `LifeSim.AvatarWorkIsHustle = true` on shift days. It **never** touches `_plannedWorkActivity`, which would arm a hustle session (`GameManager.cs:1353–1355`). A player's own `SubmitDaySchedule` replaces it for that day.
+   - **A planned shift day:** `SubmitDaySchedule` forces the job's `WorkHours` like School and sets `AvatarWorkIsHustle = true`, whatever `WorkActivity` was sent, so the job never also pays `LegalWork`'s $25/h (no double wage). On off-days the shipped behavior is unchanged: `LegalWork` side work pays and hustles arm as today.
    - Intent pass-throughs.
    - **D6 fast-forward:** `AdvanceUntil(targetDay)`, which stops on §3 D6's interrupts and returns a `WeekSummaryDto`-shaped result. SR-2a reuses the interrupt rules.
-4. **D7-A:** `CareerManager.EvaluateSuccession`'s `NoPlayableHeir` branch routes to `WriteReleaseStateInBatch(hasChildren: true)` semantics at the retirement rollover. The avatar is unrostered and `pipeline_retired`; the takeover at 16 follows.
+4. **D7-A (A4, fixing §9 S3; Opus's §10 R2 shape):**
+   - **Opt-in:** a `Career.EnableParentPhaseOnRetirement` property, default `false`, set `true` by `PipelineManager` when it attaches. A save or fixture without the pipeline (the MC `lineage-failure` suite, `Tools/MonteCarloHarness/Program.cs:3204–3223`) runs today's code exactly. `EvaluateSuccession` stays read-only and unchanged.
+   - **The rule:** in `CareerManager.OnSeasonRolledOver`, in each branch (autopilot, a stale pending choice, interactive), a succession outcome of `GameOver(NoPlayableHeir | NoWillingHeir)` with the opt-in on, **and** `EvaluateTakeover(...)` not `GameOver`, does **not** persist the game-over. It sets an in-memory `RetirementReleasePending` instead. `EvaluateTakeover` already says "a child under 16, or a willing, unrostered 16+ child with ratings", the same rule the pipeline applies at 16, so the entry rule and the takeover can never disagree.
+   - **The release:** `PipelineManager.RunRollover`, later in the same `SeasonRolledOverEvent` pump (the avatar is still rostered, so `ActiveAvatarId()` returns them), calls its existing `ReleaseAvatar(tier)` for a pending retirement release, guarded so no later pass touches the avatar again. Everything after that is shipped code: `Move(null)` + `pipeline_retired` + `WriteReleaseStateInBatch` in the rollover batch, every sim and `Micro` re-initialized, `ApplyReleaseState`, `ReactivateAvatar` → `ActivateUnrostered`, `AvatarReleasedEvent`, and `evaluateTakeover = avatarReleased && avatarHasChildren`, which takes a willing 16–18-year-old over in the same pump. No release machinery is duplicated in `CareerManager`, which owns no tier sims.
 5. **Docs:**
    - league_restructure §9.4 (`:246`) and §16 (a new I-row);
-   - heir_mechanics §6 (`NoPlayableHeir` → parent phase);
+   - heir_mechanics §6 (with the pipeline attached, a retirement `NoPlayableHeir`/`NoWillingHeir` with a future takeover → the parent phase);
    - GAME_VISION `:32` ("a willing child takes over at 16 from the parent phase, or at 19+ on retirement").
 
 ### 4.4 Phone and content (13-6d)
@@ -271,11 +336,11 @@ Reference: weekly child support is $20 a child, plus any funding commitment (`Ch
 | :-- | :-- | :-- |
 | Build | `dotnet build DirtAndDiamonds.sln -c Debug` | 0 warnings / 0 errors |
 | MC default | `dotnet run --project Tools/MonteCarloHarness -c Release` (run alone) | The baseline 623 plus the new checks, all PASS. Removing exactly the added lines (and restoring the count lines) reproduces `c9f2caf8…`. Pro guard byte-exact. Record both SHA-256s |
-| New MC checks (`--only parent-phase`) | | (1) `ChildTraining`: odds clamp at 5/95; the tilt is 0 at 0.5 and ±cap at 0 and 1; same seed and inputs → same outcomes; diminishing returns monotone; Easy never lowers an axis. (2) The identity: no job, no session → `Child_Development` and `Players` byte-identical through a takeover fold. (3) A trained child's takeover folds the trained axes (potential +k, interest +j, exactly `NurtureBlend`'s numbers). (4) Source scans: the trainable list reads `LoadChildrenOf` only, with no `Biological_Parentage`/`LineageQueries` read in either service; the drill scene never references `RngState`; no new `rng.NextUInt64()` in the boot chain. (5) `ui-strings` extended to the new keys (present, none unused, no pronoun) |
-| CoreLoop | `dotnet run --project Tools/CoreLoopHarness -c Release` | 43/43 plus: the job card resolves by deadline to Steady; the wage settles once a week and survives a reload; the job's block is forced and a stale schedule can't skip it; the budget resets weekly; unplayed sessions auto-resolve once; a reload doesn't reroll a resolved session; fast-forward stops on each interrupt kind; D7-A: a 42-year-old with a willing 15-year-old enters the phase and the child takes over at 16; the Life ↔ Baseball boundary scan stays clean |
-| Pipeline | `dotnet run --project Tools/PipelineHarness -c Release` | Green; the takeover fixtures unchanged except D7-A's new case |
+| New MC checks (`--only parent-phase`) | | (1) `ChildTraining`: odds clamp at 5/95; `tiltPp` is 0 at 0.5 and ±15 at 0 and 1; `expertisePp` is 0 at 135, +2 at 150, +5 at 180, +10 at 225, from the peak of current and potential; `fatiguePp` is 0 at 60 and 10 at 100; same seed and inputs → same outcomes; diminishing returns monotone; the `max(1, …)` floor gives a gain at every `coaching` up to 99; Easy never lowers an axis. (2) The carry: whole-point flushes truncate toward zero and a carry stays within (−100, +100); the season cap stops at exactly 600 bp and resets with `seasonYear`; the fade never takes `coaching` below 50. (3) Streams: one child over 12 seasons × 3 sessions gives all-distinct `SessionStream` seeds; `HashId64` is a fixed FNV-1a vector (a pinned id → a pinned hash); both tags differ from every `PostseasonStreams`/`PipelineProfile` tag; no `GetHashCode` in either service. (4) The identity: no job, no session → `Child_Development` and `Players` byte-identical through a takeover fold, and no `training_plan:*` key exists. (5) A trained child's takeover folds the trained axes (potential +k, interest +j, exactly `NurtureBlend`'s numbers). (6) Source scans: the trainable list reads `LoadChildrenOf` only, with no `Biological_Parentage`/`LineageQueries` read in either service; the drill scene never references `RngState`; no new `rng.NextUInt64()` in the boot chain. (7) `ui-strings` extended to the new keys (present, none unused, no pronoun). (8) The MC `lineage-failure` suite unchanged and green (no pipeline attached → today's `NoPlayableHeir`) |
+| CoreLoop | `dotnet run --project Tools/CoreLoopHarness -c Release` | 43/43 plus: the job card resolves by deadline to Steady; the wage settles once a week and survives a reload; **A3:** a fast-forwarded parent-phase week runs the standing plan (the shift's `HustleWork` drain, 3 family hours, `care`/`neglect` neutral from `ChildRearingService`), and **no `LegalWork` wage** is credited on a shift day, planned or not; a planned shift day forces the job's hours whatever `WorkActivity` was sent, and arms no hustle session; Nightlife's waiver reads the same family hours `ChildRearingService` read; the budget resets weekly; unplayed sessions auto-resolve once; a reload doesn't reroll a resolved session or a tip week; **economy:** 52 fast-forwarded weeks per job with one child and $50/wk funding end solvent with no `FundsDepleted` interrupt, and Steady's net is above Nightlife's expected net (Carbon's §9 Q1 measured in the real loop); fast-forward stops on each interrupt kind; **D7-A:** a 42-year-old with a willing 15-year-old enters the phase and the child takes over at 16; a 42-year-old whose only child is 8 with interest 35 enters the phase (not `NoWillingHeir`); a 42-year-old with a willing, unrostered 17-year-old is released and taken over in the same rollover, with no pending job card left; a 42-year-old whose children are all 16+ and unwilling gets `NoWillingHeir`; the Life ↔ Baseball boundary scan stays clean |
+| Pipeline | `dotnet run --project Tools/PipelineHarness -c Release` | Green; the takeover fixtures unchanged except D7-A's new cases (the retirement release runs through `ReleaseAvatar`, and no later pass touches the released avatar) |
 | NeedsDecay | `dotnet run --project Tools/NeedsDecayHarness -c Release` | 117/117 (`ActionCatalog` untouched) |
-| Gritty | `dotnet run --project Tools/GrittyEventsHarness -c Release` | 363/363 plus the D10 batch loading |
+| Gritty | `dotnet run --project Tools/GrittyEventsHarness -c Release` | 363/363 plus the D10 batch loading (D12-A: every `conceive_child` event carries the `age <= 50` condition) |
 | Event graph | the `check_event_graph_integrity` skill | clean (new flags set before they're read; no `voice_note`; no tier < N leak) |
 | Schema | `validate_sqlite_schema` on a scratch copy | every new key and column reference resolves; no DDL (D9-A) |
 | Godot (13-6d) | headless `--import` (keep only the translation) + parity + `BurnerPhone.tscn` and `BackyardDrill.tscn` load with 0 errors | exit 0 |
@@ -283,7 +348,7 @@ Reference: weekly child support is $20 a child, plus any funding commitment (`Ch
 
 ## 6. Definition of done
 
-- [ ] §3 records the owner's D1–D11. §9 (Carbon's Math check) and §10 (Opus's reconciliation) are signed.
+- [ ] §3 records the owner's D1–D12. §9 (Carbon's Math check) and §10 (Opus's reconciliation) are signed.
 - [ ] 13-6c built, its gates green, Carbon's review passed, merged into `p13/integration`.
 - [ ] 13-6d built, its gates green, its review passed, merged into `p13/integration`.
 - [ ] Owner playtest of one parent phase, release to takeover.
@@ -591,3 +656,46 @@ where $F_{\text{IH3}}(s) = s^3 / 6$ for $s \in [0, 1]$ and $[s^3 - 3(s-1)^3]/6$ 
 4. **`Amendment A4` — D7-A retirement-to-parent-phase seam (`S3`):** Keep `EvaluateSuccession` read-only; gate retirement entry into the parent phase on `Career.EnableParentPhaseOnRetirement` (set `true` by `PipelineManager`) when any child is `< 16` or (`16–18` and `revealedInterest ≥ 40`), performing the full tier-sim flush → batch (`SetTeam(null)`, `pipeline_retired`, `WriteReleaseStateInBatch`) → sim + micro re-init → `ActivateUnrostered` → `AvatarReleasedEvent` sequence.
 5. **`Amendment A5` — Collision-free reload-stable streams (`B2`):** Replace plain `⊕` and `string.GetHashCode()` with `PostseasonStreams.MixCombine` + FNV-1a `HashId64(childId)` + ASCII tags `"CHLDTRNG"` (`0x4348_4C44_5452_4E47UL`) and `"NGHTTIPS"` (`0x4E47_4854_5449_5053UL`), `| 1UL`.
 6. **Shipped profile sanction check:** **None required** (`NurtureProfile`, `HeirGeneticsProfile`, `DevelopmentProfile`, `ActionCatalog`, `NeedsEngine`, and `ChildRearingService` constants remain untouched).
+
+---
+
+## 10. Reconciliation — Claude Opus 5.5 (2026-11-27)
+
+**Verdict: §9 ACCEPTED, with the A3 and A4 seams reshaped (R1–R6 below).** Every finding stands. I re-checked each load-bearing citation and formula at `a2b9e26` (`Assets/` and `Tools/` byte-identical to `ac1a055`) and folded A1–A5, B1–B2, S1–S3 and N1–N3 into §§1–5, so §§1–5 are now the one set of numbers and contracts for the owner. **No shipped constant changes and no owner calibration sanction is needed.** `Status` stays PROPOSAL until the owner answers D1–D12.
+
+### 10.1 What I re-verified
+
+| Item | How | Result |
+| :-- | :-- | :-- |
+| **B1** schedule | Read `LifeSimManager.cs:575–587` (an unplanned day = 24 × `TickHour`), `:679` (Work = `LegalWork` unless `AvatarWorkIsHustle`), `:709` (family hours on planned days only), `GameManager.cs:1201–1225, 1246–1279`, `ActionCatalog.cs:150–151` (−$200 over 8 h = $25/h), `ChildRearingService.cs:47, 62–65, 113–121` | **Confirmed.** 0 h gives `care` `round(−1.5)` = −2/wk; 0 h and $0 give `neglect` +3/wk; 3 h gives 0 and −1; the job wage plus `LegalWork` doubles pay ($500/$1,000/$600 a week) |
+| **B2** streams | Recounted in Python: plain `day ^ sessionIndex` over 365 days × 3 sessions; decoded every 64-bit tag in `Assets/` (`PostseasonStreams.cs:19–23`, `PipelineRules.cs:164–168`); ran the A5 chain over 12 seasons × 3 children × 3 sessions | **Confirmed.** 368 distinct seeds out of 1,095 (727 repeats). `CHLDTRNG`/`NGHTTIPS` decode correctly and match none of the 10 shipped tags. The A5 chain gave 39,420 distinct seeds out of 39,420 |
+| **S1** economy | Checked the inputs: board share 1.0 when unrostered (`GameManager.cs:1014–1017`, `HouseholdBoard.cs:27–28`), $70/wk (`LifeSimManager.cs:112, 569`), autopilot prices (`ActionCatalog.cs:113–126`), funding neutral at $50 | **Inputs confirmed.** I did not re-run Carbon's 12-season upkeep simulation (`diag_upkeep.py` isn't in the repo). The CoreLoop **economy** check (§5) now measures the real loop's nets during the build |
+| **S2** training | Recomputed the stalls by hand (Easy 76, Normal 88, Hard 94: `g × (100 − c)/50 < 0.5`) and re-ran the A2 integer model myself (300 runs per cell) | **Confirmed.** Coach Normal, 1 child: 92.2 after 10 seasons, 93.6 after 11, 70 at 3.3 seasons, 90 at 8.4: exactly Carbon's. Nightlife Easy 86.0 (Carbon 86.0); Nightlife Normal `care` 32.6 (31.8); Steady 3 children 56.6 (58.3) |
+| **Q3/Q4** fold and willingness | Read `NurtureBlend.cs:56–73` and `HeirGenetics.cs:51–67` | **Confirmed.** Coaching 94 → 3.52 → +4, 93 → +3; 89 at funding 100 → 5.52 → +6; P(willing) at Δ = 0 is 1 − 0.5³/6 = 47/48; at Δ = −20, 1/2 |
+| **S3** D7-A | Read `CareerManager.cs:958–1029` (the interest check `continue`s before the age check), `:1411–1467` (`EvaluateTakeover`), `:1757–1812` (the rollover branches), `PipelineManager.cs:326–329, 1527, 1561–1569, 1592, 1780, 1926–1998`, `Program.cs:3200–3223` | **Confirmed**, with the reshaping in R2 |
+| **Q5/Q7** | `StressRelaxationPerHour` 0.4 (`LifeSimManager.cs:100`), `GoodNightStressRelief` 4 (`SleepProfile.cs:28`), `StressImpulseEvent` is a signed float (`CoreEvents.cs:121`, `LifeSimManager.cs:489–495`), `RngState.NextInt` exists, `BootCareer` draws unchanged | **Confirmed** |
+| **N1–N3** | `GameManager.cs:709–711, 496–500`, `ChildRearingService.cs:97–153, 151`, `GameManager.cs:1201–1225` | **Confirmed**; §1.1 corrected |
+
+Small citation drift, not material: S3's "`:999–1005`" is `:997–1004` at `a2b9e26`, and `Unflushed` is `LifeSimManager.cs:62`.
+
+### 10.2 Reconciliation decisions (R1–R6)
+
+- **R1 — A3's family hours follow the tick, not "three off-days".** Coach and Steady have only two off-days (Sat–Sun). Weekdays also restart each 365-day season (`GameCalendar.cs:79–84`; 365 % 7 = 1), so a tick that crosses the boundary has two Mondays and no Sunday. Three named weekdays would give 2 or 4 hours that week, and `RoundAwayFromZero(±0.5)` moves `care` by ±1 once a year. The standing plan therefore puts 1 h on the days where `day % 7 ∈ {1, 3, 5}`: exactly 3 h in every tick window (§4.3 item 3).
+- **R2 — D7-A reuses the pipeline's release instead of duplicating it.** A4 has `CareerManager` flush and re-initialize tier sims and `Micro`, but `CareerManager` owns no tier sims. `PipelineManager.RunRollover` already does the whole sequence for the undrafted/cut release (`ReleaseAvatar` → batch → re-init → `ApplyReleaseState` → `ReactivateAvatar` → `AvatarReleasedEvent`, plus the same-pump takeover). So `CareerManager` only *defers* the game-over (`RetirementReleasePending`), and the pipeline, later in the same pump, calls its own `ReleaseAvatar`. The entry predicate is `EvaluateTakeover(...) != GameOver` rather than A4's hand-written "child < 16 or 16–18 willing". The two agree except that `EvaluateTakeover` also requires the 16+ heir to be unrostered with a ratings row. With A4's version, a willing but rostered 17-year-old would be released and then immediately hit `NoWillingHeir`. A4's opt-in flag (`EnableParentPhaseOnRetirement`) is kept, so the MC `lineage-failure` suite is untouched. This adds `PipelineManager.cs` to 13-6c's D7-A paths (§2). §4.3 item 4 has the shape.
+- **R3 — The family-hours hand-off.** §4.3's old "subscribed after `ChildRearingService`" would read 0: `OnChildRearingDayAdvanced` clears the week's family hours in the same handler (`GameManager.cs:1432–1435`). `ParentJobService` now receives the peeked value from that handler, so Nightlife's ≥ 5 h waiver works.
+- **R4 — The standing plan never arms a hustle.** It sets `LifeSim.SetTodaySchedule` + `AvatarWorkIsHustle = true` directly and leaves `_plannedWorkActivity` alone. Going through `SubmitDaySchedule` with a non-`LegalWork` activity would queue a narcotics/fencing session (`GameManager.cs:1353–1355`). A player-planned shift day is forced the same way.
+- **R5 — One seed key for both streams.** Nightlife tips can fall before any child turns 5. "`training_seed` written on first training use" would leave the tip stream without a seed, so the key is `parent_phase_seed`, written on first use by either service (§2, §3 D9).
+- **R6 — `expertisePp` needs a pure `RoleRatingSum` overload.** `PipelineRules.RoleRatingSum` takes a `RosterPlayerRow` (`:253`), and an unrostered parent's potential isn't one. 13-6c adds an additive overload over role + three tools, and the existing method keeps byte-identical results (§2).
+
+Also folded: A1 into §3 D1 and §4.1; A2 into §3 D5/D6/D9 and §4.2; A5 into §2, §3 D9 and §4.2; the pending-succession interrupt into D6; S3's same-pump job-card clear into §4.3 item 1. §5 gains the stream, carry, cap, fade, A3, economy and D7-A cases. **New D12** (from §9 Q6's boundary note): an `age <= 50` content gate on `conceive_child` events.
+
+### 10.3 For the owner
+
+D1–D12 (§3) are open; the recommendation is A throughout. The calls the Math makes real:
+
+- **D1:** Nightlife is the risky job. Untrained, its kids end at `care` 0 and are willing at 16 only half the time. Coach is the best for the kids; Steady is the safest money.
+- **D5:** training is worth about **+3 to every potential rating** over a childhood (+4 with good drills, up to +6 with funding), and Easy or Normal training makes the child **certain to be willing**.
+- **D7:** the parent phase can last up to 15 seasons, and the parent can be 57 at the takeover.
+- **D12 (new):** cap conception at 50 in content, or allow phases into the parent's late 60s.
+
+The build starts only after §3 records the answers.
