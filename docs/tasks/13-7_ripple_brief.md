@@ -313,3 +313,48 @@ No DDL, SQL, schema, event, sim or content change; every path is inside §2.
 ### 10.4 Next
 
 **Gemini 4 Neon** delta-reviews `02fe1fb..<this commit>` on `p13/13-7-delta-review-neon` (`.worktrees/13-7-delta-review-neon`, pre-created by Opus) and records §11. On a clean PASS, Opus fast-forwards this branch to Neon's §11 commit, ticks §6 boxes 3–4 and merges `--no-ff` into `p13/integration`. `main` waits for the owner's go-ahead.
+
+---
+
+## 11. Delta review — Gemini 4 Neon
+
+**Reviewer:** Gemini 4 Neon (mid-tier engineer and UI/content reviewer; [TEAM.md](../TEAM.md) §1/§1a Option B), **2026-11-27**.  
+**Branch / worktree:** `p13/13-7-delta-review-neon` in `.worktrees/13-7-delta-review-neon`, reviewing `02fe1fb..b0060c9` (5 files, `+110 / -9`: `Assets/Platform/Steam/README.md`, `Assets/Platform/Steam/RichPresenceWriter.cs`, `Tools/MonteCarloHarness/Slice137Suites.cs`, `docs/progress.md`, `docs/tasks/13-7_ripple_brief.md`; zero `Assets/Simulation/`, schema, persistence or `EffectiveRatings` paths). Every `file:line` citation below was verified directly at `b0060c9`. **Review only:** no code, harness, README, SQL or content edits retained.
+
+**Verdict:** **PASS** — **0 blockers, 0 should-fixes, 0 nits.**
+
+### 11.1 Preconditions & Delta Verification (`02fe1fb..b0060c9`)
+
+- **Preconditions:** Worktree write check (`git commit --allow-empty` + `git reset --soft HEAD~1`) passed; tree clean at `b0060c9` (parent `02fe1fb`); **`4.54 GB`** free on `C:` (`>= 2 GB`); `git diff --stat 02fe1fb..b0060c9` touches only the 5 expected files; `git ls-files .env` empty.
+- **1. S1 fix (`Assets/Platform/Steam/RichPresenceWriter.cs`):**
+  - `OnAvatarChanged` (`RichPresenceWriter.cs:129–139`) opens with `if (LineageIsOver()) { SetBetweenCareers(); return; }` (`:131–135`), matching `SyncFromBoot` (`:93–103`, guard `:95–99`) and `OnSeasonRolledOver` (`:141–157`, guard `:151–155`) and upholding `PublishCareerPresence`'s `:180–182` live-bloodline invariant across all three entry points.
+  - Bug chain confirmed at `b0060c9`: `PipelineManager.OnSeasonRolledOver` (`Assets/Simulation/Baseball/PipelineManager.cs:319`) → `RunRollover` (`NoHeirs` at `:1781–1785, 1925–1928` → `CareerManager.WriteReleaseStateInBatch` at `Assets/Simulation/Baseball/CareerManager.cs:1369`; parent-phase `GameOver` at `PipelineManager.cs:1807–1811, 1933–1936` → `CareerManager.WriteGameOverInBatch` at `CareerManager.cs:1390`) → `Career.ReactivateAvatar()` (`PipelineManager.cs:1986–1989`) → `CareerManager.ReactivateAvatar` (`CareerManager.cs:1259–1268`, permits `IsLineageOver`) → `ActivateUnrostered(avatarId)` (`CareerManager.cs:838–854`, publishing `AvatarChangedEvent(avatarId, 0)` at `:853`). `EventBus.Publish` (`Assets/Core/EventBus.cs:64–78`) only enqueues, `DispatchPending` (`EventBus.cs:80–105`) drains handler-published events in the same pump, and `Pipeline.AttachTo(Events)` (`Assets/Core/GameManager.cs:610`) subscribes before `_presence.AttachTo(Events)` (`GameManager.cs:829`).
+  - `lineage_over_reason` (`Assets/Data/Database/GameStateQueries.cs:34`) is never cleared: repo-wide grep confirms the only writers are `CareerManager.cs:1307, 1369, 1390`, so the guard can never hide a live career.
+- **2. `SetBetweenCareers` clearing `TierKey` (`RichPresenceWriter.cs:110–117`):**
+  - `_steam.SetRichPresence(TierKey, string.Empty)` (`:115`) runs before `SteamDisplayKey` (`:116`). On an avatar-less boot (`GameManager.cs:835–838`), `SteamIntegration.SetRichPresence` (`Assets/Platform/Steam/SteamIntegration.cs:121–128`) no-ops without Steam and idempotently deletes the `"tier"` key when Steam is up. Harmless, and consistent with D3-A and `Assets/Platform/Steam/README.md:91, 118–120`.
+- **3. Harness (`Tools/MonteCarloHarness/Slice137Suites.cs`):**
+  - `MethodBody` (`Slice137Suites.cs:111–128`) and `GuardsLineageOver` (`:131–137`) scope the scan to each method body (`SyncFromBoot`, `OnAvatarChanged`, `OnSeasonRolledOver` at `:93–94`, plus `SetBetweenCareers` at `:95–96`) and require `if (LineageIsOver())` → `SetBetweenCareers();` → `PublishCareerPresence();` in order.
+  - Robust to CRLF checkouts (`\r\n    public ` matches `\n    public `, confirmed live on this CRLF checkout of `RichPresenceWriter.cs`), and missing signatures return `string.Empty`, failing both `GuardsLineageOver` and `betweenClearsTier`.
+  - Check name (`Slice137Suites.cs:97`) stays unique, prefixed `"13-7"`, and keeps `ripple` at 12 checks (`:39, 48, 64, 84, 97, 230, 236, 260, 265, 287, 292, 303`; `ui-strings` 13-7 checks remain 3 at `Program.cs:5649, 5652, 5655`).
+  - **Mutation test repeated:** temporarily deleting the `if (LineageIsOver())` block from `OnAvatarChanged` and running `--only ripple` returned exit 1 (`RED ripple: 11/12`, `unguarded: private void OnAvatarChanged(`); `RichPresenceWriter.cs` was restored byte-exact (`git diff Assets/` empty).
+- **4. N1 (`Slice137Suites.cs`):**
+  - `GroupsOrderedByWinPct` (`:184–187`) delegates to `SeasonTable.CompareFraction` (`Assets/Simulation/Baseball/Standings.cs:109–120`), reading `0-0` as ½ just like `Standings.Order` (`Standings.cs:155`). `hsShape` (`:226–227`) requires two distinct `ConferenceId` values, matching `proShape` (`:248–249`) and `collegeShape` (`:277–278`).
+  - Skipping a tied-record fixture (§10.2) is acceptable: `PlayoffManager.GetStandings` calls `Standings.Order` unchanged, and `Standings.Order`'s tiebreak ladder is already pinned by `Tools/MonteCarloHarness/Slice134Suites.cs:359–409`.
+- **5. N2 & docs (`Assets/Platform/Steam/README.md`):**
+  - `README.md:113` names `PlayerScreen` (verified at `Assets/UI/PlayerScreen.cs:33`).
+  - `README.md:91` (`tier` row) and `:116–125` (publish-cadence paragraph) match `RichPresenceWriter.cs:93–183` and `GameManager.cs:830–838` verbatim.
+  - Zero MLB/NCAA/real-league names in the delta; zero player-facing strings added, so no new strings-table keys are needed.
+
+### 11.2 Gates Reproduced on `b0060c9`
+
+| Gate | Command | Result |
+| :-- | :-- | :-- |
+| **Build (Debug)** | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** (10/10 projects) |
+| **MC default (solo)** | `dotnet run --project Tools/MonteCarloHarness -c Release` | **623/623 PASS** (`ripple` 12/12, `ui-strings` 9/9). Normalized LF/`N ms` SHA-256: **`c9f2caf8a972c0e64288c2fec9a1a28f0d6937cc3fba6eacab6a5cbf45c92aa2`** (exact match). §9.1 reconstruction recipe SHA-256: **`646f3618f74e18cfbca80bf7ebc826c1b77a2e0f2050ca0a16765f7d5d88481e`** (exact match). Pro guard: **PA 81433 / H 18471 / ER 8803**, ledger **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`** |
+| **CoreLoop** | `dotnet run --project Tools/CoreLoopHarness -c Release` | **43/43 PASS** (Life ↔ Baseball boundary scan clean) |
+| **GrittyEvents** | `dotnet run --project Tools/GrittyEventsHarness -c Release` | **363/363 PASS** (`idle poll stays under 512 B/poll — 464 B/poll`) |
+| **Mutation test** | `--only ripple` without `OnAvatarChanged` guard | **11/12 RED** (`unguarded: private void OnAvatarChanged(`); restored byte-exact |
+
+### 11.3 Findings
+
+None (**0 blockers, 0 should-fixes, 0 nits**). Ready for **Claude Opus 5.5** to fast-forward `p13/13-7-reconcile-opus` to this commit, tick §6 boxes 3–4, and merge `13-7` `--no-ff` into `origin/p13/integration`.
