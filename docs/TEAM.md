@@ -57,6 +57,8 @@ Opus performs the integration gate after review; its own code requires Carbon's 
 | **13-4** playoffs + ranking *(engine done; bracket UI in 15c)* | Claude Opus 5.5 + Gemini 4 Argon (Math; historical) (+ Claude Sonnet 5.5: bracket UI) | each other's part | — |
 | **13-5** Sunday lock + forfeits *(13-5a done)* | Claude Opus 5.5 | Gemini 4 Argon (historical) | — |
 | **13-6** pipeline + draft | Claude Opus 5.5 + Gemini 4 Argon (brief Math check, done 2026-11-24) (+ Claude Sonnet 5.5: recruiting/draft UI) | **Gemini 4 Carbon** reviews 13-6a; Opus reviewed the Math check; Gemini 4 Neon reviews 13-6b | Playtest |
+| **13-6c** parent-phase engine (jobs, training rules, pacing, D7) — [brief](tasks/13-6c_parent_phase_brief.md), D1–D12 = A (owner, 2026-11-27) | Claude Opus 5.5 (+ Gemini 4 Carbon: Math, done 2026-11-27) | Gemini 4 Carbon | — (D1–D12 decided) |
+| **13-6d** parent-phase phone, drill and content | Claude Sonnet 5.5 (after 13-6c merges) | Gemini 4 Neon (UI); Gemini 4 Carbon (content gates) | Playtest |
 | **13-7** ripple | Claude Sonnet 5.5 | Gemini 4 Carbon | — |
 | **14a** buses + VoiceDirector | Claude Sonnet 5.5 | Claude Opus 5.5 | Ear check |
 | **14b** VoiceGen + AudioManifestHarness | Gemini 4 Carbon | Claude Opus 5.5 | Pilot run (your key) |

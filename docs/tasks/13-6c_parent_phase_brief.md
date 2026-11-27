@@ -1,6 +1,6 @@
 # Task Brief: `13-6c` / `13-6d` — the parent phase: three jobs and backyard training
 
-**Author:** Claude Opus 5.5 (integration lead), 2026-11-27. **Status: PROPOSAL.** Gemini 4 Carbon's Math check (§9, PASS WITH AMENDMENTS) is reconciled in §10, and §§1–5 now carry one consistent set of signed numbers and contracts. The owner decides D1–D12 (§3). **Nothing is built from this brief until §3 records the owner's decisions.**
+**Author:** Claude Opus 5.5 (integration lead), 2026-11-27. **Status: DECIDED (owner, 2026-11-27: D1–D12 all A).** Gemini 4 Carbon's Math check (§9, PASS WITH AMENDMENTS) is reconciled in §10, and §§1–5 carry the one signed set of numbers and contracts. 13-6c (engine) may start from `p13/integration` at or after the commit that records these decisions.
 
 **Recommended split (D11-A):** **13-6c, engine:** Claude Opus 5.5 authors it and Gemini 4 Carbon reviews. **13-6d, phone and content:** Claude Sonnet 5.5 builds it and Gemini 4 Neon reviews (Carbon reviews any part that touches a sim, schema or persistence path). This mirrors 13-6a/13-6b. D11-B keeps the owner's 2026-11-24 default instead: Sonnet builds everything and Carbon reviews. **Math:** Gemini 4 Carbon (every magnitude in §4 signed in §9, reconciled in §10). **Owner gates:** D1–D12 before the build; a playtest after 13-6d. **Spec:** [league_restructure.md](../design/league_restructure.md) §9.4 (`:246`, D4b-C); [13-6 brief](13-6_pipeline_draft_brief.md) §3 (`:80–84`), §4 item 8 (`:235–246`), §7 (`:343–350`); [heir_mechanics.md](../reference/heir_mechanics.md) §3, §4.2, §6; [high_school_person_layer.md](../reference/high_school_person_layer.md) §7 (nurture); [scope_realignment.md](../design/scope_realignment.md) §3.2 (stance). **Base:** `ac1a055` (`main` = `p13/integration`, schema v14). Every citation below was verified at `ac1a055`.
 
@@ -83,7 +83,7 @@ The parent phase is where the game's "legacy" pillar ([GAME_VISION.md](../GAME_V
 
 ## 3. Owner decisions (D1–D12)
 
-Recommendations first. **Status: OPEN.** The numbers below are Carbon's signed §9 values as reconciled in §10 (A1–A5 folded in); the owner decides the options, not the arithmetic.
+**Status: DECIDED (owner, 2026-11-27): D1-A, D2-A, D3-A, D4-A, D5-A, D6-A, D7-A, D8-A, D9-A, D10-A, D11-A, D12-A.** The numbers below are Carbon's signed §9 values as reconciled in §10 (A1–A5 folded in). The B/C options stay as the record of what was weighed.
 
 **D1 — The three jobs.**
 - **A (recommended): Coach, Steady, Nightlife** (profiles in §4.1).
@@ -188,7 +188,7 @@ Recommendations first. **Status: OPEN.** The numbers below are Carbon's signed �
 - B: no cap (long phases are rare and the player can still steer away).
 - C: leave it to Phase L's fertility rules.
 
-**Proposed TEAM.md §2 rows** (Opus adds them once D11 is decided):
+**TEAM.md §2 rows** (D11-A; added to TEAM.md 2026-11-27):
 
 | Slice | Author | Reviewer | Owner gate |
 | :-- | :-- | :-- | :-- |
@@ -348,7 +348,7 @@ Pure `int` arithmetic throughout (rounding: `MidpointRounding.AwayFromZero`, the
 
 ## 6. Definition of done
 
-- [ ] §3 records the owner's D1–D12. §9 (Carbon's Math check) and §10 (Opus's reconciliation) are signed.
+- [x] §3 records the owner's D1–D12 (all A, 2026-11-27). §9 (Carbon's Math check) and §10 (Opus's reconciliation) are signed.
 - [ ] 13-6c built, its gates green, Carbon's review passed, merged into `p13/integration`.
 - [ ] 13-6d built, its gates green, its review passed, merged into `p13/integration`.
 - [ ] Owner playtest of one parent phase, release to takeover.
