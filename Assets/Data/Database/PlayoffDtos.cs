@@ -81,3 +81,27 @@ public readonly record struct PlayoffBracketView(
 /// <summary>One line of the College National Ranking ("#7 nationally").</summary>
 public readonly record struct NationalRankView(
     int TeamId, int Rank, int Wins, int Losses, int RunsScored, int RunsAllowed, int? Seed);
+
+// ----------------------------------------------------------------------
+// Slice 13-7 (docs/tasks/13-7_ripple_brief.md §4.5, D4-A): the standings view.
+// Ids and numbers only, like the views above; names resolve at render time.
+// ----------------------------------------------------------------------
+
+/// <summary>
+/// One team's line in a standings group: the regular-season record rebuilt from
+/// completed games (finals and forfeits, the same rows <c>Team_Seasons</c> is
+/// written from), plus the College national rank and the postseason seed once
+/// those have been written (null before).
+/// </summary>
+public readonly record struct StandingsRowView(
+    int TeamId, int Wins, int Losses, int RunsScored, int RunsAllowed, int? NationalRank, int? Seed);
+
+/// <summary>
+/// A conference (HS, which has no divisions: <see cref="DivisionId"/> is null)
+/// or a division, with its rows ordered best first by <c>Standings.Order</c>.
+/// </summary>
+public readonly record struct StandingsGroupView(
+    int ConferenceId, int? DivisionId, IReadOnlyList<StandingsRowView> Rows);
+
+/// <summary>A tier-season's standings as presentation sees it: every group, conference then division order.</summary>
+public readonly record struct StandingsView(int SeasonYear, LeagueTier Tier, IReadOnlyList<StandingsGroupView> Groups);

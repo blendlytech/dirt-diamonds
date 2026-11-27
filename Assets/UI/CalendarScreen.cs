@@ -193,9 +193,11 @@ public sealed partial class CalendarScreen : PanelContainer
             _lineBuilder.Append(PracticeEntry);
             any = true;
         }
-        // Game entries come from the schedule itself, not just the mandated
-        // hours — non-HS tiers (blocks.GameHours == 0, unlocked) still play
-        // daily in-season, and the calendar should say so.
+        // Game entries come from the schedule itself (TryGetScheduledGameFor: the
+        // tier's regular-season rows and its postseason games), not from the
+        // mandated hours — the schedule is the truth for whether a day is a game
+        // day and who the opponent is (HS Fridays, College Wed + Sat, Pro Tue /
+        // Thu / Sat; no tier plays Sunday), and the calendar says so.
         if (career.TryGetScheduledGameFor(day, out int homeTeamId, out int awayTeamId))
         {
             if (any)

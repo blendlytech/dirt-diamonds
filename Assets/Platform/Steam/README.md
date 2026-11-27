@@ -75,8 +75,9 @@ download must open at the same day/season.
 
 `RichPresenceWriter.cs` is the design doc's §6 presence writer: a bus subscriber
 (`AvatarChangedEvent` / `SeasonRolledOverEvent`, plus the boot sync) whose only side
-effect is `SteamIntegration.SetRichPresence`. Event-driven only, never per-frame, and
-every call no-ops without a Steam client. **No display wording lives in C#** (the
+effect is `SteamIntegration.SetRichPresence`. The token and status decisions are pure
+functions in `SteamRules.cs` (Steam-free, so the MC harness proves them). Event-driven
+only, never per-frame, and every call no-ops without a Steam client. **No display wording lives in C#** (the
 Phase-10 localization posture): the code sets stable tokens and raw values; the
 partner site's rich-presence localization file owns every player-visible string.
 Against the Spacewar dev appid nothing renders — expected until the real appid exists.
@@ -85,9 +86,9 @@ Keys the game sets:
 
 | Key | Value | When |
 | :-- | :---- | :--- |
-| `steam_display` | `#Status_Career` or `#Status_BetweenCareers` | every publish |
+| `steam_display` | `#Status_Career`, `#Status_Family` or `#Status_BetweenCareers` | every publish |
 | `season` | season year, invariant digits | career publishes |
-| `tier` | a `#Tier_*` sub-token (values starting with `#` localize too) | career publishes (tier resolves) |
+| `tier` | a `#Tier_*` sub-token (values starting with `#` localize too); **an empty value when the avatar has no team or the lineage is over**, which deletes the key | career and between-careers publishes |
 | `player` | avatar first + last name | career publishes (row resolves) |
 | `age` | avatar age, invariant digits | career publishes (row resolves) |
 
@@ -95,29 +96,33 @@ Tokens to define at 11e (Steamworks → App Admin → Rich Presence localization
 English set — wording is 11e's to polish, the token ids are the contract:
 
 - `#Status_Career` — `Season %season% · %tier% · %player%, age %age%`
+- `#Status_Family` — `Season %season% · %player%, age %age% · raising the next generation`
+  (the parent phase: the avatar was released and holds no team while the bloodline
+  carries on; the `tier` key is cleared, so this status never references `%tier%`)
 - `#Status_BetweenCareers` — `Between careers`
 - `#Tier_HS` — `High School`
 - `#Tier_College` — `College`
-> **Shipped tokens (v13 build).** Phase 13 removes the minor-league tiers, and slice 17a retires these tokens for `#Tier_HS` / `#Tier_College` / `#Tier_Pro` ([steam_commercial_release.md](../../../docs/design/steam_commercial_release.md) §3).
+- `#Tier_Pro` — `Pro`
 
-- `#Tier_MinorA` — `Class A`
-- `#Tier_MinorAA` — `Double-A`
-- `#Tier_MinorAAA` — `Triple-A`
-- `#Tier_MLB` — `MLB`
+Schema v14 has exactly three tiers and no minor leagues, so these are the whole tier set.
+The earlier minor-league tier tokens (`#Tier_Minor*`) and the old top-tier token are
+retired and the code never emits them; don't enter them on the partner site. (13-7 retired them while the app still ran on the
+Spacewar dev id, with no rich-presence localization entered on the partner site, so there
+was nothing to migrate.) Slice 17a adds `#Phase_Playoffs` and `#Phase_DraftNight`.
 
-> **Planned change (Phase 13 slice 13-7 / Phase 17 slice 17a, `docs/design/steam_commercial_release.md` §3):**
-> the league collapses to HS / College / Pro with no minor leagues. The token set becomes `#Tier_HS` — `High School`,
-> `#Tier_College` — `College`, `#Tier_Pro` — `Pro`, plus `#Phase_Playoffs` and `#Phase_DraftNight`. The
-> `#Tier_MinorA/AA/AAA` and `#Tier_MLB` tokens are retired. Until that slice ships, the code still emits the list above.
-
-(The tier display names mirror `BaseballDashboard`'s exported `TierNamesCsv` defaults
+(The tier display names mirror `PlayerScreen`'s exported `TierNamesCsv` defaults
 so the friends list and the in-game scouting card agree.)
 
-Publish cadence: avatar creation / succession / the 9c promotion republish (all on
-`AvatarChangedEvent`), the season tick (year + yearly-aged age), and boot. A boot with
-no avatar — or a save whose `lineage_over_reason` is set, which still carries the
-parked retiree's avatar pointer — publishes `#Status_BetweenCareers`; a game-over
-rollover flips to it live.
+Publish cadence: avatar creation / succession / a pipeline move / the parent-phase
+release (all on `AvatarChangedEvent`), the season tick (year + yearly-aged age), and
+boot. A boot with no avatar — or a save whose `lineage_over_reason` is set, which still
+carries the parked retiree's avatar pointer — publishes `#Status_BetweenCareers` and clears
+the `tier` key; a game-over rollover flips to it live and keeps it, even though the
+pipeline re-activates the parked avatar unrostered in the same pump (every entry point
+checks `lineage_over_reason` first). A released avatar (no team, the bloodline still
+holds the career) publishes `#Status_Family` with the `tier` key cleared, on the live
+switch and on a boot into that state alike, and reverts to `#Status_Career` the next
+time a rostered avatar is published (a succession takeover).
 
 ## Achievements & Stats (11b — partner-site definitions minted at 11e)
 
@@ -131,25 +136,31 @@ spoiler flag.
 
 | API name | Display name | Description (suggested) | Hidden |
 | :------- | :----------- | :---------------------- | :----- |
-| `ACH_WENT_PRO` | Went Pro | Sign your first professional contract. | no |
-| `ACH_THE_SHOW` | The Show | Reach the major leagues. | no |
+| `ACH_THE_SHOW` | The Show | Reach the Pro league. | no |
 | `ACH_NEXT_OF_KIN` | Next of Kin | Welcome a child into the family. | no |
 | `ACH_DYNASTY` | Dynasty | Carry the bloodline into its third generation. | no |
 | `ACH_END_OF_THE_LINE` | End of the Line | Watch a lineage end. | yes |
 | `ACH_RAP_SHEET` | Rap Sheet | Get arrested. | yes |
 | `ACH_MOONLIGHTING` | Moonlighting | Take your first step into the underworld. | yes |
 | `ACH_JUICED` | Juiced | Face the consequences of performance enhancement. | yes |
-| `ACH_JOURNEYMAN` | Journeyman | Play ten seasons of professional baseball. | no |
+| `ACH_JOURNEYMAN` | Journeyman | Play ten seasons. | no |
+
+**Retired: `ACH_WENT_PRO`.** The game no longer sets it and the const is gone: schema v14
+has one professional tier, so "Went Pro" could only double-fire with The Show (13-7 D1).
+Don't mint it. `ACH_THE_SHOW` keeps firing on reaching Pro (an idempotent re-assert on
+every pipeline move and boot) until slice 17a redefines it as "play your first Pro game".
 
 **Stat:** `STAT_SEASONS_PLAYED` — INT, default 0, increment only. The game calls
 `AddStat(+1)` on each season rollover while a bloodline holds a career (pre-creation
-and post-game-over seasons don't count) and never reads it back.
+and post-game-over seasons don't count) and never reads it back. That counts every
+season the bloodline holds a career, High School and College included, which is why
+Journeyman's copy says "Play ten seasons" and not "professional" (13-7 D6).
 
 **`ACH_JOURNEYMAN` is stat-linked, not code-fired:** set its "Progress Stat" to
 `STAT_SEASONS_PLAYED` with **unlock min value 10**. The game never references the
 `ACH_JOURNEYMAN` id — Steam evaluates the stat-vs-threshold rule server-side — so
 the threshold (and this one id) can be tuned on the site freely with no code
-change. All eight code-fired achievements are idempotent re-asserts; Steam owns
+change. All seven code-fired achievements are idempotent re-asserts; Steam owns
 unlock state (design doc §4.3, why the save schema never changed).
 
 ## Store compliance (11e — design doc §7)

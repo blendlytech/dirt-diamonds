@@ -1024,6 +1024,80 @@ public sealed class PlayoffManager
         return new PlayoffBracketView(seasonYear, tier, champion, views);
     }
 
+    /// <summary>
+    /// The tier's regular-season standings, grouped for display (13-7 D4-A): HS
+    /// by conference, College and Pro by division. It rebuilds its own
+    /// <see cref="SeasonTable"/> from the completed games (the rows
+    /// <c>Team_Seasons</c> is recomputed from, forfeits included) and orders each
+    /// group with <see cref="Standings.Order"/> under the tier's schedule seed:
+    /// the same function, inputs and seed selection uses, so the card cannot
+    /// contradict the seeding. The national rank and seed ride along from
+    /// <c>Team_Seasons</c> once flush and selection have written them. Read-only:
+    /// no batch, no write, no RNG, and nothing in the sim calls it. Allocates
+    /// freely (the <see cref="GetBracket"/> precedent) for a once-per-(day,
+    /// avatar) UI refresh; it touches no scratch the day handler owns.
+    /// </summary>
+    public StandingsView GetStandings(int seasonYear, LeagueTier tier)
+    {
+        var teams = new List<TeamRow>(RosterCapacity.MaxTeamsPerTier);
+        _baseball.LoadTeamsByTier(tier, teams);
+        var teamIds = new int[teams.Count];
+        for (int i = 0; i < teams.Count; i++)
+        {
+            teamIds[i] = teams[i].TeamId;
+        }
+
+        var completed = new List<CompletedGame>();
+        _queries.LoadCompletedRegularSeason(seasonYear, tier, completed);
+        var table = new SeasonTable();
+        table.Build(teamIds, completed);
+        var seasons = new List<TeamSeasonRow>(teams.Count);
+        _queries.LoadTeamSeasons(seasonYear, tier, seasons);
+        ulong seed = _leagues.Get(tier).ScheduleSeed;
+
+        var groups = new List<StandingsGroupView>();
+        foreach (int conference in Conferences(teams))
+        {
+            List<int> divisions = Divisions(teams, conference);
+            if (divisions.Count == 0)
+            {
+                groups.Add(StandingsGroup(table, seasons, seed, seasonYear, tier, conference, null, TeamsIn(teams, conference, null)));
+                continue;
+            }
+            foreach (int division in divisions)
+            {
+                groups.Add(StandingsGroup(table, seasons, seed, seasonYear, tier, conference, division, TeamsIn(teams, conference, division)));
+            }
+        }
+        return new StandingsView(seasonYear, tier, groups);
+    }
+
+    private static StandingsGroupView StandingsGroup(
+        SeasonTable table, List<TeamSeasonRow> seasons, ulong seed, int seasonYear, LeagueTier tier,
+        int conference, int? division, List<int> scope)
+    {
+        List<int> order = Standings.Order(table, scope, seed, seasonYear, tier);
+        var rows = new List<StandingsRowView>(order.Count);
+        foreach (int teamId in order)
+        {
+            int index = table.IndexOf(teamId);
+            int? rank = null;
+            int? teamSeed = null;
+            foreach (TeamSeasonRow ts in seasons)
+            {
+                if (ts.TeamId == teamId)
+                {
+                    rank = ts.NationalRank;
+                    teamSeed = ts.Seed;
+                    break;
+                }
+            }
+            rows.Add(new StandingsRowView(
+                teamId, table.Wins(index), table.Losses(index), table.RunsScored(index), table.RunsAllowed(index), rank, teamSeed));
+        }
+        return new StandingsGroupView(conference, division, rows);
+    }
+
     /// <summary>The College National Ranking as last written (rank order; empty before week 1's flush).</summary>
     public IReadOnlyList<NationalRankView> GetNationalRanking(int seasonYear)
     {

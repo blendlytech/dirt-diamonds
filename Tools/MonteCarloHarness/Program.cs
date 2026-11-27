@@ -205,6 +205,8 @@ internal static partial class Program
             ("roster-beats", () => RunRosterBeatsSuite(schemaPath, repoRoot)),
             ("attended-forfeit", () => RunAttendedForfeitSuite(schemaPath)),
             ("attended-undo", () => RunAttendedUndoSuite(schemaPath)),
+            // 13-7: SteamRules, the retired wire ids, and the GetStandings view (shares the 13-4 world).
+            ("ripple", () => RunRippleSuite(schemaPath, repoRoot)),
         };
 
         try
@@ -5624,6 +5626,33 @@ internal static partial class Program
             }
         }
         Check("13-6b: no ui.pipeline.* text uses an avatar pronoun", pronounRows.Count == 0, string.Join(", ", pronounRows));
+
+        // 13-7: LeagueScreen reads its new standings copy through Tr("ui.league.…"). Same three rules.
+        var leagueReferenced = new HashSet<string>(StringComparer.Ordinal);
+        var leagueLiteral = new System.Text.RegularExpressions.Regex("\"(ui\\.league\\.[a-z0-9_.]*)\"");
+        foreach (System.Text.RegularExpressions.Match m in leagueLiteral.Matches(
+                     File.ReadAllText(Path.Combine(repoRoot, "Assets", "UI", "LeagueScreen.cs"))))
+        {
+            leagueReferenced.Add(m.Groups[1].Value);
+        }
+        var leagueKeys = new List<string>();
+        foreach (string key in table.Keys)
+        {
+            if (key.StartsWith("ui.league.", StringComparison.Ordinal))
+            {
+                leagueKeys.Add(key);
+            }
+        }
+        var leagueUnknown = leagueReferenced.Where(k => !table.ContainsKey(k)).ToList();
+        var leagueUnused = leagueKeys.Where(k => !leagueReferenced.Contains(k)).ToList();
+        var leaguePronouns = leagueKeys.Where(k => pronoun.IsMatch(table[k])).ToList();
+        Check("13-7: every ui.league.* key LeagueScreen.cs names has an English row",
+            leagueReferenced.Count > 0 && leagueUnknown.Count == 0,
+            leagueUnknown.Count == 0 ? $"{leagueReferenced.Count} keys referenced" : string.Join(", ", leagueUnknown));
+        Check("13-7: no ui.league.* row sits unused by LeagueScreen.cs",
+            leagueKeys.Count > 0 && leagueUnused.Count == 0,
+            leagueUnused.Count == 0 ? $"{leagueKeys.Count} rows" : string.Join(", ", leagueUnused));
+        Check("13-7: no ui.league.* text uses an avatar pronoun", leaguePronouns.Count == 0, string.Join(", ", leaguePronouns));
     }
 
     /// <summary>Minimal RFC 4180 reader for the strings table: quoted fields, doubled quotes, CRLF or LF.</summary>
