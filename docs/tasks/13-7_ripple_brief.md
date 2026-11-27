@@ -157,3 +157,122 @@ Recommended next: Gemini 4 Carbon reviews 13-7 on p13/13-7-review-carbon (pre-cr
 ```
 
 Then add one compact line to [progress.md](../progress.md), and write the complete prompt for the next model (TEAM.md §3 step 8). Don't start the next slice.
+
+---
+
+## 9. Review — Gemini 4 Carbon
+
+**Reviewer:** Gemini 4 Carbon (simulation, calibration and math owner; independent reviewer of `13-7` per [TEAM.md](../TEAM.md) §1a/§2), **2026-11-26**.  
+**Branch / worktree:** `p13/13-7-review-carbon` in `.worktrees/13-7-review-carbon`, reviewing `origin/p13/13-7-sonnet` at `6a49dae` (`aa5cff5..6a49dae`: 23 files changed, `+696 / -139`). Every `file:line` citation and quote below was verified directly at `6a49dae`. **Review only:** no code, SQL, schema, content or scene files edited.
+
+**Verdict:** **PASS WITH FIXES** — **0 blockers, 1 should-fix (S1), 2 nits (N1–N2)**.
+
+Every build, calibration, reconstruction, core-loop, narrative and scope gate reproduces cleanly on `6a49dae`: `PlayoffManager.GetStandings` is strictly read-only over local buffers and shares selection's exact `SeasonTable` + `Standings.Order` + `ScheduleSeed` contract; the resolver guard (`6d924228…`), sanctioned Pro guard (`PA 81433 / H 18471 / ER 8803`, ledger `932ACE26…8B84`), normalized default MC log (`9c4703c8…`), and reconstructed pre-13-7 baseline (`646f3618…`) are all byte-exact; `LeagueScreen` implements D4-A and D5-A cleanly; and all comment/doc/JSON ripple edits are calibration- and content-inert. One event-ordering edge case in `RichPresenceWriter.OnAvatarChanged` (**S1**: D4b-C `NoHeirs` and parent-phase `NoWillingHeir` game-over rollovers queue `AvatarChangedEvent(avatarId, 0)` behind `SeasonRolledOverEvent` in the same pump, overwriting `#Status_BetweenCareers` with `#Status_Family`) should be reconciled before merging into `p13/integration`.
+
+### 9.1 Preconditions & Gates Reproduced on `6a49dae`
+
+| Check / Gate | Command / Method | Result |
+| :-- | :-- | :-- |
+| **§0 Preconditions & scope** | Empty-commit write check + soft reset; `git status`; `C:` free space; `git diff --stat aa5cff5..6a49dae` | Write check passed; clean tree at `6a49dae`; **`7.18 GB`** free on `C:` (`>= 2 GB`); exactly the **23** §2 allowed files touched (`PlayoffDtos.cs`, `strings.csv`, `strings.en.translation`, `rookie_season_events.json`, `GrittyEventModel.cs`, 4 `Assets/Platform/Steam/` files, `PlayoffManager.cs`, `CalendarScreen.cs`, `LeagueScreen.cs`, 3 `Tools/MonteCarloHarness/` files, 6 `docs/reference/` banners, this brief, `progress.md`); `git ls-files .env` empty |
+| **Build (Debug)** | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** (all 10 solution projects) |
+| **MC default** | `dotnet run --project Tools/MonteCarloHarness -c Release -- --repo …` | **623/623 PASS** (`608` baseline + `3` `ui-strings` + `12` `ripple`). Normalized LF/`N ms` SHA-256: **`9c4703c88dbd0fae9bbaa76b4e90d1bbb879df45e8f623700bd184cd8f8d9ed4`** (exact match). Reconstructed baseline SHA-256 (deleting `--- 13-7 ripple`, the `15` `[PASS] 13-7` lines, and `  ok   ripple: 12/12`; restoring `ok   ui-strings: 6/6`, `608/608 checks passed.`, and `non-empty — 67 keys`): **`646f3618f74e18cfbca80bf7ebc826c1b77a2e0f2050ca0a16765f7d5d88481e`** (byte-exact match to post-13-6b anchor). Pro guard byte-exact: **`PA 81433 / H 18471 / ER 8803`**, ledger **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**. Resolver LF SHA-256: **`6d92422863f22d73c3539306a2a2442a65bcdedf505ddc5bb24611782e9eda89`**. All `16/16` allocation probes **`0 B`**; **`0`** leaked `%TEMP%\dnd_*` files |
+| **CoreLoop** | `dotnet run --project Tools/CoreLoopHarness -c Release -- --repo …` | **43/43 PASS** (`Life <-> Baseball` boundary scan clean) |
+| **GrittyEvents** | `dotnet run --project Tools/GrittyEventsHarness -c Release -- --repo …` | **363/363 PASS** (`idle poll stays under 512 B/poll — 464 B/poll`) |
+| **Event graph & rookie JSON** | `check_event_graph_integrity` audit + AST diff of `rookie_season_events.json` (`aa5cff5` vs `6a49dae` minus `"//"`) | **Clean:** `116` events across `10` files, `0` orphaned prerequisite flags, `0` unresolved contacts, `0` `voice_note` / `voice_profile` occurrences, `0` `scope:any` `tier < N` leaks; `rookie_season_events.json` AST minus `"//"` byte-identical (`12` events, `8,718` compressed chars) |
+| **Translation binary** | Binary RSRC inspection of `Assets/Localization/strings.en.translation` (sandbox blocks Godot `--import` IPC) | Valid `RSRC` (`4,512` bytes, SHA-256 `93607e26…`); all 4 new `ui.league.standings.*` target strings (`"{0} Conference"`, `"{0} Division"`, `"#{0}"`, `"Seed {0}"`) verified present alongside Sonnet's recorded `71/71` headless parity |
+
+### 9.2 Checklist Verification (A–E)
+
+#### A. Simulation & Persistence (`PlayoffManager.cs`, `PlayoffDtos.cs`)
+1. **Sole `Assets/Simulation` change & read-only proof:** `PlayoffManager.GetStandings` + private static `StandingsGroup` (`Assets/Simulation/Baseball/PlayoffManager.cs:1040–1099`) is the **only** diff under `Assets/Simulation/`, paired with three `readonly record struct` view DTOs in `Assets/Data/Database/PlayoffDtos.cs:96–107` (`StandingsRowView`, `StandingsGroupView`, `StandingsView`). It opens no `_db` batch, calls no `Upsert*`/`Insert*`/`Update*`/`Set*`/`Record*` query, touches no `RngState`, and mutates zero fields on `PlayoffManager`. Repo-wide `git grep GetStandings` confirms the only non-comment callers are `Assets/UI/LeagueScreen.cs:179` (`StandingsView view = gm.Playoffs.GetStandings(seasonYear, tier);`) and `Tools/MonteCarloHarness/Slice137Suites.cs:176, 197, 226, 252`.
+2. **Scratch isolation & exact input parity with selection:** `GetStandings` allocates its own `var teams = new List<TeamRow>(RosterCapacity.MaxTeamsPerTier);` (`:1042`), `var completed = new List<CompletedGame>();` (`:1050`), `var table = new SeasonTable();` (`:1052`), `var seasons = new List<TeamSeasonRow>(teams.Count);` (`:1054`), and `var groups = new List<StandingsGroupView>();` (`:1058`) — never touching day-handler/postseason scratch (`_series`, `_games`, `_teamSeasons`, `_completed`, `_dueIds`, `_table`, `_teamsByTier` at `:85–91`, or `_writer` at `:81`). Inputs match selection (`RunSelection` `:234, 245`, `SelectHs` `:271–273`, `SelectPro` `:314–321`) identically: `_queries.LoadCompletedRegularSeason(seasonYear, tier, completed)` (`:1051` → `PlayoffQueries.cs:24–27, 150`: `WHERE season_year = @seasonYear AND tier = @tier AND phase = 0 AND status IN (1, 2)`), `table.Build(teamIds, completed)` (`:1053`), `ulong seed = _leagues.Get(tier).ScheduleSeed;` (`:1056`), and `Standings.Order(table, scope, seed, seasonYear, tier)` (`:1079`) over `Conferences(teams)` (`:1059`), `Divisions(teams, conference)` (`:1061`), and `TeamsIn(teams, conference, null | division)` (`:1064, 1069`). For HS (`Teams.division_id IS NULL`), `divisions.Count == 0` emits two conference groups with `DivisionId = null` (`:1062–1065`).
+3. **Live W/L vs weekly `NationalRank` / selection `Seed` lag (flagged per review prompt, not a defect):**
+   - W/L/RS/RA come live from `Schedule_Games` (`status IN (1, 2)`), whereas `NationalRank` and `Seed` ride along from `Team_Seasons` (`PlayoffManager.cs:1055, 1086–1093`).
+   - Macro NPC games write both `Schedule_Games` and `Team_Seasons` (including College `NationalRank`) atomically in Sunday's `LeagueSimulator.FlushAccumulated` batch (`Assets/Simulation/Baseball/LeagueSimulator.cs:1692–1704`). However, an **attended** regular-season game (`MicroGame.FlushGame`, `Assets/Simulation/Baseball/MicroGame.cs:1807–1810`) or attended regular-season forfeit commits its `Schedule_Games` row immediately mid-week without recomputing `Team_Seasons`.
+   - **Consequence:** Between an attended mid-week game (e.g. Wednesday/Saturday in College, Tue/Thu/Sat in Pro, Friday in HS) and Sunday's macro flush, the card shows the avatar team's and opponent's **live** W/L/RS/RA (temporarily 1–2 GP ahead of un-flushed NPC pairings, which `Standings.CompareFraction` and `LeagueScreen.StandingsAheadGamesBehindFormat` handle cleanly), while College `#N` reflects last Sunday's weekly poll (and is `null`/omitted before week 1's first Sunday flush). `Seed` is `null` until `PostseasonCalendar.SelectionDay(tier)`, where `RunSelection` runs `sim.FlushPending()`, `_writer.Recompute(...)`, and `SetSeed(...)` in one batch (`PlayoffManager.cs:232–259`), so seeds never lag W/L once set (and the College play-in winner's seed lands on `Team_Seasons` in `AdvanceCollege` at `:706`).
+   - **Judgment:** **Acceptable and desirable.** Weekly College polls ("#7 nationally") are weekly by spec ([league_restructure.md](../design/league_restructure.md) §8.2, matching `GetNationalRanking` at `PlayoffManager.cs:1101`), while reflecting the player's just-completed game immediately in W-L is strictly better UX than showing stale pre-game W-L until Sunday.
+4. **Threading:** `GetStandings` runs on the UI thread (`LeagueScreen._Process` → `Refresh` → `RefreshStandings`, `LeagueScreen.cs:135, 160, 179`) and shares pooled prepared commands (`_baseball.LoadTeamsByTier`, `_queries.LoadCompletedRegularSeason`, `_queries.LoadTeamSeasons`, plus `_leagues.Get(tier).ScheduleSeed` → `SeasonScheduler.ResolveSeed(_gameState)` at `LeagueSimulator.cs:320`) on the single `DatabaseManager` connection, matching `GetBracket` (`PlayoffManager.cs:990–1025`) and the pre-13-7 `LeagueScreen` queries (`LoadTeamsByTier`, `LoadTeamRecords`, `Load*Leaders`). The background Gritty poller uses its own `ReadOnlyView` connection (`GameManager.cs:809`, `DatabaseManager.cs:358–398`). For the worker-thread interactive game (`BaseballDashboard.cs:283–289`), `LeagueScreen._Process` settles `(_shownDay, _shownAvatarId)` on the day-advance frame *before* `OnPlayGameRequested` can set `InteractiveGameInFlight = true` (`BaseballDashboard.cs:272`), and `GameManager.CanAdvanceDay` (`GameManager.cs:1140–1143`) blocks day advances until `_gameTask` completes. Avoiding `_teamsByTier` (`TeamsOf`) inside `GetStandings` (`:1042`) also avoids racing `AdvanceBracket` on lazy list initialization. **No new threading risk** beyond the known, tracked R-1 `C03` single-connection command-sharing item.
+5. **Reachability of `_leagues.Get(tier)` throw from `LeagueScreen`:** `LeagueDirectory.Get(tier)` (`Assets/Simulation/Baseball/LeagueDirectory.cs:29–31`) throws only for an unregistered tier. `GameManager.BootCareer` (`Assets/Core/GameManager.cs:468–489`) registers all three `LeagueTier`s (`0..TierCount - 1`) before enabling `_Process` (`:851`), and `LeagueScreen.Refresh` (`Assets/UI/LeagueScreen.cs:152–158`) guards `gm.Baseball.TryGetTeamTier(player.TeamId ?? 0, out LeagueTier tier)` (which queries `Teams LEFT JOIN Team_Tiers`, returning `false` for `teamId == 0` and `0..2` via `CHECK (tier IN (0, 1, 2))` otherwise) before calling `RefreshStandings`. **Unreachable from `LeagueScreen`.**
+6. **UI allocation cost & dirty/visibility guards:** `GetStandings` allocates ~30–40 KB once per `(day, avatar)` settle point, zero per frame. `LeagueScreen`'s dirty-flag fields (`_shownDay`, `_shownAvatarId` at `LeagueScreen.cs:100–101`), `_tierKnown` parent-phase hide (`:106, 120, 152–158`), and `_Process` gate (`gm.Events.PendingCount == 0 && (day != _shownDay || !string.Equals(avatarId, _shownAvatarId, StringComparison.Ordinal))` at `:130–136`, before `RefreshDraftCard` at `:138`) are **unchanged**.
+
+#### B. Steam Layer (`SteamRules.cs`, `RichPresenceWriter.cs`, `AchievementManager.cs`, `README.md`)
+- `SteamRules.cs` (`Assets/Platform/Steam/SteamRules.cs:1–74`) imports only `DirtAndDiamonds.Data` (`:1`) — zero Facepunch, Steamworks, Godot or I/O dependencies — and pins `#Tier_HS` / `#Tier_College` / `#Tier_Pro` (`:29–43`, D2-A), `#Status_Career` / `#Status_Family` / `#Status_BetweenCareers` (`:23–27, 51–54`, D3-A), and `ACH_THE_SHOW` as the sole Pro tier achievement (`:62–73`, D1-A) over static arrays via `ReadOnlySpan<string>` (`0 B`).
+- `RichPresenceWriter.PublishCareerPresence` (`Assets/Platform/Steam/RichPresenceWriter.cs:157–158`) clears `TierKey` with `string.Empty` whenever `_baseball.TryGetTeamTier(_avatarTeamId, out LeagueTier tier)` is `false`, covering both `SyncFromBoot` (`:93–103`) and `OnAvatarChanged` (`:121–126`) for live parent-phase releases (`AvatarTeamId == 0`) and reloads, while restoring `#Tier_HS` + `#Status_Career` on child takeover. *(See **Should-Fix S1** below for the `LineageIsOver()` rollover interaction on `OnAvatarChanged`.)*
+- `AchievementManager.cs` deletes `AchWentPro` (`:27–35`) and loops `SteamRules.TierAchievements(tier)` (`:230–233`), keeping `ACH_THE_SHOW` firing alone on Pro.
+- `Assets/Platform/Steam/README.md` (`:87–106, 135–162`) matches the code's keys, tokens and 7 code-fired + 1 stat-linked achievements verbatim; `Journeyman` reads `"Play ten seasons."` (`:144`, D6-A); `The Show` reads `"Reach the Pro league."` (`:137`, D1-A); `ACH_WENT_PRO` is marked retired (`:146–149`); no MLB/NCAA/real-league names appear anywhere in new code or copy. *(See **Nit N2** on line `:113`.)*
+
+#### C. `LeagueScreen` (`LeagueScreen.cs`, `strings.csv`)
+- Renders the avatar's conference grouped by division (`LeagueScreen.cs:173–254`): HS 1 conference × 6 rows (no division header), College 3 divisions × 4 rows with `#N` (`ui.league.standings.rank`), Pro 4 divisions × 4 rows, avatar row prefixed via `StandingsAvatarRowFormat` (`"* {0}"`, `:251–253`), GB computed per group against `rows[0]` (`:237–240`), and postseason seeds appended via `ui.league.standings.seed` (`:247–250`).
+- **D5 qualifier math (`LeagueScreen.cs:92–94, 319–321`):**
+  - `int innings = TierRules.RegulationInnings(tier);` (`7` HS, `9` College/Pro; `TierRules.cs:13`)
+  - `int minPa = Math.Max(MinQualifier, (gamesPlayed * innings * QualifyingPaPerThousandInnings + 999) / 1000);` (`344` per `1000` innings, floor `1`)
+  - `int minOuts = Math.Max(MinQualifier, (gamesPlayed * innings + OutsPerInning - 1) / OutsPerInning);` (`OutsPerInning = 3`, floor `1`)
+  - Hand-verified: `G = 0` → `1 PA / 1 out`; `G = 6` HS (`inn = 7`) → `(14448 + 999) / 1000 = 15 PA`, `44 / 3 = 14 outs`; `G = 18` College (`inn = 9`) → `(55728 + 999) / 1000 = 56 PA`, `164 / 3 = 54 outs`; `G = 24` Pro (`inn = 9`) → `(74304 + 999) / 1000 = 75 PA`, `218 / 3 = 72 outs`.
+- All 4 new strings (`strings.csv:69–72`) are `ui.league.standings.*` keys with zero pronouns. `LeagueScreen.tscn` is untouched; zero per-scene theme overrides and zero new interactive controls added.
+
+#### D. Inertness (`GrittyEventModel.cs`, `CalendarScreen.cs`, `rookie_season_events.json`, SQL/Schema, F9 Banners)
+- `Assets/Narrative/Events/GrittyEventModel.cs:94–99` and `Assets/UI/CalendarScreen.cs:196–200` are strictly comment-only edits.
+- `Assets/Narrative/Events/Content/rookie_season_events.json:2` changes only the top-level `"//"` string; parsed JSON minus `"//"` is byte-for-byte identical to `aa5cff5`.
+- Zero schema, SQL, query or bus-event changes; `BaseballQueries.SqlSelectTeamRecordsByTier` (`:351–356`) and `LoadTeamRecords` (`:1366–1383`) remain intact and unused per §2.
+- All six `docs/reference/` line-5 banners (`gritty_event_framework.md:5`, `hs_onboarding_events.md:5`, `criminal_underworld_content_arc.md:5`, `criminal_underworld_dirt2_the_fix.md:5`, `criminal_underworld_dirt3_product_and_turf.md:5`, `criminal_underworld_dirt4_the_bust_and_the_door_out.md:5`) accurately record v14's landed ordinals while preserving gate history.
+
+#### E. Tests (`Tools/MonteCarloHarness/Slice137Suites.cs`, `Program.cs`)
+- Audited all **12** `ripple` checks (`Slice137Suites.cs:39, 48, 64, 84, 89, 182, 188, 212, 217, 239, 244, 255`) and all **3** `ui.league.*` checks (`Program.cs:5649–5655`). **None is vacuous:** every `GetStandings` check asserts concrete non-empty group/row counts, seed/rank invariants, or `2 * games` conservation (`midGamesInView == 40`, `hsViewGames == 120`, `proViewGames == 2048`, `collegeViewGames == 672`) that fail on empty, ungrouped, unsorted or `Team_Seasons`-divergent outputs, and the `ui-strings` checks require `Count > 0`. *(See **Nit N1** for two minor test-strength notes.)*
+
+---
+
+### 9.3 Findings (0 Blockers, 1 Should-Fix, 2 Nits)
+
+- **[Should-Fix S1] `RichPresenceWriter.OnAvatarChanged` omits `LineageIsOver()`, so D4b-C `NoHeirs` and parent-phase `NoWillingHeir` game-over rollovers overwrite `#Status_BetweenCareers` with `#Status_Family` in the same bus pump**
+  - **Verified citations at `6a49dae`:**
+    - `Assets/Platform/Steam/RichPresenceWriter.cs:121–126`:
+      ```csharp
+      private void OnAvatarChanged(AvatarChangedEvent e)
+      {
+          _avatarId = e.AvatarPlayerId;
+          _avatarTeamId = e.TeamId;
+          PublishCareerPresence();
+      }
+      ```
+    - `Assets/Platform/Steam/RichPresenceWriter.cs:167–169` (compare `SyncFromBoot` at `:95–99` and `OnSeasonRolledOver` at `:138–142`):
+      ```csharp
+      // Only reached with a live bloodline (the callers route a lineage-over
+      // state to SetBetweenCareers), so the status is career or family.
+      _steam.SetRichPresence(SteamDisplayKey, SteamRules.StatusToken(hasTeam, lineageOver: false));
+      ```
+    - `Assets/Simulation/Baseball/PipelineManager.cs:1781–1785, 1807–1811, 1925–1936, 1986–1989`:
+      ```csharp
+      if (Career is { HasAvatar: true } && anyMove)
+      {
+          Career.ReactivateAvatar();
+      }
+      ```
+    - `Assets/Simulation/Baseball/CareerManager.cs:853, 1259–1268`:
+      ```csharp
+      if (!_inParentPhase && !IsLineageOver)
+      ...
+      ActivateUnrostered(avatarId); // line 853: _bus?.Publish(new AvatarChangedEvent(avatarId, 0));
+      ```
+  - **Defect:** When `PipelineManager.RunRollover` ends a bloodline — either releasing a childless avatar (`NoHeirs`, `PipelineManager.cs:1781–1785, 1927`) or ending the parent phase when all children are `>= 16` and unwilling (`NoWillingHeir`, `:1807–1811, 1935`) — `lineage_over_reason` commits in the rollover batch, and `:1988` then calls `Career.ReactivateAvatar()` (`anyMove` is `true` on every normal rollover). `CareerManager.ReactivateAvatar()` (`:1259–1268`) explicitly permits `IsLineageOver` and calls `ActivateUnrostered(avatarId)`, queuing `AvatarChangedEvent(avatarId, 0)` into `EventBus` **behind** `SeasonRolledOverEvent`. Within that same `EventBus.DispatchPending()` pump:
+    1. `RichPresenceWriter.OnSeasonRolledOver` (`:138–142`) sees `LineageIsOver() == true` and calls `SetBetweenCareers()`, publishing `#Status_BetweenCareers` and clearing `_avatarId = null`.
+    2. Immediately afterward, the queued `AvatarChangedEvent(avatarId, 0)` dispatches to `OnAvatarChanged` (`:121–126`), which lacks the `if (LineageIsOver())` guard, restores `_avatarId = avatarId` / `_avatarTeamId = 0`, and calls `PublishCareerPresence()` (`lineageOver: false`), **clobbering `#Status_BetweenCareers` with `#Status_Family` (*"raising the next generation"*) on a dead lineage**. Because the clock stops on game-over, `#Status_Family` stays latched for the rest of the session (contradicting D3-A, `SteamRules.cs:46–48`, and `README.md:119–120`).
+  - **Fix (within §2 allowed paths):** Add `if (LineageIsOver()) { SetBetweenCareers(); return; }` at the top of `RichPresenceWriter.OnAvatarChanged` (`RichPresenceWriter.cs:121`, matching `SyncFromBoot` at `:95` and `OnSeasonRolledOver` at `:138`; optionally also clear `TierKey` to `string.Empty` in `SetBetweenCareers()` at `:110–114`), so all three entry points uphold `:167`'s live-bloodline invariant, and extend the `RichPresenceWriter.cs` check in `Slice137Suites.cs:89–95` to verify it.
+
+- **[Nit N1] `Slice137Suites.cs` exercises `GetStandings` on tie-free HS `HashPower` records, and `GroupsOrderedByWinPct` evaluates `0 >= 0` if a `0-0` row ever appears**
+  - **Verified citations at `6a49dae`:**
+    - `Tools/MonteCarloHarness/Slice137Suites.cs:119`: `bool homeWins = HashPower(row.HomeTeamId) > HashPower(row.AwayTeamId);`
+    - `Tools/MonteCarloHarness/Slice137Suites.cs:138–140`:
+      ```csharp
+      private static bool GroupsOrderedByWinPct(StandingsView view) =>
+          view.Groups.All(g => g.Rows.Zip(g.Rows.Skip(1)).All(p =>
+              (long)p.First.Wins * (p.Second.Wins + p.Second.Losses) >= (long)p.Second.Wins * (p.First.Wins + p.First.Losses)));
+      ```
+    - `Tools/MonteCarloHarness/Slice137Suites.cs:179`: `bool hsShape = hsView.Groups.Count == 2 && hsView.Groups.All(g => g.DivisionId is null && g.Rows.Count == 6);`
+  - **Detail:** (a) Strict `HashPower` dominance makes a 10-game HS double round-robin finish `10-0, 8-2, 6-4, 4-6, 2-8, 0-10` with no win% ties, so tiebreak agreement relies on `Standings.Order`'s direct unit suite (`Slice134Suites.cs:359–405`) rather than a tied group in `Slice137Suites`; `hsShape` (`:179`) could also include `.Select(g => g.ConferenceId).Distinct().Count() == 2` like Pro (`:201`) and College (`:230`). (b) In `GroupsOrderedByWinPct`, a `0-0` team zeroes both sides (`0 >= 0` even for `0-2` ahead of `0-0`, whereas `SeasonTable.CompareFraction` at `Standings.cs:109–120` reads `0-0` as `1/2`); harmless here since `limit: 20` gives every HS team `3–4` games, or replaceable with `SeasonTable.CompareFraction(...) >= 0`.
+
+- **[Nit N2] Pre-existing stale class name in `Assets/Platform/Steam/README.md:113` (`BaseballDashboard` → `PlayerScreen`)**
+  - **Verified citations at `6a49dae`:**
+    - `Assets/Platform/Steam/README.md:113`: `(The tier display names mirror BaseballDashboard's exported TierNamesCsv defaults`
+    - `Assets/UI/PlayerScreen.cs:33`: `public string TierNamesCsv { get; set; } = "High School,College,Pro";`
+  - **Detail:** `TierNamesCsv` moved from `BaseballDashboard` to `PlayerScreen` in the earlier phone UI reorg (`BaseballDashboard.cs:28–34`). Optional one-word doc tidy while `README.md` is open.
+
