@@ -1,0 +1,51 @@
+{
+  "_comment": "13-6c parent-phase jobs (brief §4.1, D1-A; Gemini 4 Carbon's signed §9 A1 values). Ids are stable save data (Game_State.parent_job); player-facing text lives in the strings table (13-6d, ui.job.*). shift_days use mon..sun. weekly_wage and tip_max are whole dollars; the tip is a seeded 0..tip_max roll (NGHTTIPS). weekly_care_bp goes to every Child-edge child under 16 who is unrostered; care_waiver_family_hours > 0 waives it in a week with at least that many family hours.",
+  "default_job": "steady",
+  "jobs": [
+    {
+      "id": "coach",
+      "flag": "job_coach",
+      "shift_days": ["mon", "tue", "wed", "thu", "fri"],
+      "shift_hours": 4,
+      "weekly_wage": 650,
+      "tip_max": 0,
+      "sessions_per_week": 3,
+      "drill_bonus_pp": 10,
+      "weekly_stress": -5,
+      "weekly_recklessness": 0,
+      "weekly_care_bp": 25,
+      "care_waiver_family_hours": 0,
+      "barred_by_flag": "banned_for_life"
+    },
+    {
+      "id": "steady",
+      "flag": "job_steady",
+      "shift_days": ["mon", "tue", "wed", "thu", "fri"],
+      "shift_hours": 8,
+      "weekly_wage": 1000,
+      "tip_max": 0,
+      "sessions_per_week": 2,
+      "drill_bonus_pp": -5,
+      "weekly_stress": 10,
+      "weekly_recklessness": 0,
+      "weekly_care_bp": 0,
+      "care_waiver_family_hours": 0,
+      "barred_by_flag": null
+    },
+    {
+      "id": "nightlife",
+      "flag": "job_nightlife",
+      "shift_days": ["thu", "fri", "sat", "sun"],
+      "shift_hours": 6,
+      "weekly_wage": 450,
+      "tip_max": 800,
+      "sessions_per_week": 3,
+      "drill_bonus_pp": -5,
+      "weekly_stress": -3,
+      "weekly_recklessness": 1,
+      "weekly_care_bp": -25,
+      "care_waiver_family_hours": 5,
+      "barred_by_flag": null
+    }
+  ]
+}

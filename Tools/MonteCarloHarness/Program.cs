@@ -207,6 +207,8 @@ internal static partial class Program
             ("attended-undo", () => RunAttendedUndoSuite(schemaPath)),
             // 13-7: SteamRules, the retired wire ids, and the GetStandings view (shares the 13-4 world).
             ("ripple", () => RunRippleSuite(schemaPath, repoRoot)),
+            // 13-6c: the parent phase's engine (training rules, carry, streams, identity, fold, scans).
+            ("parent-phase", () => RunParentPhaseSuite(schemaPath, repoRoot)),
         };
 
         try

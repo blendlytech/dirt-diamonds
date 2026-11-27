@@ -699,3 +699,57 @@ D1–D12 (§3) are open; the recommendation is A throughout. The calls the Math 
 - **D12 (new):** cap conception at 50 in content, or allow phases into the parent's late 60s.
 
 The build starts only after §3 records the answers.
+
+---
+
+## 11. Build record — 13-6c engine (Claude Opus 5.5, 2026-11-27)
+
+Built on `p13/13-6c-opus` from `fb15873`. Every signed number in §4.1/§4.2 is used as written; **no `ActionCatalog`, `NeedsEngine`, `UtilityCalculator`, `NurtureBlend`, `HeirGeneticsProfile`, `DevelopmentProfile` or `ChildRearingService` constant changed.** Where the build had to choose something §§2–5 leave open, or departs from them, it's listed here for Carbon's review.
+
+### 11.1 Where it lives
+
+| Piece | File |
+| :-- | :-- |
+| Pure rules: odds, tilt, expertise, fatigue, outcomes, carry, cap, fade, `HashId64`, `SessionStream`, `TipStream`, the `TrainingPlan` record | `Assets/Simulation/Baseball/ChildTraining.cs` |
+| R6 overload `RoleRatingSum(role, tool1, tool2, tool3)` (the row overload untouched; MC proves equality on every rostered player) | `Assets/Simulation/Baseball/PipelineRules.cs` |
+| Job data and loader | `Assets/Data/Family/parent_jobs.json`, `ParentJobCatalog.cs` |
+| Keys (D9-A, no DDL) | `Assets/Data/Database/GameStateQueries.cs` |
+| Job card, weekly settlement, flags, takeover clear, standing-plan shape, the D6 interrupt rules (`AdvanceInterruptRules`, `AdvanceProbe`, `AdvanceSummary`) | `Assets/Economy/Family/ParentJobService.cs` |
+| Budget, plans, `PlayDrill`, week-end autopilot and fade | `Assets/Economy/Family/ChildTrainingService.cs` |
+| Wiring, `MandatoryBlocks.WorkHours`, the A3 standing plan, shift-day forcing, intents, `AdvanceUntil` / `AdvanceToNextWeek` / `AdvanceToNextSeason` | `Assets/Core/GameManager.cs` |
+| D7-A: `EnableParentPhaseOnRetirement`, the deferral in all three rollover branches; the release after step 2 through `ReleaseAvatar` | `CareerManager.cs`, `PipelineManager.cs` |
+
+### 11.2 Build decisions (B1–B10)
+
+- **B1 — `training_plan` has a seventh field.** `focus:intensity:coachBp:careBp:seasonYear:seasonCoachBp:weekStart`. `weekStart` is the training week of the child's last session (0 = never). The week-end fade ("a child with no session that week") and the autopilot's spread need it across a reload; an in-memory set would forget a drill on reload. Still one text key per child, still no DDL.
+- **B2 — the yearly card keeps the held job when unanswered.** The release's card resolves to Steady (D2-A). The card that returns at each rollover resolves to the job already held (Steady only when that job is now barred), so ignoring the yearly card never changes a Coach into Steady.
+- **B3 — one key day per week.** Every session of a training week, played or autopilot, draws `SessionStream(seed, child, weekStartDay, ordinal)`, where `weekStartDay = day − day % 7` and the ordinal is the session's index in the week (0..budget−1). §4.2's `day` parameter is that week-start day. The (week, ordinal) pairs are unique, and waiting a day can't reroll a session.
+- **B4 — the autopilot's spread.** The unplayed sessions go round-robin over the trainable children (ordered by `player_id`), continuing across weeks (session g of the phase → child g mod n), children with no session that week first. With no drills played it's exactly a continuous round-robin (Carbon's 2–3-child model).
+- **B5 — training needs a job.** No job means a budget of 0, and the week-end does nothing: no autopilot, no fade, no key. That is the identity (MC (4)) and covers the card's 14-day window.
+- **B6 — the week-end runs once.** `ChildTrainingService.ProcessDay` returns when the tick has already opened the new week, so a repeated call on a tick day moves nothing (CoreLoop).
+- **B7 — fast-forward stops are edge-triggered.** Stress stops the day it crosses 70 (`UtilityCalculator.StressOverrideThreshold`), funds the day they cross 0, and a decision card the day it opens. A parent already over a line, or with a card already open (it resolves itself at its deadline), can still fast-forward. What `CanAdvanceDay` refuses (a gritty choice, a pending succession) blocks before a tick. Two stops beyond D6's list: `GameDay` (SR-2a's; never in the phase) and `AvatarChanged` (the takeover at 16 ends the phase). "Next week" runs to the next 7-day tick (payday); "Next season" to the next season's day 1.
+- **B8 — `AdvanceUntil` is synchronous.** It pumps the bus after each day, so it must be called from an intent, never a handler. The gritty dispatcher polls on its own thread, so an event can surface a day or two into a long fast-forward rather than on its exact day. The time bar's intraday clock reset stays with the caller (13-6d).
+- **B9 — where the interrupt rules live.** They're pure statics in `ParentJobService.cs`, because §2's 13-6c paths offer no other Godot-free home; SR-2a can move them beside the stance engine.
+- **B10 — the D7-A deferral sets `LastSuccession` to `NotTriggered`.** The UI never sees a game-over that didn't happen. `RunSuccessionCheck` (public) is unchanged; only the rollover's own path defers.
+
+### 11.3 Outside §2's paths
+
+- `Tools/GrittyEventsHarness/GrittyEventsHarness.csproj`: its `Economy/Family/*.cs` wildcard would compile the two new services without the Baseball files they read, so they're **excluded** there (a one-attribute change; the Gritty harness tests none of them). CoreLoop and MC compile and test them. Without it the solution doesn't build.
+
+### 11.4 Measured in the real loop (for Carbon)
+
+CoreLoop's economy check: 52 fast-forwarded weeks, one child aged 6, $50/wk funding, from $500, walking:
+
+| Job | Net / week | Lowest funds | Carbon §9 Q1 (1 child, $50) |
+| :-- | --: | --: | --: |
+| Coach | +$41.3 | **$14** | +$57.7 |
+| Steady | +$92.7 | $100 | +$92.4 |
+| Nightlife (actual tips) | +$30.8 | $187 | — |
+| Nightlife (tips re-centred on $400) | +$58.8 | — | +$62.8 |
+
+All three pass the gate (solvent, no `FundsDepleted`; Steady above Nightlife's expected net). Steady matches Carbon to $0.30. **Coach runs about $16/wk under Carbon's estimate, and its 52-week low is $14**, so a 2–3-child Coach household at $50/wk funding is likely to touch $0. That's a Math call for Carbon (the wage is a signed value; the build didn't change it).
+
+### 11.5 For 13-6d
+
+- A D7-A retiree's `AvatarReleasedEvent` carries the tier left (Pro, or College/HS for a health-floor retiree), and `PipelineBeatWriter` maps every non-College tier to the Pro release text ("The club is letting you go"). A retirement wants its own line (the age is on the Players row; no new event is needed).
+- Engine surface: `GameManager.TryGetPendingJobChoice`, `ChooseParentJob`, `LoadTrainableChildren`, `GetTrainingBudget`, `CanTrainChild` (`TrainingBlock` reasons), `PlayDrill(childId, score)`, `SetTrainingPlan`, `ParentJobs.TryGetLastSettlement`, `Training.TryGetLastResult`, `AdvanceToNextWeek` / `AdvanceToNextSeason` / `AdvanceUntil` (`AdvanceSummary.Stop`), `StandingPlanQueued`, and `MandatoryBlocks.WorkHours` for the ScheduleScreen's read-only shift row. Job names and reasons are `ui.job.<id>.*` keys the strings table supplies; `parent_jobs.json` holds no player-facing text.

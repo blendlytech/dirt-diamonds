@@ -200,6 +200,8 @@ The bloodline ends — and the game with it — when a retirement trigger fires 
 
 A `SuccessionOutcome` return type carries either `Succeeded(heirId)` or `GameOver(reason)`. (`NoPlayableHeir` could later soften into a "wait for the kid to grow up" mode; for now it is a terminal failure so the 3-generation run is deterministic and terminating.) Multiple children are the natural hedge against `NoWillingHeir` — an emergent incentive to raise more than one heir, needing no extra rules.
 
+**The "wait for the kid to grow up" mode (13-6c D7-A, owner 2026-11-27; [brief](../tasks/13-6c_parent_phase_brief.md) §4.3 item 4).** With the 13-6 pipeline attached (`CareerManager.EnableParentPhaseOnRetirement`, set by `PipelineManager.AttachTo`), a retirement rollover whose outcome is `NoPlayableHeir` or `NoWillingHeir` is **not persisted** when `EvaluateTakeover` still sees a future: a child under 16 (whatever that child's interest today, since the parent phase's care can still win them over), or a willing, unrostered child of 16–18 with ratings. The career defers it, and the pipeline, later in the same rollover, releases the retiree through its own release path into the parent phase ([league_restructure.md](../design/league_restructure.md) §9.4); a willing 16–18-year-old takes over in that same rollover, a younger child at 16. `EvaluateSuccession` itself is unchanged and read-only, and a career without the pipeline (the headless succession fixtures, the MC `lineage-failure` suite) keeps the terminal failure above exactly. `NoHeirs` and an all-16+-unwilling family still end the game.
+
 ---
 
 ## 7. Worked examples (double as harness fixtures)

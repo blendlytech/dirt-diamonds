@@ -259,6 +259,19 @@ public static class PipelineRules
         _ => row.BatPower + row.BatContact + row.BatDiscipline,
     };
 
+    /// <summary>
+    /// 13-6c (brief §2, §10 R6): the same scouting sum over a role and its
+    /// three tools (power/contact/discipline for a batter, stuff/control/
+    /// stamina for a pitcher), for a value that isn't a <see cref="RosterPlayerRow"/>
+    /// (an unrostered parent's ratings or potential). Additive: the row
+    /// overload above is unchanged, and for any row both give the same sum.
+    /// </summary>
+    public static int RoleRatingSum(PitcherRole role, int tool1, int tool2, int tool3) => role switch
+    {
+        PitcherRole.Reliever => tool1 + tool2 + Math.Min(100, tool3 + LeagueGenerator.RelieverStaminaPenalty),
+        _ => tool1 + tool2 + tool3,
+    };
+
     /// <summary>The raw three-tool sum (the gradient metric, 9d §7): no reliever compensation.</summary>
     public static int RawRoleSum(in RosterPlayerRow row) => row.Role == PitcherRole.None
         ? row.BatPower + row.BatContact + row.BatDiscipline

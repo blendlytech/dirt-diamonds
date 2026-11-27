@@ -34,5 +34,17 @@
     <Compile Include="..\..\Assets\Narrative\Roster\*.cs" Link="Narrative\Roster\%(Filename)%(Extension)" />
     <!-- 13-6: the pipeline beat writer (Godot-free). -->
     <Compile Include="..\..\Assets\Narrative\Pipeline\*.cs" Link="Narrative\Pipeline\%(Filename)%(Extension)" />
+    <!--
+      13-6c: the parent phase's loop (the standing plan's needs drain, the
+      family hours, the weekly settlement, the fast-forward) needs the Life
+      sim beside the career, the job data and the three Family services that
+      share the 7-day tick. GameManager's thin glue is re-composed in the
+      fixture (ParentPhaseChecks.cs), as LiveWorld re-composes its boot order.
+    -->
+    <Compile Include="..\..\Assets\Simulation\Life\*.cs" Link="Life\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Data\Family\*.cs" Link="Data\Family\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Economy\Family\ParentJobService.cs" Link="Economy\Family\ParentJobService.cs" />
+    <Compile Include="..\..\Assets\Economy\Family\ChildTrainingService.cs" Link="Economy\Family\ChildTrainingService.cs" />
+    <Compile Include="..\..\Assets\Economy\Family\ChildRearingService.cs" Link="Economy\Family\ChildRearingService.cs" />
   </ItemGroup>
 </Project>

@@ -71,7 +71,14 @@
       are §9.1's HS-3 acceptance surface, proven here.
     -->
     <Compile Include="..\..\Assets\Economy\Phone\*.cs" Link="Economy\Phone\%(Filename)%(Extension)" />
-    <Compile Include="..\..\Assets\Economy\Family\*.cs" Link="Economy\Family\%(Filename)%(Extension)" />
+    <!--
+      13-6c: the parent-phase services read the Baseball training rules and the
+      pipeline's role sums, which this harness doesn't compile; CoreLoopHarness
+      and MonteCarloHarness compile and test them instead.
+    -->
+    <Compile Include="..\..\Assets\Economy\Family\*.cs"
+             Exclude="..\..\Assets\Economy\Family\ParentJobService.cs;..\..\Assets\Economy\Family\ChildTrainingService.cs"
+             Link="Economy\Family\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\AtBatResolver.cs" Link="Baseball\AtBatResolver.cs" />
     <Compile Include="..\..\Assets\Simulation\Baseball\TierEffects.cs" Link="Baseball\TierEffects.cs" />
     <Compile Include="..\..\Assets\Simulation\Baseball\EquipmentEffects.cs" Link="Baseball\EquipmentEffects.cs" />

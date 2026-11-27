@@ -29,7 +29,7 @@ When your career ends, a willing child can pick up the bat, and the family carri
 | **The Pro career** | 64-game seasons, the Sunday roster lock, the record chase against your father's mark, money, fame, marriage, children, affairs, substances, scandals, injuries. | §4, §7, §8 |
 | **The reveal** | Win the **Pro World Championship**, or reach **career end** (retirement, permanent ban or death): whichever comes first, you learn the truth. | §6 |
 | **Career end** | Retirement, a lifetime ban, or death. | §4, §8 |
-| **Succession** | Any willing child aged 19+ (born, adopted in, or reclaimed) becomes the new player character. With no willing heir, the lineage is over and the game ends. | §7 |
+| **Succession** | Any willing child (born, adopted in, or reclaimed) becomes the new player character: one aged 19+ when you retire, or, once you're released or retire with only younger children, one who takes over at 16 as an HS freshman after you've raised them in the parent phase (a job, backyard training, the household). With no willing heir, the lineage is over and the game ends. | §7 |
 | **The next generation** | Your heir lives their own career. Secrets you left behind (a child you placed for adoption) can step into the batter's box against them. | §7 |
 
 ## 3. Design pillars
