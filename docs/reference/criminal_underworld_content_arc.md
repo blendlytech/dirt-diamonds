@@ -2,7 +2,7 @@
 
 > **Reference (shipped system).** This doc describes code as built. Its "Status" lines and its author names ("Fable 5", "Opus 4.8", "Sonnet 5") are historical; current roles live in [TEAM.md](../TEAM.md), and the game in [GAME_VISION.md](../GAME_VISION.md) v2. **Planned changes (2026-10-10):** cocaine debt can feed the dealer/syndicate threads ([substances](../design/substances_and_addiction.md) §2.3).
 
-> **Planned changes (2026-10-09):** Tier ordinals become `HS=0, College=1, Pro=2` in schema v14 ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. Key beats gain story cutscenes ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §6). (Voice notes were cut on 2026-10-10.)
+> **Planned 2026-10-09; landed in schema v14 (slice 13-1), ripple closed in 13-7 (2026-11-26):** Tier ordinals are now `HS=0, College=1, Pro=2` (schema v14) ([league_restructure.md](../design/league_restructure.md)), so `tier >= 2` still means pro ball and no gate needs editing. Read any minor-league wording as Pro. Key beats gain story cutscenes ([cutscenes_motion_comic.md](../design/cutscenes_motion_comic.md) §6). (Voice notes were cut on 2026-10-10.)
 
 **Author:** Claude Opus 4.8 (narrative architecture) · **Slice:** Content arc, batch 1 of a multi-batch criminal spine · **Status:** spec written for Sonnet 5 to author `DIRT-1` against; Fable 5 reviews + gates. Companion to `docs/reference/gritty_event_framework.md` (the content contract this obeys) and `docs/reference/presentation_layer_narrative.md` (contacts/threads).
 

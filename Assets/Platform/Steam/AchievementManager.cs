@@ -24,8 +24,8 @@ public sealed class AchievementManager
     // Steamworks partner site in 11e. Against the 11a dev appid (Spacewar)
     // none of these exist, so a live-client unlock fails server-side silently:
     // the expected dev state, same posture as no client at all.
-    private const string AchWentPro = "ACH_WENT_PRO";
-    private const string AchTheShow = "ACH_THE_SHOW";
+    // The tier achievement ids live in SteamRules (the pure decision, linked into
+    // the MC harness); the milestone ids stay here.
     private const string AchNextOfKin = "ACH_NEXT_OF_KIN";
     private const string AchDynasty = "ACH_DYNASTY";
     private const string AchEndOfTheLine = "ACH_END_OF_THE_LINE";
@@ -128,8 +128,8 @@ public sealed class AchievementManager
     /// avatar activated before the bus attached (CareerManager's
     /// LoadExistingAvatar publishes nothing), so GameManager syncs it directly —
     /// the SyncLifeSimAvatar precedent. Re-asserting the persisted-state
-    /// milestones here is exactly the §4.3 reload case: a save already in MLB
-    /// or at generation 3 re-sets an already-set flag, a harmless no-op, and it
+    /// milestones here is exactly the §4.3 reload case: a save already on a Pro
+    /// roster or at generation 3 re-sets an already-set flag, a harmless no-op, and it
     /// closes the gap for saves that earned a milestone before 11b existed (or
     /// while Steam was down).
     /// </summary>
@@ -141,8 +141,8 @@ public sealed class AchievementManager
     }
 
     /// <summary>
-    /// Creation, succession, and the 9c promotion republish all land here.
-    /// Succession commits DynastyGeneration before ActivateAvatar publishes
+    /// Creation, succession, a pipeline move (graduation, the draft) and the
+    /// parent-phase release (team id 0) all land here. Succession commits DynastyGeneration before ActivateAvatar publishes
     /// (CareerManager.Succeed), so the milestone read below is never stale —
     /// including the interactive heir-choice path, which resolves outside any
     /// season rollover.
@@ -222,18 +222,14 @@ public sealed class AchievementManager
         {
             return;
         }
-        // Went Pro covers every professional rung; The Show was the MLB rung —
-        // both re-assertable, so a promotion republish or a reload just re-sets.
-        // Schema v14 has one professional tier, so both now fire on the same
-        // event (compile-only mapping, 13-1 brief §4.6); slice 13-7 redesigns
-        // the achievement set (steam_commercial_release.md §3).
-        if (tier >= LeagueTier.Pro)
+        // Schema v14 has one professional tier, so exactly one tier achievement
+        // exists (13-7 D1-A; the old Went Pro id is retired, see README.md). The
+        // decision is SteamRules'; every unlock is an idempotent re-assert, so a
+        // pipeline move or a reload just re-sets it. Slice 17a builds the rest of
+        // the commercial set (steam_commercial_release.md §3).
+        foreach (string achievement in SteamRules.TierAchievements(tier))
         {
-            _steam.TrySetAchievement(AchWentPro);
-        }
-        if (tier == LeagueTier.Pro)
-        {
-            _steam.TrySetAchievement(AchTheShow);
+            _steam.TrySetAchievement(achievement);
         }
     }
 

@@ -24,6 +24,12 @@
     <Compile Include="..\..\Assets\Data\Schools\*.cs" Link="Data\Schools\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Core\*.cs" Exclude="..\..\Assets\Core\GameManager.cs" Link="Core\%(Filename)%(Extension)" />
     <Compile Include="..\..\Assets\Simulation\Baseball\*.cs" Link="Baseball\%(Filename)%(Extension)" />
+    <!--
+      13-7: the Steam layer's pure decisions (tier/status tokens, tier achievements).
+      Only SteamRules.cs: the rest of Assets/Platform/Steam needs Facepunch, so this
+      one Steam-free, Godot-free file is linked and the others are proven by a source scan.
+    -->
+    <Compile Include="..\..\Assets\Platform\Steam\SteamRules.cs" Link="Platform\Steam\SteamRules.cs" />
     <!-- 13-5: the coach-beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
     <Compile Include="..\..\Assets\Narrative\Roster\*.cs" Link="Narrative\Roster\%(Filename)%(Extension)" />
     <!-- 13-6: the pipeline's beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
