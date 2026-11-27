@@ -136,8 +136,8 @@ Recommendations first. **Status: DECIDED by the owner, 2026-11-26: D1 A, D2 A, D
 
 - [x] §0 recorded; D1–D6 applied as decided; §4 items 1–7 built. (Sonnet 5.5, 2026-11-26)
 - [x] §5 gates green; both MC SHA-256s and the live-boot observations recorded in the handoff. (Sonnet 5.5, 2026-11-26)
-- [ ] Gemini 4 Carbon's review passed. Then Opus merges into `p13/integration`.
-- [ ] Handoff (§8) and one `progress.md` line. **Then stop.**
+- [x] Gemini 4 Carbon's review passed (§9, PASS WITH FIXES: S1, N1, N2), Opus reconciled (§10, `b0060c9`), Gemini 4 Neon's delta review passed (§11, PASS 0/0/0, `2c484c4`). Then Opus merges into `p13/integration`. (Opus 5.5, 2026-11-27)
+- [x] Handoff (§8) and one `progress.md` line. **Then stop.** (Sonnet 5.5 build line, Carbon §9, Opus §10, Neon §11 and the merge entry, 2026-11-26/27)
 
 ## 7. Out of scope
 
