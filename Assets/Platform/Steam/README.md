@@ -88,7 +88,7 @@ Keys the game sets:
 | :-- | :---- | :--- |
 | `steam_display` | `#Status_Career`, `#Status_Family` or `#Status_BetweenCareers` | every publish |
 | `season` | season year, invariant digits | career publishes |
-| `tier` | a `#Tier_*` sub-token (values starting with `#` localize too); **an empty value when the avatar has no team**, which deletes the key | career publishes |
+| `tier` | a `#Tier_*` sub-token (values starting with `#` localize too); **an empty value when the avatar has no team or the lineage is over**, which deletes the key | career and between-careers publishes |
 | `player` | avatar first + last name | career publishes (row resolves) |
 | `age` | avatar age, invariant digits | career publishes (row resolves) |
 
@@ -110,14 +110,16 @@ retired and the code never emits them; don't enter them on the partner site. (13
 Spacewar dev id, with no rich-presence localization entered on the partner site, so there
 was nothing to migrate.) Slice 17a adds `#Phase_Playoffs` and `#Phase_DraftNight`.
 
-(The tier display names mirror `BaseballDashboard`'s exported `TierNamesCsv` defaults
+(The tier display names mirror `PlayerScreen`'s exported `TierNamesCsv` defaults
 so the friends list and the in-game scouting card agree.)
 
 Publish cadence: avatar creation / succession / a pipeline move / the parent-phase
 release (all on `AvatarChangedEvent`), the season tick (year + yearly-aged age), and
 boot. A boot with no avatar — or a save whose `lineage_over_reason` is set, which still
-carries the parked retiree's avatar pointer — publishes `#Status_BetweenCareers`; a
-game-over rollover flips to it live. A released avatar (no team, the bloodline still
+carries the parked retiree's avatar pointer — publishes `#Status_BetweenCareers` and clears
+the `tier` key; a game-over rollover flips to it live and keeps it, even though the
+pipeline re-activates the parked avatar unrostered in the same pump (every entry point
+checks `lineage_over_reason` first). A released avatar (no team, the bloodline still
 holds the career) publishes `#Status_Family` with the `tier` key cleared, on the live
 switch and on a boot into that state alike, and reverts to `#Status_Career` the next
 time a rostered avatar is published (a succession takeover).

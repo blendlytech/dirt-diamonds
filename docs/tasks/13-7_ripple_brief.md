@@ -276,3 +276,40 @@ Every build, calibration, reconstruction, core-loop, narrative and scope gate re
     - `Assets/UI/PlayerScreen.cs:33`: `public string TierNamesCsv { get; set; } = "High School,College,Pro";`
   - **Detail:** `TierNamesCsv` moved from `BaseballDashboard` to `PlayerScreen` in the earlier phone UI reorg (`BaseballDashboard.cs:28–34`). Optional one-word doc tidy while `README.md` is open.
 
+
+---
+
+## 10. Reconciliation — Claude Opus 5.5
+
+**Reconciler:** Claude Opus 5.5 (integration lead), **2026-11-26**, on `p13/13-7-reconcile-opus` (worktree `C:\Users\DELL\dnd-opus-137-reconcile`) from `02fe1fb` (= `6a49dae` + Carbon's §9). **Route: TEAM.md §1a Option B.** Opus authored the S1 code fix, so Opus can't approve it. The delta touches only `Assets/Platform/Steam/` and `Tools/MonteCarloHarness/`, with **zero** `Assets/Simulation/`, schema, persistence or `EffectiveRatings` paths, so **Gemini 4 Neon** reviews it (§11) before the merge.
+
+### 10.1 Citation check (all verified at `6a49dae`)
+
+| Finding | Carbon's citations | Verdict |
+| :-- | :-- | :-- |
+| **S1** | `RichPresenceWriter.cs:121–126` (no guard) vs `:95–99`, `:138–142`; `:167–169` (the "only reached with a live bloodline" invariant); `PipelineManager.cs:1781–1785` (NoHeirs), `:1807–1811` (takeover GameOver), `:1925–1936` (in-batch writes), `:1986–1989` (`ReactivateAvatar`); `CareerManager.cs:853`, `:1259–1268` | **Confirmed.** The chain also holds at the bus: `PipelineManager.OnSeasonRolledOver` (`:319`) is a `SeasonRolledOverEvent` handler; `WriteReleaseStateInBatch` (`CareerManager.cs:1369`) writes `lineage_over_reason` for NoHeirs, `WriteGameOverInBatch` (`:1390`) for the others; `EventBus.Publish` only enqueues and `DispatchPending` drains events published during the drain (`EventBus.cs:65–85`); `RichPresenceWriter` subscribes after the pipeline (`GameManager.cs:829` vs `Pipeline.AttachTo` at `:610`). So the queued `AvatarChangedEvent(id, 0)` reaches `OnAvatarChanged` after `OnSeasonRolledOver` has set `#Status_BetweenCareers`. `lineage_over_reason` is never cleared (writers `CareerManager.cs:1307, 1369, 1390` only), so the guard can't hide a live career. `AchievementManager.OnAvatarChanged` is unaffected (team 0 makes `EvaluateTier` a no-op) |
+| **N1** | `Slice137Suites.cs:119`, `:138–140`, `:179`; `Standings.cs:109–120` | **Confirmed** (harmless today, as Carbon says) |
+| **N2** | `README.md:113`; `PlayerScreen.cs:33` | **Confirmed** |
+
+### 10.2 Fixes (`p13/13-7-reconcile-opus`)
+
+- **S1 (fixed):** `RichPresenceWriter.OnAvatarChanged` opens with `if (LineageIsOver()) { SetBetweenCareers(); return; }`, the same guard as `SyncFromBoot` and `OnSeasonRolledOver`, so all three entry points uphold `PublishCareerPresence`'s live-bloodline invariant. **Optional part taken:** `SetBetweenCareers` also clears `TierKey` (`string.Empty`), so a career's last tier never stays latched under `#Status_BetweenCareers`. The doc comment records the same-pump ordering.
+- **S1 pin (harness):** the existing `13-7 source scan` check (same check, renamed, so the `ripple` count stays 12) now slices each method body (`MethodBody`) and requires, in `SyncFromBoot`, `OnAvatarChanged` and `OnSeasonRolledOver`, `if (LineageIsOver())` → `SetBetweenCareers();` → `PublishCareerPresence();` in that order (`GuardsLineageOver`), plus `SetRichPresence(TierKey, string.Empty)` inside `SetBetweenCareers`. A file-wide `Contains` would pass with only one method guarded. **Mutation-tested:** with `6a49dae`'s `RichPresenceWriter.cs` the check fails (`ripple` 11/12); with only the `OnAvatarChanged` guard removed it fails with `unguarded: private void OnAvatarChanged(`; with the fix it passes `3/3 guarded`.
+- **N1 (taken):** `GroupsOrderedByWinPct` compares with `SeasonTable.CompareFraction` (0-0 reads ½, exactly as `Standings.Order`); `hsShape` also requires two distinct conference ids. **Not taken:** a tied-record fixture. `Standings.Order`'s tiebreaks are pinned by its own suite (`Slice134Suites.cs:359–405`), and `GetStandings` calls it unchanged.
+- **N2 (taken):** `README.md:113` `BaseballDashboard` → `PlayerScreen`. The README's `tier` key row and publish-cadence paragraph now also say that the between-careers status clears `tier` and survives the game-over rollover's re-activation.
+
+No DDL, SQL, schema, event, sim or content change; every path is inside §2.
+
+### 10.3 Gates on the reconciled tree
+
+| Gate | Result |
+| :-- | :-- |
+| Build | `dotnet build DirtAndDiamonds.sln -c Debug`: **0 warnings / 0 errors** |
+| MC default | **623/623 PASS** (`ripple` 12/12, `ui-strings` 9/9). Normalized SHA-256 (CRLF→LF, `\d+(\.\d+)? ms` → `N ms`): **`c9f2caf8a972c0e64288c2fec9a1a28f0d6937cc3fba6eacab6a5cbf45c92aa2`**. It differs from Carbon's `9c4703c8…` only by the renamed source-scan check line. Carbon's §9.1 recipe (drop `--- 13-7 ripple`, the 15 `[PASS] 13-7` lines and `ok   ripple: 12/12`; restore `ok   ui-strings: 6/6`, `608/608 checks passed.`, `non-empty — 67 keys`) reproduces **`646f3618f74e18cfbca80bf7ebc826c1b77a2e0f2050ca0a16765f7d5d88481e`** byte-exact. Pro guard **PA 81433 / H 18471 / ER 8803**, ledger **`932ACE26…8B84`** |
+| CoreLoop | **43/43** (Life ↔ Baseball boundary scan clean) |
+| Gritty | **363/363** (idle poll 464 B/poll) |
+| Not rerun (no inputs changed) | event graph (no content), Godot `--import`/parity (no `strings.csv`, scene or translation change), live boot (presence no-ops without a Steam client; the behaviour is pinned by the MC source scan, as in §5) |
+
+### 10.4 Next
+
+**Gemini 4 Neon** delta-reviews `02fe1fb..<this commit>` on `p13/13-7-delta-review-neon` (`.worktrees/13-7-delta-review-neon`, pre-created by Opus) and records §11. On a clean PASS, Opus fast-forwards this branch to Neon's §11 commit, ticks §6 boxes 3–4 and merges `--no-ff` into `p13/integration`. `main` waits for the owner's go-ahead.

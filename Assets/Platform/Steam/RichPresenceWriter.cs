@@ -110,6 +110,9 @@ public sealed class RichPresenceWriter
     public void SetBetweenCareers()
     {
         _avatarId = null;
+        // An ended bloodline has no tier either; clear it so a career's last
+        // tier never stays latched under the between-careers status.
+        _steam.SetRichPresence(TierKey, string.Empty);
         _steam.SetRichPresence(SteamDisplayKey, SteamRules.StatusBetweenCareersToken);
     }
 
@@ -117,9 +120,19 @@ public sealed class RichPresenceWriter
     /// Creation, succession, a pipeline move and the parent-phase release all
     /// land here. A release publishes team id 0, which PublishCareerPresence
     /// reads as no team: the family status, with the tier key cleared.
+    /// A game-over rollover (D4b-C NoHeirs, parent-phase NoWillingHeir) still
+    /// re-activates the parked avatar unrostered, and that AvatarChangedEvent
+    /// dispatches after OnSeasonRolledOver in the same pump. The lineage-over
+    /// guard keeps it from replacing #Status_BetweenCareers with #Status_Family
+    /// (13-7 review S1), as in SyncFromBoot and OnSeasonRolledOver.
     /// </summary>
     private void OnAvatarChanged(AvatarChangedEvent e)
     {
+        if (LineageIsOver())
+        {
+            SetBetweenCareers();
+            return;
+        }
         _avatarId = e.AvatarPlayerId;
         _avatarTeamId = e.TeamId;
         PublishCareerPresence();

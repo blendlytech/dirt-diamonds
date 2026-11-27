@@ -86,12 +86,54 @@ internal static partial class Program
 
         string achievements = File.ReadAllText(Path.Combine(steamDir, "AchievementManager.cs"));
         string presence = File.ReadAllText(Path.Combine(steamDir, "RichPresenceWriter.cs"));
-        Check("13-7 source scan: AchievementManager takes its tier achievements from SteamRules; RichPresenceWriter takes tier and status tokens from it and clears the tier key for a team-less avatar",
+        // Review S1: every entry point that can publish a career status routes a
+        // lineage-over state to SetBetweenCareers before it publishes, and that
+        // status clears the tier key. Scanned per method body, because a
+        // file-wide Contains passes as long as any one method has the guard.
+        string[] guarded = { "public void SyncFromBoot(", "private void OnAvatarChanged(", "private void OnSeasonRolledOver(" };
+        string[] unguarded = guarded.Where(m => !GuardsLineageOver(MethodBody(presence, m))).ToArray();
+        bool betweenClearsTier = MethodBody(presence, "public void SetBetweenCareers(")
+            .Contains("SetRichPresence(TierKey, string.Empty)", StringComparison.Ordinal);
+        Check("13-7 source scan: AchievementManager takes its tier achievements from SteamRules; RichPresenceWriter takes tier and status tokens from it, clears the tier key for a team-less avatar and between careers, and SyncFromBoot, OnAvatarChanged and OnSeasonRolledOver each route a finished lineage to SetBetweenCareers before publishing",
             achievements.Contains("SteamRules.TierAchievements(", StringComparison.Ordinal)
             && presence.Contains("SteamRules.TierToken(", StringComparison.Ordinal)
             && presence.Contains("SteamRules.StatusToken(", StringComparison.Ordinal)
             && presence.Contains("SetRichPresence(TierKey, hasTeam ?", StringComparison.Ordinal)
-            && presence.Contains("string.Empty", StringComparison.Ordinal));
+            && betweenClearsTier && unguarded.Length == 0,
+            unguarded.Length == 0 ? (betweenClearsTier ? "3/3 guarded" : "SetBetweenCareers keeps the tier key") : "unguarded: " + string.Join(", ", unguarded));
+    }
+
+    /// <summary>
+    /// The text from a method's signature to the next member signature (or the
+    /// end of the file); empty when the signature is missing, which fails
+    /// the caller's check.
+    /// </summary>
+    private static string MethodBody(string source, string signature)
+    {
+        int start = source.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return string.Empty;
+        }
+        int next = source.Length;
+        foreach (string member in new[] { "\n    public ", "\n    private ", "\n    internal ", "\n    /// <summary>" })
+        {
+            int at = source.IndexOf(member, start + signature.Length, StringComparison.Ordinal);
+            if (at >= 0 && at < next)
+            {
+                next = at;
+            }
+        }
+        return source[start..next];
+    }
+
+    /// <summary>True when the body calls LineageIsOver and SetBetweenCareers before its first career publish.</summary>
+    private static bool GuardsLineageOver(string body)
+    {
+        int guard = body.IndexOf("if (LineageIsOver())", StringComparison.Ordinal);
+        int between = body.IndexOf("SetBetweenCareers();", StringComparison.Ordinal);
+        int publish = body.IndexOf("PublishCareerPresence();", StringComparison.Ordinal);
+        return guard >= 0 && between > guard && publish > between;
     }
 
     // ------------------------------------------------------------------
@@ -134,10 +176,15 @@ internal static partial class Program
         return written;
     }
 
-    /// <summary>True when every group's rows run best win% first (exact cross-multiplication; 0-game teams skip).</summary>
+    /// <summary>
+    /// True when every group's rows run best win% first, compared exactly as
+    /// Standings.Order compares them (SeasonTable.CompareFraction: a 0-0 record
+    /// reads as ½, so a 0-2 row ahead of a 0-0 row fails; review N1).
+    /// </summary>
     private static bool GroupsOrderedByWinPct(StandingsView view) =>
         view.Groups.All(g => g.Rows.Zip(g.Rows.Skip(1)).All(p =>
-            (long)p.First.Wins * (p.Second.Wins + p.Second.Losses) >= (long)p.Second.Wins * (p.First.Wins + p.First.Losses)));
+            SeasonTable.CompareFraction(p.First.Wins, p.First.Wins + p.First.Losses,
+                p.Second.Wins, p.Second.Wins + p.Second.Losses) >= 0));
 
     /// <summary>True when every view row's W/L/RS/RA equals its Team_Seasons row (and every team has one).</summary>
     private static bool ViewMatchesTeamSeasons(StandingsView view, List<TeamSeasonRow> seasons, out string detail)
@@ -176,7 +223,8 @@ internal static partial class Program
         StandingsView hsView = playoffs.GetStandings(hsYear, LeagueTier.HS);
         var hsSeasons = new List<TeamSeasonRow>();
         w.Queries.LoadTeamSeasons(hsYear, LeagueTier.HS, hsSeasons);
-        bool hsShape = hsView.Groups.Count == 2 && hsView.Groups.All(g => g.DivisionId is null && g.Rows.Count == 6);
+        bool hsShape = hsView.Groups.Count == 2 && hsView.Groups.All(g => g.DivisionId is null && g.Rows.Count == 6)
+            && hsView.Groups.Select(g => g.ConferenceId).Distinct().Count() == 2;
         bool hsSeeds = hsView.Groups.All(g =>
             g.Rows.Take(3).Select(r => r.Seed).SequenceEqual(new int?[] { 1, 2, 3 }) && g.Rows.Skip(3).All(r => !r.Seed.HasValue));
         Check("13-7 GetStandings vs selection (HS): two conference groups of six, no divisions; each conference's top three rows are seeds 1, 2, 3 in order",
