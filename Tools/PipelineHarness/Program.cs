@@ -219,7 +219,119 @@ internal static class Program
             m.HygieneFailures.Count == 0, m.HygieneFailures.Count > 0 ? m.HygieneFailures[0] : "clean");
         Check("determinism: two same-seed 20-season runs are byte-identical", m.Fingerprint == twin.Fingerprint && m.Fingerprint.Length > 0,
             $"{m.Fingerprint[..Math.Min(16, m.Fingerprint.Length)]} vs {twin.Fingerprint[..Math.Min(16, twin.Fingerprint.Length)]}");
+
+        RunRetirementReleaseFixtures(schemaPath);
     }
+
+    // ------------------------------------------------------------------
+    // 13-6c D7-A: a retirement with a future takeover runs through the
+    // pipeline's own ReleaseAvatar (brief §4.3 item 4, §10 R2)
+    // ------------------------------------------------------------------
+
+    private static void RunRetirementReleaseFixtures(string schemaPath)
+    {
+        string basePath = Path.Combine(Path.GetTempPath(), $"dnd_pipeline_d7_{Guid.NewGuid():N}.db");
+        TempPaths.Add(basePath);
+        using (var db = new DatabaseManager(basePath))
+        {
+            db.InitializeSchema(schemaPath);
+            var rng = new RngState(WorldSeed + 136);
+            LeagueGenerator.GenerateIfEmpty(db, new PlayerQueries(db), new BaseballQueries(db), LeagueGenerator.DefaultRatingSpread, ref rng);
+            db.CheckpointForSync();
+        }
+
+        // One retiree per tier: a 41-year-old Pro bat (age 42 at the rollover), and two
+        // health-floor retirees (health 40) in College and HS. Each has a young child.
+        foreach ((LeagueTier tier, int teamId, int age, int childAge) in new[]
+            {
+                (LeagueTier.Pro, LeagueStructure.TeamIdBase(LeagueTier.Pro) + 9, 41, 10),
+                (LeagueTier.College, LeagueStructure.TeamIdBase(LeagueTier.College) + 4, 21, 2),
+                (LeagueTier.HS, LeagueStructure.TeamIdBase(LeagueTier.HS) + 2, 16, 1),
+            })
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"dnd_pipeline_d7_{tier}_{Guid.NewGuid():N}.db");
+            TempPaths.Add(path);
+            File.Copy(basePath, path);
+            using var db = new DatabaseManager(path);
+            var players = new PlayerQueries(db);
+            var baseball = new BaseballQueries(db);
+            var gameState = new GameStateQueries(db);
+            var queries = new PipelineQueries(db);
+            db.RunInBatch(() =>
+            {
+                gameState.SetInt64(GameStateKeys.CurrentDay, GlobalState.DaysPerSeason - 2);
+                gameState.SetInt64(GameStateKeys.StartSeasonYear, StartYear);
+            });
+            var state = new GlobalState();
+            var bus = new EventBus();
+            var clock = new TimeManager(db, gameState, state, bus);
+            clock.Initialize(StartYear);
+            var leagues = new LeagueDirectory();
+            var normalizer = new StatsNormalizer(db, baseball);
+            for (int t = 0; t < LeagueDirectory.TierCount; t++)
+            {
+                var sim = new LeagueSimulator(db, baseball, normalizer, new RngState(SeasonSeed + (ulong)t), (LeagueTier)t);
+                sim.Initialize();
+                leagues.Register(sim);
+            }
+            var micro = new MicroGame(db, baseball) { LoggingEnabled = false };
+            micro.Initialize();
+            var career = new CareerManager(db, players, baseball, gameState, state, leagues, micro, new RngState(0x136C_D7A7UL));
+            career.CreateAvatar("Old", "Hand", teamId, new PlayerRatingsRow
+            {
+                BatPower = 60, BatContact = 60, BatDiscipline = 60, PitStuff = 50, PitControl = 50, PitStamina = 50, Fielding = 50,
+            });
+            string avatarId = career.AvatarPlayerId;
+            players.SetAge(avatarId, age);
+            if (tier != LeagueTier.Pro)
+            {
+                players.AdjustHealthCeiling(avatarId, HeirGenetics.HeirGeneticsProfile.HealthRetirementFloor - 100);
+            }
+            if (tier == LeagueTier.College)
+            {
+                queries.UpsertEnrollment(new CollegeEnrollmentRow { PlayerId = avatarId, TeamId = teamId, EntrySeason = StartYear - 2, ClassYear = 3 });
+            }
+            string child = career.ConceiveChild("Young", "Hand", birthAge: childAge - 1);
+            players.SetBaseballInterest(child, 100);
+            career.AttachTo(bus);
+            var development = new DevelopmentManager(db, players, baseball, gameState, leagues, micro, new RngState(DevelopmentSeed)) { Career = career };
+            development.AttachTo(bus);
+            var pipeline = new PipelineManager(db, players, baseball, gameState, state, leagues) { Micro = micro, Career = career };
+            pipeline.EnsureSeed(PipelineProfile.DefaultPipelineSeed);
+            pipeline.AttachTo(bus);
+            var released = new List<AvatarReleasedEvent>();
+            bus.Subscribe<AvatarReleasedEvent>(e => released.Add(e));
+
+            int teamBefore = CountOnTeam(baseball, teamId);
+            bool optedIn = career.EnableParentPhaseOnRetirement;
+            while (state.DayOfSeason != 1)
+            {
+                clock.AdvanceDay();
+                bus.DispatchPending();
+            }
+            players.TryGetById(avatarId, out PlayerRow after);
+            var flags = new List<EntityFlagRow>();
+            players.LoadActiveFlags(avatarId, flags);
+            bool retiredOnly = flags.Any(f => f.FlagName == PipelineFlags.Retired) && !flags.Any(f => f.FlagName == PipelineFlags.FreeAgent);
+            var enrollments = new List<CollegeEnrollmentRow>();
+            queries.LoadEnrollments(enrollments);
+            var picks = new List<DraftPickRow>();
+            queries.LoadDraftPicks(StartYear, picks);
+            bool untouched = !after.TeamId.HasValue && retiredOnly && !enrollments.Any(e => e.PlayerId == avatarId)
+                && !picks.Any(p => p.PlayerId == avatarId);
+            int teamAfter = CountOnTeam(baseball, teamId);
+            // HS: a departure is refilled 1-for-1 by intake; College and Pro aren't backfilled at the rollover.
+            bool tierBookkeeping = tier == LeagueTier.HS ? teamAfter == teamBefore : teamAfter <= teamBefore - 1;
+            Check($"13-6c D7-A ({tier}): a retiree ({(tier == LeagueTier.Pro ? "age 42" : "health 40")}) with a young child is released by the pipeline's own ReleaseAvatar — AvatarReleasedEvent once from {tier}, unrostered and pipeline_retired only (no free-agent flag, no draft pick, no enrollment row: no later pass touched the avatar), the retiree's tier bookkeeping applied, the parent phase on",
+                optedIn && pipeline.LastRun.AvatarReleased && released.Count == 1 && released[0].Tier == (byte)tier
+                && released[0].EnteredParentPhase && untouched && tierBookkeeping
+                && career.InParentPhase && !career.IsLineageOver && !career.IsAvatarRostered
+                && !db.IsBatchActive && db.RunForeignKeyCheck() == 0,
+                $"released {released.Count}, team {teamBefore}→{teamAfter}, flags [{string.Join(",", flags.Select(f => f.FlagName))}], phase {career.InParentPhase}");
+        }
+    }
+
+    private static int CountOnTeam(BaseballQueries baseball, int teamId) => LoadAll(baseball).Count(r => r.TeamId == teamId);
 
     private static Metrics RunOffseasonWorld(string schemaPath, bool collect)
     {

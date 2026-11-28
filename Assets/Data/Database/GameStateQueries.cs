@@ -116,6 +116,41 @@ public static class GameStateKeys
     /// Missing (an avatar created above HS) → the lowest-team_id HS team.
     /// </summary>
     public const string FamilyHsTeamId = "family_hs_team_id";
+
+    // ---- 13-6c (brief §3 D9-A): the parent phase's jobs and training. No
+    //      DDL: every key is absent until first use, so a save with no job,
+    //      no session and no parent phase never gains one. Game_State has no
+    //      delete, so a cleared key is written "" (text) or 0 (integer). ----
+
+    /// <summary>The held job's id (text: coach | steady | nightlife); "" or absent = no job.</summary>
+    public const string ParentJob = "parent_job";
+
+    /// <summary>The absolute day the held job started (long); 0 or absent = no job.</summary>
+    public const string ParentJobSinceDay = "parent_job_since_day";
+
+    /// <summary>The absolute day the open job card was raised (long); 0 or absent = no card. The card's deadline is 14 days later (D2-A).</summary>
+    public const string ParentJobPendingSinceDay = "parent_job_pending_since_day";
+
+    /// <summary>The parent phase's one seed (long), written once on first use by either service, never from the boot chain; training sessions and Nightlife tips derive from it (A5, R5).</summary>
+    public const string ParentPhaseSeed = "parent_phase_seed";
+
+    /// <summary>The start day (long, a multiple of 7) of the training week <see cref="TrainingSessionsUsed"/> counts.</summary>
+    public const string TrainingWeekStartDay = "training_week_start_day";
+
+    /// <summary>Training sessions spent in the week <see cref="TrainingWeekStartDay"/> names (long).</summary>
+    public const string TrainingSessionsUsed = "training_sessions_used";
+
+    /// <summary>
+    /// Prefix of the per-child plan key, <c>training_plan:&lt;childId&gt;</c> (text,
+    /// <c>focus:intensity:coachBp:careBp:seasonYear:seasonCoachBp:weekStart</c>):
+    /// the standing plan, the signed basis-point carries, the season cap's
+    /// running total and the child's last training week. Written on first use
+    /// only.
+    /// </summary>
+    public const string TrainingPlanPrefix = "training_plan:";
+
+    /// <summary>The plan key for one child.</summary>
+    public static string TrainingPlan(string childId) => TrainingPlanPrefix + childId;
 }
 
 /// <summary>

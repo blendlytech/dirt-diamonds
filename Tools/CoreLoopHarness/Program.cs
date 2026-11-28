@@ -49,6 +49,7 @@ internal static partial class Program
             RunPostseasonClockChecks(schemaPath, postseasonPath);
             RunRosterClockChecks(schemaPath, rosterPath);
             RunPipelineClockChecks(schemaPath, pipelinePath, parentPath);
+            RunParentPhaseChecks(schemaPath, parentPath + ".136c");
             RunBoundaryScan(repoRoot);
         }
         catch (Exception ex)

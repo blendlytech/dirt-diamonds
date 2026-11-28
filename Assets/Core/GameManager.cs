@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Data.Family;
 using DirtAndDiamonds.Data.League;
 using DirtAndDiamonds.Data.Schools;
 using DirtAndDiamonds.Economy.Equipment;
@@ -51,6 +52,9 @@ public sealed partial class GameManager : Node
 
     // Schema v14 home parks (13-1a content), read once at world-gen.
     private const string HomeParksResourcePath = "res://Assets/Data/League/home_parks.json";
+
+    // 13-6c (brief §4.1): the parent-phase job profiles — pure data like schools.json.
+    private const string ParentJobsResourcePath = "res://Assets/Data/Family/parent_jobs.json";
     private const int NewGameStartYear = 2026;
 
     public static GameManager? Instance { get; private set; }
@@ -150,6 +154,15 @@ public sealed partial class GameManager : Node
 
     /// <summary>HS-5 §7.1: the weekly child-rearing tick — the avatar's own children, the reverse direction from <see cref="Family"/>.</summary>
     public ChildRearingService ChildRearing { get; private set; } = null!;
+
+    /// <summary>13-6c: the parent phase's job (card, weekly settlement, flags) — public like ChildRearing so the phone's job card and Family tab read it.</summary>
+    public ParentJobService ParentJobs { get; private set; } = null!;
+
+    /// <summary>13-6c: backyard training (budget, plans, the drill intent) — public like ParentJobs.</summary>
+    public ChildTrainingService Training { get; private set; } = null!;
+
+    // 13-6c (A3): the standing plan GameManager queued for the next tick (not a player's own plan).
+    private bool _standingPlanQueued;
 
     /// <summary>Phase 8e Layer 2 orchestration — gear-shop snapshots and purchase application.</summary>
     public EquipmentService GearShop { get; private set; } = null!;
@@ -757,6 +770,36 @@ public sealed partial class GameManager : Node
         Events.Subscribe<DayAdvancedEvent>(OnChildRearingDayAdvanced);
         Events.Subscribe<ChildBornEvent>(OnChildBorn);
 
+        // 13-6c (brief §4.3): the parent phase's job and backyard training.
+        // Pure content first (the loud-boot discipline), then the two Layer-2
+        // services; they draw nothing at boot (the parent-phase seed is
+        // written on first use, never from the boot stream). The handlers
+        // below run AFTER the pipeline's rollover (a takeover this rollover
+        // ends the phase before the yearly card could open, or parks the
+        // player's takeover choice, which holds every card back) and after the day's
+        // LifeSim tick (the standing plan is queued for the NEXT day). With no
+        // parent phase every one of them returns at its first test.
+        string parentJobsJson = FileAccess.GetFileAsString(ParentJobsResourcePath);
+        if (string.IsNullOrWhiteSpace(parentJobsJson))
+        {
+            throw new InvalidOperationException(
+                $"Could not read '{ParentJobsResourcePath}' ({FileAccess.GetOpenError()}) — the parent-phase job catalog is missing.");
+        }
+        ParentJobs = new ParentJobService(_database, Players, Persons, Baseball, GameState,
+            ParentJobCatalog.Parse(parentJobsJson), Events);
+        Training = new ChildTrainingService(_database, Players, Persons, Baseball, GameState, State, ParentJobs);
+        Events.Subscribe<AvatarReleasedEvent>(OnParentPhaseReleased);
+        Events.Subscribe<SeasonRolledOverEvent>(OnParentPhaseRolledOver);
+        Events.Subscribe<AvatarChangedEvent>(OnParentPhaseAvatarChanged);
+        Events.Subscribe<DayAdvancedEvent>(OnParentPhaseDayAdvanced);
+        // §12 S2: after Absences.AttachTo above, so the ledger already holds
+        // the arrest when this handler reads AvatarScheduleLocked.
+        Events.Subscribe<PlayerAbsenceChangedEvent>(OnParentPhaseAbsenceChanged);
+        if (avatarLoaded)
+        {
+            QueueStandingParentPlan();
+        }
+
         // HS-4 §5.3: ownership changes re-project the avatar's transport
         // refund; the boot-time avatar sync above ran before the catalog
         // existed, so a loaded avatar gets the projection topped up here.
@@ -1204,7 +1247,8 @@ public sealed partial class GameManager : Node
         int schoolHours = LifeSim.AvatarSchoolAvailable ? SchoolCalendar.HoursForDayOfSeason(dayOfSeason) : 0;
         if (!_avatarTierKnown)
         {
-            return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false);
+            // 13-6c (D3-A): an unrostered parent's only mandated block is the job's shift.
+            return new MandatoryBlocks(schoolHours, 0, 0, practiceGameLocked: false, workHours: ParentPhaseShiftHours(day));
         }
         if (TierSeasonCalendar.TryGetLockedTeamBlocks(_avatarTier, dayOfSeason, out int practiceHours, out int gameHours)
             // 13-4 (spec §3.2, §16-I10): locked through the team's postseason
@@ -1252,8 +1296,18 @@ public sealed partial class GameManager : Node
         MandatoryBlocks blocks = GetMandatoryBlocksFor(State.CurrentDay + 1);
         int practiceHours = blocks.PracticeGameLocked ? blocks.PracticeHours : schedule.PracticeHours;
         int gameHours = blocks.PracticeGameLocked ? blocks.GameHours : schedule.GameHours;
+        // 13-6c (D3-A, R4): a parent-phase shift day forces the job's hours like
+        // School, whatever Work and activity were sent; the job's wage is weekly
+        // (ParentJobService), so its hours tick the HustleWork drain ($0) and
+        // never also pay LegalWork, and no hustle session is armed.
+        bool shiftDay = blocks.WorkHours > 0;
+        int workHours = shiftDay ? blocks.WorkHours : schedule.WorkHours;
+        if (shiftDay)
+        {
+            workActivity = WorkActivity.LegalWork;
+        }
         int travelHours = TravelTime.ComputeHours(
-            blocks.SchoolHours, practiceHours, gameHours, schedule.WorkHours,
+            blocks.SchoolHours, practiceHours, gameHours, workHours,
             schedule.FreeTimeHours, schedule.FreeTimeActivity, LifeSim.AvatarTransportHoursSaved,
             out _);
         // Sleep bands (SleepProfile): the body's guaranteed minimum is forced
@@ -1266,16 +1320,17 @@ public sealed partial class GameManager : Node
             blocks.SchoolHours,
             practiceHours,
             gameHours,
-            schedule.WorkHours,
+            workHours,
             schedule.FreeTimeHours,
             schedule.FreeTimeActivity,
             schedule.FamilyHours,
             travelHours);
         LifeSim.SetTodaySchedule(forced);
-        LifeSim.AvatarWorkIsHustle = workActivity != WorkActivity.LegalWork;
+        LifeSim.AvatarWorkIsHustle = shiftDay || workActivity != WorkActivity.LegalWork;
         _plannedWorkActivity = workActivity;
         _plannedWorkHadHours = forced.WorkHours > 0;
         _plannedPracticeHours = forced.PracticeHours;
+        _standingPlanQueued = false;
     }
 
     /// <summary>The ScheduleScreen's Clear path — drops the plan AND the activity selection together, so a stale selection can never arm a session for a day that ends up autopiloted.</summary>
@@ -1286,6 +1341,9 @@ public sealed partial class GameManager : Node
         _plannedWorkActivity = WorkActivity.LegalWork;
         _plannedWorkHadHours = false;
         _plannedPracticeHours = 0;
+        _standingPlanQueued = false;
+        // 13-6c (A3): in the parent phase an unplanned day runs the standing plan, not the 24-hour autopilot.
+        QueueStandingParentPlan();
     }
 
     /// <summary>
@@ -1429,7 +1487,16 @@ public sealed partial class GameManager : Node
             return;
         }
         string avatarId = Career.AvatarPlayerId;
-        ChildRearing.ProcessDay(avatarId, e.Day, LifeSim.PeekFamilyHoursThisWeek(avatarId));
+        float familyHours = LifeSim.PeekFamilyHoursThisWeek(avatarId);
+        ChildRearing.ProcessDay(avatarId, e.Day, familyHours);
+        if (Career.InParentPhase)
+        {
+            // 13-6c (R3): the job reads the SAME peeked hours (Nightlife's ≥ 5 h
+            // waiver) before the clear below; then the week's training closes.
+            ParentJobs.ProcessDay(avatarId, e.Day, familyHours);
+            LifeSim.TryGetStress(avatarId, out float stress);
+            Training.ProcessDay(avatarId, e.Day, stress);
+        }
         if (e.Day % ChildRearingService.TickCadenceDays == 0)
         {
             LifeSim.ClearFamilyHoursThisWeek(avatarId);
@@ -1443,6 +1510,285 @@ public sealed partial class GameManager : Node
         {
             _avatarHasChildren = true;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 13-6c: the parent phase (brief §4.3 item 3)
+    // ------------------------------------------------------------------
+
+    /// <summary>The job's shift hours on <paramref name="day"/> while the parent phase is on; 0 otherwise.</summary>
+    private int ParentPhaseShiftHours(long day) =>
+        ParentJobs is not null && Career.HasAvatar && Career.InParentPhase ? ParentJobs.ShiftHoursOn(day) : 0;
+
+    /// <summary>True while the next tick will run the standing parent-phase plan rather than a plan the player set.</summary>
+    public bool StandingPlanQueued => _standingPlanQueued;
+
+    /// <summary>
+    /// A3 (R1, R4): while the parent phase is on and the next day isn't a
+    /// jail day, an unplanned next day runs the standing plan — 8 h Sleep,
+    /// the job's shift on shift days, 1 h Family on days where day % 7 ∈
+    /// {1, 3, 5} (3 h in every 7-day tick, ChildRearingService's neutral) and
+    /// the commute — straight into the Life sim. The shift ticks the HustleWork
+    /// drain ($0; the wage is weekly), and _plannedWorkActivity is never
+    /// touched, so no hustle session is armed. A player's own
+    /// <see cref="SubmitDaySchedule"/> replaces it for that day.
+    /// </summary>
+    private void QueueStandingParentPlan()
+    {
+        if (ParentJobs is null || !Career.HasAvatar || !Career.InParentPhase || AvatarScheduleLocked
+            || LifeSim.AvatarPlayerId is null || LifeSim.HasTodaySchedule)
+        {
+            return;
+        }
+        long day = State.CurrentDay + 1;
+        int workHours = ParentJobs.ShiftHoursOn(day);
+        int familyHours = ParentJobService.StandingFamilyHoursOn(day);
+        int travelHours = TravelTime.ComputeHours(
+            0, 0, 0, workHours, 0, NpcActionId.Idle, LifeSim.AvatarTransportHoursSaved, out _);
+        LifeSim.SetTodaySchedule(new DaySchedule(
+            SleepProfile.OptimalHours, 0, 0, 0, workHours,
+            familyHours: familyHours, travelHours: travelHours));
+        LifeSim.AvatarWorkIsHustle = workHours > 0;
+        _standingPlanQueued = true;
+    }
+
+    /// <summary>Re-queues the standing plan after the job changed (a different shift), unless the player planned the day.</summary>
+    private void RequeueStandingParentPlan()
+    {
+        if (_standingPlanQueued)
+        {
+            LifeSim.ClearTodaySchedule();
+            _standingPlanQueued = false;
+        }
+        QueueStandingParentPlan();
+    }
+
+    /// <summary>After the day's LifeSim tick consumed today's plan: queue tomorrow's standing plan.</summary>
+    private void OnParentPhaseDayAdvanced(DayAdvancedEvent e)
+    {
+        if (!LifeSim.HasTodaySchedule)
+        {
+            _standingPlanQueued = false;
+        }
+        QueueStandingParentPlan();
+    }
+
+    /// <summary>
+    /// §12 S2: an arrest that lands after tomorrow's standing plan was queued
+    /// (a gritty event later on the same day) drops that plan, so the first
+    /// jail day autopilots like every other jail day instead of working the
+    /// shift. Only the standing plan: a plan the player set keeps the 8c rule.
+    /// </summary>
+    private void OnParentPhaseAbsenceChanged(PlayerAbsenceChangedEvent e)
+    {
+        if (!_standingPlanQueued || !Career.HasAvatar
+            || !string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal) || !AvatarScheduleLocked)
+        {
+            return;
+        }
+        LifeSim.ClearTodaySchedule();
+        LifeSim.AvatarWorkIsHustle = false;
+        _standingPlanQueued = false;
+    }
+
+    /// <summary>
+    /// The release into the parent phase (D2-A): the parent_phase flag and the
+    /// first job card, then the standing plan. Only when the released avatar is
+    /// still the avatar and the phase is on: a same-rollover takeover (D7-A, a
+    /// willing 16–18-year-old) has already handed over, so no card is left —
+    /// and none while that takeover waits on the player's choice (§12 S1: the
+    /// choice must name the heir, so the phase ends before another day ticks).
+    /// </summary>
+    private void OnParentPhaseReleased(AvatarReleasedEvent e)
+    {
+        if (!e.EnteredParentPhase || !Career.HasAvatar || !Career.InParentPhase || Career.HasPendingSuccessionChoice
+            || !string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal))
+        {
+            return;
+        }
+        ParentJobs.OpenJobCard(e.PlayerId, State.CurrentDay);
+        QueueStandingParentPlan();
+    }
+
+    /// <summary>Every rollover inside the phase brings the job card back (D2-A: the job can change once a year), unless a takeover choice is parked (§12 S1).</summary>
+    private void OnParentPhaseRolledOver(SeasonRolledOverEvent e)
+    {
+        if (Career.HasAvatar && Career.InParentPhase && !Career.IsLineageOver && !Career.HasPendingSuccessionChoice)
+        {
+            ParentJobs.OpenJobCard(Career.AvatarPlayerId, State.CurrentDay);
+        }
+    }
+
+    /// <summary>The takeover (a rostered heir): the job, its flags and any open card are cleared (§4.3 item 1).</summary>
+    private void OnParentPhaseAvatarChanged(AvatarChangedEvent e)
+    {
+        _standingPlanQueued = false; // SyncLifeSimAvatar's SetAvatar already dropped any plan
+        if (e.TeamId != 0)
+        {
+            ParentJobs.ClearForTakeover(State.CurrentDay);
+            if (LifeSim.AvatarWorkIsHustle && !LifeSim.HasTodaySchedule)
+            {
+                LifeSim.AvatarWorkIsHustle = false;
+            }
+        }
+    }
+
+    /// <summary>The open job card for the phone, when one is open.</summary>
+    public bool TryGetPendingJobChoice(out PendingJobChoice choice)
+    {
+        if (!Career.HasAvatar || !Career.InParentPhase || Career.HasPendingSuccessionChoice)
+        {
+            choice = default;
+            return false;
+        }
+        return ParentJobs.TryGetPendingJobChoice(Career.AvatarPlayerId, out choice);
+    }
+
+    /// <summary>The job card's answer (intent): takes the job from today and re-queues tomorrow's standing plan.</summary>
+    public void ChooseParentJob(string jobId)
+    {
+        if (!Career.HasAvatar || !Career.InParentPhase)
+        {
+            throw new InvalidOperationException("A job is chosen only in the parent phase.");
+        }
+        ParentJobs.ResolveJobChoice(Career.AvatarPlayerId, jobId, State.CurrentDay);
+        RequeueStandingParentPlan();
+    }
+
+    /// <summary>The trainable children (Child edges, ages 5–15, unrostered), for the Family tab.</summary>
+    public int LoadTrainableChildren(List<PlayerRow> destination)
+    {
+        if (!Career.HasAvatar || !Career.InParentPhase)
+        {
+            destination.Clear();
+            return 0;
+        }
+        return Training.LoadTrainable(Career.AvatarPlayerId, destination);
+    }
+
+    /// <summary>This week's training budget ("2 of 3 sessions left").</summary>
+    public TrainingBudget GetTrainingBudget() => Training.GetBudget(State.CurrentDay);
+
+    /// <summary>Why the Train button is disabled for a child, or None.</summary>
+    public TrainingBlock CanTrainChild(string childId) =>
+        Career.HasAvatar && Career.InParentPhase
+            ? Training.CanTrain(Career.AvatarPlayerId, childId, State.CurrentDay)
+            : TrainingBlock.NoJob;
+
+    /// <summary>
+    /// The drill's one intent (D4-A): a session for the child with the drill's
+    /// score in [0, 1]; 0.5 (a skipped drill) is no tilt. The resolver alone
+    /// draws the result, from the persisted parent-phase seed.
+    /// </summary>
+    public TrainingSessionResult PlayDrill(string childId, double score)
+    {
+        if (!Career.HasAvatar || !Career.InParentPhase)
+        {
+            throw new InvalidOperationException("Training runs only in the parent phase.");
+        }
+        string parentId = Career.AvatarPlayerId;
+        LifeSim.TryGetStress(parentId, out float stress);
+        return Training.PlayDrill(parentId, childId, score, stress, State.CurrentDay);
+    }
+
+    /// <summary>The household setting: the child's standing focus and intensity.</summary>
+    public void SetTrainingPlan(string childId, TrainingFocus focus, TrainingIntensity intensity)
+    {
+        if (!Career.HasAvatar || !Career.InParentPhase)
+        {
+            throw new InvalidOperationException("Training plans are set only in the parent phase.");
+        }
+        Training.SetPlan(Career.AvatarPlayerId, childId, focus, intensity);
+    }
+
+    /// <summary>"Next week" (D6-A): runs to the next 7-day tick (the next payday), or the first interrupt.</summary>
+    public AdvanceSummary AdvanceToNextWeek() =>
+        AdvanceUntil((State.CurrentDay / ParentJobService.TickCadenceDays + 1) * ParentJobService.TickCadenceDays);
+
+    /// <summary>"Next season" (D6-A): runs to the next season's first day (past the rollover), or the first interrupt.</summary>
+    public AdvanceSummary AdvanceToNextSeason() =>
+        AdvanceUntil(State.CurrentDay + (GlobalState.DaysPerSeason - State.DayOfSeason) + 1);
+
+    /// <summary>
+    /// D6-A fast-forward: runs the day tick (and the bus pump) until
+    /// <paramref name="targetDay"/> or the first interrupt by
+    /// <see cref="AdvanceInterruptRules"/> — a gritty event with choices,
+    /// stress crossing the crisis line, funds crossing zero, a parked game,
+    /// a decision card opening, a training birthday (5 or 16), or an avatar
+    /// change. Before each day, what <see cref="CanAdvanceDay"/> refuses stops
+    /// it without ticking. A synchronous call from an intent (never from a bus
+    /// handler: the pump isn't reentrant); the caller resets its own intraday
+    /// clock. SR-2a's AdvanceWeek can reuse the same rules.
+    /// </summary>
+    public AdvanceSummary AdvanceUntil(long targetDay)
+    {
+        long startDay = State.CurrentDay;
+        if (!Career.HasAvatar || targetDay <= startDay)
+        {
+            return new AdvanceSummary(startDay, startDay, AdvanceStopKind.TargetReached, 0.0, 0f);
+        }
+        string avatarId = Career.AvatarPlayerId;
+        LifeSim.TryGetFunds(avatarId, out double startFunds);
+        LifeSim.TryGetStress(avatarId, out float startStress);
+        // The clock's own rule: an attended game parks (and stops the advance) rather than autopiloting.
+        Career.AutopilotAttendedGames = false;
+        AdvanceStopKind stop = AdvanceStopKind.TargetReached;
+        while (State.CurrentDay < targetDay)
+        {
+            AdvanceStopKind blocked = AdvanceInterruptRules.BlockingStop(
+                GrittyEventChoices.HasPendingChoice, Career.HasPendingSuccessionChoice,
+                Career.HasPendingGame || InteractiveGameInFlight); // §12 N3: CanAdvanceDay's full contract
+            if (blocked != AdvanceStopKind.None)
+            {
+                stop = blocked;
+                break;
+            }
+            LifeSim.TryGetFunds(avatarId, out double fundsBefore);
+            LifeSim.TryGetStress(avatarId, out float stressBefore);
+            bool cardBefore = ParentJobs.HasPendingJobChoice || Career.HasPendingSuccessionChoice;
+            bool rolloverNext = State.DayOfSeason == GlobalState.DaysPerSeason;
+            string trainableBefore = rolloverNext ? TrainableSignature(avatarId) : string.Empty;
+
+            Clock.AdvanceDay();
+            bool attendedGameIdle = !InteractiveGameInFlight && Career is { IsGameInFlight: false };
+            Events.DispatchPending();
+            if (attendedGameIdle)
+            {
+                Playoffs?.WritePublicationMarkers();
+            }
+
+            bool avatarChanged = !Career.HasAvatar
+                || !string.Equals(Career.AvatarPlayerId, avatarId, StringComparison.Ordinal);
+            LifeSim.TryGetFunds(avatarId, out double fundsAfter);
+            LifeSim.TryGetStress(avatarId, out float stressAfter);
+            bool cardAfter = ParentJobs.HasPendingJobChoice || Career.HasPendingSuccessionChoice;
+            bool windowChanged = rolloverNext && !avatarChanged
+                && !string.Equals(TrainableSignature(avatarId), trainableBefore, StringComparison.Ordinal);
+            var probe = new AdvanceProbe(
+                GrittyEventChoices.HasPendingChoice, stressBefore, stressAfter, fundsBefore, fundsAfter,
+                Career.HasPendingGame, !cardBefore && cardAfter, windowChanged, avatarChanged);
+            AdvanceStopKind hit = AdvanceInterruptRules.FirstStop(in probe, UtilityCalculator.StressOverrideThreshold);
+            if (hit != AdvanceStopKind.None)
+            {
+                stop = hit;
+                break;
+            }
+        }
+        LifeSim.TryGetFunds(avatarId, out double endFunds);
+        LifeSim.TryGetStress(avatarId, out float endStress);
+        return new AdvanceSummary(startDay, State.CurrentDay, stop, endFunds - startFunds, endStress - startStress);
+    }
+
+    /// <summary>The trainable set as one string (ids in player_id order), to notice a training birthday at the rollover.</summary>
+    private string TrainableSignature(string parentId)
+    {
+        if (!Career.InParentPhase)
+        {
+            return string.Empty;
+        }
+        var children = new List<PlayerRow>(4);
+        Training.LoadTrainable(parentId, children);
+        return string.Join('|', children.Select(c => c.PlayerId));
     }
 
     /// <summary>
@@ -1679,14 +2025,22 @@ public readonly struct MandatoryBlocks
     public readonly int GameHours;
     public readonly bool PracticeGameLocked;
 
-    public MandatoryBlocks(int schoolHours, int practiceHours, int gameHours, bool practiceGameLocked)
+    /// <summary>
+    /// 13-6c (D3-A): the parent-phase job's shift on this day, a forced Work
+    /// block like School (read-only on the ScheduleScreen); 0 off-shift,
+    /// with no job, and outside the parent phase.
+    /// </summary>
+    public readonly int WorkHours;
+
+    public MandatoryBlocks(int schoolHours, int practiceHours, int gameHours, bool practiceGameLocked, int workHours = 0)
     {
         SchoolHours = schoolHours;
         PracticeHours = practiceHours;
         GameHours = gameHours;
         PracticeGameLocked = practiceGameLocked;
+        WorkHours = workHours;
     }
 
     /// <summary>Total mandated hours — what the editable blocks must leave room for.</summary>
-    public int TotalHours => SchoolHours + PracticeHours + GameHours;
+    public int TotalHours => SchoolHours + PracticeHours + GameHours + WorkHours;
 }

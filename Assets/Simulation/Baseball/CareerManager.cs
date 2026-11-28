@@ -199,6 +199,11 @@ public sealed class CareerManager
     // writes 0, since Game_State has no delete).
     private bool _inParentPhase;
 
+    // 13-6c (D7-A, §10 R2): a retirement this rollover deferred to the
+    // pipeline's release. In memory only: it is set and consumed inside one
+    // SeasonRolledOverEvent pump (this handler, then the pipeline's).
+    private bool _retirementReleasePending;
+
     // The avatar's league tier, cached by ActivateAvatar (every avatar-pointing
     // path — boot, creation, succession, promotion — funnels through it).
     // Selects whose schedule the avatar's games come from (13-3: each tier's
@@ -317,6 +322,29 @@ public sealed class CareerManager
 
     /// <summary>13-6 (D4b-C): the released avatar is raising his children (Game_State.parent_phase_since_day).</summary>
     public bool InParentPhase => _inParentPhase;
+
+    /// <summary>
+    /// 13-6c (D7-A, §10 R2): when true, a retirement at the rollover that
+    /// finds no eligible 19+ heir (NoPlayableHeir or NoWillingHeir) but whose
+    /// family still has a future by <see cref="EvaluateTakeover"/> (a child
+    /// under 16, or a willing, unrostered 16+ child with ratings) is not a game
+    /// over: the career defers it to <see cref="PipelineManager"/>, which
+    /// releases the retiree into the parent phase in the same pump. Default
+    /// false, so a career without the pipeline (the MC lineage-failure suite)
+    /// runs exactly as before; <see cref="PipelineManager.AttachTo"/> sets it.
+    /// </summary>
+    public bool EnableParentPhaseOnRetirement { get; set; }
+
+    /// <summary>13-6c (D7-A): a retirement release the pipeline still has to run this rollover.</summary>
+    public bool RetirementReleasePending => _retirementReleasePending;
+
+    /// <summary>The pipeline takes the deferred retirement release (once): true when one was pending.</summary>
+    internal bool ConsumeRetirementReleasePending()
+    {
+        bool pending = _retirementReleasePending;
+        _retirementReleasePending = false;
+        return pending;
+    }
 
     public string AvatarPlayerId =>
         _avatarPlayerId ?? throw new InvalidOperationException("No career avatar exists.");
@@ -1778,7 +1806,7 @@ public sealed class CareerManager
 
         if (AutopilotSuccession)
         {
-            RunSuccessionCheck();
+            RunRolloverSuccessionCheck();
             return;
         }
 
@@ -1794,7 +1822,7 @@ public sealed class CareerManager
             // NotTriggered, and a freshly-succeeded heir isn't re-checked
             // again in the same tick.
             _hasPendingSuccession = false;
-            RunSuccessionCheck();
+            RunRolloverSuccessionCheck();
             return;
         }
 
@@ -1805,10 +1833,62 @@ public sealed class CareerManager
                 _hasPendingSuccession = true;
                 break;
             case SuccessionOutcomeKind.GameOver:
+                if (TryDeferRetirementGameOver(outcome.Reason))
+                {
+                    return; // 13-6c D7-A: the pipeline releases the retiree into the parent phase
+                }
                 PersistGameOver(outcome.Reason);
                 break;
         }
         LastSuccession = outcome;
+    }
+
+    /// <summary>
+    /// <see cref="RunSuccessionCheck"/> at the rollover (the autopilot and the
+    /// stale-choice branches), with D7-A's deferral in front of a game-over.
+    /// <see cref="RunSuccessionCheck"/> itself stays the unchanged public path.
+    /// </summary>
+    private void RunRolloverSuccessionCheck()
+    {
+        SuccessionOutcome outcome = EvaluateSuccession();
+        if (outcome.Kind == SuccessionOutcomeKind.GameOver && TryDeferRetirementGameOver(outcome.Reason))
+        {
+            return;
+        }
+        switch (outcome.Kind)
+        {
+            case SuccessionOutcomeKind.Succeeded:
+                Succeed(outcome.HeirId!);
+                break;
+            case SuccessionOutcomeKind.GameOver:
+                PersistGameOver(outcome.Reason);
+                break;
+        }
+        LastSuccession = outcome;
+    }
+
+    /// <summary>
+    /// 13-6c (D7-A, §10 R2): with the opt-in on, a NoPlayableHeir or
+    /// NoWillingHeir retirement whose family still has a future by
+    /// <see cref="EvaluateTakeover"/> (the same rule the pipeline applies at
+    /// 16, so the entry and the takeover can never disagree) persists nothing:
+    /// the retirement release is left to <see cref="PipelineManager"/> later in
+    /// this pump. Read-only; <see cref="EvaluateSuccession()"/> is unchanged.
+    /// </summary>
+    private bool TryDeferRetirementGameOver(LineageFailure reason)
+    {
+        if (!EnableParentPhaseOnRetirement || !IsAvatarRostered
+            || reason is not (LineageFailure.NoPlayableHeir or LineageFailure.NoWillingHeir))
+        {
+            return false;
+        }
+        if (EvaluateTakeover(_heirScratch).Kind == SuccessionOutcomeKind.GameOver)
+        {
+            return false;
+        }
+        _retirementReleasePending = true;
+        LastSuccession = SuccessionOutcome.NotTriggered;
+        return true;
     }
 
     private void OnDayAdvanced(DayAdvancedEvent e)

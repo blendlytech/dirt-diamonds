@@ -147,6 +147,14 @@ public sealed class PipelineManager : IFreeAgencyMarket
         _bus = bus;
         bus.Subscribe(_onDayAdvanced);
         bus.Subscribe(_onSeasonRolledOver);
+        if (Career is not null)
+        {
+            // 13-6c (D7-A, §10 R2): with the pipeline attached, a retirement
+            // with a future takeover is released into the parent phase here
+            // instead of ending the game. A career without the pipeline keeps
+            // today's game-over exactly.
+            Career.EnableParentPhaseOnRetirement = true;
+        }
     }
 
     public void DetachFrom(EventBus bus)
@@ -1516,6 +1524,8 @@ public sealed class PipelineManager : IFreeAgencyMarket
     public void RunRollover(int completedSeasonYear, int newSeasonYear)
     {
         long day = _state.CurrentDay;
+        // 13-6c (D7-A): taken first, so a deferred retirement never outlives its own pump.
+        bool retirementRelease = Career?.ConsumeRetirementReleasePending() ?? false;
         Snapshot s = LoadSnapshot(completedSeasonYear, fielding: true);
         if (s.Teams.Count == 0)
         {
@@ -1607,6 +1617,31 @@ public sealed class PipelineManager : IFreeAgencyMarket
             else if (tier == LeagueTier.HS)
             {
                 hsDepartures.Add((row.TeamId, row.Role, s.PositionOf(row.PlayerId, row.Role), row.PlayerId));
+            }
+        }
+
+        // ---- 13-6c D7-A: the retired avatar the career deferred leaves like a rostered
+        //      retiree (the same tier bookkeeping) through the shipped release. Move(null)
+        //      puts the avatar in `moved` and out of `teamOf`, so no later pass touches it again. ----
+        if (retirementRelease && avatarId is not null)
+        {
+            foreach (RosterPlayerRow row in s.Roster)
+            {
+                if (!string.Equals(row.PlayerId, avatarId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                LeagueTier from = s.TierByTeam[row.TeamId];
+                if (from == LeagueTier.College)
+                {
+                    enrollmentDeletes.Add(row.PlayerId);
+                }
+                else if (from == LeagueTier.HS)
+                {
+                    hsDepartures.Add((row.TeamId, row.Role, s.PositionOf(row.PlayerId, row.Role), row.PlayerId));
+                }
+                ReleaseAvatar(from);
+                break;
             }
         }
 

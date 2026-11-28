@@ -34,6 +34,11 @@
     <Compile Include="..\..\Assets\Narrative\Roster\*.cs" Link="Narrative\Roster\%(Filename)%(Extension)" />
     <!-- 13-6: the pipeline's beat writer (Narrative, Godot-free: Core events and the Data layer only). -->
     <Compile Include="..\..\Assets\Narrative\Pipeline\*.cs" Link="Narrative\Pipeline\%(Filename)%(Extension)" />
+    <!-- 13-6c: the parent-phase job data and its two Layer-2 services (Data + Core + Baseball only, no Life). -->
+    <Compile Include="..\..\Assets\Data\Family\*.cs" Link="Data\Family\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Assets\Economy\Family\ParentJobService.cs" Link="Economy\Family\ParentJobService.cs" />
+    <Compile Include="..\..\Assets\Economy\Family\ChildTrainingService.cs" Link="Economy\Family\ChildTrainingService.cs" />
+    <Compile Include="..\..\Assets\Economy\Family\ChildRearingService.cs" Link="Economy\Family\ChildRearingService.cs" />
     <!--
       Phase 10c (presentation_layer_narrative.md §5, acceptance check 4): the
       scouting grade curve is pure/Godot-free UI math but reads

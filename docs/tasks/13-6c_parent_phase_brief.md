@@ -349,7 +349,7 @@ Pure `int` arithmetic throughout (rounding: `MidpointRounding.AwayFromZero`, the
 ## 6. Definition of done
 
 - [x] §3 records the owner's D1–D12 (all A, 2026-11-27). §9 (Carbon's Math check) and §10 (Opus's reconciliation) are signed.
-- [ ] 13-6c built, its gates green, Carbon's review passed, merged into `p13/integration`.
+- [x] 13-6c built, its gates green, Carbon's review passed (§12 PASS WITH FIXES → §13 → §14 PASS), merged into `p13/integration` (2026-11-28).
 - [ ] 13-6d built, its gates green, its review passed, merged into `p13/integration`.
 - [ ] Owner playtest of one parent phase, release to takeover.
 - [ ] Handoff (§8) and a `progress.md` line per sub-slice. **Then stop.**
@@ -699,3 +699,166 @@ D1–D12 (§3) are open; the recommendation is A throughout. The calls the Math 
 - **D12 (new):** cap conception at 50 in content, or allow phases into the parent's late 60s.
 
 The build starts only after §3 records the answers.
+
+---
+
+## 11. Build record — 13-6c engine (Claude Opus 5.5, 2026-11-27)
+
+Built on `p13/13-6c-opus` from `fb15873`. Every signed number in §4.1/§4.2 is used as written; **no `ActionCatalog`, `NeedsEngine`, `UtilityCalculator`, `NurtureBlend`, `HeirGeneticsProfile`, `DevelopmentProfile` or `ChildRearingService` constant changed.** Where the build had to choose something §§2–5 leave open, or departs from them, it's listed here for Carbon's review.
+
+### 11.1 Where it lives
+
+| Piece | File |
+| :-- | :-- |
+| Pure rules: odds, tilt, expertise, fatigue, outcomes, carry, cap, fade, `HashId64`, `SessionStream`, `TipStream`, the `TrainingPlan` record | `Assets/Simulation/Baseball/ChildTraining.cs` |
+| R6 overload `RoleRatingSum(role, tool1, tool2, tool3)` (the row overload untouched; MC proves equality on every rostered player) | `Assets/Simulation/Baseball/PipelineRules.cs` |
+| Job data and loader | `Assets/Data/Family/parent_jobs.json`, `ParentJobCatalog.cs` |
+| Keys (D9-A, no DDL) | `Assets/Data/Database/GameStateQueries.cs` |
+| Job card, weekly settlement, flags, takeover clear, standing-plan shape, the D6 interrupt rules (`AdvanceInterruptRules`, `AdvanceProbe`, `AdvanceSummary`) | `Assets/Economy/Family/ParentJobService.cs` |
+| Budget, plans, `PlayDrill`, week-end autopilot and fade | `Assets/Economy/Family/ChildTrainingService.cs` |
+| Wiring, `MandatoryBlocks.WorkHours`, the A3 standing plan, shift-day forcing, intents, `AdvanceUntil` / `AdvanceToNextWeek` / `AdvanceToNextSeason` | `Assets/Core/GameManager.cs` |
+| D7-A: `EnableParentPhaseOnRetirement`, the deferral in all three rollover branches; the release after step 2 through `ReleaseAvatar` | `CareerManager.cs`, `PipelineManager.cs` |
+
+### 11.2 Build decisions (B1–B10)
+
+- **B1 — `training_plan` has a seventh field.** `focus:intensity:coachBp:careBp:seasonYear:seasonCoachBp:weekStart`. `weekStart` is the training week of the child's last session (0 = never). The week-end fade ("a child with no session that week") and the autopilot's spread need it across a reload; an in-memory set would forget a drill on reload. Still one text key per child, still no DDL.
+- **B2 — the yearly card keeps the held job when unanswered.** The release's card resolves to Steady (D2-A). The card that returns at each rollover resolves to the job already held (Steady only when that job is now barred), so ignoring the yearly card never changes a Coach into Steady.
+- **B3 — one key day per week.** Every session of a training week, played or autopilot, draws `SessionStream(seed, child, weekStartDay, ordinal)`, where `weekStartDay = day − day % 7` and the ordinal is the session's index in the week (0..budget−1). §4.2's `day` parameter is that week-start day. The (week, ordinal) pairs are unique, and waiting a day can't reroll a session.
+- **B4 — the autopilot's spread.** The unplayed sessions go round-robin over the trainable children (ordered by `player_id`), continuing across weeks (session g of the phase → child g mod n), children with no session that week first. With no drills played it's exactly a continuous round-robin (Carbon's 2–3-child model).
+- **B5 — training needs a job.** No job means a budget of 0, and the week-end does nothing: no autopilot, no fade, no key. That is the identity (MC (4)) and covers the card's 14-day window.
+- **B6 — the week-end runs once.** `ChildTrainingService.ProcessDay` returns when the tick has already opened the new week, so a repeated call on a tick day moves nothing (CoreLoop).
+- **B7 — fast-forward stops are edge-triggered.** Stress stops the day it crosses 70 (`UtilityCalculator.StressOverrideThreshold`), funds the day they cross 0, and a decision card the day it opens. A parent already over a line, or with a card already open (it resolves itself at its deadline), can still fast-forward. What `CanAdvanceDay` refuses (a gritty choice, a pending succession) blocks before a tick. Two stops beyond D6's list: `GameDay` (SR-2a's; never in the phase) and `AvatarChanged` (the takeover at 16 ends the phase). "Next week" runs to the next 7-day tick (payday); "Next season" to the next season's day 1.
+- **B8 — `AdvanceUntil` is synchronous.** It pumps the bus after each day, so it must be called from an intent, never a handler. The gritty dispatcher polls on its own thread, so an event can surface a day or two into a long fast-forward rather than on its exact day. The time bar's intraday clock reset stays with the caller (13-6d).
+- **B9 — where the interrupt rules live.** They're pure statics in `ParentJobService.cs`, because §2's 13-6c paths offer no other Godot-free home; SR-2a can move them beside the stance engine.
+- **B10 — the D7-A deferral sets `LastSuccession` to `NotTriggered`.** The UI never sees a game-over that didn't happen. `RunSuccessionCheck` (public) is unchanged; only the rollover's own path defers.
+
+### 11.3 Outside §2's paths
+
+- `Tools/GrittyEventsHarness/GrittyEventsHarness.csproj`: its `Economy/Family/*.cs` wildcard would compile the two new services without the Baseball files they read, so they're **excluded** there (a one-attribute change; the Gritty harness tests none of them). CoreLoop and MC compile and test them. Without it the solution doesn't build.
+
+### 11.4 Measured in the real loop (for Carbon)
+
+CoreLoop's economy check: 52 fast-forwarded weeks, one child aged 6, $50/wk funding, from $500, walking:
+
+| Job | Net / week | Lowest funds | Carbon §9 Q1 (1 child, $50) |
+| :-- | --: | --: | --: |
+| Coach | +$41.3 | **$14** | +$57.7 |
+| Steady | +$92.7 | $100 | +$92.4 |
+| Nightlife (actual tips) | +$30.8 | $187 | — |
+| Nightlife (tips re-centred on $400) | +$58.8 | — | +$62.8 |
+
+All three pass the gate (solvent, no `FundsDepleted`; Steady above Nightlife's expected net). Steady matches Carbon to $0.30. **Coach runs about $16/wk under Carbon's estimate, and its 52-week low is $14**, so a 2–3-child Coach household at $50/wk funding is likely to touch $0. That's a Math call for Carbon (the wage is a signed value; the build didn't change it).
+
+### 11.5 For 13-6d
+
+- A D7-A retiree's `AvatarReleasedEvent` carries the tier left (Pro, or College/HS for a health-floor retiree), and `PipelineBeatWriter` maps every non-College tier to the Pro release text ("The club is letting you go"). A retirement wants its own line (the age is on the Players row; no new event is needed).
+- Engine surface: `GameManager.TryGetPendingJobChoice`, `ChooseParentJob`, `LoadTrainableChildren`, `GetTrainingBudget`, `CanTrainChild` (`TrainingBlock` reasons), `PlayDrill(childId, score)`, `SetTrainingPlan`, `ParentJobs.TryGetLastSettlement`, `Training.TryGetLastResult`, `AdvanceToNextWeek` / `AdvanceToNextSeason` / `AdvanceUntil` (`AdvanceSummary.Stop`), `StandingPlanQueued`, and `MandatoryBlocks.WorkHours` for the ScheduleScreen's read-only shift row. Job names and reasons are `ui.job.<id>.*` keys the strings table supplies; `parent_jobs.json` holds no player-facing text.
+
+---
+
+## 12. Independent review — Gemini 4 Carbon (2026-11-28)
+
+**Reviewer:** Gemini 4 Carbon (Simulation, calibration and math owner; primary independent reviewer of Claude Opus 5.5's sim, persistence and schema diffs, [TEAM.md](../TEAM.md) §1/§1a). **Branch / worktree:** `p13/13-6c-review-carbon` in `.worktrees/13-6c-review-carbon` at `740932e`, reviewing `fb15873..740932e` (`23` files changed, `3,973 insertions(+), 13 deletions(-)`; `0` DDL changes; `0` shipped-profile constant changes). **Docs only:** only this section and one session line in [progress.md](../progress.md) edited.
+
+**Verdict: PASS WITH FIXES** — **0 blockers, 2 surgical `GameManager.cs` should-fixes (`S1–S2`), 3 nits (`N1–N3`)**. Every pure math/simulation rule in `ChildTraining.cs`, `PipelineRules.cs`, `CareerManager.cs`, `PipelineManager.cs`, `ParentJobCatalog.cs`, `parent_jobs.json`, and `GameStateQueries.cs` matches §§2–5 and §§9–10 (`0` `Assets/Simulation/` changes needed); build decisions `B1–B10` (§11.2) and `GrittyEventsHarness.csproj`'s exclusion (§11.3) are accepted; and §11.4's real-loop Coach question is resolved below with **zero change to the signed wages (`$650 / $1,000 / $450 + $0–$800`, `0` owner sanctions required)**.
+
+### 12.1 Independent gates reproduced on `740932e`
+
+| Gate | Command | Result |
+| :-- | :-- | :-- |
+| §0 Preconditions & scope | Empty-commit write check + soft reset; `git status`; `C:` free space; `git ls-files .env`; `git diff --stat fb15873..740932e` | Write check clean; clean tree at `740932e` (`origin/p13/integration = fb15873`); **`4.91 GB`** free on `C:` (`≥ 2 GB`); `.env` untracked; `22/23` files inside §2 (`1` justified `.csproj` exclusion in §11.3, sanctioned below); `SchemaDefinitions.sql`, `ActionCatalog`, `NeedsEngine`, `UtilityCalculator`, `NurtureBlend`, `HeirGenetics`, and `DevelopmentManager` untouched |
+| Build (Debug) | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** (all 10 projects) |
+| MC default (run solo) | `dotnet run --project Tools/MonteCarloHarness -c Release` | **646/646** (`623` baseline + `23` `parent-phase`). Normalized (`CRLF → LF`, `\d+(\.\d+)? ms → N ms`) SHA-256 **`67c480c25087f011b4dcaf7b9b19adefded102289748d7c93ee784d1d0c5b6af`** (matches Opus's `67c480c2…`). Removing the `25` added `13-6c` / `parent-phase` lines and restoring `646/646 → 623/623` reproduces **`c9f2caf8a972c0e64288c2fec9a1a28f0d6937cc3fba6eacab6a5cbf45c92aa2`** **byte-exact**. Pro guard **`PA 81433 / H 18471 / ER 8803`**, ledger **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**, D1-A twin `0129DA4404F6`; `16/16` allocation probes **`0 B`**; `0` leaked `%TEMP%\dnd_*` files |
+| Resolver guard | `dotnet run --project Tools/MonteCarloHarness -c Release --no-build -- --only resolver` | **13/13** (`0 B`; LF SHA-256 **`6d92422863f22d73c3539306a2a2442a65bcdedf505ddc5bb24611782e9eda89`**, byte-exact) |
+| CoreLoopHarness | `dotnet run --project Tools/CoreLoopHarness -c Release` | **61/61** (`43` prior + `18` `13-6c` checks: card deadline, weekly settlement + reload, `A3` standing plan + shift forcing + zero `LegalWork`/hustle leak, Nightlife waiver, weekly budget + idempotent week-end autopilot, pre/post-drill & tip reload determinism, 52-wk economy, fast-forward interrupt edges/order, `D7-A` `15`/`8@35`/`17`/`18@0`, `Life <-> Baseball` boundary scan clean) |
+| PipelineHarness | `dotnet run --project Tools/PipelineHarness -c Release` & `-- --full` | Default **13/13** (`10` prior + `3` `D7-A` Pro/College/HS retirement-release fixtures, `52.7 s ≤ 60 s`; `0.0/128` arrival cuts, `128.0` arrivals/yr, `6.00`-yr career, `479` `HCP`, batters `+6.19/+17.49`, pitchers `+5.40/+16.17`, drift `2.07`, twin `89E669FF9CD0BFF1`). `--full` **7/7** (`18.9 s ≤ 240 s`); `0` leaks |
+| NeedsDecay / Hustle / Gritty | `NeedsDecayHarness`, `HustleHarness`, `GrittyEventsHarness` (`-c Release`) | **117/117**, **95/95**, **363/363** (D10/D12 content gates belong to `13-6d`) |
+| Schema & scratch SQLite | `SchemaValidator` (`-c Release`) + scratch v14 DB (`scratch_s11_4_and_schema.py`) | **174/174** (`user_version = 14`). Scratch v14 check verified all `7` `Game_State` keys (incl. negative `Int64` `unchecked((long)ulong)` `parent_phase_seed` and 7-field `training_plan:<childId>`), `5` `Entity_Flags`, `Child_Development` `0..100` clamps, `Child_Rearing_Commitment`, `foreign_key_check = 0`, `integrity_check = ok`, scratch `.db` deleted |
+
+### 12.2 Verification of `R1–R6` (§10.2), `B1–B10` (§11.2), and §11.3
+
+- **Simulation & stream contracts (`ChildTraining.cs:169–450`, `PipelineRules.cs:269–273`):** Pure `int` percentage/basis points and `MidpointRounding.AwayFromZero` throughout; `PeakRoleSum` (`:308–318`) credits reliever stamina via the additive `PipelineRules.RoleRatingSum` overload (`1,576` generated rows, `315` relievers, `0` mismatches); `CoachingGainBp` (`:348–363`) enforces `Math.Max(1, ...)` up to `99` and `0` at `100`; `AddCoachingGain` (`:398–410`), `FlushWholePoints` (`:417–422`), and `ApplyIdleFade` (`:431–443`) preserve signed carries within `(-100, +100)`, cap seasonal gains at `600 bp`, and floor idle decay at `50` (`5,000` effective bp); `HashId64` (`:246–254`), `SessionStream` (`:261–268`), and `TipStream` (`:271–272`) are process-invariant and collision-free (`13,140 / 13,140` sessions, `625 / 625` tip weeks), with `0` boot RNG draws (`GameManager.cs` keeps `4` `NextUInt64` and `2` `Split` calls) and `0` `Biological_Parentage` / `LineageQueries` reads (`LoadChildrenOf` only in `ParentJobService.cs:372` and `ChildTrainingService.cs:196, 224, 466`).
+- **Build decisions `B1–B10` & §11.3:** **Accepted.** In particular, `B1` (`7`-field `training_plan` adding `weekStart`, `:86–113`) keeps D9-A single-key/no-DDL while making reload-safe autopilot ordering and idle fade exact; `B2` (`ResolveAtDeadline` keeping an unbarred held job on yearly rollover cards, `ParentJobService.cs:302–308`) prevents accidental annual resets from Coach/Nightlife to Steady while keeping Steady as the initial release default; `B3–B6` (`weekStartDay = day - day % 7` + weekly ordinal + continuous round-robin + `TrainingWeekStartDay >= day` idempotency, `ChildTrainingService.cs:287–399`) prevent mid-week rerolls and duplicate tick closes; `B7–B9` (`AdvanceInterruptRules` in `ParentJobService.cs:600–646`) match `scope_realignment.md §3.2`'s interrupt order; `B10` (`TryDeferRetirementGameOver` in `CareerManager.cs:1879–1893` + `PipelineManager.RunRollover` `:1528, 1626–1646`) cleanly reuses `ReleaseAvatar` across all three rollover branches while leaving `Pipeline`-less callers unchanged; and §11.3 (`Tools/GrittyEventsHarness/GrittyEventsHarness.csproj:79–81`) is retroactively sanctioned so `GrittyEventsHarness` stays decoupled from `Simulation/Baseball/PipelineRules.cs`.
+
+### 12.3 Math ruling on §11.4 (Coach's real-loop `+$41.3/wk` and `$14` low)
+
+**Ruling: KEEP the signed §4.1 wages (`Coach $650/wk`, `Steady $1,000/wk`, `Nightlife $450 + $0–$800` tips) unchanged (`0` calibration edits, `0` owner sanctions).**
+
+Replaying the exact `R1` loop over both `52` weeks and `624` weeks (`12` seasons, `scratch_s11_4_and_schema.py` & `check_r1_economy.py`) reproduces Opus's `52`-week `CoreLoop` figure to the dime (`+$41.35/wk`, `min = $14.0`, `0` `FundsDepleted`) and isolates both causes:
+1. **Why `min = $14` occurs once (Day 13 of Week 1):** `RunParentEconomyChecks` (`ParentPhaseChecks.cs:636`) seeds `startDay = 7` with `$500` cash (`7` full unpaid days — `~$518.74/wk` solvent `R1` single-adult upkeep — before the first `$650` paycheck settles on `day = 14`). Cash dips to `$14` on Day `13`, receives `+$650` on Day `14`, and rises monotonically every week thereafter (`$2,648` at Week `52`; in live play, release happens on rollover `day = 366`, only `5` days before `day = 371`'s first tick, typically with College/Pro savings).
+2. **Why Year 1 nets `+$41.3/wk` while Years 2–12 converge to `+$58.1–$59.5/wk`:** During Weeks `1–12`, while cash climbs out of the `$100–$400` band, `UtilityCalculator.FinancialCostScore` (`1 - cost / fundsAvailable`, `UtilityCalculator.cs:77–78`) temporarily penalizes `$40` `SocializeEvening`, allowing `Social` to cross `≤ 20` and trigger `+$19.1/wk` of extra `$25` `DrinkAlone` (`$38.9/wk` across Year 1 vs `$19.8/wk` once solvent). Over a full `12`-season (`624`-week) phase, `R1` Coach `$650/wk` nets **`+$59.5/wk` from `$500` (`+$58.1/wk` from `$1,000`, `min = $704`, `0` `FundsDepleted`)** for `1` child + `$50/wk` funding — matching §9 Q1's `+$57.7/wk` — and nets **`+$38.5–$38.7/wk`** (`2` children + `$50/wk` funding) and **`+$13.3–$14.8/wk`** (`3` children + `$50/wk` funding; `+$56.7/wk` at `$0/wk` discretionary funding). A 3-child Coach household starting at `$500` that also commits `$50/wk` discretionary funding on top of `$60/wk` child support (`$110/wk` child outlay on a 20h stipend) feels genuine early cash pressure (`0–1` `FundsDepleted` stop before savings build), which is the intended `D1-A` trade-off (*"The least money, the best training and the warmest household"*, with Steady `$1,000/wk` or lowering the Family-tab funding commitment available).
+
+### 12.4 Findings
+
+#### Blockers
+None (`0`).
+
+#### Should-fixes (`GameManager.cs` + `CoreLoopHarness` only; `0` `Assets/Simulation/` changes)
+
+- **S1 — Interactive takeover (`Career.AutopilotSuccession == false`, live `GameManager.cs:575`) opens and exposes a spurious job card (and transient `parent_phase` flag on `D7-A` `16–18` retirement) while `Career.HasPendingSuccessionChoice` is parked (`GameManager.cs:1578–1596, 1613–1621`, `PipelineManager.cs:1827, 2009, 2027, 2032`, `ParentPhaseChecks.cs:832`):**
+  - In live play (`Career.AutopilotSuccession = false`, `GameManager.cs:575`), when `Career.EvaluateTakeover` returns `Succeeded` at rollover — either at age `16` after a parent phase, or on the same rollover as a `D7-A` age-42 retirement with a willing, unrostered `16–18`-year-old child — `PipelineManager.RunRollover` does **not** complete the takeover synchronously (`takeoverHeir` stays `null` at `:1827`). Instead, it calls `Career.ApplyReleaseState(true)` (`:2009`), `Career.ParkTakeoverChoice()` (`:2027`, setting `Career.HasPendingSuccessionChoice = true`), and publishes `AvatarReleasedEvent` (`:2032`).
+  - `GameManager.OnParentPhaseRolledOver` (`:1590–1596`), `OnParentPhaseReleased` (`:1578–1587`), and `TryGetPendingJobChoice` (`:1613–1621`) check `Career.InParentPhase` without `!Career.HasPendingSuccessionChoice` (the comments at `:777` and `:1575–1576` assumed synchronous handoff, and `ParentPhaseChecks.cs:832` only tested `d7_17` with `autopilot: true`). Because `ResolvePendingSuccession` (`CareerManager.cs:1350–1377`) only accepts an eligible heir and `CanAdvanceDay` (`GameManager.cs:1182`) blocks day advance until answered, the phase is guaranteed to end before another day can tick; yet while the interactive takeover modal is awaiting the player's click, `OpenJobCard` sets `parent_phase` + `parent_job_pending_since_day`, and `TryGetPendingJobChoice` returns `true` to `13-6d`'s Burner Phone Events card/banner (contrary to `§5:340`).
+  - **Fix:** Guard `OnParentPhaseReleased` (`:1580`), `OnParentPhaseRolledOver` (`:1592`), and `TryGetPendingJobChoice` (`:1615`) with `&& !Career.HasPendingSuccessionChoice`, and add an `autopilot: false` `d7_17` assertion in `ParentPhaseChecks.RunRetirementReleaseChecks` verifying `!jobs.HasPendingJobChoice` while `Career.HasPendingSuccessionChoice` is parked (and after `ResolvePendingSuccession(child)`).
+- **S2 — Mid-day arrest (`AvatarScheduleLocked`) leaves the pre-queued standing parent plan active on the first jail day (`GameManager.cs:1215–1226, 1532–1570`):**
+  - `OnParentPhaseDayAdvanced` (`:1563–1570`) calls `QueueStandingParentPlan()` (`:1532–1549`) at the end of `DayAdvancedEvent(d)`, immediately writing `LifeSim.SetTodaySchedule(...)` (`workHours`, `familyHours`) and `LifeSim.AvatarWorkIsHustle = workHours > 0` for `d + 1`.
+  - If a gritty-event `arrest` consequence (`EventConsequenceApplier` → `PlayerAbsenceChangedEvent`) arrests the parent later on day `d`, `AvatarScheduleLocked` (`:1215–1226`) becomes `true` for `d + 1`, but nothing clears the standing plan already loaded into `LifeSim`, so the parent works their shift and logs family hours on their first day in jail (`d + 1`), violating `:1523–1524`'s jail invariant until `d + 2`.
+  - **Fix:** Subscribe to `PlayerAbsenceChangedEvent` in `GameManager.BootCareer` (after `Absences.AttachTo(Events)`): when `AvatarScheduleLocked && _standingPlanQueued` (or `AvatarScheduleLocked && LifeSim.HasTodaySchedule`), clear `LifeSim.ClearTodaySchedule()`, reset `LifeSim.AvatarWorkIsHustle = false`, and set `_standingPlanQueued = false` (plus a `CoreLoop` check).
+
+#### Nits (non-blocking; author's discretion)
+
+- **N1 — Payday tick ordering & idempotency symmetry (`GameManager.cs:1487–1495`, `ParentJobService.cs:348–359`):** On `e.Day % 7 == 0`, `ChildRearing.ProcessDay` runs before `ParentJobs.ProcessDay`, so if pre-payday cash is below `weeklyFunding + 20·N` (e.g. Day `14` from `$500`), `AdjustFunds` / `OnFundsImpulse` clamp at `0` before the wage lands (see §12.3; harmless in live play, so optional). Also, `ChildTrainingService.ProcessDay` (`:322`) persists a same-tick repeat guard (`TrainingWeekStartDay >= day`) whereas `ParentJobService.ProcessDay` relies on `DayAdvancedEvent` firing once per day.
+- **N2 — `TrainingPlan.LastSessionWeekStart = 0` sentinel vs `WeekStartFor(1..6) == 0` (`ChildTraining.cs:55, 76–77`, `ChildTrainingService.cs:134, 389, 431`):** `WeekStartFor(day)` is `0` on `days 1..6`, matching `TrainingPlan.Default`'s `0` ("never trained") sentinel. Unreachable in live play (release requires `day >= 366`, `week >= 364`); leave `ChildTraining.cs` untouched unless `Assets/Simulation/` is already opened later.
+- **N3 — `GrittyEventsHarness.csproj` (§11.3) & `AdvanceUntil` `InteractiveGameInFlight` (`GameManager.cs:1180, 1714–1715`):** `GrittyEventsHarness.csproj`'s `Exclude` is sanctioned. In `GameManager.AdvanceUntil`, `BlockingStop` omits `CanAdvanceDay`'s `InteractiveGameInFlight` check (`:1180`); unreachable in the parent phase (no games), worth passing `InteractiveGameInFlight` into `GamePending` (`Career.HasPendingGame || InteractiveGameInFlight`) so SR-2a inherits the full `CanAdvanceDay` contract.
+
+**Recommended next:** Claude Opus 5.5 reconciles §12 (`S1`, `S2`, and optional `N3` in `GameManager.cs` + `ParentPhaseChecks.cs`; `0` `Assets/Simulation/` edits), Gemini 4 Neon (or Gemini 4 Carbon per `TEAM.md §1a`) runs the quick delta check on that `GameManager.cs` patch, and Opus merges `13-6c` `--no-ff` into `p13/integration` before `13-6d` (Claude Sonnet 5.5).
+
+## 13. Reconciliation of §12 — Claude Opus 5.5 (2026-11-28)
+
+**Branch:** `p13/13-6c-opus`, fast-forwarded `740932e → c408835` (Carbon's §12, docs only), then this patch. **Scope:** `Assets/Core/GameManager.cs` and `Tools/CoreLoopHarness/ParentPhaseChecks.cs` only. `Assets/Simulation/`, `Assets/Data/`, `SchemaDefinitions.sql` and every shipped constant are byte-identical to `c408835`.
+
+**Citations spot-checked at `c408835`:** all hold. S1: `GameManager.cs:575` sets `AutopilotSuccession = false`; `PipelineManager.cs:1827` assigns `takeoverHeir` only on autopilot, and the interactive branch parks the choice (`:2027`) before it publishes `AvatarReleasedEvent` (`:2032`); `ResolvePendingSuccession` (`CareerManager.cs:1350–1377`) only accepts a listed heir and calls `TakeOver` in the phase; the existing `d7_17` check (`ParentPhaseChecks.cs:832`) ran `autopilot: true` only. S2: `QueueStandingParentPlan` reads `AvatarScheduleLocked` only when it queues, so an arrest published later the same day left the queued shift in place.
+
+| Finding | Ruling | Change |
+| :-- | :-- | :-- |
+| **S1** | **Fixed** | `OnParentPhaseReleased` (`GameManager.cs:1604`), `OnParentPhaseRolledOver` (`:1616`) and `TryGetPendingJobChoice` (`:1639`) also require `!Career.HasPendingSuccessionChoice`. The parked choice must name the heir and `CanAdvanceDay` blocks until it does, so no card is needed or shown: the takeover's `AvatarChangedEvent` → `ClearForTakeover` runs as before. Mirrored in `ParentWorld` and the D7-A fixture's handlers. New check `d7_17_choice` (`ParentPhaseChecks.cs:898`, `autopilot: false`): while parked, no card and no `parent_phase` flag; after `ResolvePendingSuccession(child)`, the child is the avatar, out of the phase, with no card, job or flag. |
+| **S2** | **Fixed** | New `OnParentPhaseAbsenceChanged` (`GameManager.cs:1582`), subscribed at `:797`, after `Absences.AttachTo` (`:456`), so the ledger already holds the arrest. When the standing plan is queued and the avatar is now locked, it clears the plan, resets `AvatarWorkIsHustle` and drops `_standingPlanQueued`. It acts on the **standing plan only**: a player-set plan keeps the 8c rule, so nothing changes outside the parent phase. `ParentWorld` gains the ledger, `AvatarScheduleLocked`, the guard in its `QueueStandingParentPlan` (a replica gap: the ledger was missing there) and the handler. New check (`ParentPhaseChecks.cs:479`): the arrest lands after a shift day's plan was queued; both jail days tick with no plan and the plan returns on release day. |
+| **N1** | Declined | The order (child rearing, then the job, on the peeked hours) is R3 as signed; reordering moves only the harness's day-7 / $500 start (live release is day ≥ 366 with savings) and would re-cut the §12.3 economy Carbon just ruled on. `DayAdvancedEvent` fires once per day, so a repeat-tick key would add a write per tick for a case the clock can't produce. |
+| **N2** | Left | Unreachable (release needs day ≥ 366); `Assets/Simulation/` stays byte-identical. |
+| **N3** | **Fixed** | `AdvanceUntil` passes `Career.HasPendingGame \|\| InteractiveGameInFlight` (`GameManager.cs:1740`), so it inherits `CanAdvanceDay`'s full contract. The replica has no interactive game (its probe input stays `false`). |
+
+**Gates:** Debug build **0 / 0**. CoreLoop **63/63** (61 + the two new checks). Negative control: removing the S1 guard from the fixture and the S2 subscription from `ParentWorld` fails exactly those two (61/63); the file was restored byte-exact (SHA-256 prefix `d47b07c3fb89b317` before and after). MC solo **646/646**, normalized SHA-256 **`67c480c25087f011b4dcaf7b9b19adefded102289748d7c93ee784d1d0c5b6af`** (unchanged); the reconstruction gives **`c9f2caf8a972c0e64288c2fec9a1a28f0d6937cc3fba6eacab6a5cbf45c92aa2`** byte-exact; Pro guard PA 81433 / H 18471 / ER 8803, ledger `932ACE26…8B84`; 0 leaked `%TEMP%\dnd_*`. Nothing else compiles `GameManager.cs` or the changed harness file, so the other harnesses are as reproduced in §12.1.
+
+**Next:** Gemini 4 Carbon delta-reviews `c408835..<this commit>` (TEAM.md §1a: Opus-authored orchestration in `GameManager.cs`); then Opus ticks §6 box 2 and merges 13-6c `--no-ff` into `p13/integration`; then 13-6d (Claude Sonnet 5.5).
+
+---
+
+## 14. Delta review of §13 — Gemini 4 Carbon
+
+**Reviewer:** Gemini 4 Carbon ([TEAM.md](../TEAM.md) §1/§1a). **Branch / worktree:** `p13/13-6c-rereview-carbon` in `.worktrees/13-6c-rereview-carbon` at `aeaa04a`, delta-reviewing `c408835..aeaa04a` (`4` files changed, `129 insertions(+), 12 deletions(-)`; only `Assets/Core/GameManager.cs`, `Tools/CoreLoopHarness/ParentPhaseChecks.cs`, `docs/tasks/13-6c_parent_phase_brief.md`, and `docs/progress.md`). **Docs only:** only this section and one session line in [progress.md](../progress.md) edited.
+
+**Verdict: PASS** — **0 blockers, 0 should-fixes, 0 nits.** `13-6c` is approved to merge into `p13/integration`.
+
+### 14.1 Rulings on §12.4 / §13 items and open item
+
+- **Scope:** `git diff --stat c408835..aeaa04a -- Assets/Simulation Assets/Data Assets/Data/Database/SchemaDefinitions.sql` is empty (`0` files). Every shipped constant and simulation/schema/data file is byte-identical to `c408835`.
+- **S1 — FIXED (`GameManager.cs:1604, 1616, 1639`; `ParentPhaseChecks.cs:291, 302, 824, 831, 898–915`):**
+  - `OnParentPhaseReleased` (`GameManager.cs:1604`), `OnParentPhaseRolledOver` (`:1616`), and `TryGetPendingJobChoice` (`:1639`) all guard `!Career.HasPendingSuccessionChoice`, mirrored in `ParentWorld` (`ParentPhaseChecks.cs:291, 302`) and the D7-A `Compose` subscribers (`:824, 831`).
+  - **Takeover clear intact:** Answering `Career.ResolvePendingSuccession(heirId)` (`CareerManager.cs:1350–1374`) clears `_hasPendingSuccession = false` (`:1369`) and runs `TakeOver` → `CompleteTakeover` → `ActivateAvatar` (`:1584–1621, 930`), publishing `AvatarChangedEvent(heirId, hsTeamId)` (`hsTeamId != 0`), so `OnParentPhaseAvatarChanged` (`GameManager.cs:1626–1628`) still runs `ParentJobs.ClearForTakeover` after any multi-season parent phase.
+  - **Cannot swallow a legitimate job card:** `CareerManager.OnSeasonRolledOver` resets `_hasPendingSuccession = false` at the top of every parent-phase rollover (`CareerManager.cs:1801–1805`), D7-A deferral leaves `_hasPendingSuccession == false` (`:1836–1841, 1878–1892`), and `PipelineManager.RunRollover` calls `Career.ParkTakeoverChoice()` (`PipelineManager.cs:2025–2028`, `CareerManager.cs:1503–1511`) which sets `_hasPendingSuccession = true` *only* when `EvaluateTakeover` returns `Succeeded`. On rollovers where all children are `< 16` or `16+` children are unwilling alongside a younger `< 16` sibling (`EvaluateTakeover` → `NotTriggered`, `CareerManager.cs:1495`), `HasPendingSuccessionChoice` stays `false` and the card opens normally (covered by `d7_8` at `ParentPhaseChecks.cs:873–881`); when all children are `16+` and unwilling (`GameOver(NoWillingHeir)`, `PipelineManager.cs:1842–1846, 2017–2020`), the phase and lineage end. New `d7_17_choice` (`ParentPhaseChecks.cs:898–915`, `autopilot: false`) verifies both the parked wait and post-`ResolvePendingSuccession` cleanup.
+- **S2 — FIXED (`GameManager.cs:456, 797, 1582–1592`; `EventBus.cs:49, 165–171, 197–200`; `ParentPhaseChecks.cs:38, 168–169, 191–198, 277–287, 479–507`):**
+  - `EventBus` appends handlers per channel (`EventBus.cs:165–171`) and `Channel<T>.DispatchOne` invokes them in subscription order (`:197–200`). `Absences.AttachTo(Events)` (`GameManager.cs:456`, `AvailabilityLedger.cs:89, 134–152`) subscribes well before `OnParentPhaseAbsenceChanged` (`GameManager.cs:797`), so the ledger merges the arrest before `OnParentPhaseAbsenceChanged` (`:1585`) evaluates `AvatarScheduleLocked` (`:1219–1230`).
+  - **Outside-phase & player-plan identity:** `_standingPlanQueued` is set `true` solely in `QueueStandingParentPlan` (`GameManager.cs:1538, 1552`, which requires `Career.InParentPhase`) and cleared by `SubmitDaySchedule` (`:1333`). Outside the parent phase `_standingPlanQueued` is identically `false`, so `OnParentPhaseAbsenceChanged` returns at its first test (`:1584`), and inside the phase a player-submitted day plan preserves Phase 8c's contract. `ParentWorld` now mirrors `Absences`, `AvatarScheduleLocked`, the `QueueStandingParentPlan` lock guard (`ParentPhaseChecks.cs:197`), and the handler, verified across arrest + 2 jail days + release recovery by `RunArrestDropsStandingPlanCheck` (`:479–507`).
+- **N3 — FIXED (`GameManager.cs:1183–1186, 1738–1740`):** `AdvanceUntil` passes `Career.HasPendingGame || InteractiveGameInFlight` into `AdvanceInterruptRules.BlockingStop`, matching `CanAdvanceDay`'s full contract for SR-2a reuse.
+- **N1 — DECLINE ACCEPTED:** Keeping `ChildRearing.ProcessDay` ahead of `ParentJobs.ProcessDay` (`GameManager.cs:1491–1496`) preserves R3 and the §12.3-verified economy trajectory (relevant only to the harness's synthetic `day = 7, $500` start; live releases occur at `day >= 366`), and omitting a redundant weekly repeat-tick `Game_State` write in `ParentJobService.ProcessDay` (`ParentJobService.cs:348–359`) avoids pointless per-week DB churn for an event `TimeManager` emits once per calendar day.
+- **Open item ruling (jailed parent's weekly wage settling during arrest) — ACCEPTABLE AS-IS (not a 13-6d engine item):** `ParentJobService.ProcessDay` (`ParentJobService.cs:348–359`) settles a flat weekly wage regardless of shift count (§4.1 `:208`), and `13-6d` (`§2:65–72`) is UI/content-only (`ParentJobService.cs` and `GameManager.cs` are read-only there). Skipping settlement on `day % 7 == 0` when jailed would create an arbitrary calendar cliff (5 jailed Mon–Fri days paid in full vs 1 payday arrest losing the entire week's `$650–$1,000`), while shift-proration would require new persisted state beyond D9-A. With `S2` active, jail days already cut `FamilyHoursThisWeek` (costing `ChildRearingService` `care` or Nightlife's `≥ 5h` waiver) while upkeep and child outlays keep running, and gritty arrest events price bail/fines directly via negative `funds` consequences (`EventConsequenceApplier.cs:457–479`). Any `13-6d` D10 event depicting lockup or unpaid missed shifts can price that hit directly in its choice `funds` consequences.
+
+### 14.2 Gates reproduced on `aeaa04a`
+
+| Gate | Command | Result |
+| :-- | :-- | :-- |
+| Preconditions & scope | Empty-commit write check + soft reset; `git status`; `git log -4`; `git ls-files .env`; `origin/p13/integration`; `C:` free space; `git diff --stat c408835..aeaa04a` | Write check clean; clean tree at `aeaa04a` (parent `c408835`); `origin/p13/integration = fb15873`; `.env` untracked; **`3.73 GiB`** free on `C:`; only the `4` expected files touched (`0` `Assets/Simulation`, `Assets/Data`, or `SchemaDefinitions.sql` paths) |
+| Build (Debug) | `dotnet build DirtAndDiamonds.sln -c Debug` | **0 warnings / 0 errors** (all 10 projects) |
+| CoreLoopHarness + negative control | `dotnet run --project Tools/CoreLoopHarness -c Release` | **63/63** passed. Negative control (dropping `&& !w.Career.HasPendingSuccessionChoice` at `ParentPhaseChecks.cs:824` and `Bus.Subscribe<PlayerAbsenceChangedEvent>` at `:169`) failed **61/63** — **only** the `2` new S1/S2 checks failed; reverted and verified byte-exact (`git hash-object` `1ea030a8ef81aa18109d7edf59f74f9bf71bc858`), re-verified **63/63** |
+| MC default (run solo) | `dotnet run --project Tools/MonteCarloHarness -c Release` | **646/646** (`parent-phase: 23/23`). Normalized SHA-256 **`67c480c25087f011b4dcaf7b9b19adefded102289748d7c93ee784d1d0c5b6af`** (exact). Deleting the `25` `13-6c` / `ok parent-phase` lines and restoring `623/623` gives **`c9f2caf8a972c0e64288c2fec9a1a28f0d6937cc3fba6eacab6a5cbf45c92aa2`** (byte-exact). Pro guard **`PA 81433 / H 18471 / ER 8803`**, ledger **`932ACE26E257707A76256F8C06EE9EAA2E8FF52A014DF64654A84DEBF0718B84`**; `0` leaked `%TEMP%\dnd_*` files |
+
+**Recommended next:** Claude Opus 5.5 fast-forwards `p13/13-6c-opus` to this commit, ticks §6 box 2, and merges `13-6c` `--no-ff` into `p13/integration`; then `13-6d` by Claude Sonnet 5.5 (Gemini 4 Neon reviews UI, Gemini 4 Carbon reviews content gates).
