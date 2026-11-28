@@ -775,7 +775,8 @@ public sealed partial class GameManager : Node
         // services; they draw nothing at boot (the parent-phase seed is
         // written on first use, never from the boot stream). The handlers
         // below run AFTER the pipeline's rollover (a takeover this rollover
-        // ends the phase before the yearly card could open) and after the day's
+        // ends the phase before the yearly card could open, or parks the
+        // player's takeover choice, which holds every card back) and after the day's
         // LifeSim tick (the standing plan is queued for the NEXT day). With no
         // parent phase every one of them returns at its first test.
         string parentJobsJson = FileAccess.GetFileAsString(ParentJobsResourcePath);
@@ -791,6 +792,9 @@ public sealed partial class GameManager : Node
         Events.Subscribe<SeasonRolledOverEvent>(OnParentPhaseRolledOver);
         Events.Subscribe<AvatarChangedEvent>(OnParentPhaseAvatarChanged);
         Events.Subscribe<DayAdvancedEvent>(OnParentPhaseDayAdvanced);
+        // §12 S2: after Absences.AttachTo above, so the ledger already holds
+        // the arrest when this handler reads AvatarScheduleLocked.
+        Events.Subscribe<PlayerAbsenceChangedEvent>(OnParentPhaseAbsenceChanged);
         if (avatarLoaded)
         {
             QueueStandingParentPlan();
@@ -1570,14 +1574,34 @@ public sealed partial class GameManager : Node
     }
 
     /// <summary>
+    /// §12 S2: an arrest that lands after tomorrow's standing plan was queued
+    /// (a gritty event later on the same day) drops that plan, so the first
+    /// jail day autopilots like every other jail day instead of working the
+    /// shift. Only the standing plan: a plan the player set keeps the 8c rule.
+    /// </summary>
+    private void OnParentPhaseAbsenceChanged(PlayerAbsenceChangedEvent e)
+    {
+        if (!_standingPlanQueued || !Career.HasAvatar
+            || !string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal) || !AvatarScheduleLocked)
+        {
+            return;
+        }
+        LifeSim.ClearTodaySchedule();
+        LifeSim.AvatarWorkIsHustle = false;
+        _standingPlanQueued = false;
+    }
+
+    /// <summary>
     /// The release into the parent phase (D2-A): the parent_phase flag and the
     /// first job card, then the standing plan. Only when the released avatar is
     /// still the avatar and the phase is on: a same-rollover takeover (D7-A, a
-    /// willing 16–18-year-old) has already handed over, so no card is left.
+    /// willing 16–18-year-old) has already handed over, so no card is left —
+    /// and none while that takeover waits on the player's choice (§12 S1: the
+    /// choice must name the heir, so the phase ends before another day ticks).
     /// </summary>
     private void OnParentPhaseReleased(AvatarReleasedEvent e)
     {
-        if (!e.EnteredParentPhase || !Career.HasAvatar || !Career.InParentPhase
+        if (!e.EnteredParentPhase || !Career.HasAvatar || !Career.InParentPhase || Career.HasPendingSuccessionChoice
             || !string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal))
         {
             return;
@@ -1586,10 +1610,10 @@ public sealed partial class GameManager : Node
         QueueStandingParentPlan();
     }
 
-    /// <summary>Every rollover inside the phase brings the job card back (D2-A: the job can change once a year).</summary>
+    /// <summary>Every rollover inside the phase brings the job card back (D2-A: the job can change once a year), unless a takeover choice is parked (§12 S1).</summary>
     private void OnParentPhaseRolledOver(SeasonRolledOverEvent e)
     {
-        if (Career.HasAvatar && Career.InParentPhase && !Career.IsLineageOver)
+        if (Career.HasAvatar && Career.InParentPhase && !Career.IsLineageOver && !Career.HasPendingSuccessionChoice)
         {
             ParentJobs.OpenJobCard(Career.AvatarPlayerId, State.CurrentDay);
         }
@@ -1612,7 +1636,7 @@ public sealed partial class GameManager : Node
     /// <summary>The open job card for the phone, when one is open.</summary>
     public bool TryGetPendingJobChoice(out PendingJobChoice choice)
     {
-        if (!Career.HasAvatar || !Career.InParentPhase)
+        if (!Career.HasAvatar || !Career.InParentPhase || Career.HasPendingSuccessionChoice)
         {
             choice = default;
             return false;
@@ -1712,7 +1736,8 @@ public sealed partial class GameManager : Node
         while (State.CurrentDay < targetDay)
         {
             AdvanceStopKind blocked = AdvanceInterruptRules.BlockingStop(
-                GrittyEventChoices.HasPendingChoice, Career.HasPendingSuccessionChoice, Career.HasPendingGame);
+                GrittyEventChoices.HasPendingChoice, Career.HasPendingSuccessionChoice,
+                Career.HasPendingGame || InteractiveGameInFlight); // §12 N3: CanAdvanceDay's full contract
             if (blocked != AdvanceStopKind.None)
             {
                 stop = blocked;

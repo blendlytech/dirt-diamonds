@@ -35,6 +35,7 @@ internal static partial class Program
         public readonly MicroGame Micro;
         public readonly CareerManager Career;
         public readonly LifeSimManager Life = new();
+        public readonly AvailabilityLedger Absences = new();
         public readonly ChildRearingService ChildRearing;
         public readonly ParentJobService Jobs;
         public readonly ChildTrainingService Training;
@@ -164,6 +165,8 @@ internal static partial class Program
             Bus.Subscribe<SeasonRolledOverEvent>(OnParentPhaseRolledOver);
             Bus.Subscribe<AvatarChangedEvent>(OnParentPhaseAvatarChanged);
             Bus.Subscribe<DayAdvancedEvent>(OnParentPhaseDayAdvanced);
+            Absences.AttachTo(Bus); // GameManager attaches the ledger long before the handler below
+            Bus.Subscribe<PlayerAbsenceChangedEvent>(OnParentPhaseAbsenceChanged);
             QueueStandingParentPlan(); // GameManager queues it at boot
         }
 
@@ -184,9 +187,14 @@ internal static partial class Program
 
         public int ParentPhaseShiftHours(long day) => Career.HasAvatar && Career.InParentPhase ? Jobs.ShiftHoursOn(day) : 0;
 
+        /// <summary>GameManager.AvatarScheduleLocked: still in jail when the next day ticks.</summary>
+        public bool AvatarScheduleLocked =>
+            Career.HasAvatar && Absences.TryGet(Career.AvatarPlayerId, out AbsenceEntry entry)
+            && entry.Reason == AbsenceReason.Arrest && entry.StateOn(State.CurrentDay + 1) == SlotAvailability.Absent;
+
         public void QueueStandingParentPlan()
         {
-            if (!Career.HasAvatar || !Career.InParentPhase || Life.AvatarPlayerId is null || Life.HasTodaySchedule)
+            if (!Career.HasAvatar || !Career.InParentPhase || AvatarScheduleLocked || Life.AvatarPlayerId is null || Life.HasTodaySchedule)
             {
                 return;
             }
@@ -266,9 +274,21 @@ internal static partial class Program
             QueueStandingParentPlan();
         }
 
+        private void OnParentPhaseAbsenceChanged(PlayerAbsenceChangedEvent e)
+        {
+            if (!StandingPlanQueued || !Career.HasAvatar
+                || !string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal) || !AvatarScheduleLocked)
+            {
+                return;
+            }
+            Life.ClearTodaySchedule();
+            Life.AvatarWorkIsHustle = false;
+            StandingPlanQueued = false;
+        }
+
         private void OnParentPhaseReleased(AvatarReleasedEvent e)
         {
-            if (!e.EnteredParentPhase || !Career.HasAvatar || !Career.InParentPhase
+            if (!e.EnteredParentPhase || !Career.HasAvatar || !Career.InParentPhase || Career.HasPendingSuccessionChoice
                 || !string.Equals(e.PlayerId, Career.AvatarPlayerId, StringComparison.Ordinal))
             {
                 return;
@@ -279,7 +299,7 @@ internal static partial class Program
 
         private void OnParentPhaseRolledOver(SeasonRolledOverEvent e)
         {
-            if (Career.HasAvatar && Career.InParentPhase && !Career.IsLineageOver)
+            if (Career.HasAvatar && Career.InParentPhase && !Career.IsLineageOver && !Career.HasPendingSuccessionChoice)
             {
                 Jobs.OpenJobCard(Career.AvatarPlayerId, State.CurrentDay);
             }
@@ -383,6 +403,7 @@ internal static partial class Program
         {
             RunJobCardAndWageChecks(schemaPath, NewPath);
             RunStandingPlanChecks(schemaPath, NewPath);
+            RunArrestDropsStandingPlanCheck(schemaPath, NewPath);
             RunWaiverAndBudgetChecks(schemaPath, NewPath);
             RunParentReloadChecks(schemaPath, NewPath);
             RunParentEconomyChecks(schemaPath, NewPath);
@@ -453,6 +474,37 @@ internal static partial class Program
     // ------------------------------------------------------------------
     // A3: the standing plan, no double wage, no hustle
     // ------------------------------------------------------------------
+
+    /// <summary>§12 S2: an arrest after tomorrow's standing plan was queued drops it; the jail days autopilot and the plan returns after release.</summary>
+    private static void RunArrestDropsStandingPlanCheck(string schemaPath, Func<string, string> newPath)
+    {
+        using var w = new ParentWorld(schemaPath, newPath("arrest"), startDay: 63);
+        w.Jobs.OpenJobCard(w.ParentId, w.Day);
+        w.ChooseParentJob("steady");
+        long d = w.Day + 1;
+        while (w.Jobs.ShiftHoursOn(d + 1) == 0)
+        {
+            d++;
+        }
+        w.RunTo(d); // tomorrow (d + 1) is a shift day; its standing plan is queued
+        bool queuedShift = w.StandingPlanQueued && w.Life.TryGetTodaySchedule(out DaySchedule queued) && queued.WorkHours > 0
+            && w.Life.AvatarWorkIsHustle;
+        long until = d + 3; // jailed on d + 1 and d + 2
+        w.Bus.Publish(new PlayerAbsenceChangedEvent(w.ParentId, (byte)AbsenceReason.Arrest, until, 0, 0));
+        w.Bus.DispatchPending();
+        bool dropped = !w.StandingPlanQueued && !w.Life.HasTodaySchedule && !w.Life.AvatarWorkIsHustle;
+        w.TickedPlans.Clear();
+        w.Clock.AdvanceDay(); // d + 1, the first jail day
+        w.Bus.DispatchPending();
+        bool stillLocked = !w.StandingPlanQueued && !w.Life.HasTodaySchedule; // d + 2 is a jail day too
+        w.Clock.AdvanceDay(); // d + 2
+        w.Bus.DispatchPending();
+        bool jailDaysUnplanned = w.TickedPlans.Count == 0;
+        bool backAfter = w.StandingPlanQueued && w.Life.HasTodaySchedule; // d + 3: released
+        Check("13-6c A3 (§12 S2): an arrest landing after tomorrow's standing plan was queued drops it — both jail days autopilot (no shift, no family hours, no hustle drain) and the standing plan returns for the first free day",
+            queuedShift && dropped && stillLocked && jailDaysUnplanned && backAfter,
+            $"queued {queuedShift}, dropped {dropped}, locked {stillLocked}, ticked plans {w.TickedPlans.Count}, back {backAfter}");
+    }
 
     private static void RunStandingPlanChecks(string schemaPath, Func<string, string> newPath)
     {
@@ -769,14 +821,14 @@ internal static partial class Program
             w.Bus.Subscribe<AvatarReleasedEvent>(e =>
             {
                 released.Add(e);
-                if (e.EnteredParentPhase && w.Career.InParentPhase && w.Career.AvatarPlayerId == e.PlayerId)
+                if (e.EnteredParentPhase && w.Career.InParentPhase && !w.Career.HasPendingSuccessionChoice && w.Career.AvatarPlayerId == e.PlayerId)
                 {
                     jobs.OpenJobCard(e.PlayerId, w.State.CurrentDay);
                 }
             });
             w.Bus.Subscribe<SeasonRolledOverEvent>(_ =>
             {
-                if (w.Career.HasAvatar && w.Career.InParentPhase && !w.Career.IsLineageOver)
+                if (w.Career.HasAvatar && w.Career.InParentPhase && !w.Career.IsLineageOver && !w.Career.HasPendingSuccessionChoice)
                 {
                     jobs.OpenJobCard(w.Career.AvatarPlayerId, w.State.CurrentDay);
                 }
@@ -839,6 +891,27 @@ internal static partial class Program
                     w.Career.AvatarPlayerId == child && w.TeamOf(child) == 101 && !w.Career.InParentPhase && w.TeamOf(parent) == 0
                     && released.Count == 1 && !jobs.HasPendingJobChoice && holders.Count == 0 && !w.Career.IsLineageOver,
                     $"avatar {(w.Career.AvatarPlayerId == child ? "child" : "parent")}, card {jobs.HasPendingJobChoice}, flags {holders.Count}");
+            }
+        }
+        {
+            // §12 S1: the live game parks the takeover for the player's choice (AutopilotSuccession = false).
+            var (w, jobs, released, parent, child) = Compose("d7_17_choice", childAge: 17, interest: 100, autopilot: false);
+            using (w)
+            {
+                w.AdvanceTo(Day(2027, 1));
+                var holders = new List<string>();
+                w.Baseball.LoadActiveFlagPlayerIds(ParentJobService.ParentPhaseFlag, holders);
+                bool parked = w.Career.HasPendingSuccessionChoice && w.Career.InParentPhase && released.Count == 1
+                    && !jobs.HasPendingJobChoice && holders.Count == 0;
+                w.Career.ResolvePendingSuccession(child);
+                w.Bus.DispatchPending();
+                holders.Clear();
+                w.Baseball.LoadActiveFlagPlayerIds(ParentJobService.ParentPhaseFlag, holders);
+                bool resolved = w.Career.AvatarPlayerId == child && !w.Career.InParentPhase && !w.Career.HasPendingSuccessionChoice
+                    && !jobs.HasPendingJobChoice && jobs.CurrentJobId is null && holders.Count == 0 && !w.Career.IsLineageOver;
+                Check("13-6c D7-A (§12 S1): with the takeover parked for the player's choice (a willing 17-year-old, the live game's interactive succession), no job card or parent_phase flag opens while it waits, and none is left once the child is chosen",
+                    parked && resolved,
+                    $"parked {parked} (choice {w.Career.HasPendingSuccessionChoice}), resolved {resolved}, avatar {(w.Career.AvatarPlayerId == child ? "child" : "parent")}, card {jobs.HasPendingJobChoice}, flags {holders.Count}");
             }
         }
         {
