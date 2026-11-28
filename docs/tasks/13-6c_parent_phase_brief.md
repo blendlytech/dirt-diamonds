@@ -349,7 +349,7 @@ Pure `int` arithmetic throughout (rounding: `MidpointRounding.AwayFromZero`, the
 ## 6. Definition of done
 
 - [x] §3 records the owner's D1–D12 (all A, 2026-11-27). §9 (Carbon's Math check) and §10 (Opus's reconciliation) are signed.
-- [ ] 13-6c built, its gates green, Carbon's review passed, merged into `p13/integration`.
+- [x] 13-6c built, its gates green, Carbon's review passed (§12 PASS WITH FIXES → §13 → §14 PASS), merged into `p13/integration` (2026-11-28).
 - [ ] 13-6d built, its gates green, its review passed, merged into `p13/integration`.
 - [ ] Owner playtest of one parent phase, release to takeover.
 - [ ] Handoff (§8) and a `progress.md` line per sub-slice. **Then stop.**
