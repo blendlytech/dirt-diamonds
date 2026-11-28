@@ -531,6 +531,40 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 12
 
+[node name="JobCard" type="PanelContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="JobCardLayout" type="VBoxContainer" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard"]
+layout_mode = 2
+
+[node name="JobHeadingLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard/JobCardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = ""
+
+[node name="JobTitleLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard/JobCardLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="JobWageLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard/JobCardLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="JobNextShiftLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard/JobCardLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="TrainingBudgetLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard/JobCardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
+
 [node name="NoChildrenLabel" type="Label" parent="Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout"]
 layout_mode = 2
 autowrap_mode = 2

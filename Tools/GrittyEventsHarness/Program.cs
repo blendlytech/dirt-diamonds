@@ -76,6 +76,7 @@ internal static class Program
             RunDirtProductTurfArcChecks();
             RunDirtTheBustArcChecks();
             RunChildDevelopmentChecks();
+            RunParentPhaseContentChecks();
             RunNpcAutonomyChecks();
             RunStressChecks();
             RunHustleIntegrationChecks();
@@ -248,7 +249,7 @@ internal static class Program
         GrittyEventLibrary wholeFolder = GrittyEventJson.Parse(batchDocuments);
         Check("whole Content folder merges into one library (no cross-batch id collisions)",
             batchFiles.Length >= 10
-            && wholeFolder.Count == 116
+            && wholeFolder.Count == 127 // 116 + 13-6d's 11 parent-phase events (D10-A)
             && wholeFolder.TryGetById("back_alley_bribe", out _)
             && wholeFolder.TryGetById("syndicate_enforcers", out _)
             && wholeFolder.TryGetById("caught_juicing", out _)
@@ -417,7 +418,7 @@ internal static class Program
             }
         }
         Check("every shipped event's contact resolves in the registry (or is the reserved 'unknown' id)",
-            unresolved == 0 && allEvents.Count == 116 && taggedNonUnknown > 0,
+            unresolved == 0 && allEvents.Count == 127 && taggedNonUnknown > 0,
             $"{unresolved} unresolved of {allEvents.Count} events, {taggedNonUnknown} tagged non-unknown");
     }
 
@@ -3511,6 +3512,151 @@ internal static class Program
                 world.Fired.Count == 1 && !world.Persons.TryGetChild("hero", out _),
                 $"{world.Fired.Count} fires");
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 13-6d D10-A / D12-A: the parent phase's starter content
+    // ------------------------------------------------------------------
+
+    private static void RunParentPhaseContentChecks()
+    {
+        Console.WriteLine("--- 13-6d parent-phase content (D10-A batch, D12-A conception age gate) ---");
+
+        string contentDir = Path.Combine(_repoRoot, "Assets", "Narrative", "Events", "Content");
+        string parentJson = File.ReadAllText(Path.Combine(contentDir, "parent_phase_events.json"));
+        GrittyEventLibrary batch = GrittyEventJson.Parse(parentJson);
+        string[] jobFlags = { "job_coach", "job_steady", "job_nightlife" };
+        const string phaseFlag = "parent_phase";
+
+        static bool ReadsFlag(GrittyEventDefinition e, string flag) =>
+            e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == flag);
+
+        var jobEvents = new Dictionary<string, List<GrittyEventDefinition>>();
+        var familyEvents = new List<GrittyEventDefinition>();
+        bool allGated = true;
+        foreach (GrittyEventDefinition e in batch.Events)
+        {
+            allGated &= ReadsFlag(e, phaseFlag);
+            string[] held = jobFlags.Where(f => ReadsFlag(e, f)).ToArray();
+            if (held.Length == 1)
+            {
+                if (!jobEvents.TryGetValue(held[0], out List<GrittyEventDefinition>? list))
+                {
+                    jobEvents[held[0]] = list = new List<GrittyEventDefinition>();
+                }
+                list.Add(e);
+            }
+            else if (held.Length == 0)
+            {
+                familyEvents.Add(e);
+            }
+            else
+            {
+                allGated = false; // two jobs at once is a bug: a parent holds one
+            }
+        }
+        int JobCount(string flag) => jobEvents.TryGetValue(flag, out List<GrittyEventDefinition>? l) ? l.Count : 0;
+        Check("D10-A: the parent-phase batch loads with 11 avatar-scoped events — 3 per job (Coach, Steady, Nightlife) and 2 family events — every one gated on the engine-written parent_phase flag",
+            batch.Count == 11 && batch.Events.All(e => e.Scope == EventScope.Avatar) && allGated
+            && jobFlags.All(f => JobCount(f) == 3) && familyEvents.Count == 2,
+            $"{batch.Count} events, jobs {string.Join("/", jobFlags.Select(JobCount))}, family {familyEvents.Count}");
+
+        Check("D10-A: the batch is tier-free (no tier prerequisite: a parent polls at the NULL-team sentinel -1), writes no flag (so it can't loop or orphan one), reads only the engine-written parent_phase and job_* flags, and paces itself (cooldown >= 120 days, weight <= 0.01)",
+            batch.Events.All(e => !e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.Tier))
+            && batch.Events.All(e => e.Choices.All(c => c.Consequences.All(k => k.Kind != ConsequenceKind.SetFlag && k.Kind != ConsequenceKind.ClearFlag)))
+            && batch.Events.All(e => e.Prerequisites.Where(p => p.Kind != PrerequisiteKind.Field)
+                .All(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName is not null && (p.FlagName == phaseFlag || jobFlags.Contains(p.FlagName))))
+            && batch.Events.All(e => e.CooldownDays >= 120 && e.Weight <= 0.01));
+
+        var pronoun = new System.Text.RegularExpressions.Regex(
+            @"\b(he|she|him|his|hers?|himself|herself)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        Check("D10-A content lines: no conceive_child (D12-A caps the marriage arc instead), no voice_note, and no avatar pronoun in any prompt or label",
+            batch.Events.All(e => e.Choices.All(c => c.Consequences.All(k => k.Kind != ConsequenceKind.ConceiveChild)))
+            && !parentJson.Contains("voice_note", StringComparison.Ordinal)
+            && !pronoun.IsMatch(string.Join(" ", batch.Events.SelectMany(e => new[] { e.Prompt }.Concat(e.Choices.Select(c => c.Label))))));
+
+        string contactsPath = Path.Combine(_repoRoot, "Assets", "Narrative", "Contacts", "contacts.json");
+        ContactRegistry registry = ContactJson.Parse(File.ReadAllText(contactsPath));
+        Check("D10-A: every contact the batch tags resolves in the shipped registry (no new thread), and the lockup choice prices the hit in funds (13-6c brief 14.1: an arrest sits beside a negative funds consequence)",
+            batch.Events.All(e => e.ContactId == ContactRegistry.UnknownContactId || registry.Contains(e.ContactId))
+            && batch.Events.All(e => e.Choices
+                .Where(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.Absence))
+                .All(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.Funds && k.Amount < 0)))
+            && batch.Events.Any(e => e.Choices.Any(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.Absence))));
+
+        // Reachability through the real dispatcher: weight-1.0 copies, an UNROSTERED subject (the parent phase's tier -1).
+        string hotJson = System.Text.RegularExpressions.Regex.Replace(parentJson, "\"weight\": 0\\.00\\d", "\"weight\": 1.0");
+        GrittyEventLibrary hot = GrittyEventJson.Parse(hotJson);
+        string FirstFire(params string[] flags)
+        {
+            using World world = World.Create("parentContent", hot);
+            world.AddPlayer("hero", age: 31, teamId: null);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            foreach (string flag in flags)
+            {
+                world.Players.SetFlag("hero", flag, true, 1);
+            }
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            return world.Fired.Count == 1 ? world.Fired[0].EventId : $"{world.Fired.Count} fires";
+        }
+        string coach = FirstFire(phaseFlag, "job_coach");
+        string steady = FirstFire(phaseFlag, "job_steady");
+        string nightlife = FirstFire(phaseFlag, "job_nightlife");
+        string family = FirstFire(phaseFlag);
+        string none = FirstFire();
+        string jobWithoutPhase = FirstFire("job_coach");
+        Check("D10-A reachability: an unrostered parent with parent_phase + job_coach / job_steady / job_nightlife fires that job's events (never another job's); parent_phase alone fires a family event; the job flag or the phase flag missing fires nothing",
+            coach.StartsWith("pp_coach_", StringComparison.Ordinal) && steady.StartsWith("pp_steady_", StringComparison.Ordinal)
+            && nightlife.StartsWith("pp_nightlife_", StringComparison.Ordinal) && family.StartsWith("pp_family_", StringComparison.Ordinal)
+            && none == "0 fires" && jobWithoutPhase == "0 fires",
+            $"coach {coach}, steady {steady}, nightlife {nightlife}, family {family}, none {none}, job-only {jobWithoutPhase}");
+
+        // The lockup choice end to end: only the bar fight can fire, and swinging first jails the parent and takes the funds in the same fire.
+        {
+            string fightJson = System.Text.RegularExpressions.Regex.Replace(
+                hotJson,
+                "(\"id\": \"pp_(?!nightlife_bar_fight)[a-z_]+\",\\s*\"scope\": \"avatar\",\\s*\"weight\": )1\\.0",
+                "${1}0.0");
+            GrittyEventLibrary fight = GrittyEventJson.Parse(fightJson);
+            using World world = World.Create("parentFight", fight);
+            world.Applier.AutopilotAvatarChoices = false; // the live game pauses the avatar's own fires for the choice UI
+            world.AddPlayer("hero", age: 33, teamId: null, funds: 1000);
+            world.GameState.SetText(GameStateKeys.AvatarPlayerId, "hero");
+            world.Players.SetFlag("hero", phaseFlag, true, 1);
+            world.Players.SetFlag("hero", "job_nightlife", true, 1);
+            world.Dispatcher.PollOnce();
+            world.Clock.AdvanceDay();
+            world.Bus.DispatchPending();
+            world.Dispatcher.PollOnce();
+            world.Bus.DispatchPending();
+            bool pending = world.Applier.TryGetPendingChoice(out PendingGrittyChoice choice) && choice.Fired.EventId == "pp_nightlife_bar_fight";
+            fight.TryGetById("pp_nightlife_bar_fight", out GrittyEventDefinition barFight);
+            int swing = pending ? Array.FindIndex(barFight.Choices, c => c.Id == "throw_the_first_punch") : -1;
+            if (pending && swing >= 0)
+            {
+                world.Applier.ResolveChoice(swing);
+                world.Bus.DispatchPending();
+            }
+            world.Players.TryGetById("hero", out PlayerRow hero);
+            bool jailed = world.Players.TryGetAbsence("hero", out PlayerAbsenceRow absence) && absence.Reason == AbsenceReason.Arrest;
+            Check("D10-A: swinging first in the bar fight arrests the parent (an arrest absence) and takes the $300 from funds in the same fire — a lockup is priced in funds, not left to the wage",
+                pending && swing >= 0 && jailed && hero.Funds == 700.0, $"pending {pending}, jailed {jailed}, funds {hero.Funds}");
+        }
+
+        // D12-A: the marriage arc's one conceiving event carries the age cap, beside its existing expecting gate.
+        GrittyEventLibrary marriage = GrittyEventJson.Parse(File.ReadAllText(Path.Combine(contentDir, "marriage_and_family_events.json")));
+        var conceiving = marriage.Events
+            .Where(e => e.Choices.Any(c => c.Consequences.Any(k => k.Kind == ConsequenceKind.ConceiveChild))).ToList();
+        Check("D12-A: every event in marriage_and_family_events.json whose choice conceives a child (child_is_born) carries the subject age <= 50 prerequisite, beside its existing expecting gate",
+            conceiving.Count == 1 && conceiving[0].Id == "child_is_born"
+            && conceiving.All(e => e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.Field && p.Field == SubjectField.Age
+                    && p.Comparison == FieldComparison.LessOrEqual && p.Value == 50)
+                && e.Prerequisites.Any(p => p.Kind == PrerequisiteKind.FlagActive && p.FlagName == "expecting" && p.MinDaysSince == 270)),
+            $"{conceiving.Count} conceiving event(s)");
     }
 
     // ------------------------------------------------------------------

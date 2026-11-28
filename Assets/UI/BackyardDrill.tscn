@@ -1,0 +1,160 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Assets/UI/BackyardDrill.cs" id="1_backyarddrill"]
+
+[node name="BackyardDrill" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_backyarddrill")
+
+[node name="Scrim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="Card" type="PanelContainer" parent="."]
+theme_type_variation = &"Card"
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -230.0
+offset_right = 280.0
+offset_bottom = 230.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CardLayout" type="VBoxContainer" parent="Card"]
+layout_mode = 2
+
+[node name="HeadingLabel" type="Label" parent="Card/CardLayout"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = ""
+
+[node name="ChildLabel" type="Label" parent="Card/CardLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="InstructionLabel" type="Label" parent="Card/CardLayout"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="CalmCheck" type="CheckButton" parent="Card/CardLayout"]
+layout_mode = 2
+text = ""
+
+[node name="RepLabel" type="Label" parent="Card/CardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = ""
+
+[node name="MeterBox" type="Control" parent="Card/CardLayout"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+
+[node name="Track" type="Panel" parent="Card/CardLayout/MeterBox"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TargetBand" type="ColorRect" parent="Card/CardLayout/MeterBox"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 44.0
+mouse_filter = 2
+color = Color(0.45, 0.88, 0.5, 0.55)
+
+[node name="Marker" type="ColorRect" parent="Card/CardLayout/MeterBox"]
+layout_mode = 0
+offset_right = 6.0
+offset_bottom = 44.0
+mouse_filter = 2
+color = Color(1, 0.78, 0.35, 1)
+
+[node name="RepResultLabel" type="Label" parent="Card/CardLayout"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = ""
+
+[node name="ChoicesRow" type="HBoxContainer" parent="Card/CardLayout"]
+visible = false
+layout_mode = 2
+
+[node name="EarlyButton" type="Button" parent="Card/CardLayout/ChoicesRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
+
+[node name="OnTimeButton" type="Button" parent="Card/CardLayout/ChoicesRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
+
+[node name="LateButton" type="Button" parent="Card/CardLayout/ChoicesRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
+
+[node name="ButtonsRow" type="HBoxContainer" parent="Card/CardLayout"]
+layout_mode = 2
+
+[node name="StartButton" type="Button" parent="Card/CardLayout/ButtonsRow"]
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = ""
+
+[node name="StopButton" type="Button" parent="Card/CardLayout/ButtonsRow"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = ""
+
+[node name="SkipButton" type="Button" parent="Card/CardLayout/ButtonsRow"]
+layout_mode = 2
+text = ""
+
+[node name="BackButton" type="Button" parent="Card/CardLayout/ButtonsRow"]
+layout_mode = 2
+text = ""
+
+[node name="ResultBox" type="VBoxContainer" parent="Card/CardLayout"]
+visible = false
+layout_mode = 2
+
+[node name="ResultHeadingLabel" type="Label" parent="Card/CardLayout/ResultBox"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = ""
+
+[node name="ResultBodyLabel" type="Label" parent="Card/CardLayout/ResultBox"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="ResultDetailLabel" type="Label" parent="Card/CardLayout/ResultBox"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+autowrap_mode = 2
+text = ""
+
+[node name="DoneButton" type="Button" parent="Card/CardLayout/ResultBox"]
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = ""

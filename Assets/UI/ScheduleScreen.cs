@@ -105,6 +105,7 @@ public sealed partial class ScheduleScreen : PanelContainer
     private Label _sleepValueLabel = null!;
     private Label _sleepHintLabel = null!;
     private Label _schoolNoteLabel = null!;
+    private Label _shiftNoteLabel = null!;
     private HSlider _practiceSlider = null!;
     private Label _practiceValueLabel = null!;
     private HSlider _gameSlider = null!;
@@ -183,6 +184,13 @@ public sealed partial class ScheduleScreen : PanelContainer
     // (SubmitDaySchedule re-forces it server-side either way).
     private int _mandatedSchoolHours;
 
+    // 13-6d (brief §4.3 item 3): the parent-phase job's shift for the day this
+    // plan will tick, from MandatoryBlocks.WorkHours (0 outside the phase and
+    // on off-days). Like school it has no say from the player: the read-only
+    // note names it, the Work slider is pinned to it and locked, and
+    // SubmitDaySchedule re-forces it server-side either way.
+    private int _mandatedShiftHours;
+
     public override void _Ready()
     {
         _gameRow = GetNode<Control>("Layout/GameRow");
@@ -192,6 +200,7 @@ public sealed partial class ScheduleScreen : PanelContainer
         _sleepValueLabel = GetNode<Label>("Layout/SleepRow/SleepValueLabel");
         _sleepHintLabel = GetNode<Label>("Layout/SleepHintLabel");
         _schoolNoteLabel = GetNode<Label>("Layout/SchoolNoteLabel");
+        _shiftNoteLabel = GetNode<Label>("Layout/ShiftNoteLabel");
         // The slider's floor is scene-authored at 2; re-derived from the live
         // constant so a SleepProfile retune can't leave the scene lying about
         // where the body's absolute sits (the critical-mark idiom).
@@ -271,6 +280,28 @@ public sealed partial class ScheduleScreen : PanelContainer
             if (schoolTarget > 0)
             {
                 _schoolNoteLabel.Text = string.Format(SchoolMandatedFormat, schoolTarget);
+            }
+            RefreshHoursLabels();
+        }
+
+        // 13-6d: the parent phase's shift, the same read-only shape. The Work row
+        // shows and locks to the shift's hours while it's a shift day, and frees
+        // (back to 0) on an off-day, so a plan can never silently carry yesterday's shift.
+        int shiftTarget = blocks.WorkHours;
+        if (shiftTarget != _mandatedShiftHours)
+        {
+            _mandatedShiftHours = shiftTarget;
+            _shiftNoteLabel.Visible = shiftTarget > 0;
+            _workSlider.Editable = shiftTarget == 0;
+            _workActivityOption.Disabled = shiftTarget > 0;
+            if (shiftTarget > 0)
+            {
+                _shiftNoteLabel.Text = string.Format(Tr("ui.family.shift.mandated"), shiftTarget);
+                _workSlider.Value = shiftTarget;
+            }
+            else
+            {
+                _workSlider.Value = 0;
             }
             RefreshHoursLabels();
         }

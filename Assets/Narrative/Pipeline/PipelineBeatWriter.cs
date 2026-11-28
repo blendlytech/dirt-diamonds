@@ -19,7 +19,9 @@ namespace DirtAndDiamonds.Narrative.Pipeline;
 /// undrafted, or (a senior) automatically in the pool.</item>
 /// <item>Draft Night (<c>agent_diaz</c>): drafted, or (a senior) undrafted.</item>
 /// <item>The release (<c>coach_college</c> or <c>coach_reyes</c>): a
-/// parent-phase or a game-over variant.</item>
+/// parent-phase or a game-over variant; a retiree entering the parent phase
+/// (13-6d, age at or past <see cref="RetirementAge"/>) gets its own
+/// <c>coach_reyes</c> line.</item>
 /// </list>
 ///
 /// Copy lives in the strings table (<c>pipeline.*</c> keys, placeholder lines
@@ -41,6 +43,9 @@ public sealed class PipelineBeatWriter
     public const string ReleaseProParentKey = "pipeline.release.pro.parent_phase";
     public const string ReleaseProGameOverKey = "pipeline.release.pro.game_over";
 
+    /// <summary>13-6d (brief §11.5): a retiree (age at or past the mandatory retirement age) enters the parent phase with this line, not the Pro "letting you go" text.</summary>
+    public const string ReleaseRetiredParentKey = "pipeline.release.retired.parent_phase";
+
     public const string HsCoachContact = "coach_hs";
     public const string CollegeCoachContact = "coach_college";
     public const string ProCoachContact = "coach_reyes";
@@ -52,6 +57,7 @@ public sealed class PipelineBeatWriter
     private readonly DatabaseManager _db;
     private readonly NarrativeLogQueries _log;
     private readonly GlobalState _state;
+    private readonly PlayerQueries? _players;
     private readonly Action<RecruitingOffersEvent> _onOffers;
     private readonly Action<RecruitSignedEvent> _onSigned;
     private readonly Action<DraftDeclarationOpenedEvent> _onDeclarationOpened;
@@ -61,6 +67,15 @@ public sealed class PipelineBeatWriter
     /// <summary>Resolves a strings-table key to its text at write time; null writes the key.</summary>
     public Func<string, string>? ResolveText;
 
+    /// <summary>
+    /// 13-6d (brief §11.5): the age at which a release into the parent phase
+    /// reads as a retirement (the live game sets it to the mandatory
+    /// retirement age, 42). The default turns the retiree line off, so a
+    /// writer built without it behaves exactly as before. A health-floor
+    /// retiree is younger than this and keeps its tier's text.
+    /// </summary>
+    public int RetirementAge { get; set; } = int.MaxValue;
+
     /// <summary>Texts written since construction (harness visibility).</summary>
     public int TextsWritten { get; private set; }
 
@@ -68,11 +83,12 @@ public sealed class PipelineBeatWriter
     public string LastKey { get; private set; } = "";
     public string LastContact { get; private set; } = "";
 
-    public PipelineBeatWriter(DatabaseManager db, NarrativeLogQueries log, GlobalState state)
+    public PipelineBeatWriter(DatabaseManager db, NarrativeLogQueries log, GlobalState state, PlayerQueries? players = null)
     {
         _db = db;
         _log = log;
         _state = state;
+        _players = players;
         _onOffers = OnOffers;
         _onSigned = OnSigned;
         _onDeclarationOpened = OnDeclarationOpened;
@@ -130,12 +146,23 @@ public sealed class PipelineBeatWriter
 
     private void OnReleased(AvatarReleasedEvent e)
     {
+        // 13-6d: a D7-A retiree (age at or past the mandatory retirement age) gets
+        // its own line from the pro clubhouse. The age is read through the existing
+        // player query; a release without one (an old harness) keeps the tier text.
+        if (e.EnteredParentPhase && IsRetiree(e.PlayerId))
+        {
+            WriteText(e.PlayerId, ProCoachContact, ReleaseRetiredParentKey);
+            return;
+        }
         bool college = e.Tier == CollegeTier;
         string key = college
             ? (e.EnteredParentPhase ? ReleaseCollegeParentKey : ReleaseCollegeGameOverKey)
             : (e.EnteredParentPhase ? ReleaseProParentKey : ReleaseProGameOverKey);
         WriteText(e.PlayerId, college ? CollegeCoachContact : ProCoachContact, key);
     }
+
+    private bool IsRetiree(string playerId) =>
+        _players is not null && _players.TryGetById(playerId, out PlayerRow player) && player.Age >= RetirementAge;
 
     private void WriteText(string playerId, string contactId, string key)
     {

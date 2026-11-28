@@ -41,6 +41,18 @@ layout_mode = 2
 size_flags_vertical = 4
 text = "Skip Day"
 
+[node name="NextWeekButton" type="Button" parent="."]
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+text = ""
+
+[node name="NextSeasonButton" type="Button" parent="."]
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+text = ""
+
 [node name="ReadoutBox" type="VBoxContainer" parent="."]
 layout_mode = 2
 size_flags_vertical = 4
@@ -51,6 +63,12 @@ layout_mode = 2
 text = ""
 
 [node name="StatusLabel" type="Label" parent="ReadoutBox"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = ""
+
+[node name="AdvanceStopLabel" type="Label" parent="ReadoutBox"]
 visible = false
 layout_mode = 2
 theme_type_variation = &"CaptionLabel"

@@ -94,6 +94,9 @@ public sealed partial class GameManager : Node
     /// <summary>13-6 (D5-A): the pipeline's phone texts.</summary>
     public DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter PipelineBeats { get; private set; } = null!;
 
+    /// <summary>13-6d: the parent phase's phone texts (first day, first payday, training milestones).</summary>
+    public DirtAndDiamonds.Narrative.Family.ParentPhaseBeatWriter ParentPhaseBeats { get; private set; } = null!;
+
     /// <summary>
     /// The postseason (slice 13-4): selection, brackets, series, the National
     /// Ranking views and the tier-carrying ChampionshipWonEvent. Presentation
@@ -836,11 +839,23 @@ public sealed partial class GameManager : Node
         // 13-6 (D5-A): the pipeline's beats (offers, Signing Day, the
         // declaration, Draft Night, the release), the same Core-events-only
         // writer shape.
-        PipelineBeats = new DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter(_database, NarrativeLog, State)
+        PipelineBeats = new DirtAndDiamonds.Narrative.Pipeline.PipelineBeatWriter(_database, NarrativeLog, State, Players)
+        {
+            ResolveText = key => Tr(key),
+            // 13-6d: a release at or past this age reads as a retirement (brief §11.5).
+            RetirementAge = HeirGenetics.HeirGeneticsProfile.MandatoryRetirementAge,
+        };
+        PipelineBeats.AttachTo(Events);
+        // 13-6d (§4.4 item 5): the parent phase's texts (first day, first payday, the
+        // training milestones), derived from the shipped engine surface. Subscribed
+        // after the engine's own DayAdvanced handlers (ChildRearing, the job, training),
+        // so the week's settlement has landed when it reads it.
+        ParentPhaseBeats = new DirtAndDiamonds.Narrative.Family.ParentPhaseBeatWriter(
+            _database, NarrativeLog, GameState, Players, Persons, ParentJobs, Training, State)
         {
             ResolveText = key => Tr(key),
         };
-        PipelineBeats.AttachTo(Events);
+        ParentPhaseBeats.AttachTo(Events);
         GrittyEventChoices = new EventConsequenceApplier(
             _database, Players, Persons, GrittyEvents, Relationships, Events, GameState, State, NarrativeLog,
             unchecked((ulong)System.Environment.TickCount64) ^ 0x9E3779B97F4A7C15UL);

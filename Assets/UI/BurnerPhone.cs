@@ -574,6 +574,7 @@ public sealed partial class BurnerPhone : PanelContainer
         _volumeSlider.DragEnded += OnVolumeDragEnded;
 
         InitPipelineCard();
+        InitParentPhaseUi();
     }
 
     public override void _ExitTree()
@@ -1602,7 +1603,9 @@ public sealed partial class BurnerPhone : PanelContainer
     /// </summary>
     private void RefreshFamilyTab(GameManager gm)
     {
-        if (gm.State.CurrentDay == _familyLoadedDay)
+        // 13-6d: also reload when the avatar or the parent-phase flag changed mid-day (the
+        // player answers the takeover on the day it opens), so the job strip never lingers.
+        if (gm.State.CurrentDay == _familyLoadedDay && !FamilyPhaseChanged(gm))
         {
             return;
         }
@@ -1619,6 +1622,9 @@ public sealed partial class BurnerPhone : PanelContainer
         {
             existing.QueueFree();
         }
+        // 13-6d: the parent phase's job strip and the trainable set (LoadTrainableChildren only), before the cards.
+        ResetFamilyTraining();
+        RefreshJobStrip(gm);
         int childCount = gm.Players.LoadChildrenOf(avatarId, _familyChildrenScratch);
         _noChildrenLabel.Visible = childCount == 0;
         _childrenContainer.Visible = childCount > 0;
@@ -1629,6 +1635,7 @@ public sealed partial class BurnerPhone : PanelContainer
                 : ChildDevelopmentRow.Neutral(child.PlayerId);
             _childrenContainer.AddChild(BuildChildCard(in child, in axes));
         }
+        LinkFamilyFocus();
     }
 
     private Control BuildChildCard(in PlayerRow child, in ChildDevelopmentRow axes)
@@ -1644,6 +1651,11 @@ public sealed partial class BurnerPhone : PanelContainer
         layout.AddChild(BuildAxisRow(CoachingLabelText, axes.Coaching));
         layout.AddChild(BuildAxisRow(FundingLabelText, axes.Funding));
         layout.AddChild(BuildAxisRow(NeglectLabelText, axes.Neglect));
+        if (_familyParentPhase)
+        {
+            // 13-6d: the Train button, the standing plan and the last result (the parent phase only).
+            layout.AddChild(BuildTrainingControls(GameManager.Instance!, in child));
+        }
 
         var card = new PanelContainer { ThemeTypeVariation = "Card" };
         card.AddChild(layout);

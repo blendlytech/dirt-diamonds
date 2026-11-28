@@ -1,5 +1,6 @@
 using DirtAndDiamonds.Core;
 using DirtAndDiamonds.Data;
+using DirtAndDiamonds.Economy.Family;
 using DirtAndDiamonds.Simulation.Baseball;
 using Godot;
 
@@ -25,7 +26,8 @@ namespace DirtAndDiamonds.UI;
 /// resolves there by the engine's rule.
 ///
 /// Every string is a <c>ui.pipeline.*</c> strings-table key. Node paths
-/// verified against BurnerPhone.tscn before wiring.
+/// verified against BurnerPhone.tscn before wiring. 13-6d adds the parent
+/// phase's job card as a third kind of this card (BurnerPhone.ParentPhase.cs).
 /// </summary>
 public sealed partial class BurnerPhone
 {
@@ -34,6 +36,7 @@ public sealed partial class BurnerPhone
         None,
         Recruiting,
         Declaration,
+        Job,
         Answered,
     }
 
@@ -95,6 +98,7 @@ public sealed partial class BurnerPhone
         long day = gm.State.CurrentDay;
         PipelineManager pipeline = gm.Pipeline;
         PendingDeclaration declaration = default;
+        PendingJobChoice job = default;
         PipelineCardKind kind;
         if (pipeline.TryGetPendingRecruitingChoice(out PendingRecruitingChoice recruiting))
         {
@@ -103,6 +107,11 @@ public sealed partial class BurnerPhone
         else if (pipeline.TryGetPendingDeclaration(out declaration))
         {
             kind = PipelineCardKind.Declaration;
+        }
+        else if (TryGetJobCard(gm, out job))
+        {
+            // 13-6d: the parent phase's job card, the same decision-card shape (BurnerPhone.ParentPhase.cs).
+            kind = PipelineCardKind.Job;
         }
         else
         {
@@ -125,6 +134,9 @@ public sealed partial class BurnerPhone
             case PipelineCardKind.Declaration:
                 RenderDeclarationCard(gm, in declaration);
                 break;
+            case PipelineCardKind.Job:
+                RenderJobCard(gm, in job);
+                break;
             case PipelineCardKind.Answered:
                 RenderAnsweredCard();
                 break;
@@ -133,11 +145,14 @@ public sealed partial class BurnerPhone
                 break;
         }
 
-        bool decisionPending = kind == PipelineCardKind.Recruiting || kind == PipelineCardKind.Declaration;
+        bool decisionPending = kind == PipelineCardKind.Recruiting || kind == PipelineCardKind.Declaration
+            || kind == PipelineCardKind.Job;
         _pipelineBanner.Visible = decisionPending;
         if (decisionPending)
         {
-            _pipelineBanner.Text = Tr(kind == PipelineCardKind.Recruiting ? "ui.pipeline.banner.recruit" : "ui.pipeline.banner.declare");
+            _pipelineBanner.Text = kind == PipelineCardKind.Job
+                ? Tr("ui.job.banner")
+                : Tr(kind == PipelineCardKind.Recruiting ? "ui.pipeline.banner.recruit" : "ui.pipeline.banner.declare");
         }
         _pipelineDecisionPending = decisionPending;
         ApplyEventsTabBadge();

@@ -46,5 +46,7 @@
     <Compile Include="..\..\Assets\Economy\Family\ParentJobService.cs" Link="Economy\Family\ParentJobService.cs" />
     <Compile Include="..\..\Assets\Economy\Family\ChildTrainingService.cs" Link="Economy\Family\ChildTrainingService.cs" />
     <Compile Include="..\..\Assets\Economy\Family\ChildRearingService.cs" Link="Economy\Family\ChildRearingService.cs" />
+    <!-- 13-6d: the parent phase's phone texts (Narrative, Godot-free; reads the three Family services above). -->
+    <Compile Include="..\..\Assets\Narrative\Family\*.cs" Link="Narrative\Family\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

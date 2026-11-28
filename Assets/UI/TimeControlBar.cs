@@ -1,4 +1,5 @@
 using DirtAndDiamonds.Core;
+using DirtAndDiamonds.Economy.Family;
 using Godot;
 
 namespace DirtAndDiamonds.UI;
@@ -23,6 +24,15 @@ namespace DirtAndDiamonds.UI;
 /// <see cref="DaySettled"/> upward (ui_conventions: player-intent signals,
 /// never reaching into a sibling tree). Node paths verified against
 /// TimeControlBar.tscn (authored together with this script).
+///
+/// 13-6d (brief §4.4 item 4, D6-A): while the parent phase is on, two more
+/// controls — "Next week" and "Next season" — call
+/// <see cref="GameManager.AdvanceToNextWeek"/> / <see cref="GameManager.AdvanceToNextSeason"/>
+/// from the press (an intent, never a bus handler: brief §11.2 B8), then reset the
+/// intraday clock exactly as Skip Day does. The returned
+/// <see cref="AdvanceSummary.Stop"/> names why it stopped, in a caption under
+/// the readout until the day changes. Outside the parent phase they stay hidden,
+/// so every other path is unchanged.
 /// </summary>
 public sealed partial class TimeControlBar : HBoxContainer
 {
@@ -74,8 +84,11 @@ public sealed partial class TimeControlBar : HBoxContainer
     private Button _normalButton = null!;
     private Button _fastButton = null!;
     private Button _skipDayButton = null!;
+    private Button _nextWeekButton = null!;
+    private Button _nextSeasonButton = null!;
     private Label _readoutLabel = null!;
     private Label _statusLabel = null!;
+    private Label _advanceStopLabel = null!;
 
     private GameClock _clock = null!;
 
@@ -93,6 +106,9 @@ public sealed partial class TimeControlBar : HBoxContainer
     private int _shownMinute = -1;
     private TimeSpeed _shownSpeed = (TimeSpeed)(-1);
     private BarFace _shownFace = (BarFace)(-1);
+
+    // 13-6d: the fast-forward's stop caption stays until the day moves on.
+    private long _advanceStopDay = long.MinValue;
 
     /// <summary>The one line under the readout explaining why time is (or isn't) flowing.</summary>
     private enum BarFace
@@ -120,8 +136,13 @@ public sealed partial class TimeControlBar : HBoxContainer
         _normalButton = GetNode<Button>("NormalButton");
         _fastButton = GetNode<Button>("FastButton");
         _skipDayButton = GetNode<Button>("SkipDayButton");
+        _nextWeekButton = GetNode<Button>("NextWeekButton");
+        _nextSeasonButton = GetNode<Button>("NextSeasonButton");
         _readoutLabel = GetNode<Label>("ReadoutBox/ReadoutLabel");
         _statusLabel = GetNode<Label>("ReadoutBox/StatusLabel");
+        _advanceStopLabel = GetNode<Label>("ReadoutBox/AdvanceStopLabel");
+        _nextWeekButton.Text = Tr("ui.family.next_week");
+        _nextSeasonButton.Text = Tr("ui.family.next_season");
 
         _clock = GameManager.Instance!.TimeOfDay;
         // A save persisted while manually paused resumes paused; Resume then
@@ -134,6 +155,8 @@ public sealed partial class TimeControlBar : HBoxContainer
         _normalButton.Pressed += OnNormalPressed;
         _fastButton.Pressed += OnFastPressed;
         _skipDayButton.Pressed += OnSkipDayPressed;
+        _nextWeekButton.Pressed += OnNextWeekPressed;
+        _nextSeasonButton.Pressed += OnNextSeasonPressed;
     }
 
     public override void _ExitTree()
@@ -144,6 +167,8 @@ public sealed partial class TimeControlBar : HBoxContainer
         _normalButton.Pressed -= OnNormalPressed;
         _fastButton.Pressed -= OnFastPressed;
         _skipDayButton.Pressed -= OnSkipDayPressed;
+        _nextWeekButton.Pressed -= OnNextWeekPressed;
+        _nextSeasonButton.Pressed -= OnNextSeasonPressed;
     }
 
     public override void _Process(double delta)
@@ -225,6 +250,23 @@ public sealed partial class TimeControlBar : HBoxContainer
         if (_playGameButton.Visible != gameReady)
         {
             _playGameButton.Visible = gameReady;
+        }
+
+        // 13-6d (D6-A): the two fast-forwards exist only in the parent phase.
+        bool parentPhase = gm.Career.HasAvatar && gm.Career.InParentPhase;
+        if (_nextWeekButton.Visible != parentPhase)
+        {
+            _nextWeekButton.Visible = parentPhase;
+            _nextSeasonButton.Visible = parentPhase;
+        }
+        if (_nextWeekButton.Disabled != skipDisabled)
+        {
+            _nextWeekButton.Disabled = skipDisabled;
+            _nextSeasonButton.Disabled = skipDisabled;
+        }
+        if (_advanceStopLabel.Visible && gm.State.CurrentDay != _advanceStopDay)
+        {
+            _advanceStopLabel.Visible = false;
         }
 
         TimeSpeed speed = _clock.Speed;
@@ -320,6 +362,51 @@ public sealed partial class TimeControlBar : HBoxContainer
         gm.Clock.AdvanceDay();
         _clock.ResetToWake();
         _advanceSettling = true;
+    }
+
+    private void OnNextWeekPressed() => FastForward(season: false);
+
+    private void OnNextSeasonPressed() => FastForward(season: true);
+
+    /// <summary>
+    /// D6-A: runs the day tick until the target or the first interrupt, in one
+    /// synchronous call from this press (never from a bus handler, brief §11.2
+    /// B8), then does what Skip Day does after an advance: reset the intraday
+    /// clock and wait for the tick's fan-out to settle before the dashboard
+    /// refreshes. Unlike Skip it never autopilots an attended game: the engine
+    /// stops on one (never in the parent phase).
+    /// </summary>
+    private void FastForward(bool season)
+    {
+        GameManager gm = GameManager.Instance!;
+        if (!gm.Career.HasAvatar || !gm.Career.InParentPhase || _advanceSettling || !gm.CanAdvanceDay)
+        {
+            return; // stale click; the per-frame disable catches up next frame
+        }
+        AdvanceSummary summary = season ? gm.AdvanceToNextSeason() : gm.AdvanceToNextWeek();
+        _clock.ResetToWake();
+        _advanceSettling = true;
+        _advanceStopDay = gm.State.CurrentDay;
+        _advanceStopLabel.Text = StopReasonText(in summary);
+        _advanceStopLabel.Visible = true;
+    }
+
+    private string StopReasonText(in AdvanceSummary summary)
+    {
+        string reason = summary.Stop switch
+        {
+            AdvanceStopKind.TargetReached => Tr("ui.family.advance.stop.target"),
+            AdvanceStopKind.EventFired => Tr("ui.family.advance.stop.event"),
+            AdvanceStopKind.StressSpike => Tr("ui.family.advance.stop.stress"),
+            AdvanceStopKind.FundsDepleted => Tr("ui.family.advance.stop.funds"),
+            AdvanceStopKind.GameDay => Tr("ui.family.advance.stop.game"),
+            AdvanceStopKind.DecisionCard => Tr("ui.family.advance.stop.decision"),
+            AdvanceStopKind.TrainingWindow => Tr("ui.family.advance.stop.training"),
+            AdvanceStopKind.AvatarChanged => Tr("ui.family.advance.stop.avatar"),
+            _ => string.Empty,
+        };
+        string days = string.Format(Tr("ui.family.advance.days"), summary.DaysAdvanced);
+        return reason.Length == 0 ? days : days + " " + reason;
     }
 
     private void OnPausePressed()

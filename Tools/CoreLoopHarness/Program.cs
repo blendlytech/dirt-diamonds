@@ -50,6 +50,7 @@ internal static partial class Program
             RunRosterClockChecks(schemaPath, rosterPath);
             RunPipelineClockChecks(schemaPath, pipelinePath, parentPath);
             RunParentPhaseChecks(schemaPath, parentPath + ".136c");
+            RunParentPhaseBeatChecks(schemaPath, parentPath + ".136d", repoRoot);
             RunBoundaryScan(repoRoot);
         }
         catch (Exception ex)

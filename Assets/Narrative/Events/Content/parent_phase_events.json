@@ -1,0 +1,467 @@
+{
+  "//": "Slice 13-6d D10-A: the parent phase's starter content (13-6c brief §3 D10, §4.4 item 5). Eleven events for a released parent (tier -1 on the poll: the NULL-team sentinel), so every one is TIER-FREE and gated on the engine-written Entity_Flags the parent-phase services keep (13-6c ParentJobService, D9-A): `parent_phase` (set at the release, cleared at the takeover) plus the held job's `job_coach` | `job_steady` | `job_nightlife` (a job change clears the old flag and sets the new one). Nine job events, three per job -- Coach: 'daddy-ball' whispers, a parent confrontation, a recruiter sniffing around your kid; Steady: overtime, a layoff scare, an injury on the line; Nightlife: an old teammate at the bar, a bar fight, the pull of the back room -- plus two family events gated on parent_phase alone (a missed recital, the kid asks why you stopped playing). Contacts reuse the shipped threads (coach_hs, hs_friend, family_kid, unknown): no new contact row, no voice lines of any kind (voice is broadcasters only). Content lines (GEMINI.md section 10): no conceive_child anywhere here (D12-A caps the shipped marriage arc instead), nothing explicit, no temptation or substance boosts (the adults-only loader guard keys on tier >= College and a parent polls at tier -1, so Phase L owns that), a child is never physically harmed (a care or coaching nudge is the household's mood, the axis the nurture fold already reads), and no avatar pronouns (the avatar can be any gender; other people use they/them). Lockup and missed-shift outcomes price the hit in `funds` (13-6c brief section 14.1: the weekly wage settles regardless, so a choice that costs shifts or bail takes it from the funds here): pp_steady_injury_on_the_line's unpaid week, pp_nightlife_bar_fight's night in the drunk tank. Pacing: weights of about 0.004 a day with 150-210 day cooldowns give each event about one fire a season, so a job's three events plus the two family beats come about every seven weeks of fast-forward and never in a burst; none of the events changes a flag, so none can loop (check_event_graph_integrity #4: the cooldown is the pacing).",
+  "events": [
+    {
+      "id": "pp_coach_daddy_ball",
+      "scope": "avatar",
+      "weight": 0.004,
+      "cooldown_days": 180,
+      "contact": "coach_hs",
+      "category": "career",
+      "prompt": "Between innings of a Saturday youth game you catch the whispers along the fence: some of the other parents think your kid gets the best spots because you run the practices. Daddy-ball, they call it, loud enough to carry.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_coach" }
+      ],
+      "choices": [
+        {
+          "id": "sit_your_own_kid",
+          "autopilot_weight": 2,
+          "label": "Sit your own kid for the next game",
+          "consequences": [
+            { "type": "person_stat", "stat": "social_status", "amount": 3 },
+            { "type": "child_development", "axis": "coaching", "amount": 1 },
+            { "type": "stress", "amount": 4 }
+          ]
+        },
+        {
+          "id": "open_the_tryouts",
+          "autopilot_weight": 2,
+          "label": "Run open tryouts and let the work decide",
+          "consequences": [
+            { "type": "funds", "amount": -80 },
+            { "type": "person_stat", "stat": "social_status", "amount": 4 },
+            { "type": "stress", "amount": -3 }
+          ]
+        },
+        {
+          "id": "let_them_talk",
+          "autopilot_weight": 1,
+          "label": "Let them talk",
+          "consequences": [
+            { "type": "person_stat", "stat": "social_status", "amount": -2 },
+            { "type": "stress", "amount": 6 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_coach_parent_confrontation",
+      "scope": "avatar",
+      "weight": 0.004,
+      "cooldown_days": 210,
+      "contact": "coach_hs",
+      "category": "career",
+      "prompt": "A parent catches you at the gate after practice, face red, voice up: their kid has been riding the bench all month and they want to know why. A few families on the bleachers have stopped packing their bags to listen.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_coach" }
+      ],
+      "choices": [
+        {
+          "id": "hear_them_out",
+          "autopilot_weight": 2,
+          "label": "Hear them out and promise a fair look",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "person_stat", "stat": "social_status", "amount": 2 },
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "offer_a_private_session",
+          "autopilot_weight": 1,
+          "label": "Offer their kid a free session on Sunday",
+          "consequences": [
+            { "type": "funds", "amount": -60 },
+            { "type": "person_stat", "stat": "reputation", "amount": 3 },
+            { "type": "stress", "amount": 2 }
+          ]
+        },
+        {
+          "id": "stand_your_ground",
+          "autopilot_weight": 1,
+          "label": "Stand your ground: the lineup is the lineup",
+          "consequences": [
+            { "type": "person_stat", "stat": "social_status", "amount": -3 },
+            { "type": "stress", "amount": 8 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_coach_recruiter_sniffing",
+      "scope": "avatar",
+      "weight": 0.003,
+      "cooldown_days": 270,
+      "contact": "coach_hs",
+      "category": "career",
+      "prompt": "A stranger in a good jacket has watched three of your practices from the same corner of the bleachers. After the last one, they introduce themselves and ask about your kid's numbers the way scouts do: easy, friendly, a little too interested.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_coach" }
+      ],
+      "choices": [
+        {
+          "id": "let_them_watch",
+          "autopilot_weight": 2,
+          "label": "Let them watch. The work speaks for itself",
+          "consequences": [
+            { "type": "child_development", "axis": "coaching", "amount": 2 },
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "keep_them_back",
+          "autopilot_weight": 2,
+          "label": "Keep it a game for now and send them off",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 2 },
+            { "type": "stress", "amount": -2 }
+          ]
+        },
+        {
+          "id": "ask_what_they_want",
+          "autopilot_weight": 1,
+          "label": "Ask them straight out what they're really after",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_steady_overtime",
+      "scope": "avatar",
+      "weight": 0.004,
+      "cooldown_days": 150,
+      "contact": "unknown",
+      "category": "career",
+      "prompt": "The shift lead pulls you aside near the time clock: a double on Friday, time and a half, and they need an answer today. Your kid's game is at six.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_steady" }
+      ],
+      "choices": [
+        {
+          "id": "take_the_double",
+          "autopilot_weight": 2,
+          "label": "Take the double. The money's real",
+          "consequences": [
+            { "type": "funds", "amount": 240 },
+            { "type": "child_development", "axis": "care", "amount": -2 },
+            { "type": "stress", "amount": 6 }
+          ]
+        },
+        {
+          "id": "swap_a_shift",
+          "autopilot_weight": 2,
+          "label": "Trade a Saturday for it instead",
+          "consequences": [
+            { "type": "funds", "amount": 120 },
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "turn_it_down",
+          "autopilot_weight": 1,
+          "label": "Turn it down. You'll be in the stands at six",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 2 },
+            { "type": "person_stat", "stat": "work_ethic", "amount": -1 },
+            { "type": "stress", "amount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_steady_layoff_scare",
+      "scope": "avatar",
+      "weight": 0.003,
+      "cooldown_days": 270,
+      "contact": "unknown",
+      "category": "career",
+      "prompt": "A memo goes around the break room: the plant is \"reviewing headcount.\" Everyone laughs it off, and nobody laughs for long. The kids' school fees are due next month.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_steady" }
+      ],
+      "choices": [
+        {
+          "id": "work_harder",
+          "autopilot_weight": 2,
+          "label": "Keep your head down and outwork everyone",
+          "consequences": [
+            { "type": "person_stat", "stat": "work_ethic", "amount": 2 },
+            { "type": "stress", "amount": 8 }
+          ]
+        },
+        {
+          "id": "ask_the_boss",
+          "autopilot_weight": 2,
+          "label": "Ask the boss straight out where you stand",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "update_the_resume",
+          "autopilot_weight": 1,
+          "label": "Quietly update your resume and make some calls",
+          "consequences": [
+            { "type": "funds", "amount": -40 },
+            { "type": "stress", "amount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_steady_injury_on_the_line",
+      "scope": "avatar",
+      "weight": 0.003,
+      "cooldown_days": 240,
+      "contact": "unknown",
+      "category": "career",
+      "prompt": "A loaded pallet jack slips on the line and catches your shin on its way down. Nothing's broken, but it's swelling fast, and the supervisor is already asking if you can finish the shift.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_steady" }
+      ],
+      "choices": [
+        {
+          "id": "file_the_report",
+          "autopilot_weight": 2,
+          "label": "File the report and see the clinic",
+          "consequences": [
+            { "type": "funds", "amount": -150 },
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "walk_it_off",
+          "autopilot_weight": 2,
+          "label": "Walk it off and finish the shift",
+          "consequences": [
+            { "type": "stress", "amount": 6 }
+          ]
+        },
+        {
+          "id": "take_the_week",
+          "autopilot_weight": 1,
+          "label": "Take the week unpaid and let it heal",
+          "consequences": [
+            { "type": "funds", "amount": -400 },
+            { "type": "stress", "amount": -4 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_nightlife_old_teammate",
+      "scope": "avatar",
+      "weight": 0.004,
+      "cooldown_days": 180,
+      "contact": "hs_friend",
+      "category": "career",
+      "prompt": "An old teammate slides onto the last stool at your end of the bar, grin and all. They talk about the glory years and the guys who made it to the show. Their tab is going to be a big one, and they're looking at you to cover the first round.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_nightlife" }
+      ],
+      "choices": [
+        {
+          "id": "buy_a_round",
+          "autopilot_weight": 2,
+          "label": "Buy a round and listen to the stories",
+          "consequences": [
+            { "type": "funds", "amount": -60 },
+            { "type": "person_stat", "stat": "social_status", "amount": 2 },
+            { "type": "stress", "amount": -6 }
+          ]
+        },
+        {
+          "id": "keep_it_short",
+          "autopilot_weight": 2,
+          "label": "Keep it short. You're on the clock",
+          "consequences": [
+            { "type": "stress", "amount": 2 }
+          ]
+        },
+        {
+          "id": "talk_about_the_kids",
+          "autopilot_weight": 1,
+          "label": "Steer it to the kids and what comes next",
+          "consequences": [
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": -2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_nightlife_bar_fight",
+      "scope": "avatar",
+      "weight": 0.003,
+      "cooldown_days": 240,
+      "contact": "unknown",
+      "category": "career",
+      "prompt": "Two regulars start shoving each other by the rail, and the bouncer's out back on a break. Chairs scrape, the music goes on, and every head in the room turns to the host everyone knows by name.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_nightlife" }
+      ],
+      "choices": [
+        {
+          "id": "call_the_bouncer",
+          "autopilot_weight": 2,
+          "label": "Call the bouncer and keep out of it",
+          "consequences": [
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "step_between_them",
+          "autopilot_weight": 2,
+          "label": "Step between them and talk it down",
+          "consequences": [
+            { "type": "funds", "amount": -120 },
+            { "type": "person_stat", "stat": "reputation", "amount": 3 },
+            { "type": "stress", "amount": 8 }
+          ]
+        },
+        {
+          "id": "throw_the_first_punch",
+          "autopilot_weight": 1,
+          "label": "Lose your temper and swing first",
+          "consequences": [
+            { "type": "absence", "reason": "arrest", "days": 2 },
+            { "type": "funds", "amount": -300 },
+            { "type": "person_stat", "stat": "morality", "amount": -3 },
+            { "type": "stress", "amount": 10 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_nightlife_back_room",
+      "scope": "avatar",
+      "weight": 0.003,
+      "cooldown_days": 210,
+      "contact": "unknown",
+      "category": "career",
+      "prompt": "Behind the kitchen, past a curtain, there's a card game that never closes. A regular holds it open for you with a grin: \"Come on. One hand. Nobody's counting.\" The kitchen light is the only sound for a second.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" },
+        { "flag_active": "job_nightlife" }
+      ],
+      "choices": [
+        {
+          "id": "stay_behind_the_bar",
+          "autopilot_weight": 3,
+          "label": "Stay behind the bar. You have a shift to finish",
+          "consequences": [
+            { "type": "person_stat", "stat": "discipline", "amount": 2 },
+            { "type": "stress", "amount": 2 }
+          ]
+        },
+        {
+          "id": "sit_in_for_a_hand",
+          "autopilot_weight": 1,
+          "label": "Sit in for one hand",
+          "consequences": [
+            { "type": "funds", "amount": -100 },
+            { "type": "person_stat", "stat": "discipline", "amount": -2 },
+            { "type": "stress", "amount": -6 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_family_missed_recital",
+      "scope": "avatar",
+      "weight": 0.004,
+      "cooldown_days": 270,
+      "contact": "family_kid",
+      "category": "family",
+      "prompt": "The school recital started an hour before your shift ended. When you finally get home, there's a program on the kitchen table, folded in half, and a chair at the school that stayed empty with your name on the seat.",
+      "prerequisites": [
+        { "flag_active": "parent_phase" }
+      ],
+      "choices": [
+        {
+          "id": "make_it_up_to_them",
+          "autopilot_weight": 2,
+          "label": "Apologize and ask for a private performance tonight",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 4 },
+            { "type": "funds", "amount": -50 },
+            { "type": "stress", "amount": 2 }
+          ]
+        },
+        {
+          "id": "explain_the_shift",
+          "autopilot_weight": 2,
+          "label": "Explain the shift and promise the next one",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 1 },
+            { "type": "stress", "amount": 3 }
+          ]
+        },
+        {
+          "id": "brush_it_off",
+          "autopilot_weight": 1,
+          "label": "Brush it off. It's only a recital",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": -3 },
+            { "type": "stress", "amount": 4 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pp_family_why_did_you_stop",
+      "scope": "avatar",
+      "weight": 0.004,
+      "cooldown_days": 300,
+      "contact": "family_kid",
+      "category": "family",
+      "prompt": "Over cereal on a school morning your kid looks up, spoon in the air, and asks it like it's the most ordinary thing in the world: \"Why did you stop playing?\"",
+      "prerequisites": [
+        { "flag_active": "parent_phase" }
+      ],
+      "choices": [
+        {
+          "id": "tell_the_truth",
+          "autopilot_weight": 2,
+          "label": "Tell the truth, the good and the bad",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 3 },
+            { "type": "person_stat", "stat": "maturity", "amount": 2 },
+            { "type": "stress", "amount": -4 }
+          ]
+        },
+        {
+          "id": "make_it_a_promise",
+          "autopilot_weight": 2,
+          "label": "Say that now you get to watch someone else play",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": 2 },
+            { "type": "child_development", "axis": "coaching", "amount": 1 },
+            { "type": "stress", "amount": -2 }
+          ]
+        },
+        {
+          "id": "change_the_subject",
+          "autopilot_weight": 1,
+          "label": "Change the subject",
+          "consequences": [
+            { "type": "child_development", "axis": "care", "amount": -1 },
+            { "type": "stress", "amount": 3 }
+          ]
+        }
+      ]
+    }
+  ]
+}

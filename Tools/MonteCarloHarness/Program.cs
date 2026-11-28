@@ -5655,6 +5655,192 @@ internal static partial class Program
             leagueKeys.Count > 0 && leagueUnused.Count == 0,
             leagueUnused.Count == 0 ? $"{leagueKeys.Count} rows" : string.Join(", ", leagueUnused));
         Check("13-7: no ui.league.* text uses an avatar pronoun", leaguePronouns.Count == 0, string.Join(", ", leaguePronouns));
+
+        RunParentPhaseStringChecks(repoRoot, table, pronoun); // 13-6d
+    }
+
+    // ------------------------------------------------------------------
+    // 13-6d: the parent phase's strings and scenes (brief §4.4, §5 item 7). Pure file checks.
+    // ui.job.* / ui.family.* are read through Tr() by the phone, the drill, the time bar and the
+    // schedule; family.* are the phone texts (ParentPhaseBeatWriter); the retiree line is
+    // PipelineBeatWriter's. Job-keyed rows are built at runtime from parent_jobs.json's ids, so
+    // they're checked against that data, never waved through by a bare prefix.
+    // ------------------------------------------------------------------
+
+    // The scripts that read these keys through Tr(): the phone's partial and the pipeline card it extends (the job banner), the drill, the time bar, the schedule.
+    private static readonly string[] ParentPhaseUiScripts =
+    {
+        "Assets/UI/BurnerPhone.ParentPhase.cs", "Assets/UI/BurnerPhone.Pipeline.cs", "Assets/UI/BackyardDrill.cs",
+        "Assets/UI/TimeControlBar.cs", "Assets/UI/ScheduleScreen.cs",
+    };
+
+    private static void RunParentPhaseStringChecks(
+        string repoRoot, Dictionary<string, string> table, System.Text.RegularExpressions.Regex pronoun)
+    {
+        // The job data: ids and the flags that bar a job.
+        var jobIds = new List<string>();
+        var barredFlags = new List<string>();
+        using (System.Text.Json.JsonDocument jobs = System.Text.Json.JsonDocument.Parse(
+                   File.ReadAllText(Path.Combine(repoRoot, "Assets", "Data", "Family", "parent_jobs.json"))))
+        {
+            foreach (System.Text.Json.JsonElement job in jobs.RootElement.GetProperty("jobs").EnumerateArray())
+            {
+                jobIds.Add(job.GetProperty("id").GetString()!);
+                if (job.TryGetProperty("barred_by_flag", out System.Text.Json.JsonElement barred)
+                    && barred.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    barredFlags.Add(barred.GetString()!);
+                }
+            }
+        }
+
+        // Literal keys the four UI scripts name (a bare ui.job. or ui.job.barred. is the runtime-built idiom: checked below, not here).
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+        var literal = new System.Text.RegularExpressions.Regex("\"((?:ui\\.job|ui\\.family)\\.[a-z0-9_.]*)\"");
+        foreach (string script in ParentPhaseUiScripts)
+        {
+            foreach (System.Text.RegularExpressions.Match m in literal.Matches(File.ReadAllText(Path.Combine(repoRoot, script))))
+            {
+                if (!m.Groups[1].Value.EndsWith('.'))
+                {
+                    referenced.Add(m.Groups[1].Value);
+                }
+            }
+        }
+
+        // The runtime-built job rows: ui.job.<id>.{name,shift,pitch} for each job id, ui.job.barred.<flag> for each barring flag.
+        var jobRows = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in jobIds)
+        {
+            foreach (string part in new[] { "name", "shift", "pitch" })
+            {
+                jobRows.Add($"ui.job.{id}.{part}");
+            }
+        }
+        foreach (string flag in barredFlags)
+        {
+            jobRows.Add($"ui.job.barred.{flag}");
+        }
+
+        var uiKeys = table.Keys.Where(k => k.StartsWith("ui.job.", StringComparison.Ordinal) || k.StartsWith("ui.family.", StringComparison.Ordinal)).ToList();
+        var unknown = referenced.Where(k => !table.ContainsKey(k)).ToList();
+        var missingJobRows = jobRows.Where(k => !table.ContainsKey(k)).ToList();
+        Check("13-6d: every ui.job.* / ui.family.* key the phone, drill, time bar and schedule scripts name has an English row, and every job in parent_jobs.json has its name, shift and pitch rows (and each barring flag its reason row)",
+            referenced.Count > 0 && unknown.Count == 0 && missingJobRows.Count == 0 && jobIds.Count == 3,
+            unknown.Count + missingJobRows.Count == 0 ? $"{referenced.Count} keys referenced, {jobRows.Count} job rows" : string.Join(", ", unknown.Concat(missingJobRows)));
+
+        var unused = uiKeys.Where(k => !referenced.Contains(k) && !jobRows.Contains(k)).ToList();
+        Check("13-6d: no ui.job.* or ui.family.* row sits unused (a row nothing names, or a job-keyed row for a job that isn't in parent_jobs.json)",
+            uiKeys.Count > 0 && unused.Count == 0, unused.Count == 0 ? $"{uiKeys.Count} rows" : string.Join(", ", unused));
+
+        // The phone texts: family.* rows are exactly the first-day and first-payday row per job id, and the two training milestones.
+        string writerSource = File.ReadAllText(Path.Combine(repoRoot, "Assets", "Narrative", "Family", "ParentPhaseBeatWriter.cs"));
+        var textKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in jobIds)
+        {
+            textKeys.Add($"family.job.first_day.{id}");
+            textKeys.Add($"family.payday.first.{id}");
+        }
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(writerSource, "\"(family\\.train\\.[a-z0-9_]+)\""))
+        {
+            textKeys.Add(m.Groups[1].Value);
+        }
+        var familyRows = table.Keys.Where(k => k.StartsWith("family.", StringComparison.Ordinal)).ToList();
+        bool prefixesNamed = writerSource.Contains("\"family.job.first_day.\"", StringComparison.Ordinal)
+            && writerSource.Contains("\"family.payday.first.\"", StringComparison.Ordinal);
+        Check("13-6d: the family.* phone-text rows are exactly a first-day and a first-payday text per job, and the first-win and coaching-70 milestones — each present, none unused",
+            prefixesNamed && textKeys.Count == jobIds.Count * 2 + 2
+            && textKeys.All(table.ContainsKey) && familyRows.All(textKeys.Contains) && familyRows.Count == textKeys.Count,
+            $"{familyRows.Count} rows, {textKeys.Count} expected");
+
+        string pipelineWriter = File.ReadAllText(Path.Combine(repoRoot, "Assets", "Narrative", "Pipeline", "PipelineBeatWriter.cs"));
+        Check("13-6d: the retiree's release line has its row and PipelineBeatWriter names it",
+            table.ContainsKey("pipeline.release.retired.parent_phase")
+            && pipelineWriter.Contains("\"pipeline.release.retired.parent_phase\"", StringComparison.Ordinal));
+
+        // The two text rows with tokens keep them: the writer resolves {child} and {wage} at write time, so an unresolved brace would reach the phone.
+        var tokenOk = table["family.train.first_win"].Contains("{child}", StringComparison.Ordinal)
+            && table["family.train.coaching_70"].Contains("{child}", StringComparison.Ordinal)
+            && jobIds.All(id => table[$"family.payday.first.{id}"].Contains("{wage}", StringComparison.Ordinal));
+        var tokenPattern = new System.Text.RegularExpressions.Regex("\\{([a-z_]+)\\}");
+        bool onlyKnownTokens = familyRows.All(k => tokenPattern.Matches(table[k]).All(m => m.Groups[1].Value is "child" or "wage"));
+        Check("13-6d: the phone texts use only the tokens the writer resolves ({child} for the milestones, {wage} for the paydays), and each row that needs one has it",
+            tokenOk && onlyKnownTokens);
+
+        var phraseRows = uiKeys.Concat(familyRows).Concat(new[] { "pipeline.release.retired.parent_phase" }).ToList();
+        var pronounRows = phraseRows.Where(k => pronoun.IsMatch(table[k])).ToList();
+        Check("13-6d: no ui.job.*, ui.family.*, family.* or retiree text uses an avatar pronoun", pronounRows.Count == 0, string.Join(", ", pronounRows));
+
+        // UI is read-only over the sim (ui_conventions): none of the four parent-phase scripts writes a row, opens a batch or reads the parentage.
+        string[] forbidden = { "AdjustChildAxis", "BeginBatch", "RunInBatch", "SetFlag(", "Biological_Parentage", "LineageQueries", "DatabaseManager", "SqliteCommand" };
+        var offenders = new List<string>();
+        foreach (string script in new[] { "Assets/UI/BurnerPhone.ParentPhase.cs", "Assets/UI/BackyardDrill.cs" })
+        {
+            string source = File.ReadAllText(Path.Combine(repoRoot, script));
+            offenders.AddRange(forbidden.Where(f => source.Contains(f, StringComparison.Ordinal)).Select(f => $"{Path.GetFileName(script)}: {f}"));
+        }
+        string drill = File.ReadAllText(Path.Combine(repoRoot, "Assets", "UI", "BackyardDrill.cs"));
+        Check("13-6d: the phone's parent-phase partial and the drill never write the database, open a batch or read the parentage; the drill sends exactly one PlayDrill, never names the sim's RNG, and keeps its own visual RandomNumberGenerator",
+            offenders.Count == 0
+            && System.Text.RegularExpressions.Regex.Matches(drill, @"\.PlayDrill\(").Count == 1
+            && !drill.Contains("RngState", StringComparison.Ordinal)
+            && drill.Contains("RandomNumberGenerator _visualRng", StringComparison.Ordinal),
+            string.Join(", ", offenders));
+
+        // godot_scene_mapper's check, mechanised: every GetNode literal in the scripts this slice touches resolves in its scene.
+        var unresolved = new List<string>();
+        int resolvedCount = 0;
+        foreach ((string script, string scene) in new[]
+                 {
+                     ("Assets/UI/BackyardDrill.cs", "Assets/UI/BackyardDrill.tscn"),
+                     ("Assets/UI/TimeControlBar.cs", "Assets/UI/TimeControlBar.tscn"),
+                     ("Assets/UI/ScheduleScreen.cs", "Assets/UI/ScheduleScreen.tscn"),
+                     ("Assets/UI/BurnerPhone.ParentPhase.cs", "Assets/UI/BurnerPhone.tscn"),
+                 })
+        {
+            var paths = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string line in File.ReadAllLines(Path.Combine(repoRoot, scene)))
+            {
+                System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(
+                    line, "^\\[node name=\"([^\"]+)\"(?: type=\"[^\"]+\")?(?: parent=\"([^\"]*)\")?");
+                if (!m.Success)
+                {
+                    continue;
+                }
+                string name = m.Groups[1].Value;
+                string parent = m.Groups[2].Success ? m.Groups[2].Value : null!;
+                paths.Add(parent is null ? string.Empty : parent == "." ? name : parent + "/" + name);
+            }
+            string source = File.ReadAllText(Path.Combine(repoRoot, script));
+            var nodePaths = new List<string>();
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(source, "GetNode<[A-Za-z]+>\\(\"([^\"]+)\"\\)"))
+            {
+                nodePaths.Add(m.Groups[1].Value);
+            }
+            // BurnerPhone.ParentPhase.cs builds its strip paths from one const prefix (+ "/..."): resolve those too.
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(source, "GetNode<[A-Za-z]+>\\(strip \\+ \"([^\"]+)\"\\)"))
+            {
+                nodePaths.Add("Screen/ScreenLayout/PhoneTabs/Family/FamilyScroll/FamilyLayout/JobCard" + m.Groups[1].Value);
+            }
+            System.Text.RegularExpressions.Match stripMatch = System.Text.RegularExpressions.Regex.Match(source, "const string strip = \"([^\"]+)\"");
+            if (stripMatch.Success)
+            {
+                nodePaths.Add(stripMatch.Groups[1].Value);
+            }
+            foreach (string path in nodePaths)
+            {
+                resolvedCount++;
+                if (!paths.Contains(path))
+                {
+                    unresolved.Add($"{Path.GetFileName(script)}: {path}");
+                }
+            }
+        }
+        Check("13-6d (godot_scene_mapper, mechanised): every GetNode<T> path in BackyardDrill, TimeControlBar, ScheduleScreen and the phone's parent-phase partial exists in its .tscn",
+            resolvedCount > 40 && unresolved.Count == 0, unresolved.Count == 0 ? $"{resolvedCount} paths" : string.Join(", ", unresolved));
     }
 
     /// <summary>Minimal RFC 4180 reader for the strings table: quoted fields, doubled quotes, CRLF or LF.</summary>
